@@ -8,7 +8,9 @@ use tokio::io;
 use tokio::sync::RwLock;
 use tokio::net::{TcpListener, TcpStream};
 use crate::blaze::components::Components;
-use crate::database::entities::Player;
+use crate::database::entities::PlayerModel;
+use crate::database::interface::DbResult;
+use crate::database::interface::players::set_session_token_impl;
 use crate::GlobalState;
 
 mod routes;
@@ -40,7 +42,7 @@ pub struct SessionImpl {
     pub id: u32,
     pub stream: RwLock<TcpStream>,
     pub addr: SocketAddr,
-    pub player: Option<Player>,
+    pub player: Option<PlayerModel>,
     pub location: u32,
     pub net: Option<NetDetails>,
     pub net_ext: Option<NetExt>,
@@ -58,7 +60,7 @@ impl SessionImpl {
             location: 0x64654445,
             net: None,
             net_ext: None,
-            last_ping: SystemTime::now()
+            last_ping: SystemTime::now(),
         }))
     }
 }
@@ -81,6 +83,18 @@ pub struct NetExt {
     ubps: u16,
 }
 
+pub async fn set_session_token(session: &Session, token: Option<String>) -> DbResult<()> {
+    let mut session = session.write().await;
+    if let Some(player) = session.player.take() {
+        let _ = session.player.insert(set_session_token_impl(
+            &session.global.db,
+            player,
+            token
+        ));
+    }
+    Ok(())
+}
+
 pub async fn write_packet(session: &Session, packet: OpaquePacket) -> io::Result<()> {
     let session = session.read().await;
     let mut stream = session.stream.write().await;
@@ -97,7 +111,7 @@ async fn read_packet(session: &Session) -> PacketResult<(Components, OpaquePacke
 
 async fn process_session(session: Session) {
     loop {
-        let (component, packet)= match read_packet(&session).await {
+        let (component, packet) = match read_packet(&session).await {
             Ok(value) => value,
             Err(_) => break
         };

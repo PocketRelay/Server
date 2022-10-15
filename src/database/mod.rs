@@ -7,6 +7,7 @@ use migration::{Migrator, MigratorTrait};
 use crate::env;
 
 pub mod entities;
+pub mod interface;
 
 pub async fn connect() -> io::Result<DatabaseConnection> {
     info!("Connecting to database..");

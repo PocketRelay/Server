@@ -1,6 +1,7 @@
 use blaze_pk::{CodecError, OpaquePacket, PacketContent, Packets};
 use derive_more::From;
 use log::debug;
+use sea_orm::DbErr;
 use tokio::io;
 use crate::blaze::components::Components;
 use crate::blaze::{Session, write_packet};
@@ -15,6 +16,7 @@ pub enum HandleError {
     CodecError(CodecError),
     IO(io::Error),
     Other(&'static str),
+    Database(DbErr)
 }
 
 pub type HandleResult = Result<Option<OpaquePacket>, HandleError>;
