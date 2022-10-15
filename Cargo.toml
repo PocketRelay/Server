@@ -13,4 +13,9 @@ keywords = ["EA", "PocketRelay", "MassEffect"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-blaze-pk = "0.2.5"
+blaze-pk = { path = "../BlazePK", features = ["async"] }
+async-trait = "0.1.57"
+
+log = "0.4.17"
+env_logger = "0.9.1"
+derive_more = "0.99.17"
