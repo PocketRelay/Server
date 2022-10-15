@@ -5,6 +5,6 @@ pub mod player_classes;
 pub mod players;
 
 pub use galaxy_at_war::Entity as GalaxyAtWar;
-pub use player_characters::Entity as PlayerCharacters;
-pub use player_classes::Entity as PlayerClasses;
-pub use players::Entity as Players;
+pub use player_characters::Entity as PlayerCharacter;
+pub use player_classes::Entity as PlayerClass;
+pub use players::Entity as Player;
