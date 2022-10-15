@@ -6,13 +6,14 @@ use log::{error, info};
 use tokio::io;
 use tokio::sync::RwLock;
 use tokio::net::{TcpListener, TcpStream};
-use crate::Components;
+use crate::blaze::components::Components;
+use crate::GlobalState;
 
 mod router;
 mod routes;
 pub mod components;
 
-pub async fn start_server() -> io::Result<()> {
+pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
 
     let main_port = crate::env::main_port();
     info!("Starting Main Server on (0.0.0.0:{main_port})");

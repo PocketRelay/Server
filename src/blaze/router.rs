@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use blaze_pk::{CodecError, OpaquePacket};
 use derive_more::From;
-use crate::{Authentication, Components};
+use crate::blaze::components::{Authentication, Components};
 use crate::blaze::Session;
 
 #[derive(Debug, From)]

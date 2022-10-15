@@ -30,3 +30,6 @@ migration = { path = "migration" } # depends on your needs
 argon2 = "0.4"
 rand_core = { version = "0.6", features = ["std"] }
 password-hash = "0.4.2"
+
+rust-embed={ version = "6.4.1", features = ["debug-embed"]}
+mime_guess = "2.0.4"

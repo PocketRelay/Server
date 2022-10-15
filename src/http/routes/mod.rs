@@ -1,7 +1,9 @@
 use actix_web::web::ServiceConfig;
 
-pub mod server;
+mod server;
+mod public;
 
 pub fn configure(cfg: &mut ServiceConfig) {
     server::configure(cfg);
+    public::configure(cfg);
 }

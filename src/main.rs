@@ -4,41 +4,38 @@ mod http;
 mod utils;
 mod database;
 
-use tokio::fs::File;
 use std::io;
-use std::path::Path;
+use std::sync::Arc;
 use dotenvy::dotenv;
 use env_logger::WriteStyle;
 use log::info;
+use sea_orm::DatabaseConnection;
 use tokio::try_join;
-use blaze::components::{Authentication, Components};
-use migration::{Migrator, MigratorTrait};
+
+/// Global state that is shared throughout the application
+#[derive(Debug)]
+pub struct GlobalState {
+    pub db: DatabaseConnection,
+}
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
     dotenv().ok();
-    let log_level = env::logging_level();
+
     env_logger::builder()
-        .filter_module("pocket_relay", log_level)
+        .filter_module("pocket_relay", env::logging_level())
         .write_style(WriteStyle::Always)
         .init();
 
-    let db_path = Path::new("app.db");
-    if !db_path.exists() {
-        File::create(db_path).await
-            .unwrap();
-    }
-
-    let connection = sea_orm::Database::connect("sqlite:app.db").await
-        .expect("Unable to connect to database app.db");
-    Migrator::up(&connection, None).await
-        .expect("Unable to migrate database app.db");
-    
     info!("Starting Pocket Relay v{}", env::VERSION);
 
+    let db = database::connect().await?;
+    let global_state = GlobalState { db };
+    let global_state = Arc::new(global_state);
+
     try_join!(
-        http::start_server(),
-        blaze::start_server()
+        http::start_server(global_state.clone()),
+        blaze::start_server(global_state)
     )?;
 
     Ok(())

@@ -9,7 +9,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
 }
 
 #[derive(Serialize)]
-pub struct ServerDetails {
+struct ServerDetails {
     /// The server version
     version: &'static str,
     /// The list of proxy services
@@ -18,7 +18,7 @@ pub struct ServerDetails {
 
 /// Describes the details of a service
 #[derive(Serialize)]
-pub struct ServiceDetails {
+struct ServiceDetails {
     name: &'static str,
     port: u16,
     #[serde(rename = "type")]
@@ -28,7 +28,7 @@ pub struct ServiceDetails {
 /// Describes the type of service
 #[derive(Serialize)]
 #[allow(unused)]
-pub enum ServiceType {
+enum ServiceType {
     /// HTTP Proxy Server
     HTTP,
     /// Blaze Packet Proxy Server
@@ -38,7 +38,7 @@ pub enum ServiceType {
 }
 
 #[get("/api/server")]
-pub async fn server_details() -> Json<ServerDetails> {
+async fn server_details() -> Json<ServerDetails> {
     let main_port = env::main_port();
     let http_port = env::http_port();
     Json(ServerDetails {
