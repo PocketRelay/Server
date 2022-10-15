@@ -82,14 +82,14 @@ pub struct NetExt {
 }
 
 pub async fn write_packet(session: &Session, packet: OpaquePacket) -> io::Result<()> {
-    let mut session = session.read().await;
+    let session = session.read().await;
     let mut stream = session.stream.write().await;
     let stream = stream.deref_mut();
     packet.write_async(stream).await
 }
 
 async fn read_packet(session: &Session) -> PacketResult<(Components, OpaquePacket)> {
-    let mut session = session.read().await;
+    let session = session.read().await;
     let mut stream = session.stream.write().await;
     let stream = stream.deref_mut();
     OpaquePacket::read_async_typed(stream).await
