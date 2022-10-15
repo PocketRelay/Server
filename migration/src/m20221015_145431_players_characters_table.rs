@@ -1,4 +1,5 @@
 use sea_orm_migration::prelude::*;
+use crate::m20221015_142649_players_table::Players;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -6,34 +7,141 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Replace the sample below with your own migration scripts
-        todo!();
-
         manager
             .create_table(
                 Table::create()
-                    .table(Post::Table)
+                    .table(PlayerCharacters::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(Post::Id)
+                        ColumnDef::new(PlayerCharacters::Id)
                             .integer()
                             .not_null()
                             .auto_increment()
-                            .primary_key(),
+                            .primary_key()
                     )
-                    .col(ColumnDef::new(Post::Title).string().not_null())
-                    .col(ColumnDef::new(Post::Text).string().not_null())
+                    .col(
+                        ColumnDef::new(PlayerCharacters::PlayerId)
+                            .integer()
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Index)
+                            .integer_len(3)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::KitName)
+                            .text()
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Name)
+                            .text()
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Tint1)
+                            .integer_len(4)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Tint2)
+                            .integer_len(4)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Pattern)
+                            .integer_len(4)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::PatternColor)
+                            .integer_len(4)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Phong)
+                            .integer_len(4)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Emissive)
+                            .integer_len(4)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::SkinTone)
+                            .integer_len(4)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::SecondsPlayed)
+                            .integer_len(255)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::TimestampYear)
+                            .integer_len(255)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::TimestampMonth)
+                            .integer_len(255)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::TimestampDay)
+                            .integer_len(255)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::TimestampSeconds)
+                            .integer_len(255)
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Powers)
+                            .text()
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Hotkeys)
+                            .text()
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Weapons)
+                            .text()
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::WeaponMods)
+                            .text()
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::Deployed)
+                            .boolean()
+                            .not_null()
+                    )
+                    .col(
+                        ColumnDef::new(PlayerCharacters::LeveledUp)
+                            .boolean()
+                            .not_null()
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(Players::Table, Players::Id)
+                            .to(PlayerCharacters::Table, PlayerCharacters::PlayerId)
+                    )
                     .to_owned(),
             )
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Replace the sample below with your own migration scripts
-        todo!();
-
         manager
-            .drop_table(Table::drop().table(Post::Table).to_owned())
+            .drop_table(Table::drop().table(PlayerCharacters::Table).to_owned())
             .await
     }
 }
@@ -43,5 +151,25 @@ enum PlayerCharacters {
     Table,
     Id,
     PlayerId,
-
+    Index,
+    KitName,
+    Name,
+    Tint1,
+    Tint2,
+    Pattern,
+    PatternColor,
+    Phong,
+    Emissive,
+    SkinTone,
+    SecondsPlayed,
+    TimestampYear,
+    TimestampMonth,
+    TimestampDay,
+    TimestampSeconds,
+    Powers,
+    Hotkeys,
+    Weapons,
+    WeaponMods,
+    Deployed,
+    LeveledUp,
 }

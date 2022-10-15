@@ -19,7 +19,7 @@ impl MigrationTrait for Migration {
                         .primary_key()
                 )
                 .col(
-                    ColumnDef::new(PlayerClasses::Id)
+                    ColumnDef::new(PlayerClasses::PlayerId)
                         .integer()
                         .not_null()
                 )
@@ -48,16 +48,13 @@ impl MigrationTrait for Migration {
                         .integer_len(6)
                         .not_null()
                 )
+                .foreign_key(
+                    ForeignKey::create()
+                        .from(Players::Table, Players::Id)
+                        .to(PlayerClasses::Table, PlayerClasses::PlayerId)
+                )
                 .to_owned()
-        ).await?;
-        manager.create_foreign_key(
-            ForeignKey::create()
-                .from(Players::Table, Players::Id)
-                .to(PlayerClasses::Table, PlayerClasses::PlayerId)
-                .to_owned()
-        ).await?;
-
-        Ok(())
+        ).await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
