@@ -2,8 +2,7 @@ use std::net::SocketAddr;
 use std::ops::DerefMut;
 use std::sync::{Arc};
 use blaze_pk::{OpaquePacket, PacketResult};
-use derive_more::From;
-use log::error;
+use log::{error, info};
 use tokio::io;
 use tokio::sync::RwLock;
 use tokio::net::{TcpListener, TcpStream};
@@ -13,16 +12,11 @@ mod router;
 mod routes;
 pub mod components;
 
-#[derive(Debug, From)]
-pub enum ServerError {
-    IO(io::Error),
-}
+pub async fn start_server() -> io::Result<()> {
 
-type ServerResult<T> = Result<T, ServerError>;
-
-pub async fn start_server() -> ServerResult<()> {
-
-    let listener = TcpListener::bind(("0.0.0.0", 14219))
+    let main_port = crate::env::main_port();
+    info!("Starting Main Server on (0.0.0.0:{main_port})");
+    let listener = TcpListener::bind(("0.0.0.0", main_port))
         .await?;
 
     let mut sessions = Vec::new();

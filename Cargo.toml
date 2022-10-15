@@ -14,7 +14,10 @@ keywords = ["EA", "PocketRelay", "MassEffect"]
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 blaze-pk = { path = "../BlazePK", features = ["async"] }
-async-trait = "0.1.57"
+actix-web = "4"
+dotenvy = "0.15.5"
+sea-orm = { version = "^0", features = [ "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
+
 
 log = "0.4.17"
 env_logger = "0.9.1"
