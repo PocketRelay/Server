@@ -18,13 +18,26 @@ The following are the pending server design
 This server address and port will be placed into the new redirector tool
 and the tool will request /api/server which will respond with the
 following JSON content (Other configuration may be added in the future)
-(May include supported server features)
+(May include supported server features).
+
+The "services" json creates a list of proxy services that the client will
+need to start in order to work with this server
 
 ```json
 {
   "version": "0.1.0",
-  "main": 4321,
-  "http": 80
+  "services": [
+    {
+      "name": "Main Blaze Server",
+      "type": "Blaze",
+      "port": 14219
+    },
+    {
+      "name": "HTTP Server",
+      "type": "HTTP",
+      "port": 80
+    }
+  ]
 }
 ```
 

@@ -3,18 +3,11 @@ mod env;
 mod http;
 
 use std::io;
-use std::sync::Arc;
-use blaze_pk::{CodecError, OpaquePacket, Packet, packet, PacketComponent, PacketComponents, PacketContent};
-use derive_more::From;
 use dotenvy::dotenv;
 use env_logger::WriteStyle;
-use log::{info, LevelFilter};
+use log::info;
 use tokio::try_join;
 use blaze::components::{Authentication, Components};
-
-pub struct AppContext {
-    name: String,
-}
 
 #[tokio::main]
 async fn main() -> io::Result<()> {

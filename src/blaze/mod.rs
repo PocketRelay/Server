@@ -20,20 +20,23 @@ pub async fn start_server() -> io::Result<()> {
         .await?;
 
     let mut sessions = Vec::new();
+    let mut session_id = 0;
 
     loop {
         let (stream, addr) = listener.accept().await?;
-        let session = Session { stream: RwLock::new(stream), addr };
+        let session = Session { id: session_id, stream: RwLock::new(stream), addr };
+        info!("New Session Started (ID: {}, ADDR: {:?})", session.id, session.addr);
+        session_id += 1;
         let session = Arc::new(session);
         sessions.push(session.clone());
         tokio::spawn(async move {
             let _ = process_client(session).await;
         });
-        println!("New socket connection")
     }
 }
 
 pub struct Session {
+    id: u32,
     stream: RwLock<TcpStream>,
     addr: SocketAddr,
 }

@@ -1,17 +1,40 @@
-use actix_web::{HttpResponse, Responder, get};
+use actix_web::get;
 use actix_web::web::{Json, ServiceConfig};
 use serde::Serialize;
 use crate::env;
 
+/// Function for configuring the services in this route
 pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(server_details);
 }
 
 #[derive(Serialize)]
 pub struct ServerDetails {
+    /// The server version
     version: &'static str,
-    main: u16,
-    http: u16
+    /// The list of proxy services
+    services: Vec<ServiceDetails>,
+}
+
+/// Describes the details of a service
+#[derive(Serialize)]
+pub struct ServiceDetails {
+    name: &'static str,
+    port: u16,
+    #[serde(rename = "type")]
+    ty: ServiceType
+}
+
+/// Describes the type of service
+#[derive(Serialize)]
+#[allow(unused)]
+pub enum ServiceType {
+    /// HTTP Proxy Server
+    HTTP,
+    /// Blaze Packet Proxy Server
+    Blaze,
+    /// Direct buffer to buffer server (read -> write)
+    DirectBuffer
 }
 
 #[get("/api/server")]
@@ -20,7 +43,17 @@ pub async fn server_details() -> Json<ServerDetails> {
     let http_port = env::http_port();
     Json(ServerDetails {
         version: env::VERSION,
-        main: main_port,
-        http: http_port
+        services: vec![
+            ServiceDetails {
+                name: "Main Blaze Server",
+                ty: ServiceType::Blaze,
+                port: main_port
+            },
+            ServiceDetails {
+                name: "HTTP Server",
+                ty: ServiceType::HTTP,
+                port: http_port
+            }
+        ]
     })
 }
