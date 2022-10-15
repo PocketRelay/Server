@@ -26,12 +26,14 @@ pub fn logging_level() -> LevelFilter {
         .map_or(DEFAULT, |value| LevelFilter::from_str(&value).unwrap_or(DEFAULT))
 }
 
+#[allow(unused)]
 pub fn menu_message() -> String {
     const ENV_KEY: &str = "PR_MENU_MESSAGE";
     const DEFAULT: &str = "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>";
     std::env::var(ENV_KEY).unwrap_or_else(|_|DEFAULT.to_string())
 }
 
+#[allow(unused)]
 pub fn database_file() -> &'static str {
     return "app.db";
 }
