@@ -861,13 +861,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "entity"
-version = "0.1.0"
-dependencies = [
- "sea-orm",
-]
-
-[[package]]
 name = "env_logger"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1664,7 +1657,6 @@ dependencies = [
  "blaze-pk",
  "derive_more",
  "dotenvy",
- "entity",
  "env_logger",
  "log",
  "migration",

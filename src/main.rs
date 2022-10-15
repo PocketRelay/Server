@@ -2,6 +2,7 @@ mod blaze;
 mod env;
 mod http;
 mod utils;
+mod database;
 
 use tokio::fs::File;
 use std::io;
@@ -32,7 +33,7 @@ async fn main() -> io::Result<()> {
         .expect("Unable to connect to database app.db");
     Migrator::up(&connection, None).await
         .expect("Unable to migrate database app.db");
-
+    
     info!("Starting Pocket Relay v{}", env::VERSION);
 
     try_join!(
