@@ -25,8 +25,7 @@ async fn main() -> io::Result<()> {
         .write_style(WriteStyle::Always)
         .init();
 
-    let version = env!("CARGO_PKG_VERSION");
-    info!("Starting Pocket Relay v{version}");
+    info!("Starting Pocket Relay v{}", env::VERSION);
 
     try_join!(
         http::start_server(),

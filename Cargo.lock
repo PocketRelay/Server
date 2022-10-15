@@ -1322,6 +1322,7 @@ dependencies = [
  "env_logger",
  "log",
  "sea-orm",
+ "serde",
  "tokio",
 ]
 

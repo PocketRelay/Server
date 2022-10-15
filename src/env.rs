@@ -1,6 +1,8 @@
 use std::str::FromStr;
 use log::LevelFilter;
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub fn main_port() -> u16 {
     const ENV_KEY: &str = "PR_MAIN_PORT";
     const DEFAULT: u16 = 14219;

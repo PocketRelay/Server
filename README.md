@@ -18,10 +18,13 @@ The following are the pending server design
 This server address and port will be placed into the new redirector tool
 and the tool will request /api/server which will respond with the
 following JSON content (Other configuration may be added in the future)
+(May include supported server features)
 
 ```json
 {
-  "main": 4321
+  "version": "0.1.0",
+  "main": 4321,
+  "http": 80
 }
 ```
 

@@ -10,7 +10,7 @@ pub async fn start_server() -> io::Result<()> {
 
     HttpServer::new(|| {
         App::new()
-            .service(routes::hello::hello)
+            .configure(routes::configure)
     })
         .bind(("0.0.0.0", http_port))?
         .run()
