@@ -1,6 +1,5 @@
 use blaze_pk;
 use blaze_pk::define_components;
-use blaze_pk::PacketComponent;
 
 define_components! {
     Authentication (0x1) {

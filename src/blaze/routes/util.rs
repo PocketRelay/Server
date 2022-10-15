@@ -1,20 +1,22 @@
 use std::ops::DerefMut;
-use blaze_pk::{group, OpaquePacket, packet, Packets, TdfMap};
+use blaze_pk::{group, OpaquePacket, packet, TdfMap};
+use std::time::{SystemTime, UNIX_EPOCH};
 use crate::blaze::components::Util;
-use crate::blaze::routes::HandleResult;
-use crate::blaze::{Session, write_packet};
+use crate::blaze::routes::{HandleError, HandleResult, response};
+use crate::blaze::Session;
 use crate::env;
 use crate::env::ADDRESS;
 
-pub async fn route(session: Session, component: Util, packet: OpaquePacket) -> HandleResult {
+pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) -> HandleResult {
     match component {
-        Util::PreAuth => handle_pre_auth(session, packet).await?,
+        Util::PreAuth => handle_pre_auth(session, packet).await,
+        Util::Ping => handle_ping(session, packet).await,
         component => {
             println!("Got {component:?}");
-            packet.debug_decode()?
+            packet.debug_decode()?;
+            Ok(None)
         }
     }
-    Ok(())
 }
 
 packet! {
@@ -98,7 +100,7 @@ group! {
 }
 
 /// Handles the pre-auth packet as is specified above
-async fn handle_pre_auth(session: Session, packet: OpaquePacket) -> HandleResult {
+async fn handle_pre_auth(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let pre_auth = packet.contents::<PreAuthReq>()?;
     let location = pre_auth.client_info.location;
 
@@ -128,7 +130,7 @@ async fn handle_pre_auth(session: Session, packet: OpaquePacket) -> HandleResult
         name: "prod-sjc",
     });
 
-    let response = PreAuthRes {
+    response(&packet, PreAuthRes {
         anon: 0,
         asrc: "303107",
         component_ids: vec![0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803, 0x7805, 0x7806, 0x7d0],
@@ -148,8 +150,30 @@ async fn handle_pre_auth(session: Session, packet: OpaquePacket) -> HandleResult
         },
         rsrc: "303107",
         version: "Blaze 3.15.08.0 (CL# 1629389)",
-    };
-    let response = Packets::response(&packet, response);
-    write_packet(&session, response).await?;
-    Ok(())
+    })
+}
+
+
+packet! {
+    struct PingRes {
+        STIM server_time: u64
+    }
+}
+
+async fn handle_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let now = SystemTime::now();
+    let server_time = now
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| HandleError::Other("Unable to calculate elapsed time"))?
+        .as_secs();
+
+    {
+        let mut session = session.write().await;
+        let session = session.deref_mut();
+        session.last_ping = now;
+    }
+
+    response(&packet, PingRes {
+        server_time
+    })
 }

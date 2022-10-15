@@ -1,8 +1,8 @@
-use std::future::Future;
 use std::net::SocketAddr;
 use std::ops::DerefMut;
 use std::sync::{Arc};
-use blaze_pk::{OpaquePacket, Packet, PacketContent, PacketResult};
+use std::time::SystemTime;
+use blaze_pk::{OpaquePacket, PacketContent, PacketResult};
 use log::{error, info};
 use tokio::io;
 use tokio::sync::RwLock;
@@ -44,6 +44,7 @@ pub struct SessionImpl {
     pub location: u32,
     pub net: Option<NetDetails>,
     pub net_ext: Option<NetExt>,
+    pub last_ping: SystemTime,
 }
 
 impl SessionImpl {
@@ -57,6 +58,7 @@ impl SessionImpl {
             location: 0x64654445,
             net: None,
             net_ext: None,
+            last_ping: SystemTime::now()
         }))
     }
 }
@@ -79,16 +81,18 @@ pub struct NetExt {
     ubps: u16,
 }
 
-pub async fn write_packet<T: PacketContent>(session: &Session, packet: Packet<T>) -> io::Result<()> {
+pub async fn write_packet(session: &Session, packet: OpaquePacket) -> io::Result<()> {
     let mut session = session.read().await;
     let mut stream = session.stream.write().await;
-    packet.write_async(stream.deref_mut()).await
+    let stream = stream.deref_mut();
+    packet.write_async(stream).await
 }
 
 async fn read_packet(session: &Session) -> PacketResult<(Components, OpaquePacket)> {
     let mut session = session.read().await;
     let mut stream = session.stream.write().await;
-    OpaquePacket::read_async_typed(stream.deref_mut()).await
+    let stream = stream.deref_mut();
+    OpaquePacket::read_async_typed(stream).await
 }
 
 async fn process_session(session: Session) {
@@ -98,7 +102,7 @@ async fn process_session(session: Session) {
             Err(_) => break
         };
 
-        match routes::route(session.clone(), component, packet).await {
+        match routes::route(&session, component, packet).await {
             Ok(_) => {}
             Err(err) => {
                 let session = session.read().await;
