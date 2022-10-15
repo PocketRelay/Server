@@ -20,6 +20,7 @@ actix-web = "4"
 dotenvy = "0.15.5"
 sea-orm = { version = "^0", features = [ "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
 serde = { version = "1.0", features = ["derive"] }
+async-trait = "0.1.57"
 
 log = "0.4.17"
 env_logger = "0.9.1"

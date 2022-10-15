@@ -479,7 +479,7 @@ dependencies = [
 
 [[package]]
 name = "blaze-pk"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "tokio",
 ]
@@ -1664,6 +1664,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "argon2",
+ "async-trait",
  "blaze-pk",
  "derive_more",
  "dotenvy",

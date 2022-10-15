@@ -1,7 +1,8 @@
+use std::future::Future;
 use std::net::SocketAddr;
 use std::ops::DerefMut;
 use std::sync::{Arc};
-use blaze_pk::{OpaquePacket, PacketResult};
+use blaze_pk::{OpaquePacket, Packet, PacketContent, PacketResult};
 use log::{error, info};
 use tokio::io;
 use tokio::sync::RwLock;
@@ -24,38 +25,39 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
 
     loop {
         let (stream, addr) = listener.accept().await?;
-        let session = Session::new(global.clone(), session_id, stream, addr);
-        info!("New Session Started (ID: {}, ADDR: {:?})", session.id, session.addr);
+        info!("New Session Started (ID: {}, ADDR: {:?})", session_id, &addr);
+        let session = SessionImpl::new(global.clone(), session_id, stream, addr);
         session_id += 1;
-        let session = Arc::new(session);
         sessions.push(session.clone());
-        tokio::spawn(async move {
-            let _ = Session::process(session).await;
-        });
+        tokio::spawn(process_session(session));
     }
 }
 
-pub struct Session {
+pub type Session = Arc<RwLock<SessionImpl>>;
+
+pub struct SessionImpl {
     pub global: Arc<GlobalState>,
     pub id: u32,
     pub stream: RwLock<TcpStream>,
     pub addr: SocketAddr,
     pub player: Option<Player>,
+    pub location: u32,
     pub net: Option<NetDetails>,
     pub net_ext: Option<NetExt>,
 }
 
-impl Session {
-    fn new(global: Arc<GlobalState>, id: u32, stream: TcpStream, addr: SocketAddr) -> Self {
-        Self {
+impl SessionImpl {
+    fn new(global: Arc<GlobalState>, id: u32, stream: TcpStream, addr: SocketAddr) -> Arc<RwLock<Self>> {
+        Arc::new(RwLock::new(Self {
             global,
             id,
             stream: RwLock::new(stream),
             addr,
             player: None,
+            location: 0x64654445,
             net: None,
             net_ext: None,
-        }
+        }))
     }
 }
 
@@ -77,21 +79,31 @@ pub struct NetExt {
     ubps: u16,
 }
 
-impl Session {
-    async fn process(session: Arc<Session>) -> PacketResult<()> {
-        loop {
-            // Scoped so we release the lock after reading the packet
-            let (component, packet) = {
-                let mut stream = session.stream.write().await;
-                let stream = stream.deref_mut();
-                OpaquePacket::read_async_typed::<Components, _>(stream).await?
-            };
+pub async fn write_packet<T: PacketContent>(session: &Session, packet: Packet<T>) -> io::Result<()> {
+    let mut session = session.read().await;
+    let mut stream = session.stream.write().await;
+    packet.write_async(stream.deref_mut()).await
+}
 
-            match routes::route(session.clone(), component, packet).await {
-                Ok(_) => {}
-                Err(err) => {
-                    error!("Session {} got err {:?} while routing", session.id, err)
-                }
+async fn read_packet(session: &Session) -> PacketResult<(Components, OpaquePacket)> {
+    let mut session = session.read().await;
+    let mut stream = session.stream.write().await;
+    OpaquePacket::read_async_typed(stream.deref_mut()).await
+}
+
+async fn process_session(session: Session) {
+    loop {
+        let (component, packet)= match read_packet(&session).await {
+            Ok(value) => value,
+            Err(_) => break
+        };
+
+        match routes::route(session.clone(), component, packet).await {
+            Ok(_) => {}
+            Err(err) => {
+                let session = session.read().await;
+
+                error!("Session {} got err {:?} while routing", session.id, err)
             }
         }
     }
