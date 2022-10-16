@@ -15,7 +15,9 @@ use crate::GlobalState;
 
 mod routes;
 pub mod components;
+pub mod errors;
 
+/// Starts the main Blaze server with the provided global state. 
 pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
     let main_port = crate::env::main_port();
     info!("Starting Main Server on (0.0.0.0:{main_port})");
@@ -50,7 +52,9 @@ pub struct SessionImpl {
 }
 
 impl SessionImpl {
-    fn new(global: Arc<GlobalState>, id: u32, stream: TcpStream, addr: SocketAddr) -> Arc<RwLock<Self>> {
+    /// This function creates a new session from the provided values and wraps
+    /// the session in the necessary locks and Arc
+    fn new(global: Arc<GlobalState>, id: u32, stream: TcpStream, addr: SocketAddr) -> Session {
         Arc::new(RwLock::new(Self {
             global,
             id,
@@ -83,6 +87,9 @@ pub struct NetExt {
     ubps: u16,
 }
 
+/// Updates the session token for the provided session. This involves updating the model
+/// in the database by taking it out of the session player and then returning the newly
+/// updated player back into the session.
 pub async fn set_session_token(session: &Session, token: Option<String>) -> DbResult<()> {
     let mut session = session.write().await;
     if let Some(player) = session.player.take() {
@@ -95,6 +102,8 @@ pub async fn set_session_token(session: &Session, token: Option<String>) -> DbRe
     Ok(())
 }
 
+/// Function for asynchronously writing a packet to the provided session. Acquires the
+/// required locks and writes the packet to the stream.
 pub async fn write_packet(session: &Session, packet: OpaquePacket) -> io::Result<()> {
     let session = session.read().await;
     let mut stream = session.stream.write().await;
@@ -102,6 +111,8 @@ pub async fn write_packet(session: &Session, packet: OpaquePacket) -> io::Result
     packet.write_async(stream).await
 }
 
+/// Function for asynchronously reading a packet from the provided session. Acquires the
+/// required locks and reads a packet returning the Component and packet.
 async fn read_packet(session: &Session) -> PacketResult<(Components, OpaquePacket)> {
     let session = session.read().await;
     let mut stream = session.stream.write().await;
@@ -109,6 +120,8 @@ async fn read_packet(session: &Session) -> PacketResult<(Components, OpaquePacke
     OpaquePacket::read_async_typed(stream).await
 }
 
+/// Function for processing a session loops until the session is no longer readable.
+/// Reads packets and routes them with the routing function.
 async fn process_session(session: Session) {
     loop {
         let (component, packet) = match read_packet(&session).await {

@@ -42,3 +42,13 @@ pub async fn route(session: &Session, component: Components, packet: OpaquePacke
 pub fn response<T: PacketContent>(packet: &OpaquePacket, contents: T) -> HandleResult {
     Ok(Some(Packets::response(packet, contents)))
 }
+
+#[inline]
+pub fn response_error<T: PacketContent>(packet: &OpaquePacket, error: impl Into<u16>, contents: T) -> HandleResult {
+    Ok(Some(Packets::error(packet, error, contents)))
+}
+
+#[inline]
+pub fn response_error_empty(packet: &OpaquePacket, error: impl Into<u16>) -> HandleResult {
+    Ok(Some(Packets::error_empty(packet, error)))
+}
