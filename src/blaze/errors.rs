@@ -1,4 +1,19 @@
-use blaze_pk::packet;
+use blaze_pk::{CodecError, packet};
+use derive_more::From;
+use std::io;
+use sea_orm::DbErr;
+
+pub type HandleResult = Result<(), BlazeError>;
+pub type BlazeResult<T> = Result<T, BlazeError>;
+
+#[derive(Debug, From)]
+pub enum BlazeError {
+    CodecError(CodecError),
+    IO(io::Error),
+    Other(&'static str),
+    Database(DbErr),
+    MissingPlayer
+}
 
 /// Enum for errors relating to authentication
 #[derive(Debug, Clone)]
@@ -42,3 +57,4 @@ impl Default for LoginErrorRes {
         LoginErrorRes { pnam: "", uid: 0 }
     }
 }
+

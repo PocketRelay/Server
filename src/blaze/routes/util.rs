@@ -2,7 +2,8 @@ use blaze_pk::{group, OpaquePacket, packet, TdfMap};
 use std::time::{SystemTime, UNIX_EPOCH};
 use rust_embed::RustEmbed;
 use crate::blaze::components::Util;
-use crate::blaze::routes::{HandleError, HandleResult, response};
+use crate::blaze::errors::{BlazeError, HandleResult};
+use crate::blaze::routes::response;
 use crate::blaze::Session;
 use crate::env;
 use crate::env::ADDRESS;
@@ -19,7 +20,7 @@ pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) ->
         component => {
             println!("Got {component:?}");
             packet.debug_decode()?;
-            Ok(None)
+            Ok(())
         }
     }
 }
@@ -137,7 +138,7 @@ async fn handle_pre_auth(session: &Session, packet: &OpaquePacket) -> HandleResu
         name: "prod-sjc",
     });
 
-    response(packet, PreAuthRes {
+    session.response(packet, PreAuthRes {
         anon: 0,
         asrc: "303107",
         component_ids: vec![0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803, 0x7805, 0x7806, 0x7d0],
@@ -179,7 +180,7 @@ async fn handle_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| HandleError::Other("Unable to calculate elapsed time"))?
+        .map_err(|_| BlazeError::Other("Unable to calculate elapsed time"))?
         .as_secs();
 
     {
@@ -187,7 +188,7 @@ async fn handle_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
         (*session_data).last_ping = now;
     }
 
-    response(packet, PingRes {
+    session.response(packet, PingRes {
         server_time
     })
 }
@@ -225,7 +226,7 @@ const ME3_DIME: &str = include_str!("../../../resources/data/dime.xml");
 ///   text("CFID", "ME3_DATA")
 /// }
 /// ```
-async fn handle_fetch_client_config(_: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_fetch_client_config(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let fetch_config = packet.contents::<FetchConfigReq>()?;
     let config = match fetch_config.id.as_ref() {
         "ME3_DATA" => data_config(),
@@ -250,9 +251,7 @@ async fn handle_fetch_client_config(_: &Session, packet: &OpaquePacket) -> Handl
             TdfMap::empty()
         }
     };
-    response(packet, FetchConfigRes {
-        config
-    })
+    session.response(packet, FetchConfigRes { config })
 }
 
 /// Contents of the default talk dmap file

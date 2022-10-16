@@ -2,14 +2,20 @@ use std::net::SocketAddr;
 use std::ops::DerefMut;
 use std::sync::{Arc};
 use std::time::SystemTime;
-use blaze_pk::{OpaquePacket, PacketResult};
+use actix_web::web::to;
+use blaze_pk::{Blob, OpaquePacket, PacketContent, PacketResult, Packets, TdfMap, VarInt, VarIntList};
 use log::{error, info};
+use rand_core::OsRng;
 use sea_orm::DatabaseConnection;
 use tokio::io;
 use tokio::sync::RwLock;
 use tokio::net::{TcpListener, TcpStream};
-use crate::blaze::components::Components;
+use crate::blaze::components::{Components, UserSessions};
+use errors::HandleResult;
+use crate::blaze::errors::{BlazeError, BlazeResult};
+use crate::blaze::shared::{NetData, SessionDataCodec, SessionDetails, SessionUser, UpdateExtDataAttr};
 use crate::database::entities::PlayerModel;
+use crate::database::entities::players::Model;
 use crate::database::interface::DbResult;
 use crate::database::interface::players::set_session_token;
 use crate::GlobalState;
@@ -63,35 +69,19 @@ pub struct Session {
     pub id: u32,
     pub stream: RwLock<TcpStream>,
     pub addr: SocketAddr,
-    pub data: RwLock<SessionData>
+    pub data: RwLock<SessionData>,
 }
 
 pub struct SessionData {
+    // Basic
     pub player: Option<PlayerModel>,
     pub location: u32,
     pub last_ping: SystemTime,
-    pub net: Option<NetDetails>,
-    pub net_ext: Option<NetExt>,
+    // Networking
+    pub net: NetData,
+    pub hardware_flag: u16,
+    pub pslm: u32,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NetDetails {
-    internal: NetGroup,
-    external: NetGroup,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NetGroup {
-    address: u32,
-    port: u16,
-}
-
-pub struct NetExt {
-    dbps: u16,
-    natt_type: u8,
-    ubps: u16,
-}
-
 
 impl Session {
     /// This function creates a new session from the provided values and wraps
@@ -105,27 +95,86 @@ impl Session {
             data: RwLock::new(SessionData {
                 player: None,
                 location: 0x64654445,
-                net: None,
-                net_ext: None,
                 last_ping: SystemTime::now(),
-            })
+                net: NetData::default(),
+                hardware_flag: 0,
+                pslm: 0xfff0fff,
+            }),
         }
+    }
+
+    pub async fn update_for(&self, other: &Session) -> BlazeResult<()> {
+        let data = self.data.read().await;
+        let user = data.user()?;
+        let update_ext_data = Packets::notify(
+            Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
+            UpdateExtDataAttr {
+                flags: 0x3,
+                id: user.id,
+            },
+        );
+        let session_details = Packets::notify(
+            Components::UserSessions(UserSessions::SessionDetails),
+            SessionDetails {
+                data: data.to_codec(),
+                user,
+            },
+        );
+
+        drop(data);
+        other.write_packet(session_details).await?;
+        other.write_packet(update_ext_data).await?;
+        Ok(())
     }
 
     /// Returns a reference to the database connection from the global
     /// state data.
     pub fn db(&self) -> &DatabaseConnection { &self.global.db }
 
+    fn generate_session_token() -> String {
+        let mut rand = OsRng;
+        let length  = 128;
+        let mut out = String::with_capacity(length);
+        let collection = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPSQRSTUVWXYZ0123456789"
+            .chars()
+            .collect::<Vec<char>>();
+
+        for _ in 0..length {
+            let value = rand.gen_range(0..collection.len());
+            out.push(collection[value])
+        }
+        out
+    }
+
+    pub async fn session_token(&self) -> BlazeResult<String> {
+        let session_data = self.data.read().await;
+        let player = session_data.player.as_ref()
+            .ok_or(BlazeError::MissingPlayer)?;
+        match player.session_token.as_ref() {
+            None => {
+                let new_token = Self::generate_session_token();
+                self.set_token(Some(new_token.clone()))
+                    .await?;
+                Ok(new_token)
+            }
+            Some(token) => Ok(token.clone())
+        }
+    }
+
     /// Updates the session token for the provided session. This involves updating the model
     /// in the database by taking it out of the session player and then returning the newly
     /// updated player back into the session.
-    pub async fn set_token(&self, token: Option<String>) -> DbResult<()> {
+    pub async fn set_token(&self, token: Option<String>) -> BlazeResult<()> {
         let mut session_data = self.data.write().await;
-        if let Some(player) = session_data.player.take() {
-            let player = set_session_token(self.db(), player, token).await?;
-            let _ = session_data.player.insert(player);
+        match session_data.player.take() {
+            Some(player) => {
+                let player = set_session_token(self.db(), player, token).await?;
+                let _ = session_data.player.insert(player);
+                Ok(())
+            }
+            None => return Err(BlazeError::MissingPlayer)
         }
-        Ok(())
+
     }
 
     /// Function for asynchronously writing a packet to the provided session. Acquires the
@@ -143,5 +192,59 @@ impl Session {
         let stream = stream.deref_mut();
         OpaquePacket::read_async_typed(stream).await
     }
+
+    #[inline]
+    pub async fn response<T: PacketContent>(&self, packet: &OpaquePacket, contents: T) -> HandleResult {
+        self.write_packet(Packets::response(packet, contents)).await?;
+        Ok(())
+    }
+
+    #[inline]
+    pub async fn response_error<T: PacketContent>(&self, packet: &OpaquePacket, error: impl Into<u16>, contents: T) -> HandleResult {
+        self.write_packet(Packets::error(packet, error, contents)).await?;
+        Ok(())
+    }
+
+    #[inline]
+    pub async fn response_error_empty(&self, packet: &OpaquePacket, error: impl Into<u16>) -> HandleResult {
+        self.write_packet(Packets::error_empty(packet, error)).await?;
+        Ok(())
+    }
 }
 
+impl SessionData {
+    pub fn user(&self) -> BlazeResult<SessionUser> {
+        let player = self.player
+            .as_ref()
+            .ok_or(BlazeError::MissingPlayer)?;
+        Ok(SessionUser {
+            aid: player.id,
+            location: self.location,
+            exbb: Blob::empty(),
+            exid: 0,
+            id: player.id,
+            name: player.display_name.clone(),
+        })
+    }
+
+    pub fn to_codec(&self) -> SessionDataCodec {
+        SessionDataCodec {
+            addr: self.net.get_groups(),
+            bps: "ea-sjc",
+            cty: "",
+            cvar: VarIntList::empty(),
+            dmap: TdfMap::only(0x70001, 0x409a),
+            hardware_flag: self.hardware_flag,
+            pslm: vec![self.pslm],
+            net_ext: self.net.ext,
+            uatt: 0,
+            ulst: vec![(0, 0, self.game_id())],
+        }
+    }
+
+    /// Function for retrieving the ID of the current game that this player
+    /// is apart of (currently always zero)
+    pub fn game_id(&self) -> u32 {
+        0
+    }
+}

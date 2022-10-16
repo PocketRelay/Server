@@ -1,6 +1,6 @@
 use blaze_pk::OpaquePacket;
 use crate::blaze::components::Stats;
-use crate::blaze::routes::HandleResult;
+use crate::blaze::errors::HandleResult;
 use crate::blaze::Session;
 
 /// Routing function for handling packets with the `Stats` component and routing them
@@ -11,7 +11,7 @@ pub async fn route(_session: &Session, component: Stats, packet: &OpaquePacket) 
         component => {
             println!("Got {component:?}");
             packet.debug_decode()?;
-            Ok(None)
+            Ok(())
         }
     }
 }
