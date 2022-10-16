@@ -1,3 +1,5 @@
+use blaze_pk::packet;
+
 /// Enum for errors relating to authentication
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -25,5 +27,18 @@ pub enum LoginError {
 impl Into<u16> for LoginError {
     fn into(self) -> u16 {
         self as u16
+    }
+}
+
+packet! {
+    struct LoginErrorRes {
+        PNAM pnam: &'static str,
+        UID uid: u8
+    }
+}
+
+impl Default for LoginErrorRes {
+    fn default() -> Self {
+        LoginErrorRes { pnam: "", uid: 0 }
     }
 }

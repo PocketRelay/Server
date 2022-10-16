@@ -25,7 +25,7 @@ pub async fn find_by_session(db: &DatabaseConnection, session_token: &str) -> Pl
         .await
 }
 
-pub async fn set_session_token_impl(db: &DatabaseConnection, player: PlayerModel, session_token: Option<String>) -> DbResult<PlayerModel> {
+pub async fn set_session_token(db: &DatabaseConnection, player: PlayerModel, session_token: Option<String>) -> DbResult<PlayerModel> {
     let mut active = player.into_active_model();
     active.session_token = Set(session_token);
     active.update(db).await

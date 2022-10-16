@@ -1,4 +1,3 @@
-use std::ops::DerefMut;
 use blaze_pk::{group, OpaquePacket, packet, TdfMap};
 use std::time::{SystemTime, UNIX_EPOCH};
 use rust_embed::RustEmbed;
@@ -114,9 +113,8 @@ async fn handle_pre_auth(session: &Session, packet: &OpaquePacket) -> HandleResu
     let location = pre_auth.client_info.location;
 
     {
-        let mut session = session.write().await;
-        let session = session.deref_mut();
-        session.location = location;
+        let mut session_data = session.data.write().await;
+        (*session_data).location = location;
     }
 
     let mut config = TdfMap::with_capacity(3);
@@ -185,9 +183,8 @@ async fn handle_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
         .as_secs();
 
     {
-        let mut session = session.write().await;
-        let session = session.deref_mut();
-        session.last_ping = now;
+        let mut session_data = session.data.write().await;
+        (*session_data).last_ping = now;
     }
 
     response(packet, PingRes {
