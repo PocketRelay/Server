@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use blaze_pk::{Codec, CodecError, CodecResult, encode_empty_str, OpaquePacket, packet, Reader, Tag, ValueType};
+use blaze_pk::{Codec, CodecError, CodecResult, encode_empty_str, encode_field, encode_zero, OpaquePacket, packet, Reader, Tag, ValueType};
 use log::debug;
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{HandleResult, LoginError, LoginErrorRes};
@@ -39,7 +39,7 @@ async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> Handle
 
     let player = match find_by_id(session.db(), id).await? {
         Some(player) => player,
-        None => return session.response_error(packet, LoginError::InvalidAccount, LoginErrorRes::default())
+        None => return session.response_error(packet, LoginError::InvalidAccount, &LoginErrorRes::default())
     };
 
     let is_eq = match &player.session_token {
@@ -48,7 +48,7 @@ async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> Handle
     };
 
     if !is_eq {
-        return session.response_error(packet, LoginError::InvalidSession, LoginErrorRes::default());
+        return session.response_error(packet, LoginError::InvalidSession, &LoginErrorRes::default());
     }
 
     let player = {
@@ -67,7 +67,8 @@ async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> Handle
         silent: true
     };
 
-    session.response(packet, response).await?;
+    session.response(packet, &response).await?;
+    session.update_for(session).await?;
 
     Ok(())
 }
@@ -84,30 +85,55 @@ impl Codec for AuthRes {
     fn encode(&self, output: &mut Vec<u8>) {
         let silent = self.silent;
         if silent {
-            Tag::encode_from("AGUP", &ValueType::VarInt, output);
+            encode_zero!(output, AGUP);
+        }
+
+        encode_empty_str!(output, LDHT);
+        encode_zero!(output, NTOS);
+        encode_field!(output, PCTK, &self.session_token, String);
+
+        #[inline]
+        fn encode_persona(player: &PlayerModel, output: &mut Vec<u8>) {
+            encode_field!(output, DSNM, &player.display_name, String);
+            encode_zero!(output, LAST);
+            encode_field!(output, PID, &player.id, u32);
+            encode_zero!(output, STAS);
+            encode_zero!(output, XREF);
+            encode_zero!(output, XTYP);
             output.push(0);
         }
-        Tag::encode_from("LDHT", &ValueType::String, output);
-        encode_empty_str(output);
-
-        Tag::encode_from("NTOS", &ValueType::VarInt, output);
-        output.push(0);
-
-        Tag::encode_from("PCTK", &ValueType::String, output);
-        self.session_token.encode(output);
 
         if silent {
-            Tag::encode_from("PRIV", &ValueType::String, output);
-            encode_empty_str(output);
-
+            encode_empty_str!(output, PRIV);
             Tag::encode_from("SESS", &ValueType::Group, output);
-            let sess = self.session_data.to_codec();
-        }
+            encode_field!(output, BUID, &self.player.id, u32);
+            encode_zero!(output, FRST);
+            encode_field!(output, KEY, &self.session_token, String);
+            encode_zero!(output, LLOG);
+            encode_field!(output, MAIL, &self.player.email, String);
+            Tag::encode_from("PDTL", &ValueType::Group, output);
+            encode_persona(&self.player, output);
+            encode_field!(output, UID, &self.player.id, u32);
+            output.push(0);
+        } else {
+            Tag::encode_from("PLST", &ValueType::List, output);
+            ValueType::Group.encode(output);
+            output.push(1);
+            encode_persona(&self.player, output);
 
-        todo!()
+            encode_empty_str!(output, PRIV);
+            encode_field!(output, SKEY, &self.session_token, String);
+        }
+        encode_zero!(output, SPAM);
+        encode_empty_str!(output, THST);
+        encode_empty_str!(output, TSUI);
+        encode_empty_str!(output, TURI);
+        if !silent {
+            encode_field!(output, UID, &self.player.id, u32);
+        }
     }
 
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+    fn decode(_: &mut Reader) -> CodecResult<Self> {
         Err(CodecError::InvalidAction("Not allowed to decode AuthRes"))
     }
 }

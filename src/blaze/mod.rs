@@ -194,13 +194,13 @@ impl Session {
     }
 
     #[inline]
-    pub async fn response<T: PacketContent>(&self, packet: &OpaquePacket, contents: T) -> HandleResult {
-        self.write_packet(Packets::response(packet, contents)).await?;
+    pub async fn response<T: PacketContent>(&self, packet: &OpaquePacket, contents: impl AsRef<T>) -> HandleResult {
+        self.write_packet(Packets::response(packet, contents.as_ref())).await?;
         Ok(())
     }
 
     #[inline]
-    pub async fn response_error<T: PacketContent>(&self, packet: &OpaquePacket, error: impl Into<u16>, contents: T) -> HandleResult {
+    pub async fn response_error<T: PacketContent>(&self, packet: &OpaquePacket, error: impl Into<u16>, contents: &T) -> HandleResult {
         self.write_packet(Packets::error(packet, error, contents)).await?;
         Ok(())
     }

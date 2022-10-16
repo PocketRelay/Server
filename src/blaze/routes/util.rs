@@ -138,7 +138,7 @@ async fn handle_pre_auth(session: &Session, packet: &OpaquePacket) -> HandleResu
         name: "prod-sjc",
     });
 
-    session.response(packet, PreAuthRes {
+    session.response(packet, &PreAuthRes {
         anon: 0,
         asrc: "303107",
         component_ids: vec![0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803, 0x7805, 0x7806, 0x7d0],
@@ -251,7 +251,7 @@ async fn handle_fetch_client_config(session: &Session, packet: &OpaquePacket) ->
             TdfMap::empty()
         }
     };
-    session.response(packet, FetchConfigRes { config })
+    session.response(packet, &FetchConfigRes { config })
 }
 
 /// Contents of the default talk dmap file
