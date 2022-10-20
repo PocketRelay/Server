@@ -1,12 +1,15 @@
 use std::ops::Deref;
 use blaze_pk::{Codec, CodecError, CodecResult, OpaquePacket, packet, PacketContent, Packets, Reader, tag_list_start, ValueType};
 use log::debug;
+use regex::Regex;
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
 use crate::blaze::Session;
 use crate::blaze::shared::{AuthRes, Entitlement};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players;
+use crate::database::interface::players::find_by_email;
+use crate::utils::hashing::verify_password;
 
 /// Routing function for handling packets with the `Authentication` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -108,6 +111,13 @@ async fn handle_logout(session: &Session, packet: &OpaquePacket) -> HandleResult
     session.response_empty(packet).await
 }
 
+packet! {
+    struct LoginReq {
+        MAIL email: String,
+        PASS password: String
+    }
+}
+
 /// Handles logging into an account with the email and password provided. This is
 /// when the login prompt appears in game
 ///
@@ -122,7 +132,26 @@ async fn handle_logout(session: &Session, packet: &OpaquePacket) -> HandleResult
 /// }
 /// ```
 async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult {
-    todo!("Implement login handling")
+    let req = packet.contents::<LoginReq>()?;
+    let email = req.email;
+    let password = req.password;
+    let email_regex = Regex::new(r#"^([a-z0-9_+]([a-z0-9_+.]*[a-z0-9_+])?)@([a-z0-9]+([\-.][a-z0-9]+)*\.[a-z]{2,6})"#)
+        .map_err(BlazeError::Other("Regex for email matching was invalid"))?;
+
+    if !email_regex.is_match(&email) {
+        return Err(login_error(packet, LoginError::InvalidEmail));
+    }
+
+    let player = find_by_email(session.db(), &email)
+        .await?
+        .ok_or_else(||login_error(packet, LoginError::EmailNotFound))?;
+
+    if !verify_password(&password, &player.password) {
+        return Err(login_error(packet, LoginError::WrongPassword));
+    }
+
+    complete_auth(session, packet, player, false).await?;
+    Ok(())
 }
 
 packet! {
