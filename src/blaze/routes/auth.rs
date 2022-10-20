@@ -15,6 +15,7 @@ use crate::database::interface::players;
 pub async fn route(session: &Session, component: Authentication, packet: &OpaquePacket) -> HandleResult {
     match component {
         Authentication::SilentLogin => handle_silent_login(session, packet).await,
+        Authentication::Logout => handle_logout(session, packet).await,
         component => {
             println!("Got {component:?}");
             packet.debug_decode()?;
@@ -36,6 +37,17 @@ fn login_error(packet: &OpaquePacket, error: LoginError) -> BlazeError {
     BlazeError::Response(Packets::error(packet, error, &LoginErrorRes::default()))
 }
 
+/// Handles silent authentication from a client (Token based authentication) If the token provided
+/// by the client is correct the session is updated accordingly to match the player
+/// # Structure
+/// ```
+/// packet(Components.AUTHENTICATION, Commands.SILENT_LOGIN, 0x0, 0x6) {
+///   text("AUTH", "128 CHAR TOKEN OMITTED")
+///   number("PID", 0x1)
+///   number("TYPE", 0x2)
+/// }
+/// ```
+///
 async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let silent_login = packet.contents::<SilentLoginReq>()?;
     let id = silent_login.id;
@@ -51,16 +63,20 @@ async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> Handle
         return Err(login_error(packet, LoginError::InvalidSession));
     }
 
-    let player = {
-        let mut session_data = session.data.write().await;
-        session_data.player.insert(player)
-    };
+    debug!("Silent authentication success");
+    debug!("ID = {}", &player.id);
+    debug!("Username = {}", &player.display_name);
+    debug!("Email = {}", &player.email);
 
     complete_auth(session, player, true).await?;
     Ok(())
 }
 
-async fn complete_auth(session: &Session, player: &PlayerModel, silent: bool) -> HandleResult {
+/// Completes the authentication process for the provided session using the provided Player
+/// Model as the authenticated player.
+async fn complete_auth(session: &Session, player: PlayerModel, silent: bool) -> HandleResult {
+    let player = session.set_player(Some(player)).await
+        .ok_or(BlazeError::MissingPlayer)?;
     let session_token = session.session_token().await?;
     let session_data = session.data.read().await;
     let response = AuthRes {
@@ -75,6 +91,20 @@ async fn complete_auth(session: &Session, player: &PlayerModel, silent: bool) ->
         session.update_for(session).await?;
     }
     Ok(())
+}
+
+/// Handles logging out by the client this removes any current player data from the
+/// session and updating anything that depends on the session having a player.
+///
+/// # Structure
+/// ```
+/// packet(Components.AUTHENTICATION, Commands.LOGOUT, 0x0, 0x7) {}
+/// ```
+async fn handle_logout(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    debug!("Logging out for session:");
+    debug!("ID = {}", &session.id);
+    session.set_player(None).await;
+    session.response_empty(packet).await
 }
 
 /// Complex authentication result structure is manually encoded because it

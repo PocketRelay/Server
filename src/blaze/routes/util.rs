@@ -158,7 +158,7 @@ async fn handle_pre_auth(session: &Session, packet: &OpaquePacket) -> HandleResu
         },
         rsrc: "303107",
         version: "Blaze 3.15.08.0 (CL# 1629389)",
-    })
+    }).await
 }
 
 packet! {
@@ -190,7 +190,7 @@ async fn handle_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
 
     session.response(packet, PingRes {
         server_time
-    })
+    }).await
 }
 
 packet! {
@@ -252,6 +252,7 @@ async fn handle_fetch_client_config(session: &Session, packet: &OpaquePacket) ->
         }
     };
     session.response(packet, &FetchConfigRes { config })
+        .await
 }
 
 /// Contents of the default talk dmap file

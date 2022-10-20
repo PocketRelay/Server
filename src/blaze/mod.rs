@@ -4,7 +4,7 @@ use std::sync::{Arc};
 use std::time::SystemTime;
 use actix_web::web::to;
 use blaze_pk::{Blob, OpaquePacket, PacketContent, PacketResult, Packets, TdfMap, VarInt, VarIntList};
-use log::{error, info};
+use log::{debug, error, info};
 use rand_core::OsRng;
 use sea_orm::DatabaseConnection;
 use tokio::io;
@@ -174,7 +174,25 @@ impl Session {
             }
             None => return Err(BlazeError::MissingPlayer)
         }
+    }
 
+    /// Sets the player stored in this session to the provided player. This
+    /// wrapper allows state that depends on this session having a player to
+    /// be updated accordingly such as games
+    pub async fn set_player(&self, player: Option<PlayerModel>) -> Option<&mut PlayerModel> {
+        let mut session_data = self.data.write().await;
+        let existing = if let Some(player) = player {
+            session_data.player.replace(player)
+        } else {
+            session_data.player.take()
+        };
+        if let Some(existing) = &existing {
+            debug!("Swapped authentication to: ");
+            debug!("ID = {}", &existing.id);
+            debug!("Username = {}", &existing.display_name);
+            debug!("Email = {}", &existing.email);
+        }
+        session_data.player.as_mut()
     }
 
     /// Function for asynchronously writing a packet to the provided session. Acquires the
@@ -196,6 +214,12 @@ impl Session {
     #[inline]
     pub async fn response<T: PacketContent>(&self, packet: &OpaquePacket, contents: impl AsRef<T>) -> HandleResult {
         self.write_packet(&Packets::response(packet, contents.as_ref())).await?;
+        Ok(())
+    }
+
+    #[inline]
+    pub async fn response_empty(&self, packet: &OpaquePacket) -> HandleResult {
+        self.write_packet(&Packets::response_empty(packet)).await?;
         Ok(())
     }
 
