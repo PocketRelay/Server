@@ -181,14 +181,50 @@ impl NetAddress {
     }
 }
 
+#[inline]
+fn encode_persona(player: &PlayerModel, output: &mut Vec<u8>) {
+    tag_str(output, "DSNM", &player.display_name);
+    tag_zero(output, "LAST");
+    tag_u32(output, "PID", player.id);
+    tag_zero(output, "STAS");
+    tag_zero(output, "XREF");
+    tag_zero(output, "XTYP");
+    tag_group_end(output);
+}
+
+#[derive(Debug)]
+pub struct Sess<'a, 'b> {
+    pub session_data: &'a SessionData,
+    pub player: &'b PlayerModel,
+    pub session_token: String,
+}
+
+impl PacketContent for Sess<'_, '_> {}
+
+impl Codec for Sess<'_, '_> {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_group_start(output, "SESS");
+        tag_u32(output, "BUID", self.player.id);
+        tag_zero(output, "FRST");
+        tag_str(output, "KEY", &self.session_token);
+        tag_zero(output, "LLOG");
+        tag_str(output, "MAIL", &self.player.email);
+        tag_group_start(output, "PDTL");
+        encode_persona(&self.player, output);
+        tag_u32(output, "UID", self.player.id);
+    }
+
+    fn decode(_reader: &mut Reader) -> CodecResult<Self> {
+        Err(CodecError::InvalidAction("Decoding for this struct is not allowed"))
+    }
+}
+
 
 /// Complex authentication result structure is manually encoded because it
 /// has complex nesting and output can vary based on inputs provided
 #[derive(Debug)]
 pub struct AuthRes<'a, 'b> {
-    pub session_data: &'a SessionData,
-    pub player: &'b PlayerModel,
-    pub session_token: String,
+    pub sess: Sess<'a, 'b>,
     pub silent: bool,
 }
 
@@ -205,37 +241,16 @@ impl Codec for AuthRes<'_, '_> {
         tag_zero(output, "NTOS");
         tag_str(output, "PCTK", &self.session_token);
 
-        #[inline]
-        fn encode_persona(player: &PlayerModel, output: &mut Vec<u8>) {
-            tag_str(output, "DSNM", &player.display_name);
-            tag_zero(output, "LAST");
-            tag_u32(output, "PID", player.id);
-            tag_zero(output, "STAS");
-            tag_zero(output, "XREF");
-            tag_zero(output, "XTYP");
-            tag_group_end(output);
-        }
-
         if silent {
             tag_empty_str(output, "PRIV");
-
             tag_group_start(output, "SESS");
-            tag_u32(output, "BUID", self.player.id);
-            tag_zero(output, "FRST");
-            tag_str(output, "KEY", &self.session_token);
-            tag_zero(output, "LLOG");
-            tag_str(output, "MAIL", &self.player.email);
-
-            tag_group_start(output, "PDTL");
-            encode_persona(&self.player, output);
-            tag_u32(output, "UID", self.player.id);
-
+            self.sess.encode(output);
             tag_group_end(output);
         } else {
             tag_list_start(output, "PLST", ValueType::Group, 1);
             encode_persona(&self.player, output);
             tag_empty_str(output, "PRIV");
-            tag_str(output, "SKEY", &self.session_token);
+            tag_str(output, "SKEY", &self.sess.session_token);
         }
         tag_zero(output, "SPAM");
         tag_empty_str(output, "THST");

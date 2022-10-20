@@ -5,7 +5,7 @@ use regex::Regex;
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
 use crate::blaze::Session;
-use crate::blaze::shared::{AuthRes, Entitlement};
+use crate::blaze::shared::{AuthRes, Entitlement, Sess};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players;
 use crate::database::interface::players::find_by_email;
@@ -85,9 +85,11 @@ async fn complete_auth(session: &Session, packet: &OpaquePacket, player: PlayerM
     let session_data = session.data.read().await;
     let player = session_data.expect_player()?;
     let response = AuthRes {
-        session_data: session_data.deref(),
-        session_token,
-        player,
+        sess: Sess {
+            session_data: session_data.deref(),
+            session_token,
+            player,
+        },
         silent,
     };
 
@@ -287,4 +289,27 @@ async fn handle_list_user_entitlements_2(session: &Session, packet: &OpaquePacke
     ];
     let response = LUERes { list };
     session.response(packet, &response).await
+}
+
+/// Handles logging into a persona. This system doesn't implement the persona system so
+/// the account details are just used instead
+///
+/// # Structure
+/// ```
+/// packet(Components.AUTHENTICATION, Commands.LOGIN_PERSONA, 0x0, 0xe) {
+///   text("PNAM", "Jacobtread")
+/// }
+/// ```
+async fn handle_login_persona(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let session_token = session.session_token().await?;
+    let session_data = session.data.read().await;
+    let player = session_data.expect_player()?;
+    let response = Sess {
+        session_data: session_data.deref(),
+        session_token,
+        player,
+    };
+    session.response(packet, &response).await?;
+    session.update_for(session).await?;
+    Ok(())
 }
