@@ -280,10 +280,14 @@ fn talk_file(lang: &str) -> TdfMap<String, String> {
 /// these urls are set to (gosredirector.ea.com) because the client will
 /// redirect this host and handling proxying itself
 fn data_config() -> TdfMap<String, String> {
+    let ext_host = env::ext_host();
     let http_port = env::http_port();
+
+    let prefix = format!("http://{ext_host}:{http_port}");
+
     let mut config = TdfMap::with_capacity(15);
-    config.insert("GAW_SERVER_BASE_URL", format!("http://gosredirector.ea.com:{http_port}/gaw"));
-    config.insert("IMG_MNGR_BASE_URL", format!("http://gosredirector.ea.com:{http_port}/content/"));
+    config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/gaw"));
+    config.insert("IMG_MNGR_BASE_URL", format!("{prefix}/content/"));
     config.insert("IMG_MNGR_MAX_BYTES", "1048576");
     config.insert("IMG_MNGR_MAX_IMAGES", "5");
     config.insert("JOB_THROTTLE_0", "0");
@@ -297,6 +301,6 @@ fn data_config() -> TdfMap<String, String> {
     config.insert("TEL_PORT", "9988");
     config.insert("TEL_SEND_DELAY", "15000");
     config.insert("TEL_SEND_PCT", "75");
-    config.insert("TEL_SERVER", "gosredirector.ea.com");
+    config.insert("TEL_SERVER", ext_host);
     config
 }

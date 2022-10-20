@@ -10,6 +10,8 @@ pub fn configure(cfg: &mut ServiceConfig) {
 
 #[derive(Serialize)]
 struct ServerDetails {
+    /// The external server address value
+    address: String,
     /// The server version
     version: &'static str,
     /// The list of proxy services
@@ -39,9 +41,11 @@ enum ServiceType {
 
 #[get("/api/server")]
 async fn server_details() -> Json<ServerDetails> {
+    let ext_host = env::ext_host();
     let main_port = env::main_port();
     let http_port = env::http_port();
     Json(ServerDetails {
+        address: ext_host,
         version: env::VERSION,
         services: vec![
             ServiceDetails {

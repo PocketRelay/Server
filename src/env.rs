@@ -4,6 +4,12 @@ use log::LevelFilter;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const ADDRESS: &str = "gosredirector.ea.com";
 
+pub fn ext_host() -> String {
+    const ENV_KEY: &str = "PR_MAIN_PORT";
+    const DEFAULT: &str = "kme.jacobtread.local";
+    std::env::var(ENV_KEY).unwrap_or_else(|_|DEFAULT.to_string())
+}
+
 pub fn main_port() -> u16 {
     const ENV_KEY: &str = "PR_MAIN_PORT";
     const DEFAULT: u16 = 14219;
