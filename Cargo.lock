@@ -1672,6 +1672,7 @@ dependencies = [
  "migration",
  "mime_guess",
  "password-hash",
+ "rand",
  "rand_core",
  "regex",
  "rust-embed",

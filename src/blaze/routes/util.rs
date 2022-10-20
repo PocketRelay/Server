@@ -3,7 +3,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rust_embed::RustEmbed;
 use crate::blaze::components::Util;
 use crate::blaze::errors::{BlazeError, HandleResult};
-use crate::blaze::routes::response;
 use crate::blaze::Session;
 use crate::env;
 use crate::env::ADDRESS;
@@ -188,7 +187,7 @@ async fn handle_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
         (*session_data).last_ping = now;
     }
 
-    session.response(packet, PingRes {
+    session.response(packet, &PingRes {
         server_time
     }).await
 }

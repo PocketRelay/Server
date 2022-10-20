@@ -1,4 +1,4 @@
-use blaze_pk::{OpaquePacket, PacketContent, Packets};
+use blaze_pk::{OpaquePacket, Packets};
 use log::debug;
 use crate::blaze::components::Components;
 use crate::blaze::errors::{BlazeError, HandleResult};
@@ -9,7 +9,7 @@ mod auth;
 mod game_manager;
 mod stats;
 
-pub async fn route(session: &Session, component: Components, packet: &OpaquePacket) -> Result<(), BlazeError> {
+pub async fn route(session: &Session, component: Components, packet: &OpaquePacket) -> HandleResult {
     let result = match component {
         Components::Authentication(value) => auth::route(session, value, packet).await,
         Components::GameManager(value) => game_manager::route(session, value, packet).await,
@@ -26,7 +26,7 @@ pub async fn route(session: &Session, component: Components, packet: &OpaquePack
     if let Err(BlazeError::Response(response)) = &result {
         // Send error responses
         session.write_packet(response).await?;
-        return Ok(())
+        return Ok(());
     }
 
     result

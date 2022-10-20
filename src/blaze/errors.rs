@@ -21,6 +21,7 @@ pub enum BlazeError {
 /// Enum for errors relating to authentication
 #[derive(Debug, Clone)]
 #[repr(u16)]
+#[allow(unused)]
 pub enum LoginError {
     ServerUnavailable = 0x0,
     EmailNotFound = 0xB,

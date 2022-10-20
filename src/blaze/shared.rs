@@ -1,59 +1,7 @@
-use blaze_pk::{Blob, Codec, CodecError, CodecResult, group, packet, Reader, Tag, TdfMap, TdfOptional, ValueType, VarInt, VarIntList};
+use blaze_pk::{Blob, Codec, CodecError, CodecResult, decode_field, encode_empty_str, encode_field, encode_zero, group, packet, PacketContent, Reader, Tag, TdfMap, TdfOptional, ValueType, VarIntList};
 use crate::blaze::SessionData;
+use crate::database::entities::PlayerModel;
 
-packet! {
-    struct SilentAuthRes {
-        AGUP agup: u8,
-        LDHT ldht: &'static str,
-        NTOS ntos: u8,
-        PCTK token: String,
-        PRIV pri: &'static str,
-        SESS session: SessionDetailsSilent,
-        SPAM spam: u8,
-        THST thst: &'static str,
-        TSUI tsui: &'static str,
-        TURI turi: &'static str
-    }
-}
-
-packet! {
-    struct AuthRes {
-        LDHT ldht: &'static str,
-        NTOS ntos: u8,
-        PCTK token: String,
-        PLST personas: Vec<PersonaDetails>,
-        PRIV pri: &'static str,
-        SKEY skey: String,
-        SPAM spam: u8,
-        THST thst: &'static str,
-        TSUI tsui: &'static str,
-        TURI turi: &'static str,
-        UID uid: u32
-    }
-}
-
-packet! {
-    struct SessionDetailsSilent {
-        BUID buid: u32,
-        FRST frst: u8,
-        KEY key: String,
-        LLOG llog: u8,
-        MAIL mail: String,
-        PDTL personal_details: PersonaDetails,
-        UID uid: u32,
-    }
-}
-
-group! {
-    struct PersonaDetails {
-        DSNM display_name: String,
-        LAST last_login_time: u32,
-        PID  id: u32,
-        STAS stas: u8,
-        XREF xref: u8,
-        XTYP xtype: u8
-    }
-}
 
 packet! {
     struct SessionDetails {
@@ -85,7 +33,7 @@ group! {
         ADDR addr: TdfOptional<NetGroups>,
         BPS bps: &'static str,
         CTY cty: &'static str,
-        CVAR cvar: VarIntList,
+        CVAR cvar: VarIntList<u16>,
         DMAP dmap: TdfMap<u32, u32>,
         HWFG hardware_flag: u16,
         PSLM pslm: Vec<u32>,
@@ -105,23 +53,16 @@ pub struct NetExt {
 
 impl Codec for NetExt {
     fn encode(&self, output: &mut Vec<u8>) {
-        Tag::encode_from("DBPS", &ValueType::VarInt, output);
-        self.dbps.encode(output);
-        Tag::encode_from("NATT", &ValueType::VarInt, output);
-        self.natt.encode(output);
-        Tag::encode_from("UBPS", &ValueType::VarInt, output);
-        self.ubps.encode(output);
+        encode_field!(output, DBPS, &self.dbps, u16);
+        encode_field!(output, NATT, &self.natt, u8);
+        encode_field!(output, UBPS, &self.ubps, u16);
         output.push(0)
     }
 
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        Tag::expect_tag("DBPS", &ValueType::VarInt, reader)?;
-        let dbps = u16::decode(reader)?;
-        Tag::expect_tag("NATT", &ValueType::VarInt, reader)?;
-        let natt = u8::decode(reader)?;
-        Tag::expect_tag("UBPS", &ValueType::VarInt, reader)?;
-        let ubps = u16::decode(reader)?;
-
+        decode_field!(reader, DBPS, dbps, u16);
+        decode_field!(reader, NATT, natt, u8);
+        decode_field!(reader, UBPS, ubps, u16);
         reader.take_one()?;
         Ok(Self { dbps, natt, ubps })
     }
@@ -236,5 +177,75 @@ impl NetAddress {
         let c = ((self.0 >> 8) & 0xFF) as u8;
         let d = (self.0 & 0xFF) as u8;
         format!("{a}.{b}.{c}.{d}")
+    }
+}
+
+
+/// Complex authentication result structure is manually encoded because it
+/// has complex nesting and output can vary based on inputs provided
+#[derive(Debug)]
+pub struct AuthRes<'a, 'b> {
+    pub session_data: &'a SessionData,
+    pub player: &'b PlayerModel,
+    pub session_token: String,
+    pub silent: bool,
+}
+
+impl PacketContent for AuthRes<'_, '_> {}
+
+impl Codec for AuthRes<'_, '_> {
+    fn encode(&self, output: &mut Vec<u8>) {
+        let silent = self.silent;
+        if silent {
+            encode_zero!(output, AGUP);
+        }
+
+        encode_empty_str!(output, LDHT);
+        encode_zero!(output, NTOS);
+        encode_field!(output, PCTK, &self.session_token, String);
+
+        #[inline]
+        fn encode_persona(player: &PlayerModel, output: &mut Vec<u8>) {
+            encode_field!(output, DSNM, &player.display_name, String);
+            encode_zero!(output, LAST);
+            encode_field!(output, PID, &player.id, u32);
+            encode_zero!(output, STAS);
+            encode_zero!(output, XREF);
+            encode_zero!(output, XTYP);
+            output.push(0);
+        }
+
+        if silent {
+            encode_empty_str!(output, PRIV);
+            Tag::encode_from("SESS", &ValueType::Group, output);
+            encode_field!(output, BUID, &self.player.id, u32);
+            encode_zero!(output, FRST);
+            encode_field!(output, KEY, &self.session_token, String);
+            encode_zero!(output, LLOG);
+            encode_field!(output, MAIL, &self.player.email, String);
+            Tag::encode_from("PDTL", &ValueType::Group, output);
+            encode_persona(&self.player, output);
+            encode_field!(output, UID, &self.player.id, u32);
+            output.push(0);
+        } else {
+            Tag::encode_from("PLST", &ValueType::List, output);
+            ValueType::Group.encode(output);
+            output.push(1);
+            encode_persona(&self.player, output);
+
+            encode_empty_str!(output, PRIV);
+            encode_field!(output, SKEY, &self.session_token, String);
+        }
+        encode_zero!(output, SPAM);
+        encode_empty_str!(output, THST);
+        encode_empty_str!(output, TSUI);
+        encode_empty_str!(output, TURI);
+        if !silent {
+            encode_field!(output, UID, &self.player.id, u32);
+        }
+    }
+
+    fn decode(_: &mut Reader) -> CodecResult<Self> {
+        Err(CodecError::InvalidAction("Not allowed to decode AuthRes"))
     }
 }

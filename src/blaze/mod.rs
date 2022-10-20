@@ -2,10 +2,9 @@ use std::net::SocketAddr;
 use std::ops::DerefMut;
 use std::sync::{Arc};
 use std::time::SystemTime;
-use actix_web::web::to;
-use blaze_pk::{Blob, OpaquePacket, PacketContent, PacketResult, Packets, TdfMap, VarInt, VarIntList};
+use blaze_pk::{Blob, OpaquePacket, PacketContent, PacketResult, Packets, TdfMap, VarIntList};
 use log::{debug, error, info};
-use rand_core::OsRng;
+use rand::{Rng, thread_rng};
 use sea_orm::DatabaseConnection;
 use tokio::io;
 use tokio::sync::RwLock;
@@ -15,8 +14,6 @@ use errors::HandleResult;
 use crate::blaze::errors::{BlazeError, BlazeResult};
 use crate::blaze::shared::{NetData, SessionDataCodec, SessionDetails, SessionUser, UpdateExtDataAttr};
 use crate::database::entities::PlayerModel;
-use crate::database::entities::players::Model;
-use crate::database::interface::DbResult;
 use crate::database::interface::players::set_session_token;
 use crate::GlobalState;
 
@@ -72,6 +69,7 @@ pub struct Session {
     pub data: RwLock<SessionData>,
 }
 
+#[derive(Debug)]
 pub struct SessionData {
     // Basic
     pub player: Option<PlayerModel>,
@@ -131,28 +129,25 @@ impl Session {
     /// state data.
     pub fn db(&self) -> &DatabaseConnection { &self.global.db }
 
-    fn generate_session_token() -> String {
-        let mut rand = OsRng;
-        let length  = 128;
-        let mut out = String::with_capacity(length);
-        let collection = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPSQRSTUVWXYZ0123456789"
-            .chars()
-            .collect::<Vec<char>>();
-
-        for _ in 0..length {
-            let value = rand.gen_range(0..collection.len());
-            out.push(collection[value])
-        }
-        out
+    /// Generates a session token by getting 128 random alphanumeric
+    /// characters and creating a string from them.
+    fn generate_token() -> String {
+        thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(128)
+            .map(char::from)
+            .collect()
     }
 
+    /// Obtains the session token for the player linked to this session
+    /// optionally setting and returning a new session token if there is
+    /// not already one.
     pub async fn session_token(&self) -> BlazeResult<String> {
         let session_data = self.data.read().await;
-        let player = session_data.player.as_ref()
-            .ok_or(BlazeError::MissingPlayer)?;
+        let player = session_data.expect_player()?;
         match player.session_token.as_ref() {
             None => {
-                let new_token = Self::generate_session_token();
+                let new_token = Self::generate_token();
                 self.set_token(Some(new_token.clone()))
                     .await?;
                 Ok(new_token)
@@ -179,20 +174,19 @@ impl Session {
     /// Sets the player stored in this session to the provided player. This
     /// wrapper allows state that depends on this session having a player to
     /// be updated accordingly such as games
-    pub async fn set_player(&self, player: Option<PlayerModel>) -> Option<&mut PlayerModel> {
+    pub async fn set_player(&self, player: Option<PlayerModel>) {
         let mut session_data = self.data.write().await;
         let existing = if let Some(player) = player {
             session_data.player.replace(player)
         } else {
             session_data.player.take()
         };
-        if let Some(existing) = &existing {
-            debug!("Swapped authentication to: ");
+        if let Some(existing) = existing {
+            debug!("Swapped authentication from: ");
             debug!("ID = {}", &existing.id);
             debug!("Username = {}", &existing.display_name);
             debug!("Email = {}", &existing.email);
         }
-        session_data.player.as_mut()
     }
 
     /// Function for asynchronously writing a packet to the provided session. Acquires the
@@ -212,8 +206,8 @@ impl Session {
     }
 
     #[inline]
-    pub async fn response<T: PacketContent>(&self, packet: &OpaquePacket, contents: impl AsRef<T>) -> HandleResult {
-        self.write_packet(&Packets::response(packet, contents.as_ref())).await?;
+    pub async fn response<T: PacketContent>(&self, packet: &OpaquePacket, contents: &T) -> HandleResult {
+        self.write_packet(&Packets::response(packet, contents)).await?;
         Ok(())
     }
 
@@ -237,6 +231,12 @@ impl Session {
 }
 
 impl SessionData {
+    pub fn expect_player(&self) -> BlazeResult<&PlayerModel> {
+        self.player
+            .as_ref()
+            .ok_or(BlazeError::MissingPlayer)
+    }
+
     pub fn user(&self) -> BlazeResult<SessionUser> {
         let player = self.player
             .as_ref()
@@ -257,7 +257,7 @@ impl SessionData {
             bps: "ea-sjc",
             cty: "",
             cvar: VarIntList::empty(),
-            dmap: TdfMap::only(0x70001, 0x409a),
+            dmap: TdfMap::only(0x70001u32, 0x409au32),
             hardware_flag: self.hardware_flag,
             pslm: vec![self.pslm],
             net_ext: self.net.ext,

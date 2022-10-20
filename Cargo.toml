@@ -36,6 +36,7 @@ env_logger = "0.9.1"
 dotenvy = "0.15.5"
 derive_more = "0.99.17"
 regex = "1"
+rand = "0.8.5"
 
 # Password hashing
 rand_core = { version = "0.6", features = ["std"] }

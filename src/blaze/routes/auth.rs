@@ -1,10 +1,10 @@
 use std::ops::Deref;
-use blaze_pk::{Codec, CodecError, CodecResult, encode_empty_str, encode_field, encode_zero, OpaquePacket, packet, Packets, Reader, Tag, ValueType};
+use blaze_pk::{OpaquePacket, packet, Packets};
 use log::debug;
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
-use crate::blaze::routes::response_error;
-use crate::blaze::{Session, SessionData};
+use crate::blaze::Session;
+use crate::blaze::shared::AuthRes;
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players;
 
@@ -58,7 +58,7 @@ async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> Handle
         .await?
         .ok_or_else(|| login_error(packet, LoginError::InvalidSession))?;
 
-    if player.session_token.ne(&token) {
+    if player.session_token.ne(&Some(token)) {
         return Err(login_error(packet, LoginError::InvalidSession));
     }
 
@@ -67,17 +67,17 @@ async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> Handle
     debug!("Username = {}", &player.display_name);
     debug!("Email = {}", &player.email);
 
-    complete_auth(session, player, true).await?;
+    complete_auth(session, packet, player, true).await?;
     Ok(())
 }
 
 /// Completes the authentication process for the provided session using the provided Player
 /// Model as the authenticated player.
-async fn complete_auth(session: &Session, player: PlayerModel, silent: bool) -> HandleResult {
-    let player = session.set_player(Some(player)).await
-        .ok_or(BlazeError::MissingPlayer)?;
+async fn complete_auth(session: &Session, packet: &OpaquePacket, player: PlayerModel, silent: bool) -> HandleResult {
+    session.set_player(Some(player)).await;
     let session_token = session.session_token().await?;
     let session_data = session.data.read().await;
+    let player = session_data.expect_player()?;
     let response = AuthRes {
         session_data: session_data.deref(),
         session_token,
@@ -106,68 +106,3 @@ async fn handle_logout(session: &Session, packet: &OpaquePacket) -> HandleResult
     session.response_empty(packet).await
 }
 
-/// Complex authentication result structure is manually encoded because it
-/// has complex nesting and output can vary based on inputs provided
-pub struct AuthRes<'a, 'b> {
-    session_data: &'a SessionData,
-    player: &'b PlayerModel,
-    session_token: String,
-    silent: bool,
-}
-
-impl Codec for AuthRes {
-    fn encode(&self, output: &mut Vec<u8>) {
-        let silent = self.silent;
-        if silent {
-            encode_zero!(output, AGUP);
-        }
-
-        encode_empty_str!(output, LDHT);
-        encode_zero!(output, NTOS);
-        encode_field!(output, PCTK, &self.session_token, String);
-
-        #[inline]
-        fn encode_persona(player: &PlayerModel, output: &mut Vec<u8>) {
-            encode_field!(output, DSNM, &player.display_name, String);
-            encode_zero!(output, LAST);
-            encode_field!(output, PID, &player.id, u32);
-            encode_zero!(output, STAS);
-            encode_zero!(output, XREF);
-            encode_zero!(output, XTYP);
-            output.push(0);
-        }
-
-        if silent {
-            encode_empty_str!(output, PRIV);
-            Tag::encode_from("SESS", &ValueType::Group, output);
-            encode_field!(output, BUID, &self.player.id, u32);
-            encode_zero!(output, FRST);
-            encode_field!(output, KEY, &self.session_token, String);
-            encode_zero!(output, LLOG);
-            encode_field!(output, MAIL, &self.player.email, String);
-            Tag::encode_from("PDTL", &ValueType::Group, output);
-            encode_persona(&self.player, output);
-            encode_field!(output, UID, &self.player.id, u32);
-            output.push(0);
-        } else {
-            Tag::encode_from("PLST", &ValueType::List, output);
-            ValueType::Group.encode(output);
-            output.push(1);
-            encode_persona(&self.player, output);
-
-            encode_empty_str!(output, PRIV);
-            encode_field!(output, SKEY, &self.session_token, String);
-        }
-        encode_zero!(output, SPAM);
-        encode_empty_str!(output, THST);
-        encode_empty_str!(output, TSUI);
-        encode_empty_str!(output, TURI);
-        if !silent {
-            encode_field!(output, UID, &self.player.id, u32);
-        }
-    }
-
-    fn decode(_: &mut Reader) -> CodecResult<Self> {
-        Err(CodecError::InvalidAction("Not allowed to decode AuthRes"))
-    }
-}
