@@ -1,5 +1,6 @@
 use blaze_pk::{group, OpaquePacket, packet, TdfMap};
 use std::time::{SystemTime, UNIX_EPOCH};
+use log::debug;
 use rust_embed::RustEmbed;
 use crate::blaze::components::Util;
 use crate::blaze::errors::{BlazeError, HandleResult};
@@ -17,9 +18,9 @@ pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) ->
         Util::Ping => handle_ping(session, packet).await,
         Util::FetchClientConfig => handle_fetch_client_config(session, packet).await,
         component => {
-            println!("Got {component:?}");
+            debug!("Got {component:?}");
             packet.debug_decode()?;
-            Ok(())
+            session.response_empty(packet).await
         }
     }
 }

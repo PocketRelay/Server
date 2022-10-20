@@ -1,5 +1,5 @@
 use blaze_pk::{OpaquePacket, Packets};
-use log::debug;
+use log::{debug, error};
 use crate::blaze::components::Components;
 use crate::blaze::errors::{BlazeError, HandleResult};
 use crate::blaze::Session;
@@ -24,6 +24,7 @@ pub async fn route(session: &Session, component: Components, packet: &OpaquePack
     };
 
     if let Err(BlazeError::Response(response)) = &result {
+        error!("Sending error response");
         // Send error responses
         session.write_packet(response).await?;
         return Ok(());

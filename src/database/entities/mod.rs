@@ -15,3 +15,4 @@ pub use player_classes::Model as PlayerClassModel;
 
 pub use players::Entity as PlayerEntity;
 pub use players::Model as PlayerModel;
+pub use players::ActiveModel as PlayerActiveModel;

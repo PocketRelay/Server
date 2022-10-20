@@ -9,7 +9,7 @@ use crate::blaze::shared::{AuthRes, Entitlement};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players;
 use crate::database::interface::players::find_by_email;
-use crate::utils::hashing::verify_password;
+use crate::utils::hashing::{hash_password, verify_password};
 
 /// Routing function for handling packets with the `Authentication` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -20,10 +20,11 @@ pub async fn route(session: &Session, component: Authentication, packet: &Opaque
         Authentication::Logout => handle_logout(session, packet).await,
         Authentication::Login => handle_login(session, packet).await,
         Authentication::ListUserEntitlements2 => handle_list_user_entitlements_2(session, packet).await,
+        Authentication::CreateAccount => handle_create_account(session, packet).await,
         component => {
-            println!("Got {component:?}");
+            debug!("Got {component:?}");
             packet.debug_decode()?;
-            Ok(())
+            session.response_empty(packet).await
         }
     }
 }
@@ -112,7 +113,7 @@ async fn handle_logout(session: &Session, packet: &OpaquePacket) -> HandleResult
 }
 
 packet! {
-    struct LoginReq {
+    struct AccountReq {
         MAIL email: String,
         PASS password: String
     }
@@ -132,13 +133,11 @@ packet! {
 /// }
 /// ```
 async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<LoginReq>()?;
+    let req = packet.contents::<AccountReq>()?;
     let email = req.email;
     let password = req.password;
-    let email_regex = Regex::new(r#"^([a-z0-9_+]([a-z0-9_+.]*[a-z0-9_+])?)@([a-z0-9]+([\-.][a-z0-9]+)*\.[a-z]{2,6})"#)
-        .map_err(BlazeError::Other("Regex for email matching was invalid"))?;
 
-    if !email_regex.is_match(&email) {
+    if !is_email(&email)? {
         return Err(login_error(packet, LoginError::InvalidEmail));
     }
 
@@ -149,6 +148,39 @@ async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult 
     if !verify_password(&password, &player.password) {
         return Err(login_error(packet, LoginError::WrongPassword));
     }
+
+    complete_auth(session, packet, player, false).await?;
+    Ok(())
+}
+
+fn is_email(email: &str) -> Result<bool, BlazeError> {
+    let regex = Regex::new(r#"^([a-z0-9_+]([a-z0-9_+.]*[a-z0-9_+])?)@([a-z0-9]+([\-.][a-z0-9]+)*\.[a-z]{2,6})"#)
+        .map_err(|_| BlazeError::Other("Regex for email matching was invalid"))?;
+    Ok(regex.is_match(email))
+}
+
+/// Handles creating accounts
+async fn handle_create_account(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let req = packet.contents::<AccountReq>()?;
+    let email = req.email;
+    let password = req.password;
+
+    if !is_email(&email)? {
+        return Err(login_error(packet, LoginError::InvalidEmail));
+    }
+
+    let email_exists = find_by_email(session.db(), &email)
+        .await?
+        .is_some();
+
+    if email_exists {
+        return Err(login_error(packet, LoginError::EmailAlreadyInUse))
+    }
+
+    let hashed_password = hash_password(&password)
+        .map_err(|_| BlazeError::Other("Failed to hash user password"))?;
+
+    let player = players::create_normal(session.db(), email, hashed_password).await?;
 
     complete_auth(session, packet, player, false).await?;
     Ok(())
