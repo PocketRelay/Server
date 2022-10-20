@@ -1664,7 +1664,6 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "argon2",
- "async-trait",
  "blaze-pk",
  "derive_more",
  "dotenvy",
@@ -1674,6 +1673,7 @@ dependencies = [
  "mime_guess",
  "password-hash",
  "rand_core",
+ "regex",
  "rust-embed",
  "sea-orm",
  "serde",

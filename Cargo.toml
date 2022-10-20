@@ -14,23 +14,34 @@ keywords = ["EA", "PocketRelay", "MassEffect"]
 members = [".", "migration"]
 
 [dependencies]
+# Async runtime
 tokio = { version = "1", features = ["full"] }
-blaze-pk = { path = "../BlazePK", features = ["async"] }
-actix-web = "4"
-dotenvy = "0.15.5"
-sea-orm = { version = "^0", features = [ "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
-serde = { version = "1.0", features = ["derive"] }
-async-trait = "0.1.57"
 
+# HTTP Server
+actix-web = "4"
+
+# Serialization and packets
+blaze-pk = { path = "../BlazePK", features = ["async"] }
+serde = { version = "1.0", features = ["derive"] }
+
+# Database dependencies
+migration = { path = "migration" }
+sea-orm = { version = "^0", features = [ "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
+
+# Logging
 log = "0.4.17"
 env_logger = "0.9.1"
+
+# Utilities
+dotenvy = "0.15.5"
 derive_more = "0.99.17"
+regex = "1"
 
-migration = { path = "migration" } # depends on your needs
-
-argon2 = "0.4"
+# Password hashing
 rand_core = { version = "0.6", features = ["std"] }
+argon2 = "0.4"
 password-hash = "0.4.2"
 
+# Resource / HTTP embedding
 rust-embed={ version = "6.4.1", features = ["debug-embed"]}
 mime_guess = "2.0.4"

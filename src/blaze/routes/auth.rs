@@ -1,4 +1,3 @@
-use std::env::var;
 use std::ops::Deref;
 use blaze_pk::{Codec, CodecError, CodecResult, encode_empty_str, encode_field, encode_zero, OpaquePacket, packet, Packets, Reader, Tag, ValueType};
 use log::debug;
