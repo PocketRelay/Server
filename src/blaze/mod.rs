@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::ops::DerefMut;
 use std::sync::{Arc};
 use std::time::SystemTime;
-use blaze_pk::{Blob, OpaquePacket, PacketContent, PacketResult, Packets, TdfMap, VarIntList};
+use blaze_pk::{Blob, Codec, OpaquePacket, PacketResult, Packets, TdfMap, VarIntList};
 use log::{debug, error, info};
 use rand::{Rng, thread_rng};
 use sea_orm::DatabaseConnection;
@@ -206,7 +206,7 @@ impl Session {
     }
 
     #[inline]
-    pub async fn response<T: PacketContent>(&self, packet: &OpaquePacket, contents: &T) -> HandleResult {
+    pub async fn response<T: Codec>(&self, packet: &OpaquePacket, contents: &T) -> HandleResult {
         self.write_packet(&Packets::response(packet, contents)).await?;
         Ok(())
     }
@@ -218,7 +218,7 @@ impl Session {
     }
 
     #[inline]
-    pub async fn response_error<T: PacketContent>(&self, packet: &OpaquePacket, error: impl Into<u16>, contents: &T) -> HandleResult {
+    pub async fn response_error<T: Codec>(&self, packet: &OpaquePacket, error: impl Into<u16>, contents: &T) -> HandleResult {
         self.write_packet(&Packets::error(packet, error, contents)).await?;
         Ok(())
     }

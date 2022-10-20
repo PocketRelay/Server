@@ -1,4 +1,4 @@
-use blaze_pk::{Blob, Codec, CodecError, CodecResult, decode_field, group, packet, PacketContent, Reader, Tag, tag_empty_str, tag_group_end, tag_group_start, tag_list_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_zero, TdfMap, TdfOptional, ValueType, VarIntList};
+use blaze_pk::{Blob, Codec, CodecResult, decode_field, group, packet, Reader, Tag, tag_empty_str, tag_group_end, tag_group_start, tag_list_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_zero, TdfMap, TdfOptional, ValueType, VarIntList};
 use crate::blaze::SessionData;
 use crate::database::entities::PlayerModel;
 
@@ -199,8 +199,6 @@ pub struct Sess<'a, 'b> {
     pub session_token: String,
 }
 
-impl PacketContent for Sess<'_, '_> {}
-
 impl Codec for Sess<'_, '_> {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_group_start(output, "SESS");
@@ -213,10 +211,6 @@ impl Codec for Sess<'_, '_> {
         encode_persona(&self.player, output);
         tag_u32(output, "UID", self.player.id);
     }
-
-    fn decode(_reader: &mut Reader) -> CodecResult<Self> {
-        Err(CodecError::InvalidAction("Decoding for this struct is not allowed"))
-    }
 }
 
 
@@ -227,8 +221,6 @@ pub struct AuthRes<'a, 'b> {
     pub sess: Sess<'a, 'b>,
     pub silent: bool,
 }
-
-impl PacketContent for AuthRes<'_, '_> {}
 
 impl Codec for AuthRes<'_, '_> {
     fn encode(&self, output: &mut Vec<u8>) {
@@ -260,10 +252,6 @@ impl Codec for AuthRes<'_, '_> {
             tag_u32(output, "UID", self.player.id);
         }
     }
-
-    fn decode(_: &mut Reader) -> CodecResult<Self> {
-        Err(CodecError::InvalidAction("Not allowed to decode AuthRes"))
-    }
 }
 
 //noinspection SpellCheckingInspection
@@ -282,8 +270,8 @@ impl<'a> Entitlement<'a> {
     const DLC_TY: u8 = 5;
     const EXT_TY: u8 = 1;
 
-    const PC_TAG: &str = "ME3PCOffers";
-    const GEN_TAG: &str = "ME3GenOffers";
+    const PC_TAG: &'a str = "ME3PCOffers";
+    const GEN_TAG: &'a str = "ME3GenOffers";
 
     pub fn new_pc(
         id: u64,
@@ -345,8 +333,35 @@ impl Codec for Entitlement<'_> {
         tag_u8(output, "VER", 0);
         tag_group_end(output);
     }
+}
 
-    fn decode(_: &mut Reader) -> CodecResult<Self> {
-        Err(CodecError::InvalidAction("Not allowed to decode entitlement"))
+#[derive(Debug)]
+pub struct LegalDocsInfo;
+
+impl Codec for LegalDocsInfo {
+    //noinspection SpellCheckingInspection
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_zero(output, "EAMC");
+        tag_empty_str(output, "LHST");
+        tag_zero(output, "PMC");
+        tag_empty_str(output, "PPUI");
+        tag_empty_str(output, "TSUI");
+    }
+}
+
+#[derive(Debug)]
+pub struct TermsContent<'a, 'b> {
+    pub path: &'a str,
+    pub col: u16,
+    pub content: &'b str,
+}
+
+
+impl Codec for TermsContent<'_, '_> {
+    //noinspection SpellCheckingInspection
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_str(output, "LDVC", self.path);
+        tag_u16(output, "TCOL", self.col);
+        tag_str(output, "TCOT", self.content);
     }
 }

@@ -1,11 +1,11 @@
 use std::ops::Deref;
-use blaze_pk::{Codec, CodecError, CodecResult, OpaquePacket, packet, PacketContent, Packets, Reader, tag_list_start, ValueType};
+use blaze_pk::{Codec, CodecError, CodecResult, OpaquePacket, packet, Packets, Reader, tag_list_start, ValueType};
 use log::debug;
 use regex::Regex;
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
 use crate::blaze::Session;
-use crate::blaze::shared::{AuthRes, Entitlement, Sess};
+use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players;
 use crate::database::interface::players::find_by_email;
@@ -23,6 +23,7 @@ pub async fn route(session: &Session, component: Authentication, packet: &Opaque
         Authentication::CreateAccount => handle_create_account(session, packet).await,
         Authentication::LoginPersona => handle_login_persona(session, packet).await,
         Authentication::PasswordForgot => handle_forgot_password(session, packet).await,
+        Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(session, packet).await,
 
         component => {
             debug!("Got {component:?}");
@@ -202,8 +203,6 @@ struct LUERes<'a> {
     list: Vec<Entitlement<'a>>,
 }
 
-impl PacketContent for LUERes<'_> {}
-
 impl Codec for LUERes<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_list_start(output, "NLST", ValueType::Group, self.list.len());
@@ -341,4 +340,18 @@ async fn handle_forgot_password(session: &Session, packet: &OpaquePacket) -> Han
     }
     debug!("Got request for password rest for email: {}", &req.email);
     session.response_empty(packet).await
+}
+
+/// Expected to be getting information about the legal docs however the exact meaning
+/// of the response content is not yet known and further research is required
+///
+/// # Structure
+/// ```
+/// packet(Components.AUTHENTICATION, Commands.GET_LEGAL_DOCS_INFO, 0x0, 0x16) {
+///   text("CTRY", "") // Country?
+///   text("PTFM", "pc") // Platform?
+/// }
+/// ```
+async fn handle_get_legal_docs_info(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    session.response(packet, &LegalDocsInfo).await
 }
