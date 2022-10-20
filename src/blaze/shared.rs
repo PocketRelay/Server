@@ -1,4 +1,4 @@
-use blaze_pk::{Blob, Codec, CodecError, CodecResult, decode_field, encode_empty_str, encode_field, encode_zero, group, packet, PacketContent, Reader, Tag, TdfMap, TdfOptional, ValueType, VarIntList};
+use blaze_pk::{Blob, Codec, CodecError, CodecResult, decode_field, group, packet, PacketContent, Reader, Tag, tag_empty_str, tag_group_end, tag_group_start, tag_list_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_zero, TdfMap, TdfOptional, ValueType, VarIntList};
 use crate::blaze::SessionData;
 use crate::database::entities::PlayerModel;
 
@@ -53,9 +53,9 @@ pub struct NetExt {
 
 impl Codec for NetExt {
     fn encode(&self, output: &mut Vec<u8>) {
-        encode_field!(output, DBPS, &self.dbps, u16);
-        encode_field!(output, NATT, &self.natt, u8);
-        encode_field!(output, UBPS, &self.ubps, u16);
+        tag_u16(output, "DBPS", self.dbps);
+        tag_u8(output, "NATT", self.natt);
+        tag_u16(output, "UBPS", self.ubps);
         output.push(0)
     }
 
@@ -84,20 +84,29 @@ pub struct NetGroups {
     pub external: NetGroup,
 }
 
+//noinspection SpellCheckingInspection
 impl Codec for NetGroups {
     fn encode(&self, output: &mut Vec<u8>) {
-        Tag::encode_from("EXIP", &ValueType::Group, output);
+        tag_group_start(output, "EXIP");
         self.external.encode(output);
-        Tag::encode_from("INIP", &ValueType::Group, output);
+        tag_group_end(output);
+
+        tag_group_start(output, "INIP");
         self.internal.encode(output);
+        tag_group_end(output);
+
         output.push(0)
     }
 
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
         Tag::expect_tag("EXIP", &ValueType::Group, reader)?;
         let external = NetGroup::decode(reader)?;
+        reader.take_one()?;
+
         Tag::expect_tag("INIP", &ValueType::Group, reader)?;
         let internal = NetGroup::decode(reader)?;
+        reader.take_one()?;
+
         reader.take_one()?;
         Ok(Self {
             external,
@@ -128,23 +137,15 @@ pub struct NetGroup(pub NetAddress, pub Port);
 
 impl Codec for NetGroup {
     fn encode(&self, output: &mut Vec<u8>) {
-        Tag::encode_from("IP", &ValueType::VarInt, output);
-        self.0.0.encode(output);
-
-        Tag::encode_from("PORT", &ValueType::VarInt, output);
-        self.1.encode(output);
-
-        output.push(0)
+        tag_u32(output, "IP", self.0.0);
+        tag_u16(output, "PORT", self.1);
     }
 
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
         Tag::expect_tag("IP", &ValueType::VarInt, reader)?;
         let ip = u32::decode(reader)?;
-
         Tag::expect_tag("PORT", &ValueType::VarInt, reader)?;
         let port = u16::decode(reader)?;
-
-        reader.take_one()?;
         Ok(Self(NetAddress(ip), port))
     }
 
@@ -197,55 +198,140 @@ impl Codec for AuthRes<'_, '_> {
     fn encode(&self, output: &mut Vec<u8>) {
         let silent = self.silent;
         if silent {
-            encode_zero!(output, AGUP);
+            tag_zero(output, "AGUP");
         }
 
-        encode_empty_str!(output, LDHT);
-        encode_zero!(output, NTOS);
-        encode_field!(output, PCTK, &self.session_token, String);
+        tag_empty_str(output, "LDHT");
+        tag_zero(output, "NTOS");
+        tag_str(output, "PCTK", &self.session_token);
 
         #[inline]
         fn encode_persona(player: &PlayerModel, output: &mut Vec<u8>) {
-            encode_field!(output, DSNM, &player.display_name, String);
-            encode_zero!(output, LAST);
-            encode_field!(output, PID, &player.id, u32);
-            encode_zero!(output, STAS);
-            encode_zero!(output, XREF);
-            encode_zero!(output, XTYP);
-            output.push(0);
+            tag_str(output, "DSNM", &player.display_name);
+            tag_zero(output, "LAST");
+            tag_u32(output, "PID", player.id);
+            tag_zero(output, "STAS");
+            tag_zero(output, "XREF");
+            tag_zero(output, "XTYP");
+            tag_group_end(output);
         }
 
         if silent {
-            encode_empty_str!(output, PRIV);
-            Tag::encode_from("SESS", &ValueType::Group, output);
-            encode_field!(output, BUID, &self.player.id, u32);
-            encode_zero!(output, FRST);
-            encode_field!(output, KEY, &self.session_token, String);
-            encode_zero!(output, LLOG);
-            encode_field!(output, MAIL, &self.player.email, String);
-            Tag::encode_from("PDTL", &ValueType::Group, output);
-            encode_persona(&self.player, output);
-            encode_field!(output, UID, &self.player.id, u32);
-            output.push(0);
-        } else {
-            Tag::encode_from("PLST", &ValueType::List, output);
-            ValueType::Group.encode(output);
-            output.push(1);
-            encode_persona(&self.player, output);
+            tag_empty_str(output, "PRIV");
 
-            encode_empty_str!(output, PRIV);
-            encode_field!(output, SKEY, &self.session_token, String);
+            tag_group_start(output, "SESS");
+            tag_u32(output, "BUID", self.player.id);
+            tag_zero(output, "FRST");
+            tag_str(output, "KEY", &self.session_token);
+            tag_zero(output, "LLOG");
+            tag_str(output, "MAIL", &self.player.email);
+
+            tag_group_start(output, "PDTL");
+            encode_persona(&self.player, output);
+            tag_u32(output, "UID", self.player.id);
+
+            tag_group_end(output);
+        } else {
+            tag_list_start(output, "PLST", ValueType::Group, 1);
+            encode_persona(&self.player, output);
+            tag_empty_str(output, "PRIV");
+            tag_str(output, "SKEY", &self.session_token);
         }
-        encode_zero!(output, SPAM);
-        encode_empty_str!(output, THST);
-        encode_empty_str!(output, TSUI);
-        encode_empty_str!(output, TURI);
+        tag_zero(output, "SPAM");
+        tag_empty_str(output, "THST");
+        tag_empty_str(output, "TSUI");
+        tag_empty_str(output, "TURI");
         if !silent {
-            encode_field!(output, UID, &self.player.id, u32);
+            tag_u32(output, "UID", self.player.id);
         }
     }
 
     fn decode(_: &mut Reader) -> CodecResult<Self> {
         Err(CodecError::InvalidAction("Not allowed to decode AuthRes"))
+    }
+}
+
+//noinspection SpellCheckingInspection
+#[derive(Debug)]
+pub struct Entitlement<'a> {
+    name: &'a str,
+    id: u64,
+    pjid: &'a str,
+    prca: u8,
+    prid: &'a str,
+    tag: &'a str,
+    ty: u8,
+}
+
+impl<'a> Entitlement<'a> {
+    const DLC_TY: u8 = 5;
+    const EXT_TY: u8 = 1;
+
+    const PC_TAG: &str = "ME3PCOffers";
+    const GEN_TAG: &str = "ME3GenOffers";
+
+    pub fn new_pc(
+        id: u64,
+        pjid: &'a str,
+        prca: u8,
+        prid: &'a str,
+        tag: &'a str,
+        ty: u8,
+    ) -> Self {
+        Self {
+            name: Self::PC_TAG,
+            id,
+            pjid,
+            prca,
+            prid,
+            tag,
+            ty,
+        }
+    }
+
+    pub fn new_gen(
+        id: u64,
+        pjid: &'a str,
+        prca: u8,
+        prid: &'a str,
+        tag: &'a str,
+        ty: u8,
+    ) -> Self {
+        Self {
+            name: Self::GEN_TAG,
+            id,
+            pjid,
+            prca,
+            prid,
+            tag,
+            ty,
+        }
+    }
+}
+
+impl Codec for Entitlement<'_> {
+    //noinspection SpellCheckingInspection
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_empty_str(output, "DEVI");
+        tag_str(output, "GDAY", "2012-12-15T16:15Z");
+        tag_str(output, "GNAM", self.name);
+        tag_u64(output, "ID", self.id);
+        tag_u8(output, "ISCO", 0);
+        tag_u8(output, "PID", 0);
+        tag_str(output, "PJID", self.pjid);
+        tag_u8(output, "PRCA", self.prca);
+        tag_str(output, "PRID", self.prid);
+        tag_u8(output, "STAT", 1);
+        tag_u8(output, "STRC", 0);
+        tag_str(output, "TAG", self.tag);
+        tag_empty_str(output, "TDAY");
+        tag_u8(output, "TTYPE", self.ty);
+        tag_u8(output, "UCNT", 0);
+        tag_u8(output, "VER", 0);
+        tag_group_end(output);
+    }
+
+    fn decode(_: &mut Reader) -> CodecResult<Self> {
+        Err(CodecError::InvalidAction("Not allowed to decode entitlement"))
     }
 }
