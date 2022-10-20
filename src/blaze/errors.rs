@@ -1,4 +1,4 @@
-use blaze_pk::{CodecError, packet};
+use blaze_pk::{CodecError, OpaquePacket, packet};
 use derive_more::From;
 use std::io;
 use sea_orm::DbErr;
@@ -12,7 +12,10 @@ pub enum BlazeError {
     IO(io::Error),
     Other(&'static str),
     Database(DbErr),
-    MissingPlayer
+    MissingPlayer,
+    // Response error type. Responds with the provided response through
+    // the redirect handler
+    Response(OpaquePacket)
 }
 
 /// Enum for errors relating to authentication

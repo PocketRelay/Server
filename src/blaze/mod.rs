@@ -108,22 +108,22 @@ impl Session {
         let user = data.user()?;
         let update_ext_data = Packets::notify(
             Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
-            UpdateExtDataAttr {
+            &UpdateExtDataAttr {
                 flags: 0x3,
                 id: user.id,
             },
         );
         let session_details = Packets::notify(
             Components::UserSessions(UserSessions::SessionDetails),
-            SessionDetails {
+            &SessionDetails {
                 data: data.to_codec(),
                 user,
             },
         );
 
         drop(data);
-        other.write_packet(session_details).await?;
-        other.write_packet(update_ext_data).await?;
+        other.write_packet(&session_details).await?;
+        other.write_packet(&update_ext_data).await?;
         Ok(())
     }
 
@@ -179,7 +179,7 @@ impl Session {
 
     /// Function for asynchronously writing a packet to the provided session. Acquires the
     /// required locks and writes the packet to the stream.
-    pub async fn write_packet(&self, packet: OpaquePacket) -> io::Result<()> {
+    pub async fn write_packet(&self, packet: &OpaquePacket) -> io::Result<()> {
         let mut stream = self.stream.write().await;
         let stream = stream.deref_mut();
         packet.write_async(stream).await
@@ -195,19 +195,19 @@ impl Session {
 
     #[inline]
     pub async fn response<T: PacketContent>(&self, packet: &OpaquePacket, contents: impl AsRef<T>) -> HandleResult {
-        self.write_packet(Packets::response(packet, contents.as_ref())).await?;
+        self.write_packet(&Packets::response(packet, contents.as_ref())).await?;
         Ok(())
     }
 
     #[inline]
     pub async fn response_error<T: PacketContent>(&self, packet: &OpaquePacket, error: impl Into<u16>, contents: &T) -> HandleResult {
-        self.write_packet(Packets::error(packet, error, contents)).await?;
+        self.write_packet(&Packets::error(packet, error, contents)).await?;
         Ok(())
     }
 
     #[inline]
     pub async fn response_error_empty(&self, packet: &OpaquePacket, error: impl Into<u16>) -> HandleResult {
-        self.write_packet(Packets::error_empty(packet, error)).await?;
+        self.write_packet(&Packets::error_empty(packet, error)).await?;
         Ok(())
     }
 }
