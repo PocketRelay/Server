@@ -21,6 +21,7 @@ define_components! {
         GetTOSInfo (0x2A)
         ModifyEntitlement2 (0x2B)
         ConsumeCode (0x2C)
+        PasswordForgot (0x2D)
         GetTOSContent (0x2E)
         GetPrivacyPolicyContent (0x2F)
         ListPersonalEntitlements2 (0x30)

@@ -21,6 +21,9 @@ pub async fn route(session: &Session, component: Authentication, packet: &Opaque
         Authentication::Login => handle_login(session, packet).await,
         Authentication::ListUserEntitlements2 => handle_list_user_entitlements_2(session, packet).await,
         Authentication::CreateAccount => handle_create_account(session, packet).await,
+        Authentication::LoginPersona => handle_login_persona(session, packet).await,
+        Authentication::PasswordForgot => handle_forgot_password(session, packet).await,
+
         component => {
             debug!("Got {component:?}");
             packet.debug_decode()?;
@@ -145,7 +148,7 @@ async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult 
 
     let player = find_by_email(session.db(), &email)
         .await?
-        .ok_or_else(||login_error(packet, LoginError::EmailNotFound))?;
+        .ok_or_else(|| login_error(packet, LoginError::EmailNotFound))?;
 
     if !verify_password(&password, &player.password) {
         return Err(login_error(packet, LoginError::WrongPassword));
@@ -155,10 +158,10 @@ async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult 
     Ok(())
 }
 
-fn is_email(email: &str) -> Result<bool, BlazeError> {
+fn is_email(email: &str) -> bool {
     let regex = Regex::new(r#"^([a-z0-9_+]([a-z0-9_+.]*[a-z0-9_+])?)@([a-z0-9]+([\-.][a-z0-9]+)*\.[a-z]{2,6})"#)
-        .map_err(|_| BlazeError::Other("Regex for email matching was invalid"))?;
-    Ok(regex.is_match(email))
+        .unwrap();
+    regex.is_match(email)
 }
 
 /// Handles creating accounts
@@ -176,7 +179,7 @@ async fn handle_create_account(session: &Session, packet: &OpaquePacket) -> Hand
         .is_some();
 
     if email_exists {
-        return Err(login_error(packet, LoginError::EmailAlreadyInUse))
+        return Err(login_error(packet, LoginError::EmailAlreadyInUse));
     }
 
     let hashed_password = hash_password(&password)
@@ -196,7 +199,7 @@ packet! {
 
 #[derive(Debug)]
 struct LUERes<'a> {
-    list: Vec<Entitlement<'a>>
+    list: Vec<Entitlement<'a>>,
 }
 
 impl PacketContent for LUERes<'_> {}
@@ -312,4 +315,30 @@ async fn handle_login_persona(session: &Session, packet: &OpaquePacket) -> Handl
     session.response(packet, &response).await?;
     session.update_for(session).await?;
     Ok(())
+}
+
+
+packet! {
+    struct ForgotPaswdReq {
+        MAIL email: String
+    }
+}
+
+/// Handles forgot password requests. This normally would send a forgot password
+/// email but this server does not yet implement that functionality so it is just
+/// logged to debug output
+///
+/// # Structure
+/// ```
+/// packet(Components.AUTHENTICATION, Commands.PASSWORD_FORGOT, 0x0, 0x11) {
+///   text("MAIL", "EMAIL OMITTED")
+/// }
+/// ```
+async fn handle_forgot_password(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let req = packet.contents::<ForgotPaswdReq>()?;
+    if !is_email(&req.email) {
+        return Err(login_error(packet, LoginError::InvalidEmail))
+    }
+    debug!("Got request for password rest for email: {}", &req.email);
+    session.response_empty(packet).await
 }
