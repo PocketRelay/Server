@@ -5,7 +5,7 @@ use regex::Regex;
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
 use crate::blaze::Session;
-use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess};
+use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players;
 use crate::database::interface::players::find_by_email;
@@ -24,6 +24,8 @@ pub async fn route(session: &Session, component: Authentication, packet: &Opaque
         Authentication::LoginPersona => handle_login_persona(session, packet).await,
         Authentication::PasswordForgot => handle_forgot_password(session, packet).await,
         Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(session, packet).await,
+        Authentication::GetTermsOfServiceConent => handle_terms_of_service_content(session, packet).await,
+        Authentication::GetPrivacyPolicyContent => handle_privacy_policy_content(session, packet).await,
 
         component => {
             debug!("Got {component:?}");
@@ -50,7 +52,7 @@ fn login_error(packet: &OpaquePacket, error: LoginError) -> BlazeError {
 /// by the client is correct the session is updated accordingly to match the player
 /// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.SILENT_LOGIN, 0x0, 0x6) {
+/// packet(Components.AUTHENTICATION, Commands.SILENT_LOGIN, 0x6) {
 ///   text("AUTH", "128 CHAR TOKEN OMITTED")
 ///   number("PID", 0x1)
 ///   number("TYPE", 0x2)
@@ -130,7 +132,7 @@ packet! {
 ///
 /// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.LOGIN, 0x0, 0xe) {
+/// packet(Components.AUTHENTICATION, Commands.LOGIN, 0xe) {
 ///   number("DVID", 0x0)
 ///   text("MAIL", "EMAIL OMITTED")
 ///   text("PASS", "PASSWORD OMITTED")
@@ -222,7 +224,7 @@ impl Codec for LUERes<'_> {
 ///
 /// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.LIST_USER_ENTITLEMENTS_2, 0x0, 0x8) {
+/// packet(Components.AUTHENTICATION, Commands.LIST_USER_ENTITLEMENTS_2, 0x8) {
 ///   number("BUID", 0x0)
 ///   number("EPSN", 0x1)
 ///   number("EPSZ", 0x32)
@@ -298,7 +300,7 @@ async fn handle_list_user_entitlements_2(session: &Session, packet: &OpaquePacke
 ///
 /// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.LOGIN_PERSONA, 0x0, 0xe) {
+/// packet(Components.AUTHENTICATION, Commands.LOGIN_PERSONA, 0xe) {
 ///   text("PNAM", "Jacobtread")
 /// }
 /// ```
@@ -329,7 +331,7 @@ packet! {
 ///
 /// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.PASSWORD_FORGOT, 0x0, 0x11) {
+/// packet(Components.AUTHENTICATION, Commands.PASSWORD_FORGOT, 0x11) {
 ///   text("MAIL", "EMAIL OMITTED")
 /// }
 /// ```
@@ -347,11 +349,63 @@ async fn handle_forgot_password(session: &Session, packet: &OpaquePacket) -> Han
 ///
 /// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.GET_LEGAL_DOCS_INFO, 0x0, 0x16) {
+/// packet(Components.AUTHENTICATION, Commands.GET_LEGAL_DOCS_INFO, 0x16) {
 ///   text("CTRY", "") // Country?
 ///   text("PTFM", "pc") // Platform?
 /// }
 /// ```
 async fn handle_get_legal_docs_info(session: &Session, packet: &OpaquePacket) -> HandleResult {
     session.response(packet, &LegalDocsInfo).await
+}
+
+/// The default terms of service document
+const DEFAULT_TERMS_OF_SERVICE: &str = include_str!("../../../resources/defaults/term_of_service.html");
+
+/// Handles serving the contents of the terms of service. This is an HTML document which is
+/// rendered inside the game when you click the button for viewing terms of service.
+///
+/// # Structure
+/// ```
+/// packet(Components.AUTHENTICATION, Commands.GET_TERMS_OF_SERVICE_CONTENT, 0x17) {
+///   text("CTRY", "")
+///   text("LANG", "")
+///   text("PTFM", "pc")
+///   number("TEXT", 0x1)
+/// }
+/// ```
+///
+async fn handle_terms_of_service_content(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    // TODO: Attempt to load local terms of service before reverting to default
+    let response = TermsContent {
+        path: "webterms/au/en/pc/default/09082020/02042022",
+        content: DEFAULT_TERMS_OF_SERVICE,
+        col: 0xdaed
+    };
+    session.response(packet, &response).await
+}
+
+/// The default privacy policy document
+const DEFAULT_PRIVACY_POLICY: &str = include_str!("../../../resources/defaults/privacy_policy.html");
+
+/// Handles serving the contents of the privacy policy. This is an HTML document which is
+/// rendered inside the game when you click the button for viewing privacy policy.
+///
+/// # Structure
+/// ```
+/// packet(Components.AUTHENTICATION, Commands.GET_PRIVACY_POLICY_CONTENT, 0x18) {
+///   text("CTRY", "")
+///   text("LANG", "")
+///   text("PTFM", "pc")
+///   number("TEXT", 0x1)
+/// }
+/// ```
+///
+async fn handle_privacy_policy_content(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    // TODO: Attempt to load local privacy policy before reverting to default
+    let response = TermsContent {
+        path: "webprivacy/au/en/pc/default/08202020/02042022",
+        content: DEFAULT_PRIVACY_POLICY,
+        col: 0xc99c
+    };
+    session.response(packet, &response).await
 }
