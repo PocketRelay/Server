@@ -9,9 +9,7 @@ use crate::blaze::Session;
 /// is printed to the output and an empty response is sent.
 pub async fn route_game_reporting(session: &Session, component: GameReporting, packet: &OpaquePacket) -> HandleResult {
     match component {
-        GameReporting::SubmitOfflineGameReport => {
-            session.response
-        }
+        GameReporting::SubmitOfflineGameReport => handle_submit_offline(session, packet).await,
         component => {
             debug!("Got GameReporting({component:?})");
             packet.debug_decode()?;

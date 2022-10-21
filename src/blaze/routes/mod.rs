@@ -20,8 +20,8 @@ pub async fn route(session: &Session, component: Components, packet: &OpaquePack
         Components::Util(value) => util::route(session, value, packet).await,
         Components::Messaging(value) => messaging::route(session, value, packet).await,
         Components::UserSessions(value) => user_sessions::route(session, value, packet).await,
-        Components::AssociationLists(value) => other::route_association_lists(stats, value, packet).await,
-        Components::GameReporting(value) => other::route_game_reporting(stats, value, packet).await,
+        Components::AssociationLists(value) => other::route_association_lists(session, value, packet).await,
+        Components::GameReporting(value) => other::route_game_reporting(session, value, packet).await,
         value => {
             debug!("No handler for component {value:?}");
             packet.debug_decode()?;
