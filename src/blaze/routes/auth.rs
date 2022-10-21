@@ -170,6 +170,37 @@ async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult 
 }
 
 /// Handles creating accounts
+///
+/// # Structure
+/// ```
+/// packet(Components.AUTHENTICATION, Commands.CREATE_ACCOUNT, 0x12) {
+///   number("BDAY", 0x0)
+///   number("BMON", 0x0)
+///   number("BYR", 0x0)
+///   text("CTRY", "NZ")
+///   number("DVID", 0x0)
+///   number("GEST", 0x0)
+///   text("LANG", "en")
+///   text("MAIL", "EMAIL OMITTED")
+///   number("OPT", 0x0)
+///   number("OPT", 0x0)
+///   text("PASS", "PASSWORD OMITTED")
+///   text("PNAM")
+///   text("PRIV", "webprivacy/au/en/pc/default/08202020/02042022")
+///   text("PRNT")
+///   +group("PROF") {
+///     text("CITY")
+///     text("CTRY")
+///     number("GNDR", 0x0)
+///     text("STAT")
+///     text("STRT")
+///     text("ZIP")
+///   }
+///   text("TOSV", "webterms/au/en/pc/default/09082020/02042022")
+///   text("TSUI", "webterms/au/en/pc/default/09082020/02042022")
+/// }
+/// ```
+///
 async fn handle_create_account(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<AccountReq>()?;
     let email = req.email;
