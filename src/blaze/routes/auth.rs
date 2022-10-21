@@ -46,7 +46,7 @@ packet! {
 }
 
 /// Creates a new blaze error response from the provided login error
-fn login_error(packet: &OpaquePacket, error: LoginError) -> BlazeError {
+pub fn login_error(packet: &OpaquePacket, error: LoginError) -> BlazeError {
     BlazeError::Response(Packets::error(packet, error, &LoginErrorRes::default()))
 }
 
@@ -87,7 +87,7 @@ async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> Handle
 
 /// Completes the authentication process for the provided session using the provided Player
 /// Model as the authenticated player.
-async fn complete_auth(session: &Session, packet: &OpaquePacket, player: PlayerModel, silent: bool) -> HandleResult {
+pub async fn complete_auth(session: &Session, packet: &OpaquePacket, player: PlayerModel, silent: bool) -> HandleResult {
     session.set_player(Some(player)).await;
     let session_token = session.session_token().await?;
     let session_data = session.data.read().await;
