@@ -10,7 +10,7 @@ use crate::blaze::Session;
 pub async fn route(session: &Session, component: Stats, packet: &OpaquePacket) -> HandleResult {
     match component {
         component => {
-            debug!("Got {component:?}");
+            debug!("Got Stats({component:?})");
             packet.debug_decode()?;
             session.response_empty(packet).await
         }

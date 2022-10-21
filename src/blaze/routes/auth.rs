@@ -30,7 +30,7 @@ pub async fn route(session: &Session, component: Authentication, packet: &Opaque
         Authentication::GetAuthToken => handle_get_auth_token(session, packet).await,
 
         component => {
-            debug!("Got {component:?}");
+            debug!("Got Authentication({component:?})");
             packet.debug_decode()?;
             session.response_empty(packet).await
         }

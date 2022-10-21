@@ -18,7 +18,7 @@ pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) ->
         Util::Ping => handle_ping(session, packet).await,
         Util::FetchClientConfig => handle_fetch_client_config(session, packet).await,
         component => {
-            debug!("Got {component:?}");
+            debug!("Got Util({component:?})");
             packet.debug_decode()?;
             session.response_empty(packet).await
         }
