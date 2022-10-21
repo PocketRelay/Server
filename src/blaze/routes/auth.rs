@@ -27,7 +27,7 @@ pub async fn route(session: &Session, component: Authentication, packet: &Opaque
         Authentication::GetTermsOfServiceConent => handle_terms_of_service_content(session, packet).await,
         Authentication::GetPrivacyPolicyContent => handle_privacy_policy_content(session, packet).await,
         Authentication::GetPasswordRules => handle_get_password_rules(session, packet).await,
-
+        Authentication::GetAuthToken => handle_get_auth_token(session, packet).await,
 
         component => {
             debug!("Got {component:?}");
@@ -430,6 +430,25 @@ async fn handle_get_password_rules(session: &Session, packet: &OpaquePacket) -> 
     })
 }
 
-async fn handle_get_auth_token(session: &Session, packet: &OpaquePacket) -> HandleResult {
+packet! {
+    struct GetAuthRes {
+        AUTH auth: String
+    }
+}
 
+
+/// Handles retrieving an authentication token for use with the Galaxy At War HTTP service
+/// however in this case we are just using the player ID in hex format as the token.
+///
+/// # Structure
+/// ```
+/// packet(Components.AUTHENTICATION, Commands.GET_AUTH_TOKEN, 0x23) {}
+/// ```
+async fn handle_get_auth_token(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let session_data = session.data.read().await;
+    let player = session_data.expect_player()?;
+    let value = format!("{:X}", player.id);
+    session.response(packet, &GetAuthRes {
+        auth: value
+    }).await
 }
