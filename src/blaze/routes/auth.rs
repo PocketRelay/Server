@@ -28,7 +28,7 @@ pub async fn route(session: &Session, component: Authentication, packet: &Opaque
         Authentication::GetPrivacyPolicyContent => handle_privacy_policy_content(session, packet).await,
         Authentication::GetPasswordRules => handle_get_password_rules(session, packet).await,
         Authentication::GetAuthToken => handle_get_auth_token(session, packet).await,
-
+        Authentication::OriginLogin => handle_origin_login(session, packet).await,
         component => {
             debug!("Got Authentication({component:?})");
             packet.debug_decode()?;
@@ -122,6 +122,12 @@ async fn handle_logout(session: &Session, packet: &OpaquePacket) -> HandleResult
     session.response_empty(packet).await
 }
 
+fn is_email(email: &str) -> bool {
+    let regex = Regex::new(r#"^([a-z0-9_+]([a-z0-9_+.]*[a-z0-9_+])?)@([a-z0-9]+([\-.][a-z0-9]+)*\.[a-z]{2,6})"#)
+        .unwrap();
+    regex.is_match(email)
+}
+
 packet! {
     struct AccountReq {
         MAIL email: String,
@@ -163,12 +169,6 @@ async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult 
     Ok(())
 }
 
-fn is_email(email: &str) -> bool {
-    let regex = Regex::new(r#"^([a-z0-9_+]([a-z0-9_+.]*[a-z0-9_+])?)@([a-z0-9]+([\-.][a-z0-9]+)*\.[a-z]{2,6})"#)
-        .unwrap();
-    regex.is_match(email)
-}
-
 /// Handles creating accounts
 async fn handle_create_account(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<AccountReq>()?;
@@ -194,6 +194,30 @@ async fn handle_create_account(session: &Session, packet: &OpaquePacket) -> Hand
 
     complete_auth(session, packet, player, false).await?;
     Ok(())
+}
+
+packet! {
+    struct OriginLoginReq {
+        AUTH token: String
+    }
+}
+
+/// Handles logging in with a session token provided by Origin rather than with email
+/// and password. This requires connecting to the official server to get the correct
+/// credentials.
+///
+/// # Structure
+/// ```
+/// packet(Components.AUTHENTICATION, Commands.ORIGIN_LOGIN, INCOMING_TYPE, 0x0) {
+///   text("AUTH", "ORIGIN TOKEN OMITTED")
+///   number("TYPE", 0x1)
+/// }
+/// ```
+async fn handle_origin_login(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let req = packet.contents::<OriginLoginReq>()?;
+    // TODO: Implement origin login
+    debug!("Origin login request with token: {}", &req.token);
+    session.response_empty(packet).await
 }
 
 packet! {
