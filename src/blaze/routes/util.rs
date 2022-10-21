@@ -79,6 +79,8 @@ group! {
     }
 }
 
+pub const QOSS_KEY: &str = "ea-sjc";
+
 /// Handles responding to pre-auth requests which is the first request
 /// that clients will send. The response to this contains information
 /// about the server the client is connecting to.
@@ -132,7 +134,7 @@ async fn handle_pre_auth(session: &Session, packet: &OpaquePacket) -> HandleResu
     };
 
     let mut qoss_list = TdfMap::with_capacity(1);
-    qoss_list.insert("ea-sjc", QOSSGroup {
+    qoss_list.insert(QOSS_KEY, QOSSGroup {
         address: ADDRESS,
         port: http_port,
         name: "prod-sjc",

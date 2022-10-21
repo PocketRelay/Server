@@ -66,6 +66,10 @@ impl Codec for NetExt {
         reader.take_one()?;
         Ok(Self { dbps, natt, ubps })
     }
+
+    fn value_type() -> ValueType {
+        ValueType::Group
+    }
 }
 
 /// Type alias for ports which are always u16
