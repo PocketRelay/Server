@@ -8,6 +8,8 @@ mod util;
 mod auth;
 mod game_manager;
 mod stats;
+mod messaging;
+mod user_sessions;
 
 pub async fn route(session: &Session, component: Components, packet: &OpaquePacket) -> HandleResult {
     let result = match component {
@@ -15,6 +17,8 @@ pub async fn route(session: &Session, component: Components, packet: &OpaquePack
         Components::GameManager(value) => game_manager::route(session, value, packet).await,
         Components::Stats(value) => stats::route(session, value, packet).await,
         Components::Util(value) => util::route(session, value, packet).await,
+        Components::Messaging(value) => messaging::route(session, value, packet).await,
+        Components::UserSessions(value) => user_sessions::route(session, value, packet).await,
         value => {
             debug!("No handler for component {value:?}");
             packet.debug_decode()?;
