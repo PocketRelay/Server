@@ -144,9 +144,11 @@ impl Session {
     /// not already one.
     pub async fn session_token(&self) -> BlazeResult<String> {
         let session_data = self.data.read().await;
+        debug!("Got read lock for session token");
         let player = session_data.expect_player()?;
         match player.session_token.as_ref() {
             None => {
+                drop(session_data);
                 let new_token = Self::generate_token();
                 self.set_token(Some(new_token.clone()))
                     .await?;

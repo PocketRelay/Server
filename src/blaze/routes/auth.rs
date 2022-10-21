@@ -1,6 +1,6 @@
 use std::ops::Deref;
 use blaze_pk::{Codec, CodecError, CodecResult, OpaquePacket, packet, Packets, Reader, tag_list_start, ValueType};
-use log::debug;
+use log::{debug, warn};
 use regex::Regex;
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
@@ -88,21 +88,26 @@ async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> Handle
 /// Completes the authentication process for the provided session using the provided Player
 /// Model as the authenticated player.
 pub async fn complete_auth(session: &Session, packet: &OpaquePacket, player: PlayerModel, silent: bool) -> HandleResult {
+    debug!("Completing authentication");
     session.set_player(Some(player)).await;
+    debug!("Set player");
     let session_token = session.session_token().await?;
+    debug!("Session token: {}", session_token);
     let session_data = session.data.read().await;
     let player = session_data.expect_player()?;
     let response = AuthRes {
         sess: Sess {
-            session_data: session_data.deref(),
+            session_data: &session_data,
             session_token,
             player,
         },
         silent,
     };
 
+    debug!("Sending session response");
     session.response(packet, &response).await?;
     if silent {
+        debug!("Sending session update");
         session.update_for(session).await?;
     }
     Ok(())
@@ -154,6 +159,7 @@ async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult 
     let password = req.password;
 
     if !is_email(&email) {
+        debug!("Client attempted to login with invalid email address: {}", &email);
         return Err(login_error(packet, LoginError::InvalidEmail));
     }
 
@@ -161,7 +167,10 @@ async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult 
         .await?
         .ok_or_else(|| login_error(packet, LoginError::EmailNotFound))?;
 
+    debug!("Attempting login for {}", player.email);
+
     if !verify_password(&password, &player.password) {
+        debug!("Client provided password did not match stored hash");
         return Err(login_error(packet, LoginError::WrongPassword));
     }
 
@@ -395,7 +404,7 @@ packet! {
 async fn handle_forgot_password(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<ForgotPaswdReq>()?;
     if !is_email(&req.email) {
-        return Err(login_error(packet, LoginError::InvalidEmail))
+        return Err(login_error(packet, LoginError::InvalidEmail));
     }
     debug!("Got request for password rest for email: {}", &req.email);
     session.response_empty(packet).await
@@ -436,7 +445,7 @@ async fn handle_terms_of_service_content(session: &Session, packet: &OpaquePacke
     session.response(packet, &TermsContent {
         path: "webterms/au/en/pc/default/09082020/02042022",
         content: DEFAULT_TERMS_OF_SERVICE,
-        col: 0xdaed
+        col: 0xdaed,
     }).await
 }
 
@@ -461,7 +470,7 @@ async fn handle_privacy_policy_content(session: &Session, packet: &OpaquePacket)
     session.response(packet, &TermsContent {
         path: "webprivacy/au/en/pc/default/08202020/02042022",
         content: DEFAULT_PRIVACY_POLICY,
-        col: 0xc99c
+        col: 0xc99c,
     }).await
 }
 
@@ -481,7 +490,7 @@ async fn handle_get_password_rules(session: &Session, packet: &OpaquePacket) -> 
     session.response(packet, &PasswordRules {
         max_length: 99,
         min_length: 4,
-        valid_chars: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]`!@#$%^&*()_={}:;<>+-',.~?/|\\"
+        valid_chars: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]`!@#$%^&*()_={}:;<>+-',.~?/|\\",
     }).await
 }
 
