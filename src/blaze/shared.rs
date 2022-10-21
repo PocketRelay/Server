@@ -235,7 +235,7 @@ impl Codec for AuthRes<'_, '_> {
 
         tag_empty_str(output, "LDHT");
         tag_zero(output, "NTOS");
-        tag_str(output, "PCTK", &self.session_token);
+        tag_str(output, "PCTK", &self.sess.session_token);
 
         if silent {
             tag_empty_str(output, "PRIV");
@@ -244,7 +244,7 @@ impl Codec for AuthRes<'_, '_> {
             tag_group_end(output);
         } else {
             tag_list_start(output, "PLST", ValueType::Group, 1);
-            encode_persona(&self.player, output);
+            encode_persona(&self.sess.player, output);
             tag_empty_str(output, "PRIV");
             tag_str(output, "SKEY", &self.sess.session_token);
         }
@@ -253,7 +253,7 @@ impl Codec for AuthRes<'_, '_> {
         tag_empty_str(output, "TSUI");
         tag_empty_str(output, "TURI");
         if !silent {
-            tag_u32(output, "UID", self.player.id);
+            tag_u32(output, "UID", self.sess.player.id);
         }
     }
 }

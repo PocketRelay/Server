@@ -125,7 +125,7 @@ packet! {
 async fn handle_update_hardware_flag(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<UpdateHWFlagReq>()?;
 
-    let session_data = session.data.write().await;
+    let mut session_data = session.data.write().await;
     (*session_data).hardware_flag = req.hardware_flag;
 
     session.response_empty(packet).await

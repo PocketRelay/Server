@@ -153,7 +153,7 @@ async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult 
     let email = req.email;
     let password = req.password;
 
-    if !is_email(&email)? {
+    if !is_email(&email) {
         return Err(login_error(packet, LoginError::InvalidEmail));
     }
 
@@ -175,7 +175,7 @@ async fn handle_create_account(session: &Session, packet: &OpaquePacket) -> Hand
     let email = req.email;
     let password = req.password;
 
-    if !is_email(&email)? {
+    if !is_email(&email) {
         return Err(login_error(packet, LoginError::InvalidEmail));
     }
 
@@ -451,7 +451,7 @@ async fn handle_get_password_rules(session: &Session, packet: &OpaquePacket) -> 
         max_length: 99,
         min_length: 4,
         valid_chars: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]`!@#$%^&*()_={}:;<>+-',.~?/|\\"
-    })
+    }).await
 }
 
 packet! {
