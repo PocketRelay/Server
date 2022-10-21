@@ -231,6 +231,7 @@ impl Session {
 }
 
 impl SessionData {
+
     pub fn expect_player(&self) -> BlazeResult<&PlayerModel> {
         self.player
             .as_ref()
