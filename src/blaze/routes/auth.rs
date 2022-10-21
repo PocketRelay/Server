@@ -26,6 +26,8 @@ pub async fn route(session: &Session, component: Authentication, packet: &Opaque
         Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(session, packet).await,
         Authentication::GetTermsOfServiceConent => handle_terms_of_service_content(session, packet).await,
         Authentication::GetPrivacyPolicyContent => handle_privacy_policy_content(session, packet).await,
+        Authentication::GetPasswordRules => handle_get_password_rules(session, packet).await,
+
 
         component => {
             debug!("Got {component:?}");
@@ -376,12 +378,11 @@ const DEFAULT_TERMS_OF_SERVICE: &str = include_str!("../../../resources/defaults
 ///
 async fn handle_terms_of_service_content(session: &Session, packet: &OpaquePacket) -> HandleResult {
     // TODO: Attempt to load local terms of service before reverting to default
-    let response = TermsContent {
+    session.response(packet, &TermsContent {
         path: "webterms/au/en/pc/default/09082020/02042022",
         content: DEFAULT_TERMS_OF_SERVICE,
         col: 0xdaed
-    };
-    session.response(packet, &response).await
+    }).await
 }
 
 /// The default privacy policy document
@@ -402,10 +403,33 @@ const DEFAULT_PRIVACY_POLICY: &str = include_str!("../../../resources/defaults/p
 ///
 async fn handle_privacy_policy_content(session: &Session, packet: &OpaquePacket) -> HandleResult {
     // TODO: Attempt to load local privacy policy before reverting to default
-    let response = TermsContent {
+    session.response(packet, &TermsContent {
         path: "webprivacy/au/en/pc/default/08202020/02042022",
         content: DEFAULT_PRIVACY_POLICY,
         col: 0xc99c
-    };
-    session.response(packet, &response).await
+    }).await
+}
+
+packet! {
+    struct PasswordRules {
+        MAXS max_length: u32,
+        MINS min_length: u32,
+        VDCH valid_chars: &'static str,
+    }
+}
+
+/// Handles returning the password rules for creating passwords in the client.
+///
+/// # Structure
+/// *To be recorded*.
+async fn handle_get_password_rules(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    session.response(packet, &PasswordRules {
+        max_length: 99,
+        min_length: 4,
+        valid_chars: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]`!@#$%^&*()_={}:;<>+-',.~?/|\\"
+    })
+}
+
+async fn handle_get_auth_token(session: &Session, packet: &OpaquePacket) -> HandleResult {
+
 }
