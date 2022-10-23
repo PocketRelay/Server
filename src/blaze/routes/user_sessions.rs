@@ -46,7 +46,7 @@ async fn handle_resume_session(session: &Session, packet: &OpaquePacket) -> Hand
 packet! {
     struct UpdateNetworkInfo {
         ADDR address: TdfOptional<NetGroups>,
-        NLMP nlmp: TdfMap<String, u32>,
+        // NLMP nlmp: TdfMap<String, u32>,
         NQOS nqos: NetExt
     }
 }
@@ -93,9 +93,10 @@ async fn handle_update_network_info(session: &Session, packet: &OpaquePacket) ->
         }
     };
 
-    let pslm = req.nlmp.take(QOSS_KEY)
-        .unwrap_or(0xfff0fff);
+    // let pslm = req.nlmp.take(QOSS_KEY)
+    //     .unwrap_or(0xfff0fff);
 
+    let pslm = 0xfff0fff;
     let mut session_data = session.data.write().await;
     let session_data = session_data.deref_mut();
     session_data.pslm = pslm;

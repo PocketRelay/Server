@@ -99,7 +99,7 @@ impl Codec for NetGroups {
         self.internal.encode(output);
         tag_group_end(output);
 
-        output.push(0)
+        tag_group_end(output);
     }
 
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
