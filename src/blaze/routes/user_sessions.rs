@@ -1,5 +1,5 @@
 use std::ops::DerefMut;
-use blaze_pk::{OpaquePacket, packet, TdfMap, TdfOptional};
+use blaze_pk::{Codec, CodecResult, OpaquePacket, packet, Reader, Tag, TdfMap, TdfOptional};
 use log::{debug, warn};
 use crate::blaze::components::UserSessions;
 use crate::blaze::errors::{HandleResult, LoginError};
@@ -43,11 +43,25 @@ async fn handle_resume_session(session: &Session, packet: &OpaquePacket) -> Hand
     complete_auth(session, packet, player, true).await
 }
 
-packet! {
-    struct UpdateNetworkInfo {
-        ADDR address: TdfOptional<NetGroups>,
-        // NLMP nlmp: TdfMap<String, u32>,
-        NQOS nqos: NetExt
+
+#[derive(Debug)]
+struct UpdateNetworkInfo {
+    address: TdfOptional<NetGroups>,
+    nlmp: Option<TdfMap<String, u32>>,
+    nqos: NetExt,
+}
+
+impl Codec for UpdateNetworkInfo {
+    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+        let address = Tag::expect(reader, "ADDR")?;
+        let nlmp = Tag::try_expect(reader, "NLMP")?;
+        let nqos = Tag::expect(reader, "NQOS")?;
+
+        Ok(Self {
+            address,
+            nlmp,
+            nqos,
+        })
     }
 }
 
@@ -84,17 +98,21 @@ packet! {
 /// }
 /// ```
 async fn handle_update_network_info(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    packet.debug_decode()?;
     let mut req = packet.contents::<UpdateNetworkInfo>()?;
     let groups = match req.address {
         TdfOptional::Some(_, value) => value.1,
         TdfOptional::None => {
             warn!("Client didn't provide the expected networking information");
-            return session.response_empty(packet).await
+            return session.response_empty(packet).await;
         }
     };
 
-    // let pslm = req.nlmp.take(QOSS_KEY)
-    //     .unwrap_or(0xfff0fff);
+    const DEFAULT_PSLM: u32 = 0xfff0fff;
+
+    let pslm = req.nlmp
+        .map(|mut value| value.take(QOSS_KEY).unwrap_or(DEFAULT_PSLM))
+        .unwrap_or(DEFAULT_PSLM);
 
     let pslm = 0xfff0fff;
     let mut session_data = session.data.write().await;

@@ -1,4 +1,4 @@
-use blaze_pk::{Blob, Codec, CodecResult, decode_field, group, packet, Reader, Tag, tag_empty_str, tag_group_end, tag_group_start, tag_list_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_zero, TdfMap, TdfOptional, ValueType, VarIntList};
+use blaze_pk::{Blob, Codec, CodecResult, group, packet, Reader, Tag, tag_empty_str, tag_group_end, tag_group_start, tag_list_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_zero, TdfMap, TdfOptional, ValueType, VarIntList};
 use crate::blaze::SessionData;
 use crate::database::entities::PlayerModel;
 
@@ -60,9 +60,9 @@ impl Codec for NetExt {
     }
 
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        decode_field!(reader, DBPS, dbps, u16);
-        decode_field!(reader, NATT, natt, u8);
-        decode_field!(reader, UBPS, ubps, u16);
+        let dbps = Tag::expect(reader, "DBPS")?;
+        let natt = Tag::expect(reader, "NATT")?;
+        let ubps = Tag::expect(reader, "UBPS")?;
         reader.take_one()?;
         Ok(Self { dbps, natt, ubps })
     }
@@ -103,19 +103,10 @@ impl Codec for NetGroups {
     }
 
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        Tag::expect_tag("EXIP", &ValueType::Group, reader)?;
-        let external = NetGroup::decode(reader)?;
+        let external = Tag::expect(reader, "EXIP")?;
+        let internal = Tag::expect(reader, "INIP")?;
         reader.take_one()?;
-
-        Tag::expect_tag("INIP", &ValueType::Group, reader)?;
-        let internal = NetGroup::decode(reader)?;
-        reader.take_one()?;
-
-        reader.take_one()?;
-        Ok(Self {
-            external,
-            internal,
-        })
+        Ok(Self { external, internal })
     }
 
     fn value_type() -> ValueType {
@@ -143,13 +134,13 @@ impl Codec for NetGroup {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_u32(output, "IP", self.0.0);
         tag_u16(output, "PORT", self.1);
+        tag_group_end(output);
     }
 
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        Tag::expect_tag("IP", &ValueType::VarInt, reader)?;
-        let ip = u32::decode(reader)?;
-        Tag::expect_tag("PORT", &ValueType::VarInt, reader)?;
-        let port = u16::decode(reader)?;
+        let ip = Tag::expect(reader, "IP")?;
+        let port = Tag::expect(reader, "IP")?;
+        reader.take_one()?;
         Ok(Self(NetAddress(ip), port))
     }
 
