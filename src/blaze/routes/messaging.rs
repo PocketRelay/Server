@@ -1,8 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 use blaze_pk::{Codec, encode_str, OpaquePacket, Packets, tag_group_end, tag_group_start, tag_map_start, tag_str, tag_triple, tag_u64, tag_u8, ValueType};
+use dotenvy::var;
 use log::debug;
 use crate::blaze::components::{Components, Messaging};
-use crate::blaze::errors::{BlazeError, HandleResult};
+use crate::blaze::errors::{BlazeError, BlazeResult, HandleResult};
 use crate::blaze::Session;
 use crate::database::entities::PlayerModel;
 use crate::env;
@@ -100,18 +101,39 @@ async fn handle_fetch_messages(session: &Session, packet: &OpaquePacket) -> Hand
         .duration_since(UNIX_EPOCH)
         .map_err(|_| BlazeError::Other("Unable to calculate server time"))?
         .as_secs();
-    let mut menu_message = env::menu_message();
-    menu_message = menu_message.replace("{v}", VERSION);
-    menu_message = menu_message.replace("{n}", &player.display_name);
-    menu_message = menu_message.replace("{ip}", &session.addr.to_string());
-    menu_message.push(char::from(0x0A));
+    let mut menu_message = get_menu_message(session, player);
     let response = MenuMessage {
         message: menu_message,
         player,
-        time
+        time,
     };
 
     let packet = Packets::notify(Components::Messaging(Messaging::SendMessage), &response);
     session.write_packet(&packet).await?;
     Ok(())
 }
+
+/// Retrieves the menu message from the environment variables and replaces
+/// any variables inside the message with the correct values for this session
+///
+/// # Variables
+/// - {v} = Server Version
+/// - {n} = Player Display Name
+/// - {ip} = Session IP Address
+fn get_menu_message(session: &Session, player: &PlayerModel) -> String {
+    let mut message = env::menu_message();
+    if message.contains("{v}") {
+        message = message.replace("{v}", VERSION);
+    }
+    if message.contains("{n}") {
+        message = message.replace("{n}", &player.display_name);
+    }
+    if message.contains("{ip}") {
+        message = message.replace("{ip}", &session.addr.to_string());
+    }
+    // Line terminator for the end of the message
+    message.push(char::from(0x0A));
+    message
+}
+
+
