@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use log::debug;
 use rust_embed::RustEmbed;
 use crate::blaze::components::Util;
+use crate::blaze::components::Util::SuspendUserPing;
 use crate::blaze::errors::{BlazeError, HandleResult};
 use crate::blaze::Session;
 use crate::env;
@@ -17,6 +18,7 @@ pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) ->
         Util::PreAuth => handle_pre_auth(session, packet).await,
         Util::Ping => handle_ping(session, packet).await,
         Util::FetchClientConfig => handle_fetch_client_config(session, packet).await,
+        Util::SuspendUserPing => handle_suspend_user_ping(session, packet).await,
         component => {
             debug!("Got Util({component:?})");
             packet.debug_decode()?;
@@ -306,4 +308,30 @@ fn data_config() -> TdfMap<String, String> {
     config.insert("TEL_SEND_PCT", "75");
     config.insert("TEL_SERVER", ext_host);
     config
+}
+
+packet! {
+    struct SuspendUserPing {
+        TVAL value: u32,
+    }
+}
+
+/// Handles suspend user ping packets. The usage of this is unknown and needs
+/// further research
+///
+/// # Structure
+/// ```
+/// packet(Components.UTIL, Commands.SUSPEND_USER_PING, 0x1f) {
+///   number("TVAL", 0x55d4a80)
+/// }
+/// ```
+///
+///
+async fn handle_suspend_user_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let req = packet.contents::<SuspendUserPing>()?;
+    match req {
+        0x1312D00 => session.response_error_empty(packet, 0x12D).await,
+        0x55D4A80 => session.response_error_empty(packet, 0x12E).await,
+        _ => session.response_empty(packet).await,
+    }
 }
