@@ -230,6 +230,17 @@ impl Session {
         self.write_packet(&Packets::error_empty(packet, error)).await?;
         Ok(())
     }
+
+    pub async fn player_id(&self) -> Option<u32> {
+        let session_data = self.data.read().await;
+        session_data.player.as_ref().map(|player| player.id)
+    }
+
+    pub async fn expect_player_id(&self) -> BlazeResult<u32> {
+        let session_data = self.data.read().await;
+        let player = session_data.expect_player()?;
+        Ok(player.id)
+    }
 }
 
 impl SessionData {

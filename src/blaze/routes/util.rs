@@ -3,11 +3,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use log::debug;
 use rust_embed::RustEmbed;
 use sea_orm::ActiveValue::Set;
-use sea_orm::{ActiveModelTrait, IntoActiveModel};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, NotSet, QueryFilter};
 use crate::blaze::components::Util;
-use crate::blaze::errors::{BlazeError, HandleResult};
+use crate::blaze::errors::{BlazeError, BlazeResult, HandleResult};
 use crate::blaze::Session;
-use crate::database::entities::PlayerActiveModel;
+use crate::database::entities::{player_characters, player_classes, PlayerActiveModel, PlayerCharacterActiveModel, PlayerCharacterEntity, PlayerCharacterModel, PlayerClassActiveModel, PlayerClassEntity, PlayerClassModel, PlayerModel};
 use crate::env;
 use crate::env::ADDRESS;
 use crate::utils::conv::MEStringParser;
@@ -340,46 +340,205 @@ async fn handle_suspend_user_ping(session: &Session, packet: &OpaquePacket) -> H
 }
 
 async fn set_player_data(session: &Session, key: &str, value: String) -> HandleResult {
-    if key.starts_with("class") {} else if key.starts_with("char") {} else {
-        update_player_data(session, key, value).await?;
+    if key.starts_with("class") {
+        update_player_class(session, key, value).await
+    } else if key.starts_with("char") {
+        update_player_character(session, key, value).await
+    } else {
+        update_player_data(session, key, value).await
+    }
+}
+
+
+async fn get_player_character(session: &Session, index: u16) -> BlazeResult<PlayerCharacterActiveModel> {
+    let player_class = PlayerCharacterEntity::find()
+        .filter(player_characters::Column::Index.eq(index))
+        .one(session.db())
+        .await?;
+    if let Some(value) = player_class {
+        return Ok(value.into_active_model());
+    }
+    let player_id = session.expect_player_id().await?;
+    Ok(PlayerCharacterActiveModel {
+        id: NotSet,
+        player_id: Set(player_id),
+        index: Set(index),
+        kit_name: NotSet,
+        name: NotSet,
+        tint1: NotSet,
+        tint2: NotSet,
+        pattern: NotSet,
+        pattern_color: NotSet,
+        phong: NotSet,
+        emissive: NotSet,
+        skin_tone: NotSet,
+        seconds_played: NotSet,
+        timestamp_year: NotSet,
+        timestamp_month: NotSet,
+        timestamp_day: NotSet,
+        timestamp_seconds: NotSet,
+        powers: NotSet,
+        hotkeys: NotSet,
+        weapons: NotSet,
+        weapon_mods: NotSet,
+        deployed: NotSet,
+        leveled_up: NotSet,
+    })
+}
+
+async fn update_player_character(session: &Session, key: &str, value: String) -> HandleResult {
+    if key.len() > 4 {
+        let index = key[4..]
+            .parse::<u16>()
+            .map_err(|_| BlazeError::Other("Invalid index for player class"))?;
+        let mut model = get_player_character(session, index).await?;
+        parse_player_character(&mut model, &value);
+        model.save(session.db()).await?;
     }
     Ok(())
 }
 
-#[derive(Debug)]
-struct PlayerBase {
-    credits: u32,
-    credits_spent: u32,
-    games_played: u32,
-    seconds_played: u32,
-    inventory: String,
+fn encode_player_character(model: &PlayerCharacterModel) -> String {
+    format!(
+        "20;4;{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{}",
+        model.kit_name,
+        model.name,
+        model.tint1,
+        model.tint2,
+        model.pattern,
+        model.pattern_color,
+        model.phong,
+        model.emissive,
+        model.skin_tone,
+        model.seconds_played,
+        model.timestamp_year,
+        model.timestamp_month,
+        model.timestamp_day,
+        model.timestamp_seconds,
+        model.powers,
+        model.hotkeys,
+        model.weapons,
+        model.weapon_mods,
+        if model.deployed { "True" } else { "False" },
+        if model.leveled_up { "True" } else { "False" },
+    )
 }
 
-/// Parses a player base data string which contains the credits, credits spent,
-/// games played, seconds played, and the inventory contents of the current player.
+fn parse_player_character(model: &mut PlayerCharacterActiveModel, value: &str) -> Option<()> {
+    let mut parser = MEStringParser::new(value)?;
+    model.kit_name = Set(parser.next_str()?);
+    model.name = Set(parser.next()?);
+    model.tint1 = Set(parser.next()?);
+    model.tint2 = Set(parser.next()?);
+    model.pattern = Set(parser.next()?);
+    model.pattern_color = Set(parser.next()?);
+    model.phong = Set(parser.next()?);
+    model.emissive = Set(parser.next()?);
+    model.skin_tone = Set(parser.next()?);
+    model.seconds_played = Set(parser.next()?);
+    model.timestamp_year = Set(parser.next()?);
+    model.timestamp_month = Set(parser.next()?);
+    model.timestamp_day = Set(parser.next()?);
+    model.timestamp_seconds = Set(parser.next()?);
+    model.powers = Set(parser.next_str()?);
+    model.hotkeys = Set(parser.next_str()?);
+    model.weapons = Set(parser.next_str()?);
+    model.weapon_mods = Set(parser.next_str()?);
+    model.deployed = Set(parser.next()?);
+    model.leveled_up = Set(parser.next()?);
+    Some(())
+}
+
+async fn get_player_class(session: &Session, index: u16) -> BlazeResult<PlayerClassActiveModel> {
+    let player_class = PlayerClassEntity::find()
+        .filter(player_classes::Column::Index.eq(index))
+        .one(session.db())
+        .await?;
+    if let Some(value) = player_class {
+        return Ok(value.into_active_model());
+    }
+    let player_id = session.expect_player_id().await?;
+    Ok(PlayerClassActiveModel {
+        id: NotSet,
+        player_id: Set(player_id),
+        index: Set(index),
+        name: NotSet,
+        level: NotSet,
+        exp: NotSet,
+        promotions: NotSet,
+    })
+}
+
+async fn update_player_class(session: &Session, key: &str, value: String) -> HandleResult {
+    if key.len() > 5 {
+        let index = key[5..]
+            .parse::<u16>()
+            .map_err(|_| BlazeError::Other("Invalid index for player class"))?;
+        let mut model = get_player_class(session, index).await?;
+        parse_player_class(&mut model, &value);
+        model.save(session.db()).await?;
+    }
+    Ok(())
+}
+
+/// Parses the player class data stored in the provided value and modifies the provided
+/// player class model accordingly
+///
+/// # Structure
+/// ```
+/// 20;4;Adept;20;0;50
+/// ```
+///
+fn parse_player_class(model: &mut PlayerClassActiveModel, value: &str) -> Option<()> {
+    let mut parser = MEStringParser::new(value)?;
+    model.name = Set(parser.next_str()?);
+    model.level = Set(parser.next()?);
+    model.exp = Set(parser.next()?);
+    model.promotions = Set(parser.next()?);
+    Some(())
+}
+
+/// Encodes a player class model into a string format for sending to the client
+fn encode_player_class(model: &PlayerClassModel) -> String {
+    format!(
+        "20;4;{};{};{};{}",
+        model.name,
+        model.level,
+        model.exp,
+        model.promotions
+    )
+}
+
+/// Encodes the base player data into a string format for sending to the client
+fn encode_player_base(model: &PlayerModel) -> String {
+    format!(
+        "20;4;{};-1;0;{};0;{};{};0;{}",
+        model.credits,
+        model.credits_spent,
+        model.games_played,
+        model.seconds_played,
+        model.inventory
+    )
+}
+
+/// Parses the player data stored in the provided value and modifies the player
+/// active model accordingly.
 ///
 /// # Structure
 /// ```
 /// 20;4;21474;-1;0;0;0;50;180000;0;fff....(LARGE SEQUENCE OF INVENTORY CHARS)
 /// ```
-fn parse_player_base(value: &str) -> Option<PlayerBase> {
+fn parse_player_base(model: &mut PlayerActiveModel, value: &str) -> Option<()> {
     let mut parser = MEStringParser::new(value)?;
-    let credits = parser.next()?;
+    model.credits = Set(parser.next()?);
     parser.skip(2); // Skip -1;0
-    let credits_spent = parser.next()?;
+    model.credits_spent = Set(parser.next()?);
     parser.skip(1)?;
-    let games_played = parser.next()?;
-    let seconds_played = parser.next()?;
+    model.games_played = Set(parser.next()?);
+    model.seconds_played = Set(parser.next()?);
     parser.skip(1);
-    let inventory = parser.next_str()?;
-
-    Some(PlayerBase {
-        credits,
-        credits_spent,
-        games_played,
-        seconds_played,
-        inventory,
-    })
+    model.inventory = Set(parser.next_str()?);
+    Some(())
 }
 
 /// Updates the provided model reflecting the changes stored in the provided
@@ -387,15 +546,7 @@ fn parse_player_base(value: &str) -> Option<PlayerBase> {
 //noinspection SpellCheckingInspection
 fn update_active_model(model: &mut PlayerActiveModel, key: &str, value: String) {
     match key {
-        "Base" => {
-            if let Some(base) = parse_player_base(&value) {
-                model.credits = Set(base.credits);
-                model.credits_spent = Set(base.credits_spent);
-                model.games_played = Set(base.games_played);
-                model.seconds_played = Set(base.seconds_played);
-                model.inventory = Set(base.inventory);
-            }
-        }
+        "Base" => { parse_player_base(model, &value); }
         "FaceCodes" => { model.face_codes = Set(Some(value)) }
         "NewItem" => { model.new_item = Set(Some(value)) }
         "csreward" => {

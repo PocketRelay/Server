@@ -6,12 +6,15 @@ pub mod players;
 
 pub use galaxy_at_war::Entity as GalaxyAtWarEntity;
 pub use galaxy_at_war::Model as GalaxyAtWarModel;
+pub use galaxy_at_war::ActiveModel as GalaxyAtWarActiveModel;
 
 pub use player_characters::Entity as PlayerCharacterEntity;
 pub use player_characters::Model as PlayerCharacterModel;
+pub use player_characters::ActiveModel as PlayerCharacterActiveModel;
 
 pub use player_classes::Entity as PlayerClassEntity;
 pub use player_classes::Model as PlayerClassModel;
+pub use player_classes::ActiveModel as PlayerClassActiveModel;
 
 pub use players::Entity as PlayerEntity;
 pub use players::Model as PlayerModel;

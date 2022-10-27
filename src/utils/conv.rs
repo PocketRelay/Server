@@ -39,8 +39,6 @@ impl<'a> MEStringParser<'a> {
     }
 }
 
-
-
 #[cfg(test)]
 mod test {
     use crate::utils::conv::MEStringParser;
