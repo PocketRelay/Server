@@ -3,12 +3,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use log::debug;
 use rust_embed::RustEmbed;
 use sea_orm::ActiveValue::Set;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, NotSet, QueryFilter};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, ModelTrait, NotSet, QueryFilter};
+use tokio::try_join;
 use crate::blaze::components::Util;
 use crate::blaze::errors::{BlazeError, BlazeResult, HandleResult};
 use crate::blaze::Session;
 use crate::blaze::shared::TelemetryRes;
-use crate::database::entities::{player_characters, player_classes, PlayerActiveModel, PlayerCharacterActiveModel, PlayerCharacterEntity, PlayerCharacterModel, PlayerClassActiveModel, PlayerClassEntity, PlayerClassModel, PlayerModel};
+use crate::database::entities::{player_characters, player_classes, PlayerActiveModel, PlayerCharacterActiveModel, PlayerCharacterEntity, PlayerCharacterModel, PlayerClassActiveModel, PlayerClassEntity, PlayerClassModel, PlayerModel, players};
 use crate::env;
 use crate::env::ADDRESS;
 use crate::utils::conv::MEStringParser;
@@ -25,6 +26,7 @@ pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) ->
         Util::SuspendUserPing => handle_suspend_user_ping(session, packet).await,
         Util::UserSettingsSave => handle_user_settings_save(session, packet).await,
         Util::GetTelemetryServer => handle_get_telemetry_server(session, packet).await,
+        Util::UserSettingsLoadAll => handle_user_settings_load_all(session, packet).await,
         component => {
             debug!("Got Util({component:?})");
             packet.debug_decode()?;
@@ -43,7 +45,7 @@ pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) ->
 ///
 async fn handle_get_telemetry_server(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let ext_host = env::ext_host();
-    let res = TelemetryRes { address: ext_host, session_id: session.id, };
+    let res = TelemetryRes { address: ext_host, session_id: session.id };
     session.response(packet, &res).await
 }
 
@@ -614,4 +616,62 @@ async fn update_player_data(session: &Session, key: &str, value: String) -> Hand
     let result = active.update(session.db()).await?;
     session_data.player = Some(result);
     Ok(())
+}
+
+packet! {
+    struct UserSettingsAll {
+        SMAP settings: TdfMap<String, String>
+    }
+}
+
+/// Handles loading all the user details for the current account and sending them to the
+/// client
+///
+/// # Structure
+/// ```
+/// packet(Components.UTIL, Commands.USER_SETTINGS_LOAD_ALL, 0x17) {}
+/// ```
+async fn handle_user_settings_load_all(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let mut settings = TdfMap::<String, String>::new();
+    {
+        let session_data = session.data.read().await;
+        let player = session_data.expect_player()?;
+
+
+        let classes = player
+            .find_related(PlayerClassEntity)
+            .all(session.db());
+
+        let characters = player
+            .find_related(PlayerCharacterEntity)
+            .all(session.db());
+
+        let (classes, characters) = try_join!(classes, characters)?;
+
+        let mut index = 0;
+        for class in classes {
+            settings.insert(format!("class{}", index), encode_player_class(&class));
+            index += 1;
+        }
+
+        index = 0;
+        for char in characters {
+            settings.insert(format!("char{}", index), encode_player_character(&char));
+            index += 1;
+        }
+
+        if let Some(value) = &player.face_codes { settings.insert("FaceCodes", value) }
+        if let Some(value) = &player.new_item { settings.insert("NewItem", value) }
+        settings.insert("csreward", player.csreward.to_string());
+        if let Some(value) = &player.completion { settings.insert("Completion", value) }
+        if let Some(value) = &player.progress { settings.insert("Progress", value) }
+        if let Some(value) = &player.cs_completion { settings.insert("cscompletion", value) }
+        if let Some(value) = &player.cs_timestamps1 { settings.insert("cstimestamps", value) }
+        if let Some(value) = &player.cs_timestamps2 { settings.insert("cstimestamps2", value) }
+        if let Some(value) = &player.cs_timestamps3 { settings.insert("cstimestamps3", value) }
+        settings.insert("Base", encode_player_base(player));
+    }
+    session.response(packet, &UserSettingsAll {
+        settings
+    }).await
 }
