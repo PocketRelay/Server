@@ -139,7 +139,7 @@ impl Codec for NetGroup {
 
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
         let ip = Tag::expect(reader, "IP")?;
-        let port = Tag::expect(reader, "IP")?;
+        let port = Tag::expect(reader, "PORT")?;
         reader.take_one()?;
         Ok(Self(NetAddress(ip), port))
     }
