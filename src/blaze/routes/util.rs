@@ -329,9 +329,9 @@ packet! {
 ///
 async fn handle_suspend_user_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<SuspendUserPing>()?;
-    match req {
-        0x1312D00 => session.response_error_empty(packet, 0x12D).await,
-        0x55D4A80 => session.response_error_empty(packet, 0x12E).await,
+    match req.value {
+        0x1312D00 => session.response_error_empty(packet, 0x12Du16).await,
+        0x55D4A80 => session.response_error_empty(packet, 0x12Eu16).await,
         _ => session.response_empty(packet).await,
     }
 }
