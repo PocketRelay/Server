@@ -131,8 +131,8 @@ impl MigrationTrait for Migration {
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .from(Players::Table, Players::Id)
-                            .to(PlayerCharacters::Table, PlayerCharacters::PlayerId)
+                            .from(PlayerCharacters::Table, PlayerCharacters::PlayerId)
+                            .to(Players::Table, Players::Id)
                     )
                     .to_owned(),
             )

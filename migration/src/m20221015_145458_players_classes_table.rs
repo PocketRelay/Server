@@ -50,8 +50,8 @@ impl MigrationTrait for Migration {
                 )
                 .foreign_key(
                     ForeignKey::create()
-                        .from(Players::Table, Players::Id)
-                        .to(PlayerClasses::Table, PlayerClasses::PlayerId)
+                        .from(PlayerClasses::Table, PlayerClasses::PlayerId)
+                        .to(Players::Table, Players::Id)
                 )
                 .to_owned()
         ).await

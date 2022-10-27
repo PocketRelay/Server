@@ -98,7 +98,6 @@ impl Codec for UpdateNetworkInfo {
 /// }
 /// ```
 async fn handle_update_network_info(session: &Session, packet: &OpaquePacket) -> HandleResult {
-    packet.debug_decode()?;
     let mut req = packet.contents::<UpdateNetworkInfo>()?;
     let groups = match req.address {
         TdfOptional::Some(_, value) => value.1,
