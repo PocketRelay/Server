@@ -1,4 +1,4 @@
-use blaze_pk::{group, OpaquePacket, packet, TdfMap};
+use blaze_pk::{Codec, group, OpaquePacket, packet, tag_empty_blob, tag_group_end, tag_group_start, tag_str, tag_u16, tag_u32, tag_u8, TdfMap};
 use std::time::{SystemTime, UNIX_EPOCH};
 use log::debug;
 use rust_embed::RustEmbed;
@@ -21,6 +21,7 @@ use crate::utils::dmap::load_dmap;
 pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) -> HandleResult {
     match component {
         Util::PreAuth => handle_pre_auth(session, packet).await,
+        Util::PostAuth => handle_post_auth(session, packet).await,
         Util::Ping => handle_ping(session, packet).await,
         Util::FetchClientConfig => handle_fetch_client_config(session, packet).await,
         Util::SuspendUserPing => handle_suspend_user_ping(session, packet).await,
@@ -185,6 +186,81 @@ async fn handle_pre_auth(session: &Session, packet: &OpaquePacket) -> HandleResu
         rsrc: "303107",
         version: "Blaze 3.15.08.0 (CL# 1629389)",
     }).await
+}
+
+struct PSSDetails {
+    address: String,
+    port: u16,
+}
+
+impl Codec for PSSDetails {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_str(output, "ADRS", &self.address);
+        tag_empty_blob(output, "CSIG");
+        tag_str(output, "PJID", "303107");
+        tag_u16(output, "PORT", self.port);
+        tag_u8(output, "RPRT", 0xF);
+        tag_u8(output, "TIID", 0);
+    }
+}
+
+struct TickerDetails {
+    host: String,
+    port: u16,
+    key: &'static str,
+}
+
+impl Codec for TickerDetails {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_str(output, "ADRS", &self.host);
+        tag_u16(output, "PORT", self.port);
+        tag_str(output, "SKEY", self.key);
+    }
+}
+
+struct PostAuthRes {
+    pss: PSSDetails,
+    ticker: TickerDetails,
+    session_id: u32,
+}
+
+impl Codec for PostAuthRes {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_group_start(output, "PSS");
+        self.pss.encode(output);
+        tag_group_end(output);
+
+        tag_group_start(output, "TICK");
+        self.ticker.encode(output);
+        tag_group_end(output);
+
+        tag_group_start(output, "UROP");
+        tag_u8(output, "TMOP", 0x1);
+        tag_u32(output, "UID", self.session_id);
+        tag_group_end(output);
+    }
+}
+
+///
+/// # Structure
+/// ```
+/// packet(Components.UTIL, Commands.POST_AUTH, 0x1b) {}
+/// ```
+async fn handle_post_auth(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let ext_host = env::ext_host();
+    let res = PostAuthRes {
+        session_id: session.id,
+        ticker: TickerDetails {
+            host: ext_host,
+            port: 9988,
+            key: "823287263,10.23.15.2:8999,masseffect-3-pc,10,50,50,50,50,0,12"
+        },
+        pss: PSSDetails {
+            address: "playersyncservice.ea.com".to_string(),
+            port: 443
+        }
+    };
+    session.response(packet, &res).await
 }
 
 packet! {
