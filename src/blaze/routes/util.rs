@@ -22,6 +22,7 @@ pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) ->
         Util::Ping => handle_ping(session, packet).await,
         Util::FetchClientConfig => handle_fetch_client_config(session, packet).await,
         Util::SuspendUserPing => handle_suspend_user_ping(session, packet).await,
+        Util::UserSettingsSave => handle_user_settings_save(session, packet).await,
         component => {
             debug!("Got Util({component:?})");
             packet.debug_decode()?;
@@ -339,6 +340,30 @@ async fn handle_suspend_user_ping(session: &Session, packet: &OpaquePacket) -> H
     }
 }
 
+packet! {
+    struct UserSettingsSave {
+        DATA value: String,
+        KEY key: String,
+    }
+
+}
+
+/// Handles updating the stored data for this account
+///
+/// # Structure
+/// ```
+/// packet(Components.UTIL, Commands.USER_SETTINGS_SAVE, 0x0, 0x2d) {
+///   text("DATA", "20;4;Adept;20;0.0000;50")
+///   text("KEY", "class1")
+///   number("UID", 0x0)
+/// }
+/// ```
+async fn handle_user_settings_save(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let req = packet.contents::<UserSettingsSave>()?;
+    set_player_data(session, &req.key, req.value).await?;
+    session.response_empty(packet).await
+}
+
 async fn set_player_data(session: &Session, key: &str, value: String) -> HandleResult {
     if key.starts_with("class") {
         update_player_class(session, key, value).await
@@ -348,7 +373,6 @@ async fn set_player_data(session: &Session, key: &str, value: String) -> HandleR
         update_player_data(session, key, value).await
     }
 }
-
 
 async fn get_player_character(session: &Session, index: u16) -> BlazeResult<PlayerCharacterActiveModel> {
     let player_class = PlayerCharacterEntity::find()
@@ -544,7 +568,7 @@ fn parse_player_base(model: &mut PlayerActiveModel, value: &str) -> Option<()> {
 /// Updates the provided model reflecting the changes stored in the provided
 /// pair of key and value
 //noinspection SpellCheckingInspection
-fn update_active_model(model: &mut PlayerActiveModel, key: &str, value: String) {
+fn update_player_model(model: &mut PlayerActiveModel, key: &str, value: String) {
     match key {
         "Base" => { parse_player_base(model, &value); }
         "FaceCodes" => { model.face_codes = Set(Some(value)) }
@@ -570,7 +594,7 @@ async fn update_player_data(session: &Session, key: &str, value: String) -> Hand
     let mut session_data = session.data.write().await;
     let player = session_data.expect_player_owned()?;
     let mut active = player.into_active_model();
-    update_active_model(&mut active, key, value);
+    update_player_model(&mut active, key, value);
     let result = active.update(session.db()).await?;
     session_data.player = Some(result);
     Ok(())
