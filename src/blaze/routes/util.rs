@@ -2,12 +2,15 @@ use blaze_pk::{group, OpaquePacket, packet, TdfMap};
 use std::time::{SystemTime, UNIX_EPOCH};
 use log::debug;
 use rust_embed::RustEmbed;
+use sea_orm::ActiveValue::Set;
+use sea_orm::{ActiveModelTrait, IntoActiveModel};
 use crate::blaze::components::Util;
-use crate::blaze::components::Util::SuspendUserPing;
 use crate::blaze::errors::{BlazeError, HandleResult};
 use crate::blaze::Session;
+use crate::database::entities::PlayerActiveModel;
 use crate::env;
 use crate::env::ADDRESS;
+use crate::utils::conv::MEStringParser;
 use crate::utils::dmap::load_dmap;
 
 /// Routing function for handling packets with the `Util` component and routing them
@@ -334,4 +337,90 @@ async fn handle_suspend_user_ping(session: &Session, packet: &OpaquePacket) -> H
         0x55D4A80 => session.response_error_empty(packet, 0x12Eu16).await,
         _ => session.response_empty(packet).await,
     }
+}
+
+async fn set_player_data(session: &Session, key: &str, value: String) -> HandleResult {
+    if key.starts_with("class") {} else if key.starts_with("char") {} else {
+        update_player_data(session, key, value).await?;
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+struct PlayerBase {
+    credits: u32,
+    credits_spent: u32,
+    games_played: u32,
+    seconds_played: u32,
+    inventory: String,
+}
+
+/// Parses a player base data string which contains the credits, credits spent,
+/// games played, seconds played, and the inventory contents of the current player.
+///
+/// # Structure
+/// ```
+/// 20;4;21474;-1;0;0;0;50;180000;0;fff....(LARGE SEQUENCE OF INVENTORY CHARS)
+/// ```
+fn parse_player_base(value: &str) -> Option<PlayerBase> {
+    let mut parser = MEStringParser::new(value)?;
+    let credits = parser.next()?;
+    parser.skip(2); // Skip -1;0
+    let credits_spent = parser.next()?;
+    parser.skip(1)?;
+    let games_played = parser.next()?;
+    let seconds_played = parser.next()?;
+    parser.skip(1);
+    let inventory = parser.next_str()?;
+
+    Some(PlayerBase {
+        credits,
+        credits_spent,
+        games_played,
+        seconds_played,
+        inventory,
+    })
+}
+
+/// Updates the provided model reflecting the changes stored in the provided
+/// pair of key and value
+//noinspection SpellCheckingInspection
+fn update_active_model(model: &mut PlayerActiveModel, key: &str, value: String) {
+    match key {
+        "Base" => {
+            if let Some(base) = parse_player_base(&value) {
+                model.credits = Set(base.credits);
+                model.credits_spent = Set(base.credits_spent);
+                model.games_played = Set(base.games_played);
+                model.seconds_played = Set(base.seconds_played);
+                model.inventory = Set(base.inventory);
+            }
+        }
+        "FaceCodes" => { model.face_codes = Set(Some(value)) }
+        "NewItem" => { model.new_item = Set(Some(value)) }
+        "csreward" => {
+            let value = value.parse::<u16>()
+                .unwrap_or(0);
+            model.csreward = Set(value)
+        }
+        "Completion" => { model.new_item = Set(Some(value)) }
+        "Progress" => { model.progress = Set(Some(value)) }
+        "cscompletion" => { model.cs_completion = Set(Some(value)) }
+        "cstimestamps" => { model.cs_timestamps1 = Set(Some(value)) }
+        "cstimestamps2" => { model.cs_timestamps2 = Set(Some(value)) }
+        "cstimestamps3" => { model.cs_timestamps3 = Set(Some(value)) }
+        _ => {}
+    }
+}
+
+/// Updates the player model stored on this session with the provided key value data pair
+/// persisting the changes to the database and updating the stored model.
+async fn update_player_data(session: &Session, key: &str, value: String) -> HandleResult {
+    let mut session_data = session.data.write().await;
+    let player = session_data.expect_player_owned()?;
+    let mut active = player.into_active_model();
+    update_active_model(&mut active, key, value);
+    let result = active.update(session.db()).await?;
+    session_data.player = Some(result);
+    Ok(())
 }

@@ -240,6 +240,12 @@ impl SessionData {
             .ok_or(BlazeError::MissingPlayer)
     }
 
+    pub fn expect_player_owned(&mut self) -> BlazeResult<PlayerModel> {
+        self.player
+            .take()
+            .ok_or(BlazeError::MissingPlayer)
+    }
+
     pub fn user(&self) -> BlazeResult<SessionUser> {
         let player = self.player
             .as_ref()
