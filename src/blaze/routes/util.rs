@@ -7,6 +7,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, NotSe
 use crate::blaze::components::Util;
 use crate::blaze::errors::{BlazeError, BlazeResult, HandleResult};
 use crate::blaze::Session;
+use crate::blaze::shared::TelemetryRes;
 use crate::database::entities::{player_characters, player_classes, PlayerActiveModel, PlayerCharacterActiveModel, PlayerCharacterEntity, PlayerCharacterModel, PlayerClassActiveModel, PlayerClassEntity, PlayerClassModel, PlayerModel};
 use crate::env;
 use crate::env::ADDRESS;
@@ -23,12 +24,27 @@ pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) ->
         Util::FetchClientConfig => handle_fetch_client_config(session, packet).await,
         Util::SuspendUserPing => handle_suspend_user_ping(session, packet).await,
         Util::UserSettingsSave => handle_user_settings_save(session, packet).await,
+        Util::GetTelemetryServer => handle_get_telemetry_server(session, packet).await,
         component => {
             debug!("Got Util({component:?})");
             packet.debug_decode()?;
             session.response_empty(packet).await
         }
     }
+}
+
+
+/// Handles retrieving the details about the telemetry server
+///
+/// # Structure
+/// ```
+/// packet(Components.UTIL, Commands.GET_TELEMETRY_SERVER, 0x0) {}
+/// ```
+///
+async fn handle_get_telemetry_server(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    let ext_host = env::ext_host();
+    let res = TelemetryRes { address: ext_host, session_id: session.id, };
+    session.response(packet, &res).await
 }
 
 packet! {
