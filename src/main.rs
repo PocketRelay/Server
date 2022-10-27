@@ -3,6 +3,7 @@ mod env;
 mod http;
 mod utils;
 mod database;
+mod game;
 
 use std::io;
 use std::sync::Arc;
@@ -11,10 +12,11 @@ use env_logger::WriteStyle;
 use log::info;
 use sea_orm::DatabaseConnection;
 use tokio::try_join;
+use crate::game::GameManager;
 
 /// Global state that is shared throughout the application
-#[derive(Debug)]
 pub struct GlobalState {
+    pub game_manager: GameManager,
     pub db: DatabaseConnection,
 }
 
@@ -30,7 +32,8 @@ async fn main() -> io::Result<()> {
     info!("Starting Pocket Relay v{}", env::VERSION);
 
     let db = database::connect().await?;
-    let global_state = GlobalState { db };
+    let game_manager = GameManager::new();
+    let global_state = GlobalState { db, game_manager };
     let global_state = Arc::new(global_state);
 
     try_join!(

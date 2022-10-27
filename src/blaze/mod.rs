@@ -12,7 +12,7 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::blaze::components::{Components, UserSessions};
 use errors::HandleResult;
 use crate::blaze::errors::{BlazeError, BlazeResult};
-use crate::blaze::shared::{NetData, SessionDataCodec, SessionDetails, SessionUser, UpdateExtDataAttr};
+use crate::blaze::shared::{NetData, Sess, SessionDataCodec, SessionDetails, SessionUser, UpdateExtDataAttr};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
 use crate::GlobalState;
@@ -29,7 +29,6 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
     let listener = TcpListener::bind(("0.0.0.0", main_port))
         .await?;
 
-    let mut sessions = Vec::new();
     let mut session_id = 0;
 
     loop {
@@ -38,7 +37,6 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
         let session = Arc::new(session);
         info!("New Session Started (ID: {}, ADDR: {:?})", session.id, session.addr);
         session_id += 1;
-        sessions.push(session.clone());
         tokio::spawn(process_session(session));
     }
 }
@@ -59,6 +57,7 @@ async fn process_session(session: Arc<Session>) {
             }
         }
     }
+    session.release();
 }
 
 pub struct Session {
@@ -82,6 +81,11 @@ pub struct SessionData {
 }
 
 impl Session {
+
+    pub fn release(&self) {
+        // TODO: Release the session removing all references to it
+    }
+
     /// This function creates a new session from the provided values and wraps
     /// the session in the necessary locks and Arc
     fn new(global: Arc<GlobalState>, id: u32, stream: TcpStream, addr: SocketAddr) -> Session {
