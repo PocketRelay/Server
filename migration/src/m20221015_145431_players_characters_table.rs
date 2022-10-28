@@ -123,11 +123,13 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(PlayerCharacters::Deployed)
                             .boolean()
                             .not_null()
+                            .default(false)
                     )
                     .col(
                         ColumnDef::new(PlayerCharacters::LeveledUp)
                             .boolean()
                             .not_null()
+                            .default(false)
                     )
                     .foreign_key(
                         ForeignKey::create()

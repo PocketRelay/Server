@@ -37,6 +37,17 @@ impl<'a> MEStringParser<'a> {
         next.parse::<F>()
             .ok()
     }
+
+    pub fn next_bool(&mut self) -> Option<bool> {
+        let next = self.split.next()?;
+        if next == "True" {
+            Some(true)
+        } else if next == "False" {
+            Some(false)
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]

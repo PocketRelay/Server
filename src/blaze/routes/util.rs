@@ -460,15 +460,23 @@ async fn handle_user_settings_save(session: &Session, packet: &OpaquePacket) -> 
 
 async fn set_player_data(session: &Session, key: &str, value: String) -> HandleResult {
     if key.starts_with("class") {
+        debug!("Updating player class data: {key}");
         update_player_class(session, key, value).await
-            .map_err(|err| err.context("While updating player class"))
+            .map_err(|err| err.context("While updating player class"))?;
+        debug!("Updated player class data: {key}");
     } else if key.starts_with("char") {
+        debug!("Updating player character data: {key}");
         update_player_character(session, key, value).await
-            .map_err(|err| err.context("While updating player character"))
+            .map_err(|err| err.context("While updating player character"))?;
+        debug!("Updated player character data: {key}");
     } else {
+        debug!("Updating player base data");
         update_player_data(session, key, value).await
-            .map_err(|err| err.context("While updating player data"))
+            .map_err(|err| err.context("While updating player data"))?;
+        debug!("Updated player base data");
     }
+
+    Ok(())
 }
 
 async fn get_player_character(session: &Session, index: u16) -> BlazeResult<PlayerCharacterActiveModel> {
@@ -567,8 +575,8 @@ fn parse_player_character(model: &mut PlayerCharacterActiveModel, value: &str) -
     model.hotkeys = Set(parser.next_str()?);
     model.weapons = Set(parser.next_str()?);
     model.weapon_mods = Set(parser.next_str()?);
-    model.deployed = Set(parser.next()?);
-    model.leveled_up = Set(parser.next()?);
+    model.deployed = Set(parser.next_bool()?);
+    model.leveled_up = Set(parser.next_bool()?);
     Some(())
 }
 
