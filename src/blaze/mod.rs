@@ -16,6 +16,7 @@ use crate::blaze::shared::{NetData, Sess, SessionDataCodec, SessionDetails, Sess
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
 use crate::GlobalState;
+use crate::utils::generate_token;
 
 mod routes;
 pub mod components;
@@ -147,35 +148,23 @@ impl Session {
     /// optionally setting and returning a new session token if there is
     /// not already one.
     pub async fn session_token(&self) -> BlazeResult<String> {
-        let session_data = self.data.read().await;
-        debug!("Got read lock for session token");
-        let player = session_data.expect_player()?;
-        match player.session_token.as_ref() {
-            None => {
-                drop(session_data);
-                let new_token = Self::generate_token();
-                self.set_token(Some(new_token.clone()))
-                    .await?;
-                Ok(new_token)
+        {
+            let session_data = self.data.read().await;
+            let player = session_data.expect_player()?;
+            if let Some(token) = &player.session_token {
+                return Ok(token.clone())
             }
-            Some(token) => Ok(token.clone())
         }
+
+        let token = generate_token(128);
+        let mut session_data = self.data.write().await;
+        let player = session_data.player.take()
+            .ok_or(BlazeError::MissingPlayer)?;
+        let (player, token) = set_session_token(self.db(), player, token).await?;
+        let _ = session_data.player.insert(player);
+        Ok(token)
     }
 
-    /// Updates the session token for the provided session. This involves updating the model
-    /// in the database by taking it out of the session player and then returning the newly
-    /// updated player back into the session.
-    pub async fn set_token(&self, token: Option<String>) -> BlazeResult<()> {
-        let mut session_data = self.data.write().await;
-        match session_data.player.take() {
-            Some(player) => {
-                let player = set_session_token(self.db(), player, token).await?;
-                let _ = session_data.player.insert(player);
-                Ok(())
-            }
-            None => return Err(BlazeError::MissingPlayer)
-        }
-    }
 
     /// Sets the player stored in this session to the provided player. This
     /// wrapper allows state that depends on this session having a player to

@@ -2,6 +2,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, In
 use sea_orm::ActiveValue::Set;
 use crate::database::entities::{PlayerActiveModel, PlayerEntity, PlayerModel, players};
 use crate::database::interface::DbResult;
+use crate::utils::generate_token;
 
 type PlayerResult = DbResult<Option<PlayerModel>>;
 
@@ -52,9 +53,35 @@ pub async fn find_by_session(db: &DatabaseConnection, session_token: &str) -> Pl
         .await
 }
 
-pub async fn set_session_token(db: &DatabaseConnection, player: PlayerModel, session_token: Option<String>) -> DbResult<PlayerModel> {
+pub async fn set_session_token(
+    db: &DatabaseConnection,
+    player: PlayerModel,
+    session_token: String,
+) -> DbResult<(PlayerModel, String)> {
     let mut active = player.into_active_model();
-    active.session_token = Set(session_token);
+    active.session_token = Set(Some(session_token.clone()));
+    let player = active.update(db).await?;
+    Ok((player, session_token))
+}
+
+pub async fn clear_session_token(
+    db: &DatabaseConnection,
+    player: PlayerModel,
+) -> DbResult<PlayerModel> {
+    let mut active = player.into_active_model();
+    active.session_token = Set(None);
     active.update(db).await
+}
+
+pub async fn get_session_token(db: &DatabaseConnection, player: PlayerModel) -> DbResult<(PlayerModel, String)> {
+    match &player.session_token {
+        None => {
+            let token = generate_token(128);
+            let out = set_session_token(db, player, token)
+                .await?;
+            Ok(out)
+        }
+        Some(value) => Ok((player, value.clone()))
+    }
 }
 
