@@ -97,7 +97,6 @@ pub async fn complete_auth(session: &Session, packet: &OpaquePacket, player: Pla
     let player = session_data.expect_player()?;
     let response = AuthRes {
         sess: Sess {
-            session_data: &session_data,
             session_token,
             player,
         },
@@ -371,16 +370,17 @@ async fn handle_list_user_entitlements_2(session: &Session, packet: &OpaquePacke
 /// }
 /// ```
 async fn handle_login_persona(session: &Session, packet: &OpaquePacket) -> HandleResult {
+    debug!("Logging into persona");
     let session_token = session.session_token().await?;
     let session_data = session.data.read().await;
     let player = session_data.expect_player()?;
     let response = Sess {
-        session_data: session_data.deref(),
         session_token,
         player,
     };
     session.response(packet, &response).await?;
     session.update_for(session).await?;
+    debug!("Persona login complete");
     Ok(())
 }
 

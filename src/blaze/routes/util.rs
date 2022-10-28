@@ -1,6 +1,6 @@
 use blaze_pk::{Codec, group, OpaquePacket, packet, tag_empty_blob, tag_group_end, tag_group_start, tag_str, tag_u16, tag_u32, tag_u8, TdfMap};
 use std::time::{SystemTime, UNIX_EPOCH};
-use log::debug;
+use log::{debug, warn};
 use rust_embed::RustEmbed;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, ModelTrait, NotSet, QueryFilter};
@@ -513,7 +513,9 @@ async fn update_player_character(session: &Session, key: &str, value: String) ->
             .parse::<u16>()
             .map_err(|_| BlazeError::Other("Invalid index for player class"))?;
         let mut model = get_player_character(session, index).await?;
-        parse_player_character(&mut model, &value);
+        if let None = parse_player_character(&mut model, &value) {
+            warn!("Failed to fully parse player character: {key} = {value}")
+        }
         model.save(session.db()).await?;
     }
     Ok(())
@@ -596,7 +598,9 @@ async fn update_player_class(session: &Session, key: &str, value: String) -> Han
             .parse::<u16>()
             .map_err(|_| BlazeError::Other("Invalid index for player class"))?;
         let mut model = get_player_class(session, index).await?;
-        parse_player_class(&mut model, &value);
+        if let None = parse_player_class(&mut model, &value) {
+            warn!("Failed to fully parse player class: {key} = {value}")
+        }
         model.save(session.db()).await?;
     }
     Ok(())
@@ -667,7 +671,11 @@ fn parse_player_base(model: &mut PlayerActiveModel, value: &str) -> Option<()> {
 //noinspection SpellCheckingInspection
 fn update_player_model(model: &mut PlayerActiveModel, key: &str, value: String) {
     match key {
-        "Base" => { parse_player_base(model, &value); }
+        "Base" => {
+            if let None = parse_player_base(model, &value) {
+                warn!("Failed to completely parse player base")
+            };
+        }
         "FaceCodes" => { model.face_codes = Set(Some(value)) }
         "NewItem" => { model.new_item = Set(Some(value)) }
         "csreward" => {

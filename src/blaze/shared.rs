@@ -188,13 +188,12 @@ fn encode_persona(player: &PlayerModel, output: &mut Vec<u8>) {
 }
 
 #[derive(Debug)]
-pub struct Sess<'a, 'b> {
-    pub session_data: &'a SessionData,
-    pub player: &'b PlayerModel,
+pub struct Sess<'a> {
+    pub player: &'a PlayerModel,
     pub session_token: String,
 }
 
-impl Codec for Sess<'_, '_> {
+impl Codec for Sess<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_group_start(output, "SESS");
         tag_u32(output, "BUID", self.player.id);
@@ -212,12 +211,12 @@ impl Codec for Sess<'_, '_> {
 /// Complex authentication result structure is manually encoded because it
 /// has complex nesting and output can vary based on inputs provided
 #[derive(Debug)]
-pub struct AuthRes<'a, 'b> {
-    pub sess: Sess<'a, 'b>,
+pub struct AuthRes<'a> {
+    pub sess: Sess<'a>,
     pub silent: bool,
 }
 
-impl Codec for AuthRes<'_, '_> {
+impl Codec for AuthRes<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
         let silent = self.silent;
         if silent {
