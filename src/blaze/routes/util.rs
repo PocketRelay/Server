@@ -253,12 +253,12 @@ async fn handle_post_auth(session: &Session, packet: &OpaquePacket) -> HandleRes
         ticker: TickerDetails {
             host: ext_host,
             port: 9988,
-            key: "823287263,10.23.15.2:8999,masseffect-3-pc,10,50,50,50,50,0,12"
+            key: "823287263,10.23.15.2:8999,masseffect-3-pc,10,50,50,50,50,0,12",
         },
         pss: PSSDetails {
             address: "playersyncservice.ea.com".to_string(),
-            port: 443
-        }
+            port: 443,
+        },
     };
     session.response(packet, &res).await
 }
@@ -461,10 +461,13 @@ async fn handle_user_settings_save(session: &Session, packet: &OpaquePacket) -> 
 async fn set_player_data(session: &Session, key: &str, value: String) -> HandleResult {
     if key.starts_with("class") {
         update_player_class(session, key, value).await
+            .map_err(|err| err.context("While updating player class"))
     } else if key.starts_with("char") {
         update_player_character(session, key, value).await
+            .map_err(|err| err.context("While updating player character"))
     } else {
         update_player_data(session, key, value).await
+            .map_err(|err| err.context("While updating player data"))
     }
 }
 

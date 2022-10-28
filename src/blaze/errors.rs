@@ -15,7 +15,15 @@ pub enum BlazeError {
     MissingPlayer,
     // Response error type. Responds with the provided response through
     // the redirect handler
-    Response(OpaquePacket)
+    Response(OpaquePacket),
+    Context(&'static str, Box<BlazeError>),
+}
+
+impl BlazeError {
+    /// Provides additional context to the error
+    pub fn context(self, context: &'static str) -> BlazeError {
+        BlazeError::Context(context, Box::new(self))
+    }
 }
 
 /// Enum for errors relating to authentication
@@ -25,7 +33,7 @@ pub enum BlazeError {
 pub enum LoginError {
     ServerUnavailable = 0x0,
     EmailNotFound = 0xB,
-    WrongPassword =0xC,
+    WrongPassword = 0xC,
     InvalidSession = 0xD,
     EmailAlreadyInUse = 0x0F,
     AgeRestriction = 0x10,
@@ -40,7 +48,7 @@ pub enum LoginError {
     ServerUnavailableFinal = 0x4001,
     FailedNoLoginAction = 0x4004,
     ServerUnavailableNothing = 0x4005,
-    ConnectionLost = 0x4007
+    ConnectionLost = 0x4007,
 }
 
 impl Into<u16> for LoginError {
