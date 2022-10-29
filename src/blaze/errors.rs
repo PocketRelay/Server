@@ -29,8 +29,9 @@ impl BlazeError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, From)]
 pub enum GameError {
+    IO(io::Error),
     Full,
     MissingHost,
     Other(&'static str),

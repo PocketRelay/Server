@@ -7,8 +7,8 @@ use blaze_pk::{OpaquePacket, Packets};
 use tokio::sync::RwLock;
 use crate::blaze::{Session, SessionArc, SessionGame};
 use crate::blaze::components::{Components, GameManager};
-use crate::blaze::errors::{GameError, GameResult};
-use crate::game::shared::NotifyPlayerJoining;
+use crate::blaze::errors::{BlazeError, BlazeResult, GameError, GameResult};
+use crate::game::shared::{notify_game_setup, NotifyPlayerJoining};
 
 pub struct Games {
     games: RwLock<HashMap<u32, Arc<Game>>>,
@@ -62,11 +62,11 @@ impl Game {
         players.len()
     }
 
-    pub async fn get_host(&self) -> GameResult<&Arc<Session>> {
+    pub async fn get_host(&self) -> GameResult<SessionArc> {
         let players = self.players.read().await;
         let player = players.get(0)
             .ok_or(GameError::MissingHost)?;
-        Ok(player)
+        Ok(player.clone())
     }
 
     pub async fn push_all(&self, packet: &OpaquePacket) -> GameResult<()> {
@@ -78,24 +78,25 @@ impl Game {
         Ok(())
     }
 
-    pub async fn add_player(game: &Arc<Game>, session: &SessionArc) -> GameResult<()> {
+    pub async fn add_player(game: &Arc<Game>, session: &SessionArc) -> BlazeResult<()> {
         // Game is full cannot add anymore players
-        if game.player_count() >= Self::MAX_PLAYERS {
-            return Err(GameError::Full);
+        if game.player_count().await >= Self::MAX_PLAYERS {
+            return Err(BlazeError::Game(GameError::Full));
         }
-        let session = session.clone();
 
         // Add the player to the players list returning the slot it was added to
         let slot = {
             let mut players = game.players.write().await;
             let slot = players.len();
-            players.push(session);
+            players.push(session.clone());
             slot
         };
 
         // Set the player session game data
         {
-            let mut session_data = session.data.write().await;
+            let mut session_data = session
+                .data
+                .write().await;
             session_data.game = Some(SessionGame {
                 game: game.clone(),
                 slot,
@@ -122,14 +123,16 @@ impl Game {
                 for player in players {
                     player.write_packet(&join_notify).await?;
                     // TODO: Handle disconnects here.
-                    if player != session {
+                    if player.id != session.id {
                         player.update_for(&session).await?;
                     }
                 }
             }
         }
 
-
+        let setup = notify_game_setup(game, &session).await?;
+        session.write_packet(&setup).await?;
+        session.update_client().await?;
 
         Ok(())
     }

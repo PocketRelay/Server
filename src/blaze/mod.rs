@@ -11,7 +11,7 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::blaze::components::{Components, UserSessions};
 use errors::HandleResult;
 use crate::blaze::errors::{BlazeError, BlazeResult};
-use crate::blaze::shared::{NetData, SessionDetails, UpdateExtDataAttr};
+use crate::blaze::shared::{NetData, SessionDetails, SetSessionDetails, UpdateExtDataAttr};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
 use crate::game::Game;
@@ -61,19 +61,12 @@ async fn process_session(session: SessionArc) {
     session.release();
 }
 
-#[derive(Eq)]
 pub struct Session {
     pub global: Arc<GlobalState>,
     pub id: u32,
     pub stream: RwLock<TcpStream>,
     pub addr: SocketAddr,
     pub data: RwLock<SessionData>,
-}
-
-impl PartialEq for Session {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
 }
 
 // Type for session wrapped in an arc
@@ -91,9 +84,15 @@ pub struct SessionData {
     pub pslm: u32,
 
     pub state: u8,
+    pub matchmaking: Option<MatchmakingState>,
 
     // Game Details
     pub game: Option<SessionGame>,
+}
+
+pub struct MatchmakingState {
+    pub id: u32,
+    pub start: u64,
 }
 
 pub struct SessionGame {
@@ -125,6 +124,7 @@ impl Session {
                 hardware_flag: 0,
                 pslm: 0xfff0fff,
                 state: 2,
+                matchmaking: None,
                 game: None,
             }),
         }
@@ -150,6 +150,16 @@ impl Session {
 
         other.write_packet(&session_details).await?;
         other.write_packet(&update_ext_data).await?;
+        Ok(())
+    }
+
+    /// Sends a Components::UserSessions(UserSessions::SetSession) packet to the client updating
+    /// the clients session information with the copy stored on the server.
+    pub async fn update_client(&self) -> BlazeResult<()> {
+        let data = self.data.read().await;
+        let res = SetSessionDetails { session: &data };
+        let packet = Packets::notify(Components::UserSessions(UserSessions::SetSession), &res);
+        self.write_packet(&packet).await?;
         Ok(())
     }
 
@@ -253,13 +263,15 @@ impl SessionData {
     pub fn player_name_safe(&self) -> String {
         self
             .player
-            .map(|value| value.display_name)
+            .as_ref()
+            .map(|value| value.display_name.clone())
             .unwrap_or_else(|| String::new())
     }
 
     pub fn player_id_safe(&self) -> u32 {
         self
             .player
+            .as_ref()
             .map(|value| value.id)
             .unwrap_or(1)
     }
@@ -267,6 +279,7 @@ impl SessionData {
     pub fn game_id_safe(&self) -> u32 {
         self
             .game
+            .as_ref()
             .map(|game| game.game.id)
             .unwrap_or(1)
     }
@@ -274,6 +287,7 @@ impl SessionData {
     pub fn game_slot_safe(&self) -> usize {
         self
             .game
+            .as_ref()
             .map(|game| game.slot)
             .unwrap_or(1)
     }

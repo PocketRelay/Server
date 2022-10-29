@@ -2,15 +2,28 @@ use blaze_pk::{Codec, CodecResult, packet, Reader, Tag, tag_empty_blob, tag_empt
 use crate::blaze::SessionData;
 use crate::database::entities::PlayerModel;
 
+pub struct SetSessionDetails<'a> {
+    pub session: &'a SessionData,
+}
+
+//noinspection SpellCheckingInspection
+impl Codec for SetSessionDetails<'_> {
+    fn encode(&self, output: &mut Vec<u8>) {
+        self.session.encode(output);
+        tag_u32(output, "USID", self.session.player_id_safe());
+    }
+}
+
 pub struct SessionDetails<'a> {
     pub session: &'a SessionData,
     pub player: &'a PlayerModel,
 }
 
+//noinspection SpellCheckingInspection
 impl Codec for SessionData {
-    fn encode(&self, _output: &mut Vec<u8>) {
+    fn encode(&self, output: &mut Vec<u8>) {
         tag_group_start(output, "DATA");
-        tag_value(output, "ADDR", &self.session.net.get_groups());
+        tag_value(output, "ADDR", &self.net.get_groups());
         tag_str(output, "BPS", "ea-sjc");
         tag_empty_str(output, "CTY");
         tag_var_int_list_empty(output, "CVAR");
@@ -19,16 +32,16 @@ impl Codec for SessionData {
             0x70001.encode(output);
             0x409a.encode(output);
         }
-        tag_u16(output, "HWFG", self.session.hardware_flag);
+        tag_u16(output, "HWFG", self.hardware_flag);
         {
             tag_list_start(output, "PSLM", ValueType::VarInt, 1);
-            self.session.pslm.encode(output);
+            self.pslm.encode(output);
         }
-        tag_value(output, "QDAT", &self.session.net.ext);
+        tag_value(output, "QDAT", &self.net.ext);
         tag_u8(output, "UATT", 0);
         {
             tag_list_start(output, "ULST", ValueType::Triple, 1);
-            (4, 1, self.session.game_id_safe()).encode(output);
+            (4, 1, self.game_id_safe()).encode(output);
         }
         tag_group_end(output);
     }

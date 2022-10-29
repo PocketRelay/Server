@@ -1,7 +1,9 @@
-use blaze_pk::{Codec, tag_empty_blob, tag_group_end, tag_group_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u8, tag_usize, tag_value};
-use crate::blaze::SessionData;
+use blaze_pk::{Codec, OpaquePacket, Packets, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_list_start, tag_map, tag_map_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8, tag_usize, tag_value, TdfOptional, ValueType};
+use crate::blaze::{SessionArc, SessionData};
+use crate::blaze::components::{Components, GameManager};
+use crate::blaze::errors::{GameError, GameResult};
+use crate::game::Game;
 
-#[derive(Debug)]
 pub struct NotifyPlayerJoining<'a> {
     /// ID of the game that the player is joining
     pub id: u32,
@@ -9,16 +11,15 @@ pub struct NotifyPlayerJoining<'a> {
     pub session: &'a SessionData,
 }
 
-impl Codec for NotifyPlayerJoining {
+impl Codec for NotifyPlayerJoining<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
-
         tag_u32(output, "GID", self.id);
+        tag_group_start(output, "PDAT");
         encode_player_data(self.session, output);
     }
 }
 
 pub fn encode_player_data(session: &SessionData, output: &mut Vec<u8>) {
-    tag_group_start(output, "PDAT");
     tag_empty_blob(output, "BLOB");
     tag_u8(output, "EXID", 0);
     tag_u32(output, "GID", session.game_id_safe());
@@ -34,4 +35,113 @@ pub fn encode_player_data(session: &SessionData, output: &mut Vec<u8>) {
     tag_triple(output, "UGID", &(0, 0, 0));
     tag_u32(output, "UID", player_id);
     tag_group_end(output);
+}
+
+pub async fn notify_game_setup(game: &Game, session: &SessionArc) -> GameResult<OpaquePacket> {
+    let mut output = Vec::new();
+    let session_data = session.data.read().await;
+    encode_notify_game_setup_impl(game, &session_data, &mut output).await?;
+    Ok(Packets::notify_raw(
+        Components::GameManager(GameManager::GameSetup),
+        output,
+    ))
+}
+
+async fn encode_notify_game_setup_impl(game: &Game, session: &SessionData, output: &mut Vec<u8>) -> GameResult<()> {
+    let mut player_data = Vec::new();
+    let mut player_ids = Vec::new();
+
+    let players = &*game.players.read().await;
+    let player_count = players.len();
+
+
+    for player in players {
+        player_ids.push(player.id);
+        let session_data = player.data.read().await;
+        encode_player_data(&session_data, &mut player_data);
+    }
+
+    let host = players.get(0)
+        .ok_or(GameError::MissingHost)?;
+    let host_data = host.data.read().await;
+    let host_id = host_data.player_id_safe();
+
+    {
+        tag_group_start(output, "GAME");
+        tag_list(output, "ADMN", player_ids);
+        let attributes = game.attributes.read().await;
+        tag_map(output, "ATTR", &attributes);
+        drop(attributes);
+        tag_list(output, "CAP", vec![0x4, 0x0]);
+        tag_u32(output, "GID", game.id);
+        tag_str(output, "GNAM", &host_data.player_name_safe());
+        tag_u64(output, "GPVH", Game::GPVH);
+        tag_u16(output, "GSET", game.setting);
+        tag_u64(output, "GSID", Game::GSID);
+        tag_u16(output, "GSTA", game.state);
+        tag_empty_str(output, "GTYP");
+        {
+            tag_list_start(output, "HNET", ValueType::Optional, 1);
+            host_data.net.get_groups().encode(output);
+        }
+
+        tag_u32(output, "HSES", host_id);
+        tag_u8(output, "IGNO", 0);
+        tag_u8(output, "MCAP", 0x4);
+        tag_value(output, "NQOS", &host_data.net.ext);
+        tag_u8(output, "NRES", 0x0);
+        tag_u8(output, "NTOP", 0x0);
+        tag_empty_str(output, "PGID");
+        tag_empty_blob(output, "PGSR");
+
+        {
+            tag_group_start(output, "PHST");
+            tag_u32(output, "HPID", host_id);
+            tag_u8(output, "HSLT", 0x0);
+            tag_group_end(output);
+        }
+
+        tag_u8(output, "PRES", 0x1);
+        tag_empty_str(output, "PSAS");
+        tag_u8(output, "QCAP", 0x0);
+        tag_u32(output, "SEED", 0x4cbc8585);
+        tag_u8(output, "TCAP", 0x0);
+
+        {
+            tag_group_start(output, "THST");
+            tag_u32(output, "HPID", host_id);
+            tag_u8(output, "HSLT", 0x0);
+            tag_group_end(output);
+        }
+
+        tag_str(output, "UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
+        tag_u8(output, "VOIP", 0x2);
+        tag_str(output, "VSTR", "ME3-295976325-179181965240128");
+        tag_empty_blob(output, "XNNC");
+        tag_empty_blob(output, "XSES");
+        tag_group_end(output);
+    }
+
+    tag_list_start(output, "PROS", ValueType::Group, player_count);
+    output.extend_from_slice(&player_data);
+
+    tag_optional_start(output, "REAS", 0x0);
+    tag_group_start(output, "VALU");
+    if session.game_slot_safe() != 0 {
+        tag_u16(output, "FIT", 0x3f7a);
+        tag_u16(output, "MAXF", 0x5460);
+        let mid = session
+            .matchmaking
+            .as_ref()
+            .map(|value| value.id)
+            .unwrap_or(1);
+        tag_u32(output, "MSID", mid);
+        tag_u8(output, "RLST", 0x2);
+        tag_u32(output, "USID", session.player_id_safe());
+    } else {
+        tag_u8(output, "DCTX", 0x0);
+    }
+    tag_group_end(output);
+
+    Ok(())
 }
