@@ -1,10 +1,53 @@
-use blaze_pk::{Blob, Codec, CodecResult, group, packet, Reader, Tag, tag_empty_str, tag_group_end, tag_group_start, tag_list_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_zero, TdfMap, TdfOptional, ValueType, VarIntList};
+use blaze_pk::{Codec, CodecResult, packet, Reader, Tag, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list_start, tag_map_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_value, tag_var_int_list_empty, tag_zero, TdfOptional, ValueType};
+use crate::blaze::SessionData;
 use crate::database::entities::PlayerModel;
 
-packet! {
-    struct SessionDetails {
-        DATA data: SessionDataCodec,
-        USER user: SessionUser
+pub struct SessionDetails<'a> {
+    pub session: &'a SessionData,
+    pub player: &'a PlayerModel,
+}
+
+impl Codec for SessionData {
+    fn encode(&self, _output: &mut Vec<u8>) {
+        tag_group_start(output, "DATA");
+        tag_value(output, "ADDR", &self.session.net.get_groups());
+        tag_str(output, "BPS", "ea-sjc");
+        tag_empty_str(output, "CTY");
+        tag_var_int_list_empty(output, "CVAR");
+        {
+            tag_map_start(output, "DMAP", ValueType::VarInt, ValueType::VarInt, 1);
+            0x70001.encode(output);
+            0x409a.encode(output);
+        }
+        tag_u16(output, "HWFG", self.session.hardware_flag);
+        {
+            tag_list_start(output, "PSLM", ValueType::VarInt, 1);
+            self.session.pslm.encode(output);
+        }
+        tag_value(output, "QDAT", &self.session.net.ext);
+        tag_u8(output, "UATT", 0);
+        {
+            tag_list_start(output, "ULST", ValueType::Triple, 1);
+            (4, 1, self.session.game_id_safe()).encode(output);
+        }
+        tag_group_end(output);
+    }
+}
+
+//noinspection SpellCheckingInspection
+impl Codec for SessionDetails<'_> {
+    fn encode(&self, output: &mut Vec<u8>) {
+        self.session.encode(output);
+        {
+            tag_group_start(output, "USER");
+            tag_u32(output, "AID", self.player.id);
+            tag_u32(output, "ALOC", self.session.location);
+            tag_empty_blob(output, "EXBB");
+            tag_u8(output, "EXID", 0);
+            tag_u32(output, "ID", self.player.id);
+            tag_str(output, "NAME", &self.player.display_name);
+            tag_group_end(output);
+        }
     }
 }
 
@@ -15,31 +58,6 @@ packet! {
     }
 }
 
-packet! {
-    struct SessionUser {
-        AID aid: u32,
-        ALOC location: u32,
-        EXBB exbb: Blob,
-        EXID exid: u8,
-        ID id: u32,
-        NAME name: String
-    }
-}
-
-group! {
-    struct SessionDataCodec {
-        ADDR addr: TdfOptional<NetGroups>,
-        BPS bps: &'static str,
-        CTY cty: &'static str,
-        CVAR cvar: VarIntList<u16>,
-        DMAP dmap: TdfMap<u32, u32>,
-        HWFG hardware_flag: u16,
-        PSLM pslm: Vec<u32>,
-        QDAT net_ext: NetExt,
-        UATT uatt: u8,
-        ULST ulst: Vec<(u8, u8, u32)>
-    }
-}
 
 /// Structure for storing extended network data
 #[derive(Debug, Copy, Clone, Default)]
@@ -49,6 +67,7 @@ pub struct NetExt {
     pub ubps: u16,
 }
 
+//noinspection SpellCheckingInspection
 impl Codec for NetExt {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_u16(output, "DBPS", self.dbps);

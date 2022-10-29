@@ -3,19 +3,19 @@ mod shared;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use blaze_pk::{OpaquePacket, Packets};
 use tokio::sync::RwLock;
 use crate::blaze::{Session, SessionArc, SessionGame};
+use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{GameError, GameResult};
+use crate::game::shared::NotifyPlayerJoining;
 
-type Player = Arc<Session>;
-type PlayersList = Vec<Player>;
-
-pub struct GameManager {
+pub struct Games {
     games: RwLock<HashMap<u32, Arc<Game>>>,
     next_id: AtomicU32,
 }
 
-impl GameManager {
+impl Games {
     pub fn new() -> Self {
         Self {
             games: RwLock::new(HashMap::new()),
@@ -37,7 +37,7 @@ pub struct Game {
     state: u16,
     setting: u16,
     attributes: RwLock<HashMap<String, String>>,
-    players: RwLock<PlayersList>,
+    players: RwLock<Vec<SessionArc>>,
 }
 
 impl Game {
@@ -69,6 +69,15 @@ impl Game {
         Ok(player)
     }
 
+    pub async fn push_all(&self, packet: &OpaquePacket) -> GameResult<()> {
+        let players = &*self.players.read().await;
+        for player in players {
+            player.write_packet(packet).await?;
+            // TODO: Handle disconnects here.
+        }
+        Ok(())
+    }
+
     pub async fn add_player(game: &Arc<Game>, session: &SessionArc) -> GameResult<()> {
         // Game is full cannot add anymore players
         if game.player_count() >= Self::MAX_PLAYERS {
@@ -92,6 +101,35 @@ impl Game {
                 slot,
             })
         }
+
+        // Joining player is not the host player
+        if slot != 0 {
+            let join_notify = {
+                let session_data = session.data.read().await;
+                let content = NotifyPlayerJoining {
+                    id: 0,
+                    session: &session_data,
+                };
+                Packets::notify(
+                    Components::GameManager(GameManager::PlayerJoining),
+                    &content,
+                )
+            };
+
+            // Update session details for other players and send join notifies
+            {
+                let players = &*game.players.read().await;
+                for player in players {
+                    player.write_packet(&join_notify).await?;
+                    // TODO: Handle disconnects here.
+                    if player != session {
+                        player.update_for(&session).await?;
+                    }
+                }
+            }
+        }
+
+
 
         Ok(())
     }

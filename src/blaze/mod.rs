@@ -2,16 +2,16 @@ use std::net::SocketAddr;
 use std::ops::DerefMut;
 use std::sync::{Arc};
 use std::time::SystemTime;
-use blaze_pk::{Blob, Codec, OpaquePacket, PacketResult, Packets, TdfMap, VarIntList};
+use blaze_pk::{Codec, OpaquePacket, PacketResult, Packets};
 use log::{debug, error, info};
 use sea_orm::DatabaseConnection;
 use tokio::io;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tokio::net::{TcpListener, TcpStream};
 use crate::blaze::components::{Components, UserSessions};
 use errors::HandleResult;
 use crate::blaze::errors::{BlazeError, BlazeResult};
-use crate::blaze::shared::{NetData, Sess, SessionDataCodec, SessionDetails, SessionUser, UpdateExtDataAttr};
+use crate::blaze::shared::{NetData, SessionDetails, UpdateExtDataAttr};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
 use crate::game::Game;
@@ -61,12 +61,19 @@ async fn process_session(session: SessionArc) {
     session.release();
 }
 
+#[derive(Eq)]
 pub struct Session {
     pub global: Arc<GlobalState>,
     pub id: u32,
     pub stream: RwLock<TcpStream>,
     pub addr: SocketAddr,
     pub data: RwLock<SessionData>,
+}
+
+impl PartialEq for Session {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 // Type for session wrapped in an arc
@@ -82,6 +89,8 @@ pub struct SessionData {
     pub net: NetData,
     pub hardware_flag: u16,
     pub pslm: u32,
+
+    pub state: u8,
 
     // Game Details
     pub game: Option<SessionGame>,
@@ -115,6 +124,7 @@ impl Session {
                 net: NetData::default(),
                 hardware_flag: 0,
                 pslm: 0xfff0fff,
+                state: 2,
                 game: None,
             }),
         }
@@ -122,23 +132,22 @@ impl Session {
 
     pub async fn update_for(&self, other: &SessionArc) -> BlazeResult<()> {
         let data = self.data.read().await;
-        let user = data.user()?;
+        let player = data.expect_player()?;
         let update_ext_data = Packets::notify(
             Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
             &UpdateExtDataAttr {
                 flags: 0x3,
-                id: user.id,
+                id: player.id,
             },
         );
         let session_details = Packets::notify(
             Components::UserSessions(UserSessions::SessionDetails),
             &SessionDetails {
-                data: data.to_codec(),
-                user,
+                session: &data,
+                player,
             },
         );
 
-        drop(data);
         other.write_packet(&session_details).await?;
         other.write_packet(&update_ext_data).await?;
         Ok(())
@@ -241,6 +250,34 @@ impl Session {
 }
 
 impl SessionData {
+    pub fn player_name_safe(&self) -> String {
+        self
+            .player
+            .map(|value| value.display_name)
+            .unwrap_or_else(|| String::new())
+    }
+
+    pub fn player_id_safe(&self) -> u32 {
+        self
+            .player
+            .map(|value| value.id)
+            .unwrap_or(1)
+    }
+
+    pub fn game_id_safe(&self) -> u32 {
+        self
+            .game
+            .map(|game| game.game.id)
+            .unwrap_or(1)
+    }
+
+    pub fn game_slot_safe(&self) -> usize {
+        self
+            .game
+            .map(|game| game.slot)
+            .unwrap_or(1)
+    }
+
     pub fn expect_player(&self) -> BlazeResult<&PlayerModel> {
         self.player
             .as_ref()
@@ -251,35 +288,6 @@ impl SessionData {
         self.player
             .take()
             .ok_or(BlazeError::MissingPlayer)
-    }
-
-    pub fn user(&self) -> BlazeResult<SessionUser> {
-        let player = self.player
-            .as_ref()
-            .ok_or(BlazeError::MissingPlayer)?;
-        Ok(SessionUser {
-            aid: player.id,
-            location: self.location,
-            exbb: Blob::empty(),
-            exid: 0,
-            id: player.id,
-            name: player.display_name.clone(),
-        })
-    }
-
-    pub fn to_codec(&self) -> SessionDataCodec {
-        SessionDataCodec {
-            addr: self.net.get_groups(),
-            bps: "ea-sjc",
-            cty: "",
-            cvar: VarIntList::empty(),
-            dmap: TdfMap::only(0x70001u32, 0x409au32),
-            hardware_flag: self.hardware_flag,
-            pslm: vec![self.pslm],
-            net_ext: self.net.ext,
-            uatt: 0,
-            ulst: vec![(0, 0, self.game_id())],
-        }
     }
 
     /// Function for retrieving the ID of the current game that this player
