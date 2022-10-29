@@ -9,7 +9,7 @@ use std::io;
 use std::sync::Arc;
 use dotenvy::dotenv;
 use env_logger::WriteStyle;
-use log::info;
+use log::{info, LevelFilter};
 use sea_orm::DatabaseConnection;
 use tokio::try_join;
 use crate::game::GameManager;
@@ -26,6 +26,8 @@ async fn main() -> io::Result<()> {
 
     env_logger::builder()
         .filter_module("pocket_relay", env::logging_level())
+        .filter_module("actix_web", env::logging_level())
+        .filter_module("actix", env::logging_level())
         .write_style(WriteStyle::Always)
         .init();
 
