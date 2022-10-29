@@ -35,7 +35,7 @@ pub enum Relation {
     Classes,
     #[sea_orm(has_many = "super::player_characters::Entity")]
     Characters,
-    #[sea_orm(has_one = "super::player_characters::Entity")]
+    #[sea_orm(has_one = "super::galaxy_at_war::Entity")]
     GalaxyAtWar,
 }
 

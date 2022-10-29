@@ -1,10 +1,12 @@
 use std::cmp;
 use std::fmt::Display;
 use std::num::ParseIntError;
-use actix_web::{get, HttpRequest, ResponseError};
+use actix_web::{Error, get, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web::dev::Url;
+use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
-use actix_web::web::{Data, Path, scope, ServiceConfig};
+use actix_web::web::{Data, Path, Query, scope, ServiceConfig};
+use chrono::{Datelike, DateTime, Local, NaiveDate, NaiveDateTime, Utc};
 use derive_more::{Display, From};
 use sea_orm::{ActiveModelTrait, DatabaseConnection, DbErr, IntoActiveModel, ModelTrait, NotSet};
 use sea_orm::ActiveValue::Set;
@@ -24,10 +26,6 @@ pub fn configure(cfg: &mut ServiceConfig) {
     );
 }
 
-#[derive(Deserialize)]
-struct AuthQuery {
-    auth: String,
-}
 
 #[derive(Debug, Display, From)]
 enum GAWError {
@@ -59,10 +57,14 @@ async fn gaw_player(db: &DatabaseConnection, id: &str) -> GAWResult<PlayerModel>
     }
 }
 
+#[derive(Deserialize)]
+struct AuthQuery {
+    auth: String,
+}
+
 #[get("authentication/sharedTokenLogin")]
-async fn authenticate(req: HttpRequest, global: Data<GlobalState>) -> GAWResult<String> {
-    let auth = req.match_info().query("auth");
-    let player = gaw_player(&global.db, auth).await?;
+async fn authenticate(query: Query<AuthQuery>, global: Data<GlobalState>) -> GAWResult<impl Responder> {
+    let player = gaw_player(&global.db, &query.auth).await?;
     let (player, token) = get_session_token(&global.db, player).await?;
 
     let id = player.id;
@@ -98,11 +100,28 @@ async fn authenticate(req: HttpRequest, global: Data<GlobalState>) -> GAWResult<
     <tosuri/>
 </fulllogin>"#);
 
-    Ok(response)
+    Ok(HttpResponse::build(StatusCode::OK)
+        .content_type(ContentType::xml())
+        .body(response))
+}
+
+#[derive(Deserialize)]
+struct IncreaseQuery {
+    #[serde(rename = "rinc|0")]
+    a: Option<String>,
+    #[serde(rename = "rinc|1")]
+    b: Option<String>,
+    #[serde(rename = "rinc|2")]
+    c: Option<String>,
+    #[serde(rename = "rinc|3")]
+    d: Option<String>,
+    #[serde(rename = "rinc|4")]
+    e: Option<String>,
+
 }
 
 #[get("galaxyatwar/increaseRatings/{id}")]
-async fn increase_ratings(req: HttpRequest, id: Path<String>, global: Data<GlobalState>) -> GAWResult<String> {
+async fn increase_ratings(id: Path<String>, query: Query<IncreaseQuery>, global: Data<GlobalState>) -> GAWResult<impl Responder> {
     let id = id.into_inner();
     let player = gaw_player(&global.db, &id).await?;
 
@@ -111,13 +130,11 @@ async fn increase_ratings(req: HttpRequest, id: Path<String>, global: Data<Globa
         get_promotions(&global.db, &player)
     )?;
 
-    let match_info = req.match_info();
-
-    let a = get_inc_value(gaw_data.group_a, match_info.query("rinc|0"));
-    let b = get_inc_value(gaw_data.group_b, match_info.query("rinc|1"));
-    let c = get_inc_value(gaw_data.group_c, match_info.query("rinc|2"));
-    let d = get_inc_value(gaw_data.group_d, match_info.query("rinc|3"));
-    let e = get_inc_value(gaw_data.group_e, match_info.query("rinc|4"));
+    let a = get_inc_value(gaw_data.group_a, &query.a);
+    let b = get_inc_value(gaw_data.group_b, &query.b);
+    let c = get_inc_value(gaw_data.group_c, &query.c);
+    let d = get_inc_value(gaw_data.group_d, &query.d);
+    let e = get_inc_value(gaw_data.group_e, &query.e);
 
     let mut gaw_data = gaw_data.into_active_model();
 
@@ -132,20 +149,18 @@ async fn increase_ratings(req: HttpRequest, id: Path<String>, global: Data<Globa
     Ok(ratings_response(promotions, gaw_data))
 }
 
-fn get_rating_value(current: u16, inc: u16) -> u16 {
-    cmp::min(GAW_MAX_VALUE, current + inc)
-}
-
-fn get_inc_value(old: u16, value: &str) -> u16 {
-    if value.is_empty() {
-        return old;
+fn get_inc_value(old: u16, value: &Option<String>) -> u16 {
+    match value {
+        None => old,
+        Some(value) => {
+            let value = value.parse().unwrap_or(0);
+            cmp::min(old + value, GAW_MAX_VALUE)
+        }
     }
-    let value = value.parse().unwrap_or(0);
-    cmp::min(old + value, GAW_MAX_VALUE)
 }
 
 #[get("galaxyatwar/getRatings/{id}")]
-async fn get_ratings(req: HttpRequest, id: Path<String>, global: Data<GlobalState>) -> GAWResult<String> {
+async fn get_ratings(id: Path<String>, global: Data<GlobalState>) -> GAWResult<impl Responder> {
     let id = id.into_inner();
     let player = gaw_player(&global.db, &id).await?;
 
@@ -167,13 +182,14 @@ async fn get_galaxy_at_war(db: &DatabaseConnection, player: &PlayerModel) -> GAW
     let existing = player.find_related(GalaxyAtWarEntity)
         .one(db)
         .await?;
-    let time = server_unix_time();
+    let current_time = Local::now()
+        .naive_local();
     match existing {
         None => {
             let gaw = GalaxyAtWarActiveModel {
                 id: NotSet,
                 player_id: Set(player.id),
-                last_modified: Set(time),
+                last_modified: Set(current_time),
                 group_a: Set(DEFAULT_GAW_VALUE),
                 group_b: Set(DEFAULT_GAW_VALUE),
                 group_c: Set(DEFAULT_GAW_VALUE),
@@ -193,9 +209,12 @@ async fn apply_gaw_decay(db: &DatabaseConnection, value: GalaxyAtWarModel) -> GA
     if decay <= 0.0 {
         return Ok(value);
     }
-    let time = server_unix_time();
-    let days_past = ((time - value.last_modified) / 86400) as f32; /* 1 day = 86400 seconds */
-    let decay_value = (decay * days_past * 100.0) as u16;
+
+    let current_time = Local::now()
+        .naive_local();
+
+    let days_passed = (current_time - value.last_modified).num_days() as f32;
+    let decay_value = (decay * days_passed * 100.0) as u16;
 
     let a = cmp::max(value.group_a - decay_value, GAW_MIN_VALUE);
     let b = cmp::max(value.group_b - decay_value, GAW_MIN_VALUE);
@@ -219,14 +238,14 @@ async fn apply_gaw_decay(db: &DatabaseConnection, value: GalaxyAtWarModel) -> GA
 }
 
 /// Returns a XML response generated for the provided ratings
-fn ratings_response(promotions: u32, ratings: GalaxyAtWarModel) -> String {
+fn ratings_response(promotions: u32, ratings: GalaxyAtWarModel) -> impl Responder {
     let a = ratings.group_a;
     let b = ratings.group_b;
     let c = ratings.group_c;
     let d = ratings.group_d;
     let e = ratings.group_e;
     let level = (a + b + c + d + e) / 5;
-    format!(r#"<?xml version="1.0" encoding="UTF-8"?>
+    let response = format!(r#"<?xml version="1.0" encoding="UTF-8"?>
 <galaxyatwargetratings>
     <ratings>
         <ratings>{a}</ratings>
@@ -249,7 +268,10 @@ fn ratings_response(promotions: u32, ratings: GalaxyAtWarModel) -> String {
         <assets>0</assets>
     </assets>
 </galaxyatwargetratings>
-"#)
+"#);
+    HttpResponse::build(StatusCode::OK)
+        .content_type(ContentType::xml())
+        .body(response)
 }
 
 /// Finds the total number of promotions the provided player has received on

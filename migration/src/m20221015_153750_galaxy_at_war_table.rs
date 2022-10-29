@@ -26,7 +26,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(GalaxyAtWar::LastModified)
-                            .big_integer()
+                            .date_time()
                             .not_null()
                     )
                     .col(
