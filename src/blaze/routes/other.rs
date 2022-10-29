@@ -1,4 +1,4 @@
-use blaze_pk::{Codec, group, OpaquePacket, packet, Packets, tag_group_end, tag_group_start, tag_list_start, tag_str, tag_triple, tag_u8, tag_var_int_list_empty, tag_zero, ValueType, VarIntList};
+use blaze_pk::{Codec, OpaquePacket, Packets, tag_group_end, tag_group_start, tag_list_start, tag_str, tag_triple, tag_u8, tag_var_int_list_empty, tag_zero, ValueType};
 use log::debug;
 use crate::blaze::components::{AssociationLists, Components, GameReporting};
 use crate::blaze::errors::HandleResult;

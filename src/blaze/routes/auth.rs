@@ -1,6 +1,5 @@
-use std::ops::Deref;
 use blaze_pk::{Codec, CodecError, CodecResult, OpaquePacket, packet, Packets, Reader, tag_list_start, ValueType};
-use log::{debug, warn};
+use log::debug;
 use regex::Regex;
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};

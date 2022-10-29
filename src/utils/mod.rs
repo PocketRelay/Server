@@ -1,5 +1,4 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use chrono::{NaiveDateTime, Utc};
 use rand::{Rng, thread_rng};
 
 pub mod hashing;

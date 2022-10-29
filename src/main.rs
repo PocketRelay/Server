@@ -9,7 +9,7 @@ use std::io;
 use std::sync::Arc;
 use dotenvy::dotenv;
 use env_logger::WriteStyle;
-use log::{info, LevelFilter};
+use log::info;
 use sea_orm::DatabaseConnection;
 use tokio::try_join;
 use crate::game::GameManager;
@@ -24,10 +24,12 @@ pub struct GlobalState {
 async fn main() -> io::Result<()> {
     dotenv().ok();
 
+    let logging_level = env::logging_level();
+
     env_logger::builder()
-        .filter_module("pocket_relay", env::logging_level())
-        .filter_module("actix_web", env::logging_level())
-        .filter_module("actix", env::logging_level())
+        .filter_module("pocket_relay", logging_level)
+        .filter_module("actix_web", logging_level)
+        .filter_module("actix", logging_level)
         .write_style(WriteStyle::Always)
         .init();
 

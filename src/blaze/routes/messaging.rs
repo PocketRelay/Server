@@ -96,7 +96,7 @@ async fn handle_fetch_messages(session: &Session, packet: &OpaquePacket) -> Hand
     };
     session.response(packet, &MessageCount { count: 1 }).await?;
     let time = server_unix_time();
-    let mut menu_message = get_menu_message(session, player);
+    let menu_message = get_menu_message(session, player);
     let response = MenuMessage {
         message: menu_message,
         player,

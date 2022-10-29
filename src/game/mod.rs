@@ -52,7 +52,7 @@ impl Game {
         }
     }
 
-    pub fn add_player(&self, session: &Arc<Session>) {
-
+    pub fn add_player(&self, _session: &Arc<Session>) {
+        todo!("Add player to game")
     }
 }

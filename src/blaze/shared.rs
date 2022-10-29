@@ -1,7 +1,5 @@
 use blaze_pk::{Blob, Codec, CodecResult, group, packet, Reader, Tag, tag_empty_str, tag_group_end, tag_group_start, tag_list_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_zero, TdfMap, TdfOptional, ValueType, VarIntList};
-use crate::blaze::SessionData;
 use crate::database::entities::PlayerModel;
-
 
 packet! {
     struct SessionDetails {
@@ -261,9 +259,6 @@ pub struct Entitlement<'a> {
 }
 
 impl<'a> Entitlement<'a> {
-    const DLC_TY: u8 = 5;
-    const EXT_TY: u8 = 1;
-
     const PC_TAG: &'a str = "ME3PCOffers";
     const GEN_TAG: &'a str = "ME3GenOffers";
 
@@ -369,7 +364,7 @@ pub struct TelemetryRes {
 impl Codec for TelemetryRes {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_str(output, "ADRS", &self.address);
-        tag_zero(output , "ANON");
+        tag_zero(output, "ANON");
         tag_str(output, "DISA", "AD,AF,AG,AI,AL,AM,AN,AO,AQ,AR,AS,AW,AX,AZ,BA,BB,BD,BF,BH,BI,BJ,BM,BN,BO,BR,BS,BT,BV,BW,BY,BZ,CC,CD,CF,CG,CI,CK,CL,CM,CN,CO,CR,CU,CV,CX,DJ,DM,DO,DZ,EC,EG,EH,ER,ET,FJ,FK,FM,FO,GA,GD,GE,GF,GG,GH,GI,GL,GM,GN,GP,GQ,GS,GT,GU,GW,GY,HM,HN,HT,ID,IL,IM,IN,IO,IQ,IR,IS,JE,JM,JO,KE,KG,KH,KI,KM,KN,KP,KR,KW,KY,KZ,LA,LB,LC,LI,LK,LR,LS,LY,MA,MC,MD,ME,MG,MH,ML,MM,MN,MO,MP,MQ,MR,MS,MU,MV,MW,MY,MZ,NA,NC,NE,NF,NG,NI,NP,NR,NU,OM,PA,PE,PF,PG,PH,PK,PM,PN,PS,PW,PY,QA,RE,RS,RW,SA,SB,SC,SD,SG,SH,SJ,SL,SM,SN,SO,SR,ST,SV,SY,SZ,TC,TD,TF,TG,TH,TJ,TK,TL,TM,TN,TO,TT,TV,TZ,UA,UG,UM,UY,UZ,VA,VC,VE,VG,VN,VU,WF,WS,YE,YT,ZM,ZW,ZZ");
         tag_str(output, "FILT", "-UION/****");
         tag_u32(output, "LOC", 0x656e5553);
@@ -377,8 +372,8 @@ impl Codec for TelemetryRes {
         tag_u16(output, "PORT", 9988);
         tag_u16(output, "SDLY", 15000);
         tag_str(output, "SESS", "Evi8itOCVpD");
+        tag_str(output, "SKEY", &self.session_id.to_string());
         tag_u8(output, "SPCT", 75);
         tag_empty_str(output, "STIM");
     }
-
 }

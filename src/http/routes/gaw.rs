@@ -1,12 +1,10 @@
 use std::cmp;
-use std::fmt::Display;
 use std::num::ParseIntError;
-use actix_web::{Error, get, HttpRequest, HttpResponse, Responder, ResponseError};
-use actix_web::dev::Url;
+use actix_web::{get, HttpResponse, Responder, ResponseError};
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
 use actix_web::web::{Data, Path, Query, scope, ServiceConfig};
-use chrono::{Datelike, DateTime, Local, NaiveDate, NaiveDateTime, Utc};
+use chrono::Local;
 use derive_more::{Display, From};
 use sea_orm::{ActiveModelTrait, DatabaseConnection, DbErr, IntoActiveModel, ModelTrait, NotSet};
 use sea_orm::ActiveValue::Set;
@@ -15,7 +13,6 @@ use tokio::try_join;
 use crate::database::entities::{GalaxyAtWarActiveModel, GalaxyAtWarEntity, GalaxyAtWarModel, PlayerClassEntity, PlayerModel};
 use crate::database::interface::players::{find_by_id, get_session_token};
 use crate::{env, GlobalState};
-use crate::utils::server_unix_time;
 
 pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(

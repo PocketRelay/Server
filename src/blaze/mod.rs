@@ -4,7 +4,6 @@ use std::sync::{Arc};
 use std::time::SystemTime;
 use blaze_pk::{Blob, Codec, OpaquePacket, PacketResult, Packets, TdfMap, VarIntList};
 use log::{debug, error, info};
-use rand::{Rng, thread_rng};
 use sea_orm::DatabaseConnection;
 use tokio::io;
 use tokio::sync::RwLock;
@@ -12,7 +11,7 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::blaze::components::{Components, UserSessions};
 use errors::HandleResult;
 use crate::blaze::errors::{BlazeError, BlazeResult};
-use crate::blaze::shared::{NetData, Sess, SessionDataCodec, SessionDetails, SessionUser, UpdateExtDataAttr};
+use crate::blaze::shared::{NetData, SessionDataCodec, SessionDetails, SessionUser, UpdateExtDataAttr};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
 use crate::GlobalState;
@@ -84,6 +83,7 @@ pub struct SessionData {
 impl Session {
 
     pub fn release(&self) {
+        info!("Session {} was released", self.id)
         // TODO: Release the session removing all references to it
     }
 
@@ -133,16 +133,6 @@ impl Session {
     /// Returns a reference to the database connection from the global
     /// state data.
     pub fn db(&self) -> &DatabaseConnection { &self.global.db }
-
-    /// Generates a session token by getting 128 random alphanumeric
-    /// characters and creating a string from them.
-    fn generate_token() -> String {
-        thread_rng()
-            .sample_iter(&rand::distributions::Alphanumeric)
-            .take(128)
-            .map(char::from)
-            .collect()
-    }
 
     /// Obtains the session token for the player linked to this session
     /// optionally setting and returning a new session token if there is

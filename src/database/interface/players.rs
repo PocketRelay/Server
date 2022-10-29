@@ -64,15 +64,6 @@ pub async fn set_session_token(
     Ok((player, session_token))
 }
 
-pub async fn clear_session_token(
-    db: &DatabaseConnection,
-    player: PlayerModel,
-) -> DbResult<PlayerModel> {
-    let mut active = player.into_active_model();
-    active.session_token = Set(None);
-    active.update(db).await
-}
-
 pub async fn get_session_token(db: &DatabaseConnection, player: PlayerModel) -> DbResult<(PlayerModel, String)> {
     let token = match &player.session_token{
         None => {
