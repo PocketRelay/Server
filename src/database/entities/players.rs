@@ -35,6 +35,8 @@ pub enum Relation {
     Classes,
     #[sea_orm(has_many = "super::player_characters::Entity")]
     Characters,
+    #[sea_orm(has_one = "super::player_characters::Entity")]
+    GalaxyAtWar,
 }
 
 impl Related<super::player_classes::Entity> for Entity {
@@ -46,6 +48,12 @@ impl Related<super::player_classes::Entity> for Entity {
 impl Related<super::player_characters::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Characters.def()
+    }
+}
+
+impl Related<super::galaxy_at_war::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::GalaxyAtWar.def()
     }
 }
 

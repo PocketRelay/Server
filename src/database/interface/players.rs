@@ -74,14 +74,15 @@ pub async fn clear_session_token(
 }
 
 pub async fn get_session_token(db: &DatabaseConnection, player: PlayerModel) -> DbResult<(PlayerModel, String)> {
-    match &player.session_token {
+    let token = match &player.session_token{
         None => {
             let token = generate_token(128);
             let out = set_session_token(db, player, token)
                 .await?;
-            Ok(out)
+            return Ok(out)
         }
-        Some(value) => Ok((player, value.clone()))
-    }
+        Some(value) => value.clone()
+    };
+    Ok((player, token))
 }
 

@@ -14,6 +14,7 @@ use crate::env;
 use crate::env::ADDRESS;
 use crate::utils::conv::MEStringParser;
 use crate::utils::dmap::load_dmap;
+use crate::utils::server_unix_time;
 
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -280,19 +281,14 @@ packet! {
 ///
 async fn handle_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
     let now = SystemTime::now();
-    let server_time = now
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| BlazeError::Other("Unable to calculate elapsed time"))?
-        .as_secs();
+    let server_time = server_unix_time();
 
     {
         let mut session_data = session.data.write().await;
         (*session_data).last_ping = now;
     }
 
-    session.response(packet, &PingRes {
-        server_time
-    }).await
+    session.response(packet, &PingRes { server_time }).await
 }
 
 packet! {

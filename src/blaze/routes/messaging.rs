@@ -1,13 +1,12 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 use blaze_pk::{Codec, encode_str, OpaquePacket, Packets, tag_group_end, tag_group_start, tag_map_start, tag_str, tag_triple, tag_u64, tag_u8, ValueType};
-use dotenvy::var;
 use log::debug;
 use crate::blaze::components::{Components, Messaging};
-use crate::blaze::errors::{BlazeError, BlazeResult, HandleResult};
+use crate::blaze::errors::HandleResult;
 use crate::blaze::Session;
 use crate::database::entities::PlayerModel;
 use crate::env;
 use crate::env::VERSION;
+use crate::utils::server_unix_time;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -96,11 +95,7 @@ async fn handle_fetch_messages(session: &Session, packet: &OpaquePacket) -> Hand
         }
     };
     session.response(packet, &MessageCount { count: 1 }).await?;
-    let now = SystemTime::now();
-    let time = now
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| BlazeError::Other("Unable to calculate server time"))?
-        .as_secs();
+    let time = server_unix_time();
     let mut menu_message = get_menu_message(session, player);
     let response = MenuMessage {
         message: menu_message,
