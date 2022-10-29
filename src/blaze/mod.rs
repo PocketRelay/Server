@@ -14,6 +14,7 @@ use crate::blaze::errors::{BlazeError, BlazeResult};
 use crate::blaze::shared::{NetData, Sess, SessionDataCodec, SessionDetails, SessionUser, UpdateExtDataAttr};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
+use crate::game::Game;
 use crate::GlobalState;
 use crate::utils::generate_token;
 
@@ -71,20 +72,29 @@ pub struct Session {
 // Type for session wrapped in an arc
 pub type SessionArc = Arc<Session>;
 
-#[derive(Debug)]
 pub struct SessionData {
     // Basic
     pub player: Option<PlayerModel>,
     pub location: u32,
     pub last_ping: SystemTime,
+
     // Networking
     pub net: NetData,
     pub hardware_flag: u16,
     pub pslm: u32,
+
+    // Game Details
+    pub game: Option<SessionGame>,
+}
+
+pub struct SessionGame {
+    /// Reference to the connected game
+    pub game: Arc<Game>,
+    /// Slot index of this session in the game
+    pub slot: usize,
 }
 
 impl Session {
-
     pub fn release(&self) {
         info!("Session {} was released", self.id)
         // TODO: Release the session removing all references to it
@@ -105,6 +115,7 @@ impl Session {
                 net: NetData::default(),
                 hardware_flag: 0,
                 pslm: 0xfff0fff,
+                game: None,
             }),
         }
     }
@@ -145,7 +156,7 @@ impl Session {
             let session_data = self.data.read().await;
             let player = session_data.expect_player()?;
             if let Some(token) = &player.session_token {
-                return Ok(token.clone())
+                return Ok(token.clone());
             }
         }
 
@@ -230,7 +241,6 @@ impl Session {
 }
 
 impl SessionData {
-
     pub fn expect_player(&self) -> BlazeResult<&PlayerModel> {
         self.player
             .as_ref()

@@ -5,6 +5,7 @@ use sea_orm::DbErr;
 
 pub type HandleResult = Result<(), BlazeError>;
 pub type BlazeResult<T> = Result<T, BlazeError>;
+pub type GameResult<T> = Result<T, GameError>;
 
 #[derive(Debug, From)]
 pub enum BlazeError {
@@ -17,12 +18,30 @@ pub enum BlazeError {
     // the redirect handler
     Response(OpaquePacket),
     Context(&'static str, Box<BlazeError>),
+    Game(GameError),
 }
+
 
 impl BlazeError {
     /// Provides additional context to the error
     pub fn context(self, context: &'static str) -> BlazeError {
         BlazeError::Context(context, Box::new(self))
+    }
+}
+
+#[derive(Debug)]
+pub enum GameError {
+    Full,
+    MissingHost,
+    Other(&'static str),
+    Context(&'static str, Box<GameError>),
+}
+
+
+impl GameError {
+    /// Provides additional context to the error
+    pub fn context(self, context: &'static str) -> GameError {
+        GameError::Context(context, Box::new(self))
     }
 }
 
