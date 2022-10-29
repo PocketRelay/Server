@@ -11,7 +11,7 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::blaze::components::{Components, UserSessions};
 use errors::HandleResult;
 use crate::blaze::errors::{BlazeError, BlazeResult};
-use crate::blaze::shared::{NetData, SessionDataCodec, SessionDetails, SessionUser, UpdateExtDataAttr};
+use crate::blaze::shared::{NetData, Sess, SessionDataCodec, SessionDetails, SessionUser, UpdateExtDataAttr};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
 use crate::GlobalState;
@@ -43,7 +43,7 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
 
 /// Function for processing a session loops until the session is no longer readable.
 /// Reads packets and routes them with the routing function.
-async fn process_session(session: Arc<Session>) {
+async fn process_session(session: SessionArc) {
     loop {
         let (component, packet) = match session.read_packet().await {
             Ok(value) => value,
@@ -67,6 +67,9 @@ pub struct Session {
     pub addr: SocketAddr,
     pub data: RwLock<SessionData>,
 }
+
+// Type for session wrapped in an arc
+pub type SessionArc = Arc<Session>;
 
 #[derive(Debug)]
 pub struct SessionData {
@@ -106,7 +109,7 @@ impl Session {
         }
     }
 
-    pub async fn update_for(&self, other: &Session) -> BlazeResult<()> {
+    pub async fn update_for(&self, other: &SessionArc) -> BlazeResult<()> {
         let data = self.data.read().await;
         let user = data.user()?;
         let update_ext_data = Packets::notify(

@@ -2,7 +2,7 @@ use blaze_pk::{Codec, encode_str, OpaquePacket, Packets, tag_group_end, tag_grou
 use log::debug;
 use crate::blaze::components::{Components, Messaging};
 use crate::blaze::errors::HandleResult;
-use crate::blaze::Session;
+use crate::blaze::SessionArc;
 use crate::database::entities::PlayerModel;
 use crate::env;
 use crate::env::VERSION;
@@ -11,7 +11,7 @@ use crate::utils::server_unix_time;
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &Session, component: Messaging, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(session: &SessionArc, component: Messaging, packet: &OpaquePacket) -> HandleResult {
     match component {
         Messaging::FetchMessages => handle_fetch_messages(session, packet).await,
         component => {
@@ -85,7 +85,7 @@ impl Codec for MenuMessage<'_> {
 /// }
 /// ```
 ///
-async fn handle_fetch_messages(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_fetch_messages(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let session_data = session.data.read().await;
     let player = match session_data.player.as_ref() {
         Some(player) => player,
@@ -115,7 +115,7 @@ async fn handle_fetch_messages(session: &Session, packet: &OpaquePacket) -> Hand
 /// - {v} = Server Version
 /// - {n} = Player Display Name
 /// - {ip} = Session IP Address
-fn get_menu_message(session: &Session, player: &PlayerModel) -> String {
+fn get_menu_message(session: &SessionArc, player: &PlayerModel) -> String {
     let mut message = env::menu_message();
     if message.contains("{v}") {
         message = message.replace("{v}", VERSION);

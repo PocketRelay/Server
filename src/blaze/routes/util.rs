@@ -7,7 +7,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, Model
 use tokio::try_join;
 use crate::blaze::components::Util;
 use crate::blaze::errors::{BlazeError, BlazeResult, HandleResult};
-use crate::blaze::Session;
+use crate::blaze::SessionArc;
 use crate::blaze::shared::TelemetryRes;
 use crate::database::entities::{player_characters, player_classes, PlayerActiveModel, PlayerCharacterActiveModel, PlayerCharacterEntity, PlayerCharacterModel, PlayerClassActiveModel, PlayerClassEntity, PlayerClassModel, PlayerModel};
 use crate::env;
@@ -19,7 +19,7 @@ use crate::utils::server_unix_time;
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(session: &SessionArc, component: Util, packet: &OpaquePacket) -> HandleResult {
     match component {
         Util::PreAuth => handle_pre_auth(session, packet).await,
         Util::PostAuth => handle_post_auth(session, packet).await,
@@ -45,7 +45,7 @@ pub async fn route(session: &Session, component: Util, packet: &OpaquePacket) ->
 /// packet(Components.UTIL, Commands.GET_TELEMETRY_SERVER, 0x0) {}
 /// ```
 ///
-async fn handle_get_telemetry_server(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_get_telemetry_server(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let ext_host = env::ext_host();
     let res = TelemetryRes { address: ext_host, session_id: session.id };
     session.response(packet, &res).await
@@ -137,7 +137,7 @@ pub const QOSS_KEY: &str = "ea-sjc";
 ///   }
 /// }
 /// ```
-async fn handle_pre_auth(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_pre_auth(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let pre_auth = packet.contents::<PreAuthReq>()?;
     let location = pre_auth.client_info.location;
 
@@ -247,7 +247,7 @@ impl Codec for PostAuthRes {
 /// ```
 /// packet(Components.UTIL, Commands.POST_AUTH, 0x1b) {}
 /// ```
-async fn handle_post_auth(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_post_auth(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let ext_host = env::ext_host();
     let res = PostAuthRes {
         session_id: session.id,
@@ -279,7 +279,7 @@ packet! {
 /// packet(Components.UTIL, Commands.PING, 0x0, 0x1) {}
 /// ```
 ///
-async fn handle_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_ping(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let now = SystemTime::now();
     let server_time = server_unix_time();
 
@@ -324,7 +324,7 @@ const ME3_DIME: &str = include_str!("../../../resources/data/dime.xml");
 ///   text("CFID", "ME3_DATA")
 /// }
 /// ```
-async fn handle_fetch_client_config(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_fetch_client_config(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let fetch_config = packet.contents::<FetchConfigReq>()?;
     let config = match fetch_config.id.as_ref() {
         "ME3_DATA" => data_config(),
@@ -421,7 +421,7 @@ packet! {
 /// ```
 ///
 ///
-async fn handle_suspend_user_ping(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_suspend_user_ping(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<SuspendUserPing>()?;
     match req.value {
         0x1312D00 => session.response_error_empty(packet, 0x12Du16).await,
@@ -448,13 +448,13 @@ packet! {
 ///   number("UID", 0x0)
 /// }
 /// ```
-async fn handle_user_settings_save(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_user_settings_save(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<UserSettingsSave>()?;
     set_player_data(session, &req.key, req.value).await?;
     session.response_empty(packet).await
 }
 
-async fn set_player_data(session: &Session, key: &str, value: String) -> HandleResult {
+async fn set_player_data(session: &SessionArc, key: &str, value: String) -> HandleResult {
     if key.starts_with("class") {
         debug!("Updating player class data: {key}");
         update_player_class(session, key, value).await
@@ -475,7 +475,7 @@ async fn set_player_data(session: &Session, key: &str, value: String) -> HandleR
     Ok(())
 }
 
-async fn get_player_character(session: &Session, index: u16) -> BlazeResult<PlayerCharacterActiveModel> {
+async fn get_player_character(session: &SessionArc, index: u16) -> BlazeResult<PlayerCharacterActiveModel> {
     let player_class = PlayerCharacterEntity::find()
         .filter(player_characters::Column::Index.eq(index))
         .one(session.db())
@@ -511,7 +511,7 @@ async fn get_player_character(session: &Session, index: u16) -> BlazeResult<Play
     })
 }
 
-async fn update_player_character(session: &Session, key: &str, value: String) -> HandleResult {
+async fn update_player_character(session: &SessionArc, key: &str, value: String) -> HandleResult {
     if key.len() > 4 {
         let index = key[4..]
             .parse::<u16>()
@@ -576,7 +576,7 @@ fn parse_player_character(model: &mut PlayerCharacterActiveModel, value: &str) -
     Some(())
 }
 
-async fn get_player_class(session: &Session, index: u16) -> BlazeResult<PlayerClassActiveModel> {
+async fn get_player_class(session: &SessionArc, index: u16) -> BlazeResult<PlayerClassActiveModel> {
     let player_class = PlayerClassEntity::find()
         .filter(player_classes::Column::Index.eq(index))
         .one(session.db())
@@ -596,7 +596,7 @@ async fn get_player_class(session: &Session, index: u16) -> BlazeResult<PlayerCl
     })
 }
 
-async fn update_player_class(session: &Session, key: &str, value: String) -> HandleResult {
+async fn update_player_class(session: &SessionArc, key: &str, value: String) -> HandleResult {
     if key.len() > 5 {
         let index = key[5..]
             .parse::<u16>()
@@ -699,7 +699,7 @@ fn update_player_model(model: &mut PlayerActiveModel, key: &str, value: String) 
 
 /// Updates the player model stored on this session with the provided key value data pair
 /// persisting the changes to the database and updating the stored model.
-async fn update_player_data(session: &Session, key: &str, value: String) -> HandleResult {
+async fn update_player_data(session: &SessionArc, key: &str, value: String) -> HandleResult {
     let mut session_data = session.data.write().await;
     let player = session_data.expect_player_owned()?;
     let mut active = player.into_active_model();
@@ -722,7 +722,7 @@ packet! {
 /// ```
 /// packet(Components.UTIL, Commands.USER_SETTINGS_LOAD_ALL, 0x17) {}
 /// ```
-async fn handle_user_settings_load_all(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_user_settings_load_all(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let mut settings = TdfMap::<String, String>::new();
     {
         let session_data = session.data.read().await;

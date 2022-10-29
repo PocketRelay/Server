@@ -2,7 +2,7 @@ use blaze_pk::{OpaquePacket, Packets};
 use log::{debug, error};
 use crate::blaze::components::Components;
 use crate::blaze::errors::{BlazeError, HandleResult};
-use crate::blaze::Session;
+use crate::blaze::SessionArc;
 
 mod util;
 mod auth;
@@ -12,7 +12,7 @@ mod messaging;
 mod user_sessions;
 mod other;
 
-pub async fn route(session: &Session, component: Components, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(session: &SessionArc, component: Components, packet: &OpaquePacket) -> HandleResult {
     let result = match component {
         Components::Authentication(value) => auth::route(session, value, packet).await,
         Components::GameManager(value) => game_manager::route(session, value, packet).await,

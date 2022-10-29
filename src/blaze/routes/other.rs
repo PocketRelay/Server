@@ -2,12 +2,12 @@ use blaze_pk::{Codec, OpaquePacket, Packets, tag_group_end, tag_group_start, tag
 use log::debug;
 use crate::blaze::components::{AssociationLists, Components, GameReporting};
 use crate::blaze::errors::HandleResult;
-use crate::blaze::Session;
+use crate::blaze::SessionArc;
 
 /// Routing function for handling packets with the `GameReporting` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route_game_reporting(session: &Session, component: GameReporting, packet: &OpaquePacket) -> HandleResult {
+pub async fn route_game_reporting(session: &SessionArc, component: GameReporting, packet: &OpaquePacket) -> HandleResult {
     match component {
         GameReporting::SubmitOfflineGameReport => handle_submit_offline(session, packet).await,
         component => {
@@ -43,7 +43,7 @@ pub async fn route_game_reporting(session: &Session, component: GameReporting, p
 ///   text("GTYP", "massEffectReport")
 /// }
 /// ```
-async fn handle_submit_offline(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_submit_offline(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     session.response_empty(packet).await?;
 
     let packet = Packets::notify(
@@ -71,7 +71,7 @@ impl Codec for GameReportResult {
 /// Routing function for handling packets with the `AssociationLists` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route_association_lists(session: &Session, component: AssociationLists, packet: &OpaquePacket) -> HandleResult {
+pub async fn route_association_lists(session: &SessionArc, component: AssociationLists, packet: &OpaquePacket) -> HandleResult {
     match component {
         AssociationLists::GetLists => handle_get_lists(session, packet).await,
         component => {
@@ -133,6 +133,6 @@ impl Codec for DefaultAssocList {
 ///   number("OFRC", 0x0)
 /// }
 /// ```
-async fn handle_get_lists(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_get_lists(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     session.response(packet, &DefaultAssocList).await
 }

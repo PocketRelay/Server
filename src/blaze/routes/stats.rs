@@ -2,12 +2,12 @@ use blaze_pk::{Codec, encode_str, OpaquePacket, packet, tag_group_end, tag_list_
 use log::debug;
 use crate::blaze::components::Stats;
 use crate::blaze::errors::HandleResult;
-use crate::blaze::Session;
+use crate::blaze::SessionArc;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &Session, component: Stats, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(session: &SessionArc, component: Stats, packet: &OpaquePacket) -> HandleResult {
     match component {
         Stats::GetLeaderboardEntityCount => handle_leaderboard_entity_count(session, packet).await,
         Stats::GetCenteredLeaderboard => handle_centered_leaderboard(session, packet).await,
@@ -48,7 +48,7 @@ impl Codec for EntityCount {
 ///   number("POFF", 0x0)
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_leaderboard_entity_count(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     session.response(packet, &EntityCount { count: 1 }).await
 }
 
@@ -80,7 +80,7 @@ impl Codec for EmptyLeaderboard {
 ///   tripple("USET", 0x0, 0x0, 0x0)
 /// }
 /// ```
-async fn handle_centered_leaderboard(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_centered_leaderboard(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     session.response(packet, &EmptyLeaderboard).await
 }
 
@@ -102,7 +102,7 @@ async fn handle_centered_leaderboard(session: &Session, packet: &OpaquePacket) -
 ///   tripple("USET", 0x0, 0x0, 0x0)
 /// }
 /// ```
-async fn handle_filtered_leaderboard(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_filtered_leaderboard(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     session.response(packet, &EmptyLeaderboard).await
 }
 
@@ -184,7 +184,7 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_leaderboard_group(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_leaderboard_group(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<LeaderboardGroupReq>()?;
     let name = req.name;
     let is_n7 = name.starts_with("N7Rating");
@@ -199,7 +199,7 @@ async fn handle_leaderboard_group(session: &Session, packet: &OpaquePacket) -> H
             desc: format!("N7 Rating - {locale}"),
             sname: "n7rating",
             sdsc: "N7 Rating",
-            gname: "ME3LeaderboardGroup"
+            gname: "ME3LeaderboardGroup",
         }
     } else {
         LeaderboardGroup {
@@ -207,7 +207,7 @@ async fn handle_leaderboard_group(session: &Session, packet: &OpaquePacket) -> H
             desc: format!("Challenge Points - {locale}"),
             sname: "ChallengePoints",
             sdsc: "Challenge Points",
-            gname: "ME3ChallengePoints"
+            gname: "ME3ChallengePoints",
         }
     };
     session.response(packet, &group).await

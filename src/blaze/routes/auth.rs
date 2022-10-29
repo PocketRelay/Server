@@ -3,7 +3,7 @@ use log::debug;
 use regex::Regex;
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
-use crate::blaze::Session;
+use crate::blaze::SessionArc;
 use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players;
@@ -13,7 +13,7 @@ use crate::utils::hashing::{hash_password, verify_password};
 /// Routing function for handling packets with the `Authentication` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &Session, component: Authentication, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(session: &SessionArc, component: Authentication, packet: &OpaquePacket) -> HandleResult {
     match component {
         Authentication::SilentLogin => handle_silent_login(session, packet).await,
         Authentication::Logout => handle_logout(session, packet).await,
@@ -60,7 +60,7 @@ pub fn login_error(packet: &OpaquePacket, error: LoginError) -> BlazeError {
 /// }
 /// ```
 ///
-async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_silent_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let silent_login = packet.contents::<SilentLoginReq>()?;
     let id = silent_login.id;
     let token = silent_login.token;
@@ -86,7 +86,7 @@ async fn handle_silent_login(session: &Session, packet: &OpaquePacket) -> Handle
 
 /// Completes the authentication process for the provided session using the provided Player
 /// Model as the authenticated player.
-pub async fn complete_auth(session: &Session, packet: &OpaquePacket, player: PlayerModel, silent: bool) -> HandleResult {
+pub async fn complete_auth(session: &SessionArc, packet: &OpaquePacket, player: PlayerModel, silent: bool) -> HandleResult {
     debug!("Completing authentication");
     session.set_player(Some(player)).await;
     debug!("Set player");
@@ -118,7 +118,7 @@ pub async fn complete_auth(session: &Session, packet: &OpaquePacket, player: Pla
 /// ```
 /// packet(Components.AUTHENTICATION, Commands.LOGOUT, 0x0, 0x7) {}
 /// ```
-async fn handle_logout(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_logout(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     debug!("Logging out for session:");
     debug!("ID = {}", &session.id);
     session.set_player(None).await;
@@ -151,7 +151,7 @@ packet! {
 ///   number("TYPE", 0x0)
 /// }
 /// ```
-async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<AccountReq>()?;
     let email = req.email;
     let password = req.password;
@@ -208,7 +208,7 @@ async fn handle_login(session: &Session, packet: &OpaquePacket) -> HandleResult 
 /// }
 /// ```
 ///
-async fn handle_create_account(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_create_account(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<AccountReq>()?;
     let email = req.email;
     let password = req.password;
@@ -251,7 +251,7 @@ packet! {
 ///   number("TYPE", 0x1)
 /// }
 /// ```
-async fn handle_origin_login(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_origin_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<OriginLoginReq>()?;
     // TODO: Implement origin login
     debug!("Origin login request with token: {}", &req.token);
@@ -304,7 +304,7 @@ impl Codec for LUERes<'_> {
 ///   number("TYPE", 0x0)
 /// }
 /// ```
-async fn handle_list_user_entitlements_2(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_list_user_entitlements_2(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<LUEReq>()?;
     let tag = req.tag;
     if !tag.is_empty() {
@@ -368,7 +368,7 @@ async fn handle_list_user_entitlements_2(session: &Session, packet: &OpaquePacke
 ///   text("PNAM", "Jacobtread")
 /// }
 /// ```
-async fn handle_login_persona(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_login_persona(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     debug!("Logging into persona");
     let session_token = session.session_token().await?;
     let session_data = session.data.read().await;
@@ -400,7 +400,7 @@ packet! {
 ///   text("MAIL", "EMAIL OMITTED")
 /// }
 /// ```
-async fn handle_forgot_password(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_forgot_password(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<ForgotPaswdReq>()?;
     if !is_email(&req.email) {
         return Err(login_error(packet, LoginError::InvalidEmail));
@@ -419,7 +419,7 @@ async fn handle_forgot_password(session: &Session, packet: &OpaquePacket) -> Han
 ///   text("PTFM", "pc") // Platform?
 /// }
 /// ```
-async fn handle_get_legal_docs_info(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_get_legal_docs_info(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     session.response(packet, &LegalDocsInfo).await
 }
 
@@ -439,7 +439,7 @@ const DEFAULT_TERMS_OF_SERVICE: &str = include_str!("../../../resources/defaults
 /// }
 /// ```
 ///
-async fn handle_terms_of_service_content(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_terms_of_service_content(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     // TODO: Attempt to load local terms of service before reverting to default
     session.response(packet, &TermsContent {
         path: "webterms/au/en/pc/default/09082020/02042022",
@@ -464,7 +464,7 @@ const DEFAULT_PRIVACY_POLICY: &str = include_str!("../../../resources/defaults/p
 /// }
 /// ```
 ///
-async fn handle_privacy_policy_content(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_privacy_policy_content(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     // TODO: Attempt to load local privacy policy before reverting to default
     session.response(packet, &TermsContent {
         path: "webprivacy/au/en/pc/default/08202020/02042022",
@@ -485,7 +485,7 @@ packet! {
 ///
 /// # Structure
 /// *To be recorded*.
-async fn handle_get_password_rules(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_get_password_rules(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     session.response(packet, &PasswordRules {
         max_length: 99,
         min_length: 4,
@@ -507,7 +507,7 @@ packet! {
 /// ```
 /// packet(Components.AUTHENTICATION, Commands.GET_AUTH_TOKEN, 0x23) {}
 /// ```
-async fn handle_get_auth_token(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_get_auth_token(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let session_data = session.data.read().await;
     let player = session_data.expect_player()?;
     let value = format!("{:X}", player.id);

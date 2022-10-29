@@ -5,14 +5,14 @@ use crate::blaze::components::UserSessions;
 use crate::blaze::errors::{HandleResult, LoginError};
 use crate::blaze::routes::auth::{complete_auth, login_error};
 use crate::blaze::routes::util::QOSS_KEY;
-use crate::blaze::Session;
+use crate::blaze::SessionArc;
 use crate::blaze::shared::{NetExt, NetGroups};
 use crate::database::interface::players::find_by_session;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &Session, component: UserSessions, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(session: &SessionArc, component: UserSessions, packet: &OpaquePacket) -> HandleResult {
     match component {
         UserSessions::ResumeSession => handle_resume_session(session, packet).await,
         UserSessions::UpdateNetworkInfo => handle_update_network_info(session, packet).await,
@@ -35,7 +35,7 @@ packet! {
 ///
 /// # Structure
 /// *To be recorded*
-async fn handle_resume_session(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_resume_session(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<ResumeSession>()?;
     let player = find_by_session(session.db(), &req.session_token)
         .await?
@@ -97,7 +97,7 @@ impl Codec for UpdateNetworkInfo {
 ///   }
 /// }
 /// ```
-async fn handle_update_network_info(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_update_network_info(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<UpdateNetworkInfo>()?;
     let groups = match req.address {
         TdfOptional::Some(_, value) => value.1,
@@ -139,7 +139,7 @@ packet! {
 ///   number("HWFG", 0x0)
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: &Session, packet: &OpaquePacket) -> HandleResult {
+async fn handle_update_hardware_flag(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<UpdateHWFlagReq>()?;
 
     let mut session_data = session.data.write().await;
