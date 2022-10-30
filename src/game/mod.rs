@@ -3,7 +3,7 @@ mod shared;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use blaze_pk::{OpaquePacket, Packets};
+use blaze_pk::{OpaquePacket, Packets, TdfMap};
 use tokio::sync::RwLock;
 use crate::blaze::{Session, SessionArc, SessionGame};
 use crate::blaze::components::{Components, GameManager};
@@ -23,10 +23,15 @@ impl Games {
         }
     }
 
-    pub async fn new_game(&self, attributes: HashMap<String, String>) -> Arc<Game> {
+    pub async fn new_game(
+        &self,
+        name: String,
+        attributes: TdfMap<String, String>,
+        setting: u16,
+    ) -> Arc<Game> {
         let mut games = self.games.write().await;
         let id = self.next_id.fetch_add(1, Ordering::AcqRel);
-        let game = Arc::new(Game::new(id, attributes));
+        let game = Arc::new(Game::new(id, name, attributes, setting));
         games.insert(id, game.clone());
         game
     }
@@ -34,9 +39,10 @@ impl Games {
 
 pub struct Game {
     pub id: u32,
+    name: String,
     state: u16,
     setting: u16,
-    attributes: RwLock<HashMap<String, String>>,
+    attributes: RwLock<TdfMap<String, String>>,
     players: RwLock<Vec<SessionArc>>,
 }
 
@@ -45,11 +51,17 @@ impl Game {
     const GSID: u64 = 0x4000000a76b645;
     const MAX_PLAYERS: usize = 4;
 
-    pub fn new(id: u32, attributes: HashMap<String, String>) -> Self {
+    pub fn new(
+        id: u32,
+        name: String,
+        attributes: TdfMap<String, String>,
+        setting: u16,
+    ) -> Self {
         Self {
             id,
+            name,
             state: 0x1,
-            setting: 0x11f,
+            setting,
             attributes: RwLock::new(attributes),
             players: RwLock::new(Vec::with_capacity(Self::MAX_PLAYERS)),
         }

@@ -158,7 +158,10 @@ impl Session {
     pub async fn update_client(&self) -> BlazeResult<()> {
         let data = self.data.read().await;
         let res = SetSessionDetails { session: &data };
-        let packet = Packets::notify(Components::UserSessions(UserSessions::SetSession), &res);
+        let packet = Packets::notify(
+            Components::UserSessions(UserSessions::SetSession),
+            &res,
+        );
         self.write_packet(&packet).await?;
         Ok(())
     }

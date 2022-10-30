@@ -1,7 +1,8 @@
-use blaze_pk::{Codec, OpaquePacket, Packets, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_list_start, tag_map, tag_map_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8, tag_usize, tag_value, TdfOptional, ValueType};
+use blaze_pk::{Codec, OpaquePacket, Packets, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_list_start, tag_map, tag_map_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8, tag_usize, tag_value, TdfMap, TdfOptional, ValueType};
 use crate::blaze::{SessionArc, SessionData};
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{GameError, GameResult};
+use crate::blaze::shared::Sess;
 use crate::game::Game;
 
 pub struct NotifyPlayerJoining<'a> {
@@ -40,14 +41,19 @@ pub fn encode_player_data(session: &SessionData, output: &mut Vec<u8>) {
 pub async fn notify_game_setup(game: &Game, session: &SessionArc) -> GameResult<OpaquePacket> {
     let mut output = Vec::new();
     let session_data = session.data.read().await;
-    encode_notify_game_setup_impl(game, &session_data, &mut output).await?;
+    encode_notify_game_setup(game, &session_data, &mut output).await?;
     Ok(Packets::notify_raw(
         Components::GameManager(GameManager::GameSetup),
         output,
     ))
 }
 
-async fn encode_notify_game_setup_impl(game: &Game, session: &SessionData, output: &mut Vec<u8>) -> GameResult<()> {
+//noinspection SpellCheckingInspection
+async fn encode_notify_game_setup(
+    game: &Game,
+    session: &SessionData,
+    output: &mut Vec<u8>
+) -> GameResult<()> {
     let mut player_data = Vec::new();
     let mut player_ids = Vec::new();
 
@@ -63,18 +69,23 @@ async fn encode_notify_game_setup_impl(game: &Game, session: &SessionData, outpu
 
     let host = players.get(0)
         .ok_or(GameError::MissingHost)?;
-    let host_data = host.data.read().await;
-    let host_id = host_data.player_id_safe();
+
+    let (host_id, host_groups) = {
+        let host_data = host.data.read().await;
+        let host_id = host_data.player_id_safe();
+        let groups = host_data.net.get_groups();
+        (host_id, groups)
+    };
 
     {
         tag_group_start(output, "GAME");
         tag_list(output, "ADMN", player_ids);
         let attributes = game.attributes.read().await;
-        tag_map(output, "ATTR", &attributes);
+        tag_value(output, "ATTR", &attributes);
         drop(attributes);
         tag_list(output, "CAP", vec![0x4, 0x0]);
         tag_u32(output, "GID", game.id);
-        tag_str(output, "GNAM", &host_data.player_name_safe());
+        tag_str(output, "GNAM", &game.name);
         tag_u64(output, "GPVH", Game::GPVH);
         tag_u16(output, "GSET", game.setting);
         tag_u64(output, "GSID", Game::GSID);
@@ -82,7 +93,7 @@ async fn encode_notify_game_setup_impl(game: &Game, session: &SessionData, outpu
         tag_empty_str(output, "GTYP");
         {
             tag_list_start(output, "HNET", ValueType::Optional, 1);
-            host_data.net.get_groups().encode(output);
+            host_groups.encode(output);
         }
 
         tag_u32(output, "HSES", host_id);
@@ -126,22 +137,23 @@ async fn encode_notify_game_setup_impl(game: &Game, session: &SessionData, outpu
     output.extend_from_slice(&player_data);
 
     tag_optional_start(output, "REAS", 0x0);
-    tag_group_start(output, "VALU");
-    if session.game_slot_safe() != 0 {
-        tag_u16(output, "FIT", 0x3f7a);
-        tag_u16(output, "MAXF", 0x5460);
-        let mid = session
-            .matchmaking
-            .as_ref()
-            .map(|value| value.id)
-            .unwrap_or(1);
-        tag_u32(output, "MSID", mid);
-        tag_u8(output, "RLST", 0x2);
-        tag_u32(output, "USID", session.player_id_safe());
-    } else {
-        tag_u8(output, "DCTX", 0x0);
+    {
+        tag_group_start(output, "VALU");
+        if session.game_slot_safe() != 0 {
+            tag_u16(output, "FIT", 0x3f7a);
+            tag_u16(output, "MAXF", 0x5460);
+            let mid = session
+                .matchmaking
+                .as_ref()
+                .map(|value| value.id)
+                .unwrap_or(1);
+            tag_u32(output, "MSID", mid);
+            tag_u8(output, "RLST", 0x2);
+            tag_u32(output, "USID", session.player_id_safe());
+        } else {
+            tag_u8(output, "DCTX", 0x0);
+        }
+        tag_group_end(output);
     }
-    tag_group_end(output);
-
     Ok(())
 }
