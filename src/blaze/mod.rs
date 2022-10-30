@@ -3,7 +3,7 @@ use std::ops::DerefMut;
 use std::sync::{Arc};
 use std::time::SystemTime;
 use blaze_pk::{Codec, OpaquePacket, PacketResult, Packets};
-use log::{debug, error, info};
+use log::{debug, error, info, LevelFilter};
 use sea_orm::DatabaseConnection;
 use tokio::io;
 use tokio::sync::RwLock;
@@ -235,6 +235,10 @@ impl Session {
     /// Function for asynchronously writing a packet to the provided session. Acquires the
     /// required locks and writes the packet to the stream.
     pub async fn write_packet(&self, packet: &OpaquePacket) -> io::Result<()> {
+        if log::max_level() >= LevelFilter::Debug {
+            debug!("Sent packet TY {:?}", &packet.0.ty);
+            let _= packet.debug_decode();
+        }
         let mut stream = self.stream.write().await;
         let stream = stream.deref_mut();
         packet.write_async(stream).await
