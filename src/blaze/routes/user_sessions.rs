@@ -1,4 +1,3 @@
-use std::ops::DerefMut;
 use blaze_pk::{Codec, CodecResult, OpaquePacket, packet, Reader, Tag, TdfMap, TdfOptional};
 use log::{debug, warn};
 use crate::blaze::components::UserSessions;
@@ -112,18 +111,18 @@ async fn handle_update_network_info(session: &SessionArc, packet: &OpaquePacket)
     let pslm = req.nlmp
         .map(|mut value| value.take(QOSS_KEY).unwrap_or(DEFAULT_PSLM))
         .unwrap_or(DEFAULT_PSLM);
-
-    let mut session_data = session.data.write().await;
-    let session_data = session_data.deref_mut();
-    session_data.pslm = pslm;
-
-    let mut net = &mut session_data.net;
-    net.is_unset = false;
-    net.ext = req.nqos;
-    net.groups = groups;
+    {
+        let session_data = &mut *session.data.write().await;
+        session_data.pslm = pslm;
+        let mut net = &mut session_data.net;
+        net.is_unset = false;
+        net.ext = req.nqos;
+        net.groups = groups;
+    }
 
     session.response_empty(packet).await?;
     session.update_client().await?;
+    debug!("Done update networking");
     Ok(())
 }
 
@@ -143,10 +142,10 @@ packet! {
 /// ```
 async fn handle_update_hardware_flag(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<UpdateHWFlagReq>()?;
-
-    let mut session_data = session.data.write().await;
-    (*session_data).hardware_flag = req.hardware_flag;
-
+    {
+        let session_data = &mut *session.data.write().await;
+        session_data.hardware_flag = req.hardware_flag;
+    }
     session.response_empty(packet).await?;
     session.update_client().await?;
     Ok(())
