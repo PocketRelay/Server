@@ -12,6 +12,7 @@ pub async fn route(session: &SessionArc, component: GameManager, packet: &Opaque
     match component {
         GameManager::CreateGame => handle_create_game(session, packet).await,
         GameManager::AdvanceGameState => handle_advance_game_state(session, packet).await,
+        GameManager::SetGameSettings => handle_set_game_setting(session, packet).await,
         component => {
             debug!("Got GameManager({component:?})");
             packet.debug_decode()?;
@@ -127,5 +128,33 @@ async fn handle_advance_game_state(session: &SessionArc, packet: &OpaquePacket) 
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
     game.set_state(req.state).await?;
+    session.response_empty(packet).await
+}
+
+packet! {
+    struct GameSettingReq {
+        GID id: u32,
+        GSET setting: u16,
+    }
+}
+
+
+/// Handles changing the setting of the game with the provided ID
+///
+/// # Structure
+/// ```
+/// packet(Components.GAME_MANAGER, Commands.SET_GAME_SETTINGS, 0xa1) {
+///   number("GID", 0x48a759)
+///   number("GSET", 0x11d)
+/// }
+/// ```
+///
+async fn handle_set_game_setting(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+    let req = packet.contents::<GameSettingReq>()?;
+    let game = session.games()
+        .find_by_id(req.id)
+        .await
+        .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
+    game.set_setting(req.setting).await?;
     session.response_empty(packet).await
 }
