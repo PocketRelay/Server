@@ -7,7 +7,7 @@ use blaze_pk::{OpaquePacket, Packets, TdfMap};
 use log::debug;
 use tokio::sync::RwLock;
 use tokio::try_join;
-use crate::blaze::{Session, SessionArc, SessionGame};
+use crate::blaze::{SessionArc, SessionGame};
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{BlazeError, BlazeResult, GameError, GameResult};
 use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete};
@@ -207,7 +207,7 @@ impl Game {
     }
 
     pub async fn remove_player(&self, session: &SessionArc) -> BlazeResult<()> {
-        let mut session_data = session.data.read().await;
+        let session_data = session.data.read().await;
 
         if let Some(player) = &session_data.player {
             debug!("Removing player {} from game {}", player.display_name, self.id)
@@ -223,7 +223,7 @@ impl Game {
                     pid: session_data.player_id_safe(),
                 },
             );
-            self.push_all(&packet);
+            self.push_all(&packet).await?;
         }
 
         drop(session_data);

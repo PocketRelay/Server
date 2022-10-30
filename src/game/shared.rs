@@ -1,8 +1,7 @@
-use blaze_pk::{Codec, OpaquePacket, packet, Packets, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_list_start, tag_map, tag_map_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8, tag_usize, tag_value, TdfMap, TdfOptional, ValueType};
+use blaze_pk::{Codec, OpaquePacket, packet, Packets, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_list_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8, tag_usize, tag_value, TdfMap, ValueType};
 use crate::blaze::{SessionArc, SessionData};
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{GameError, GameResult};
-use crate::blaze::shared::Sess;
 use crate::game::Game;
 
 pub struct NotifyPlayerJoining<'a> {
@@ -70,20 +69,14 @@ async fn encode_notify_game_setup(
     let host = players.get(0)
         .ok_or(GameError::MissingHost)?;
 
-    let (host_id, host_groups) = {
-        let host_data = host.data.read().await;
-        let host_id = host_data.player_id_safe();
-        let groups = host_data.net.get_groups();
-        (host_id, groups)
-    };
-
+    let host_data = host.data.read().await;
+    let host_id = host_data.player_id_safe();
 
     {
         let game_data = game.data.read().await;
         tag_group_start(output, "GAME");
         tag_list(output, "ADMN", player_ids);
         tag_value(output, "ATTR", &game_data.attributes);
-        drop(attributes);
         tag_list(output, "CAP", vec![0x4, 0x0]);
         tag_u32(output, "GID", game.id);
         tag_str(output, "GNAM", &game.name);
@@ -95,7 +88,7 @@ async fn encode_notify_game_setup(
         tag_empty_str(output, "GTYP");
         {
             tag_list_start(output, "HNET", ValueType::Optional, 1);
-            host_groups.encode(output);
+            host_data.net.get_groups().encode(output);
         }
 
         tag_u32(output, "HSES", host_id);
@@ -179,10 +172,10 @@ pub struct NotifyAttribsChange<'a> {
     pub id: u32,
 }
 
-impl Codec for NotifyAttribsChange {
+impl Codec for NotifyAttribsChange<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_value(output, "ATTR", self.attributes);
-        tag_u32(output, "GID",self.id)
+        tag_u32(output, "GID", self.id)
     }
 }
 

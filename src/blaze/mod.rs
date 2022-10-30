@@ -6,7 +6,7 @@ use blaze_pk::{Codec, OpaquePacket, PacketResult, Packets};
 use log::{debug, error, info};
 use sea_orm::DatabaseConnection;
 use tokio::io;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tokio::net::{TcpListener, TcpStream};
 use crate::blaze::components::{Components, GameManager, UserSessions};
 use errors::HandleResult;
