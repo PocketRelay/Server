@@ -27,8 +27,8 @@ pub async fn route(session: &SessionArc, component: GameManager, packet: &Opaque
 packet! {
     struct CreateGameReq {
         ATTR attributes: TdfMap<String, String>,
+        GNAM name: String,
         GSET setting: u16,
-        GNAM name: String
     }
 }
 
@@ -164,8 +164,8 @@ async fn handle_set_game_setting(session: &SessionArc, packet: &OpaquePacket) ->
 
 packet! {
     struct GameAttribsReq {
-        GID id: u32,
         ATTR attributes: TdfMap<String, String>,
+        GID id: u32,
     }
 }
 

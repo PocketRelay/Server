@@ -148,5 +148,6 @@ async fn handle_update_hardware_flag(session: &SessionArc, packet: &OpaquePacket
     }
     session.response_empty(packet).await?;
     session.update_client().await?;
+    debug!("Done updating hardware flag");
     Ok(())
 }

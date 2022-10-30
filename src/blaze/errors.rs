@@ -17,14 +17,19 @@ pub enum BlazeError {
     // Response error type. Responds with the provided response through
     // the redirect handler
     Response(OpaquePacket),
-    Context(&'static str, Box<BlazeError>),
+    Context(String, Box<BlazeError>),
     Game(GameError),
 }
 
 
 impl BlazeError {
     /// Provides additional context to the error
-    pub fn context(self, context: &'static str) -> BlazeError {
+    pub fn context(self, context: &str) -> BlazeError {
+        BlazeError::Context(context.to_string(), Box::new(self))
+    }
+
+    /// Provides additional context to the error
+    pub fn context_owned(self, context: String) -> BlazeError {
         BlazeError::Context(context, Box::new(self))
     }
 }
