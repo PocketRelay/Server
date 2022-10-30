@@ -15,6 +15,7 @@ pub async fn route(session: &SessionArc, component: GameManager, packet: &Opaque
         GameManager::SetGameSettings => handle_set_game_setting(session, packet).await,
         GameManager::SetGameAttributes => handle_set_game_attribs(session, packet).await,
         GameManager::RemovePlayer => handle_remove_player(session, packet).await,
+        GameManager::UpdateMeshConnection => handle_update_mesh_connection(session, packet).await,
         component => {
             debug!("Got GameManager({component:?})");
             packet.debug_decode()?;
@@ -209,7 +210,7 @@ packet! {
 ///
 /// # Structure
 /// ```
-/// packet(Components.GAME_MANAGER, Commands.REMOVE_PLAYER, 0x0, 0x97) {
+/// packet(Components.GAME_MANAGER, Commands.REMOVE_PLAYER, 0x97) {
 ///   triple("BTPL", 0x0, 0x0, 0x0)
 ///   number("CNTX", 0x0)
 ///   number("GID", 0x48a758)
@@ -227,3 +228,35 @@ async fn handle_remove_player(session: &SessionArc, packet: &OpaquePacket) -> Ha
     session.response_empty(packet).await
 }
 
+packet! {
+    struct UpdateMeshReq {
+        GID id: u32,
+    }
+}
+
+/// Handles updating mesh connections
+///
+/// # Structure
+/// ```
+/// packet(Components.GAME_MANAGER, Commands.UPDATE_MESH_CONNECTION, 0x93) {
+///   number("GID", 0x48a758)
+///   list("TARG", listOf(
+///     group {
+///       number("FLGS", 0x0)
+///       number("PID", 0xccc456b)
+///       number("STAT", 0x2)
+///     }
+///   ))
+/// }
+/// ```
+async fn handle_update_mesh_connection(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+    session.response_empty(packet).await?;
+
+    let req = packet.contents::<UpdateMeshReq>()?;
+    let game = session.games()
+        .find_by_id(req.id)
+        .await
+        .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
+    game.update_mesh_connection(session).await?;
+    Ok(())
+}

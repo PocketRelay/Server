@@ -6,9 +6,11 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use blaze_pk::{OpaquePacket, Packets, TdfMap};
 use log::debug;
 use tokio::sync::RwLock;
+use tokio::try_join;
 use crate::blaze::{Session, SessionArc, SessionGame};
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{BlazeError, BlazeResult, GameError, GameResult};
+use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete};
 use crate::game::shared::{notify_game_setup, NotifyAttribsChange, NotifyPlayerJoining, NotifyPlayerRemoved, NotifySettingChange, NotifyStateChange};
 
 pub struct Games {
@@ -157,6 +159,42 @@ impl Game {
         Ok(())
     }
 
+    pub async fn update_mesh_connection(&self, session: &SessionArc) -> BlazeResult<()> {
+        session.set_state(4).await?;
+
+        let pid = {
+            let session_data = session.data.read().await;
+            session_data.player_id_safe()
+        };
+
+        let packet_a = Packets::notify(
+            Components::GameManager(GameManager::PlayerJoinCompleted),
+            &NotifyJoinComplete {
+                gid: self.id,
+                pid,
+            },
+        );
+
+        let packet_b = Packets::notify(
+            Components::GameManager(GameManager::PlayerJoinCompleted),
+            &NotifyAdminListChange {
+                alst: pid,
+                gid: self.id,
+                oper: 0,
+                uid: pid,
+            },
+        );
+
+        // May need to refactor possible issues could arise.
+
+        try_join!(
+            self.push_all(&packet_a),
+            self.push_all(&packet_b)
+        )?;
+
+        Ok(())
+    }
+
     pub async fn remove_by_id(&self, id: u32) -> BlazeResult<()> {
         let players = self.players.read().await;
         let player = players
@@ -169,7 +207,6 @@ impl Game {
     }
 
     pub async fn remove_player(&self, session: &SessionArc) -> BlazeResult<()> {
-
         let mut session_data = session.data.read().await;
 
         if let Some(player) = &session_data.player {
@@ -183,8 +220,8 @@ impl Game {
                 Components::GameManager(GameManager::PlayerRemoved),
                 &NotifyPlayerRemoved {
                     id: self.id,
-                    pid: session_data.player_id_safe()
-                }
+                    pid: session_data.player_id_safe(),
+                },
             );
             self.push_all(&packet);
         }

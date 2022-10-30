@@ -8,10 +8,10 @@ use sea_orm::DatabaseConnection;
 use tokio::io;
 use tokio::sync::{Mutex, RwLock};
 use tokio::net::{TcpListener, TcpStream};
-use crate::blaze::components::{Components, UserSessions};
+use crate::blaze::components::{Components, GameManager, UserSessions};
 use errors::HandleResult;
 use crate::blaze::errors::{BlazeError, BlazeResult};
-use crate::blaze::shared::{NetData, SessionDetails, SetSessionDetails, UpdateExtDataAttr};
+use crate::blaze::shared::{NetData, SessionDetails, SessionStateChange, SetSessionDetails, UpdateExtDataAttr};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
 use crate::game::{Game, Games};
@@ -103,6 +103,24 @@ pub struct SessionGame {
 }
 
 impl Session {
+    pub async fn set_state(&self, state: u8) -> BlazeResult<()> {
+        let mut data = self.data.write().await;
+        data.state = state;
+        if let Some(sess_game) = &data.game {
+            let game = &sess_game.game;
+            let packet = Packets::notify(
+                Components::GameManager(GameManager::GamePlayerStateChange),
+                &SessionStateChange {
+                    gid: game.id,
+                    pid: self.id,
+                    state,
+                },
+            );
+            game.push_all(&packet).await?;
+        }
+        Ok(())
+    }
+
     pub fn release(&self) {
         info!("Session {} was released", self.id)
         // TODO: Release the session removing all references to it

@@ -409,3 +409,27 @@ impl Codec for TelemetryRes {
         tag_empty_str(output, "STIM");
     }
 }
+
+packet! {
+    struct SessionStateChange {
+        GID gid: u32,
+        PID pid: u32,
+        STAT state: u8,
+    }
+}
+
+packet! {
+    struct NotifyJoinComplete {
+        GID gid: u32,
+        PID pid: u32,
+    }
+}
+
+packet! {
+    struct NotifyAdminListChange {
+        ALST alst: u32,
+        GID gid: u32,
+        OPER oper: u8,
+        UID uid: u32,
+    }
+}
