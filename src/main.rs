@@ -16,7 +16,7 @@ use crate::game::Games;
 
 /// Global state that is shared throughout the application
 pub struct GlobalState {
-    pub game_manager: Games,
+    pub games: Games,
     pub db: DatabaseConnection,
 }
 
@@ -37,7 +37,7 @@ async fn main() -> io::Result<()> {
 
     let db = database::connect().await?;
     let game_manager = Games::new();
-    let global_state = GlobalState { db, game_manager };
+    let global_state = GlobalState { db, games: game_manager };
     let global_state = Arc::new(global_state);
 
     try_join!(

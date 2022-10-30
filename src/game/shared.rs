@@ -1,4 +1,4 @@
-use blaze_pk::{Codec, OpaquePacket, Packets, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_list_start, tag_map, tag_map_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8, tag_usize, tag_value, TdfMap, TdfOptional, ValueType};
+use blaze_pk::{Codec, OpaquePacket, packet, Packets, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_list_start, tag_map, tag_map_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8, tag_usize, tag_value, TdfMap, TdfOptional, ValueType};
 use crate::blaze::{SessionArc, SessionData};
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{GameError, GameResult};
@@ -52,7 +52,7 @@ pub async fn notify_game_setup(game: &Game, session: &SessionArc) -> GameResult<
 async fn encode_notify_game_setup(
     game: &Game,
     session: &SessionData,
-    output: &mut Vec<u8>
+    output: &mut Vec<u8>,
 ) -> GameResult<()> {
     let mut player_data = Vec::new();
     let mut player_ids = Vec::new();
@@ -77,19 +77,21 @@ async fn encode_notify_game_setup(
         (host_id, groups)
     };
 
+
     {
+        let game_data = game.data.read().await;
         tag_group_start(output, "GAME");
         tag_list(output, "ADMN", player_ids);
-        let attributes = game.attributes.read().await;
-        tag_value(output, "ATTR", &attributes);
+        tag_value(output, "ATTR", &game_data.attributes);
         drop(attributes);
         tag_list(output, "CAP", vec![0x4, 0x0]);
         tag_u32(output, "GID", game.id);
         tag_str(output, "GNAM", &game.name);
         tag_u64(output, "GPVH", Game::GPVH);
-        tag_u16(output, "GSET", game.setting);
+        tag_u16(output, "GSET", game_data.setting);
         tag_u64(output, "GSID", Game::GSID);
-        tag_u16(output, "GSTA", game.state);
+        tag_u16(output, "GSTA", game_data.state);
+        drop(game_data);
         tag_empty_str(output, "GTYP");
         {
             tag_list_start(output, "HNET", ValueType::Optional, 1);
@@ -156,4 +158,30 @@ async fn encode_notify_game_setup(
         tag_group_end(output);
     }
     Ok(())
+}
+
+packet! {
+    struct NotifyStateChange {
+        GID id: u32,
+        GSTA state: u16,
+    }
+}
+
+packet! {
+    struct NotifySettingChange {
+        ATTR setting: u16,
+        GID id: u32,
+    }
+}
+
+pub struct NotifyAttribsChange<'a> {
+    pub attributes: &'a TdfMap<String, String>,
+    pub id: u32,
+}
+
+impl Codec for NotifyAttribsChange {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_value(output, "ATTR", self.attributes);
+        tag_u32(output, "GID",self.id)
+    }
 }

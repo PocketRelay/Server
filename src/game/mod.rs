@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 use crate::blaze::{Session, SessionArc, SessionGame};
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{BlazeError, BlazeResult, GameError, GameResult};
-use crate::game::shared::{notify_game_setup, NotifyPlayerJoining};
+use crate::game::shared::{notify_game_setup, NotifyAttribsChange, NotifyPlayerJoining, NotifySettingChange, NotifyStateChange};
 
 pub struct Games {
     games: RwLock<HashMap<u32, Arc<Game>>>,
@@ -35,15 +35,25 @@ impl Games {
         games.insert(id, game.clone());
         game
     }
+
+    pub async fn find_by_id(&self, id: u32) -> Option<Arc<Game>> {
+        let games = self.games.read().await;
+        games.get(&id)
+            .cloned()
+    }
 }
 
 pub struct Game {
     pub id: u32,
-    name: String,
-    state: u16,
-    setting: u16,
-    attributes: RwLock<TdfMap<String, String>>,
-    players: RwLock<Vec<SessionArc>>,
+    pub name: String,
+    pub data: RwLock<GameData>,
+    pub players: RwLock<Vec<SessionArc>>,
+}
+
+pub struct GameData {
+    pub state: u16,
+    pub setting: u16,
+    pub attributes: TdfMap<String, String>,
 }
 
 impl Game {
@@ -60,9 +70,11 @@ impl Game {
         Self {
             id,
             name,
-            state: 0x1,
-            setting,
-            attributes: RwLock::new(attributes),
+            data: RwLock::new(GameData {
+                state: 0x1,
+                setting,
+                attributes,
+            }),
             players: RwLock::new(Vec::with_capacity(Self::MAX_PLAYERS)),
         }
     }
@@ -87,6 +99,60 @@ impl Game {
             player.write_packet(packet).await?;
             // TODO: Handle disconnects here.
         }
+        Ok(())
+    }
+
+    pub async fn set_state(&self, state: u16) -> BlazeResult<()> {
+        {
+            let mut data = self.data.write().await;
+            (*data).state = state;
+        }
+
+        let packet = Packets::notify(
+            Components::GameManager(GameManager::GameStateChange),
+            &NotifyStateChange {
+                id: self.id,
+                state,
+            },
+        );
+        self.push_all(&packet).await?;
+        Ok(())
+    }
+
+    pub async fn set_setting(&self, setting: u16) -> BlazeResult<()> {
+        {
+            let mut data = self.data.write().await;
+            (*data).setting = setting;
+        }
+
+        let packet = Packets::notify(
+            Components::GameManager(GameManager::GameSettingsChange),
+            &NotifySettingChange {
+                id: self.id,
+                setting,
+            },
+        );
+        self.push_all(&packet).await?;
+        Ok(())
+    }
+
+    pub async fn set_attributes(&self, attributes: TdfMap<String, String>) -> BlazeResult<()> {
+        {
+            let mut data = self.data.write().await;
+            (*data).attributes.extend(attributes)
+        }
+
+        let packet = {
+            let data = self.data.read().await;
+            Packets::notify(
+                Components::GameManager(GameManager::GameSettingsChange),
+                &NotifyAttribsChange {
+                    id: self.id,
+                    attributes: &data.attributes,
+                },
+            )
+        };
+        self.push_all(&packet).await?;
         Ok(())
     }
 

@@ -14,7 +14,7 @@ use crate::blaze::errors::{BlazeError, BlazeResult};
 use crate::blaze::shared::{NetData, SessionDetails, SetSessionDetails, UpdateExtDataAttr};
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
-use crate::game::Game;
+use crate::game::{Game, Games};
 use crate::GlobalState;
 use crate::utils::generate_token;
 
@@ -169,6 +169,10 @@ impl Session {
     /// Returns a reference to the database connection from the global
     /// state data.
     pub fn db(&self) -> &DatabaseConnection { &self.global.db }
+
+    /// Returns a reference to the games manager from the global
+    /// state data.
+    pub fn games(&self) -> &Games { &self.global.games }
 
     /// Obtains the session token for the player linked to this session
     /// optionally setting and returning a new session token if there is

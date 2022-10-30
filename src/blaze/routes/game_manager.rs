@@ -1,7 +1,7 @@
 use blaze_pk::{OpaquePacket, packet, TdfMap};
 use log::debug;
 use crate::blaze::components::GameManager;
-use crate::blaze::errors::HandleResult;
+use crate::blaze::errors::{BlazeError, GameError, HandleResult};
 use crate::blaze::SessionArc;
 use crate::game::Game;
 
@@ -11,6 +11,7 @@ use crate::game::Game;
 pub async fn route(session: &SessionArc, component: GameManager, packet: &OpaquePacket) -> HandleResult {
     match component {
         GameManager::CreateGame => handle_create_game(session, packet).await,
+        GameManager::AdvanceGameState => handle_advance_game_state(session, packet).await,
         component => {
             debug!("Got GameManager({component:?})");
             packet.debug_decode()?;
@@ -88,7 +89,7 @@ packet! {
 async fn handle_create_game(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<CreateGameReq>()?;
 
-    let game = session.global.game_manager.new_game(
+    let game = session.games().new_game(
         req.name,
         req.attributes,
         req.setting,
@@ -100,4 +101,31 @@ async fn handle_create_game(session: &SessionArc, packet: &OpaquePacket) -> Hand
     // TODO: Update matchmaking await.
 
     Ok(())
+}
+
+packet! {
+    struct GameStateReq {
+        GID id: u32,
+        GSTA state: u16,
+    }
+}
+
+/// Handles changing the state of the game with the provided ID
+///
+/// # Structure
+/// ```
+/// packet(Components.GAME_MANAGER, Commands.ADVANCE_GAME_STATE, 0x39) {
+///   number("GID", 0x5dc695)
+///   number("GSTA", 0x82)
+/// }
+/// ```
+///
+async fn handle_advance_game_state(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+    let req = packet.contents::<GameStateReq>()?;
+    let game = session.games()
+        .find_by_id(req.id)
+        .await
+        .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
+    game.set_state(req.state).await?;
+    session.response_empty(packet).await
 }

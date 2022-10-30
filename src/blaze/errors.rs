@@ -35,6 +35,7 @@ pub enum GameError {
     Full,
     MissingHost,
     Other(&'static str),
+    UnknownGame(u32),
     Context(&'static str, Box<GameError>),
 }
 
