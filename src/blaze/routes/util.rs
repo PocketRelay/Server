@@ -683,7 +683,7 @@ fn update_player_model(model: &mut PlayerActiveModel, key: &str, value: String) 
                 .unwrap_or(0);
             model.csreward = Set(value)
         }
-        "Completion" => { model.new_item = Set(Some(value)) }
+        "Completion" => { model.completion = Set(Some(value)) }
         "Progress" => { model.progress = Set(Some(value)) }
         "cscompletion" => { model.cs_completion = Set(Some(value)) }
         "cstimestamps" => { model.cs_timestamps1 = Set(Some(value)) }
@@ -724,6 +724,7 @@ async fn handle_user_settings_load_all(session: &SessionArc, packet: &OpaquePack
         let session_data = session.data.read().await;
         let player = session_data.expect_player()?;
 
+        settings.insert("Base", encode_player_base(player));
 
         let classes = player
             .find_related(PlayerClassEntity)
@@ -736,14 +737,14 @@ async fn handle_user_settings_load_all(session: &SessionArc, packet: &OpaquePack
         let (classes, characters) = try_join!(classes, characters)?;
 
         let mut index = 0;
-        for class in classes {
-            settings.insert(format!("class{}", index), encode_player_class(&class));
+        for char in characters {
+            settings.insert(format!("char{}", index), encode_player_character(&char));
             index += 1;
         }
 
         index = 0;
-        for char in characters {
-            settings.insert(format!("char{}", index), encode_player_character(&char));
+        for class in classes {
+            settings.insert(format!("class{}", index), encode_player_class(&class));
             index += 1;
         }
 
@@ -753,17 +754,15 @@ async fn handle_user_settings_load_all(session: &SessionArc, packet: &OpaquePack
                 map.insert(key, value);
             }
         }
-
-        insert_optional(&mut settings, "FaceCodes", &player.face_codes);
-        insert_optional(&mut settings, "NewItem", &player.new_item);
-        settings.insert("csreward", player.csreward.to_string());
         insert_optional(&mut settings, "Completion", &player.completion);
-        insert_optional(&mut settings, "Progress", &player.progress);
         insert_optional(&mut settings, "cscompletion", &player.cs_completion);
+        settings.insert("csreward", player.csreward.to_string());
         insert_optional(&mut settings, "cstimestamps", &player.cs_timestamps1);
         insert_optional(&mut settings, "cstimestamps2", &player.cs_timestamps2);
         insert_optional(&mut settings, "cstimestamps3", &player.cs_timestamps3);
-        settings.insert("Base", encode_player_base(player));
+        insert_optional(&mut settings, "FaceCodes", &player.face_codes);
+        insert_optional(&mut settings, "NewItem", &player.new_item);
+        insert_optional(&mut settings, "Progress", &player.progress);
     }
     session.response(packet, &UserSettingsAll { settings }).await
 }

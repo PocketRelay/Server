@@ -36,8 +36,8 @@ async fn main() -> io::Result<()> {
     info!("Starting Pocket Relay v{}", env::VERSION);
 
     let db = database::connect().await?;
-    let game_manager = Games::new();
-    let global_state = GlobalState { db, games: game_manager };
+    let games = Games::new();
+    let global_state = GlobalState { db, games };
     let global_state = Arc::new(global_state);
 
     try_join!(
