@@ -123,11 +123,9 @@ impl Codec for NetGroups {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_group_start(output, "EXIP");
         self.external.encode(output);
-        tag_group_end(output);
 
         tag_group_start(output, "INIP");
         self.internal.encode(output);
-        tag_group_end(output);
 
         tag_group_end(output);
     }
@@ -225,7 +223,6 @@ pub struct Sess<'a> {
 
 impl Codec for Sess<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
-        tag_group_start(output, "SESS");
         tag_u32(output, "BUID", self.player.id);
         tag_zero(output, "FRST");
         tag_str(output, "KEY", &self.session_token);
