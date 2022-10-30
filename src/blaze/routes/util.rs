@@ -1,4 +1,4 @@
-use blaze_pk::{Codec, group, OpaquePacket, packet, tag_empty_blob, tag_group_end, tag_group_start, tag_str, tag_u16, tag_u32, tag_u8, TdfMap};
+use blaze_pk::{Codec, group, OpaquePacket, packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_map_start, tag_str, tag_u16, tag_u32, tag_u8, tag_value, tag_zero, TdfMap, ValueType};
 use std::time::SystemTime;
 use log::{debug, warn};
 use rust_embed::RustEmbed;
@@ -11,7 +11,6 @@ use crate::blaze::SessionArc;
 use crate::blaze::shared::TelemetryRes;
 use crate::database::entities::{player_characters, player_classes, PlayerActiveModel, PlayerCharacterActiveModel, PlayerCharacterEntity, PlayerCharacterModel, PlayerClassActiveModel, PlayerClassEntity, PlayerClassModel, PlayerModel};
 use crate::env;
-use crate::env::ADDRESS;
 use crate::utils::conv::MEStringParser;
 use crate::utils::dmap::load_dmap;
 use crate::utils::server_unix_time;
@@ -63,49 +62,71 @@ group! {
     }
 }
 
-packet! {
-    struct PreAuthRes {
-        ANON anon: u8,
-        ASRC asrc: &'static str,
-        CIDS component_ids: Vec<u16>,
-        CNGN cngn: &'static str,
-        CONF config: PreAuthConfig,
-        INST inst: &'static str,
-        MINR minr: u8,
-        NASP nasp: &'static str,
-        PILD pild: &'static str,
-        PLAT platform: &'static str,
-        PTAG ptag: &'static str,
-        QOSS qoss: QOSS,
-        RSRC rsrc: &'static str,
-        SVER version: &'static str
-    }
+pub struct PreAuthRes {
+    host: String,
+    port: u16,
+    config: TdfMap<String, String>,
 }
 
-group! {
-    struct PreAuthConfig {
-        CONF config: TdfMap<&'static str, &'static str>
-    }
-}
-
-group! {
-    struct QOSS {
-        BWPS main: QOSSGroup,
-        LNP lnp: u8,
-        LTPS list: TdfMap<&'static str, QOSSGroup>,
-        SVID svid: u32
-    }
-}
-
-group! {
-    struct QOSSGroup {
-        PSA address: &'static str,
-        PSP port: u16,
-        SNA name: &'static str
-    }
-}
-
+/// Key identifying the QOSS server used.
 pub const QOSS_KEY: &str = "ea-sjc";
+/// Server SRC version
+pub const SRC_VERSION: &str = "303107";
+pub const BLAZE_VERSION: &str = "Blaze 3.15.08.0 (CL# 1629389)";
+pub const PING_PERIOD: &str = "15s";
+pub const VOIP_HEADSET_UPDATE_RATE: &str = "1000";
+/// XLSP (Xbox Live Server Platform)
+pub const XLSP_CONNECTION_IDLE_TIMEOUT: &str = "300";
+
+//noinspection SpellCheckingInspection
+impl Codec for PreAuthRes {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_zero(output, "ANON");
+        tag_str(output, "ASRC", SRC_VERSION);
+        tag_list(output, "CIDS", vec![0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803, 0x7805, 0x7806, 0x7d0]);
+        tag_empty_str(output, "CNGN");
+        {
+            tag_group_start(output, "CONF");
+            tag_value(output, "CONF", &self.config);
+            tag_group_end(output);
+        }
+        tag_str(output, "INST", "masseffect-3-pc");
+        tag_zero(output, "MINR");
+        tag_str(output, "NASP", "cem_ea_id");
+        tag_empty_str(output, "PILD");
+        tag_str(output, "PLAT", "pc");
+        tag_empty_str(output, "PTAG");
+
+        #[inline]
+        fn encode_qoss_group(output: &mut Vec<u8>, host: &str, port: u16) {
+            tag_str(output, "PSA", host);
+            tag_u16(output, "PSP", port);
+            tag_str(output, "SNA", "prod-sjc");
+            tag_group_end(output);
+        }
+
+        {
+            tag_group_start(output, "QOSS");
+            {
+                tag_group_start(output, "BWPS");
+                encode_qoss_group(output, &self.host, self.port);
+            }
+            tag_u8(output, "LNP", 0xA);
+
+            {
+                tag_map_start(output, "LTPS", ValueType::String, ValueType::Group, 1);
+                QOSS_KEY.encode(output);
+                encode_qoss_group(output, &self.host, self.port);
+            }
+
+            tag_u32(output, "SVID", 0x45410805);
+            tag_group_end(output)
+        }
+
+        tag_str(output, "RSRC", SRC_VERSION);
+        tag_str(output, "SVER", BLAZE_VERSION)
+    }
+}
 
 /// Handles responding to pre-auth requests which is the first request
 /// that clients will send. The response to this contains information
@@ -147,45 +168,17 @@ async fn handle_pre_auth(session: &SessionArc, packet: &OpaquePacket) -> HandleR
     }
 
     let mut config = TdfMap::with_capacity(3);
-    config.insert("pingPeriod", "15s");
-    config.insert("voipHeadsetUpdateRate", "1000");
-    config.insert("xlspConnectionIdleTimeout", "300");
+    config.insert("pingPeriod", PING_PERIOD);
+    config.insert("voipHeadsetUpdateRate", VOIP_HEADSET_UPDATE_RATE);
+    config.insert("xlspConnectionIdleTimeout", XLSP_CONNECTION_IDLE_TIMEOUT);
 
-    let http_port = env::http_port();
-
-    let qoss_main = QOSSGroup {
-        address: ADDRESS,
-        port: http_port,
-        name: "prod-sjc",
-    };
-
-    let mut qoss_list = TdfMap::with_capacity(1);
-    qoss_list.insert(QOSS_KEY, QOSSGroup {
-        address: ADDRESS,
-        port: http_port,
-        name: "prod-sjc",
-    });
+    let host = env::ext_host();
+    let port = env::http_port();
 
     session.response(packet, &PreAuthRes {
-        anon: 0,
-        asrc: "303107",
-        component_ids: vec![0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803, 0x7805, 0x7806, 0x7d0],
-        cngn: "",
-        config: PreAuthConfig { config },
-        inst: "masseffect-3-pc",
-        minr: 0,
-        nasp: "cem_ea_id",
-        pild: "",
-        platform: "pc",
-        ptag: "",
-        qoss: QOSS {
-            main: qoss_main,
-            lnp: 0xA,
-            list: qoss_list,
-            svid: 0x45410805,
-        },
-        rsrc: "303107",
-        version: "Blaze 3.15.08.0 (CL# 1629389)",
+        host,
+        port,
+        config
     }).await
 }
 
@@ -194,11 +187,12 @@ struct PSSDetails {
     port: u16,
 }
 
+//noinspection SpellCheckingInspection
 impl Codec for PSSDetails {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_str(output, "ADRS", &self.address);
         tag_empty_blob(output, "CSIG");
-        tag_str(output, "PJID", "303107");
+        tag_str(output, "PJID", SRC_VERSION);
         tag_u16(output, "PORT", self.port);
         tag_u8(output, "RPRT", 0xF);
         tag_u8(output, "TIID", 0);
@@ -211,6 +205,7 @@ struct TickerDetails {
     key: &'static str,
 }
 
+//noinspection SpellCheckingInspection
 impl Codec for TickerDetails {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_str(output, "ADRS", &self.host);
@@ -225,6 +220,7 @@ struct PostAuthRes {
     session_id: u32,
 }
 
+//noinspection SpellCheckingInspection
 impl Codec for PostAuthRes {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_group_start(output, "PSS");
