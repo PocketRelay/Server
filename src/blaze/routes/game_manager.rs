@@ -13,6 +13,7 @@ pub async fn route(session: &SessionArc, component: GameManager, packet: &Opaque
         GameManager::CreateGame => handle_create_game(session, packet).await,
         GameManager::AdvanceGameState => handle_advance_game_state(session, packet).await,
         GameManager::SetGameSettings => handle_set_game_setting(session, packet).await,
+        GameManager::SetGameAttributes => handle_set_game_attribs(session, packet).await,
         component => {
             debug!("Got GameManager({component:?})");
             packet.debug_decode()?;
@@ -156,5 +157,42 @@ async fn handle_set_game_setting(session: &SessionArc, packet: &OpaquePacket) ->
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
     game.set_setting(req.setting).await?;
+    session.response_empty(packet).await
+}
+
+packet! {
+    struct GameAttribsReq {
+        GID id: u32,
+        ATTR attributes: TdfMap<String, String>,
+    }
+}
+
+/// Handles changing the attributes of the game with the provided ID
+///
+/// # Structure
+/// ```
+/// packet(Components.GAME_MANAGER, Commands.SET_GAME_ATTRIBUTES, 0xa2) {
+///   map("ATTR", mapOf(
+///     "ME3_dlc2300" to "required",
+///     "ME3_dlc2500" to "required",
+///     "ME3_dlc2700" to "required",
+///     "ME3_dlc3050" to "required",
+///     "ME3_dlc3225" to "required",
+///     "ME3gameDifficulty" to "difficulty0",
+///     "ME3gameEnemyType" to "enemy1",
+///     "ME3map" to "map2",
+///     "ME3privacy" to "PUBLIC",
+///   ))
+///   number("GID", 0x48a759)
+/// }
+/// ```
+///
+async fn handle_set_game_attribs(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+    let req = packet.contents::<GameAttribsReq>()?;
+    let game = session.games()
+        .find_by_id(req.id)
+        .await
+        .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
+    game.set_attributes(req.attributes).await?;
     session.response_empty(packet).await
 }
