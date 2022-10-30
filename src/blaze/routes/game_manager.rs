@@ -16,3 +16,52 @@ pub async fn route(session: &SessionArc, component: GameManager, packet: &Opaque
         }
     }
 }
+
+// Create Game
+// packet(4, 1) {
+//   "ATTR": Map<String, String> {
+//     "ME3_dlc2300": "required"
+//     "ME3_dlc2500": "required"
+//     "ME3_dlc2700": "required"
+//     "ME3_dlc3050": "required"
+//     "ME3_dlc3225": "required"
+//     "ME3gameDifficulty": "difficulty1"
+//     "ME3gameEnemyType": "enemy1"
+//     "ME3map": "map2"
+//     "ME3privacy": "PUBLIC"
+//   },
+//   "BTPL": (0, 0, 0),
+//   "GCTR": "",
+//   "GENT": 0,
+//   "GNAM": "",
+//   "GSET": 287,
+//   "GTYP": "",
+//   "GURL": "",
+//   "HNET": List<Group> [
+//     Group {
+//       "EXIP": Group {
+//         "IP": 0,
+//         "PORT": 0,
+//       },
+//       "INIP": Group {
+//         "IP": 3232258299,
+//         "PORT": 3659,
+//       },
+//     }
+//   ],
+//   "IGNO": 0,
+//   "NRES": 0,
+//   "NTOP": 0,
+//   "PCAP": List<VarInt>[40],
+//   "PGID": "",
+//   "PGSC": Blob[],
+//   "PMAX": 4,
+//   "PRES": 1,
+//   "QCAP": 0,
+//   "RGID": 0,
+//   "SLOT": 0,
+//   "TCAP": 0,
+//   "TIDX": 65535,
+//   "VOIP": 2,
+//   "VSTR": "ME3-295976325-179181965240128",
+// }
