@@ -87,7 +87,6 @@ struct DefaultAssocList;
 impl Codec for DefaultAssocList {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_list_start(output, "LMAP", ValueType::Group, 1);
-        ValueType::Group.encode(output);
         {
             tag_group_start(output, "INFO");
 
