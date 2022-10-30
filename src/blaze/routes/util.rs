@@ -178,7 +178,7 @@ async fn handle_pre_auth(session: &SessionArc, packet: &OpaquePacket) -> HandleR
     session.response(packet, &PreAuthRes {
         host,
         port,
-        config
+        config,
     }).await
 }
 
@@ -747,18 +747,23 @@ async fn handle_user_settings_load_all(session: &SessionArc, packet: &OpaquePack
             index += 1;
         }
 
-        if let Some(value) = &player.face_codes { settings.insert("FaceCodes", value) }
-        if let Some(value) = &player.new_item { settings.insert("NewItem", value) }
+        #[inline]
+        fn insert_optional(map: &mut TdfMap<String, String>, key: &str, value: &Option<String>) {
+            if let Some(value) = value {
+                map.insert(key, value);
+            }
+        }
+
+        insert_optional(&mut settings, "FaceCodes", &player.face_codes);
+        insert_optional(&mut settings, "NewItem", &player.new_item);
         settings.insert("csreward", player.csreward.to_string());
-        if let Some(value) = &player.completion { settings.insert("Completion", value) }
-        if let Some(value) = &player.progress { settings.insert("Progress", value) }
-        if let Some(value) = &player.cs_completion { settings.insert("cscompletion", value) }
-        if let Some(value) = &player.cs_timestamps1 { settings.insert("cstimestamps", value) }
-        if let Some(value) = &player.cs_timestamps2 { settings.insert("cstimestamps2", value) }
-        if let Some(value) = &player.cs_timestamps3 { settings.insert("cstimestamps3", value) }
+        insert_optional(&mut settings, "Completion", &player.completion);
+        insert_optional(&mut settings, "Progress", &player.progress);
+        insert_optional(&mut settings, "cscompletion", &player.cs_completion);
+        insert_optional(&mut settings, "cstimestamps", &player.cs_timestamps1);
+        insert_optional(&mut settings, "cstimestamps2", &player.cs_timestamps2);
+        insert_optional(&mut settings, "cstimestamps3", &player.cs_timestamps3);
         settings.insert("Base", encode_player_base(player));
     }
-    session.response(packet, &UserSettingsAll {
-        settings
-    }).await
+    session.response(packet, &UserSettingsAll { settings }).await
 }

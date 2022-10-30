@@ -34,6 +34,7 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
 
     loop {
         let (stream, addr) = listener.accept().await?;
+
         let session = Session::new(global.clone(), session_id, stream, addr);
         let session = Arc::new(session);
         info!("New Session Started (ID: {}, ADDR: {:?})", session.id, session.addr);
@@ -90,6 +91,22 @@ pub struct SessionData {
     pub game: Option<SessionGame>,
 }
 
+impl Default for SessionData {
+    fn default() -> Self {
+        Self {
+            player: None,
+            location: 0x64654445,
+            last_ping: SystemTime::now(),
+            net: NetData::default(),
+            hardware_flag: 0,
+            pslm: 0xfff0fff,
+            state: 2,
+            matchmaking: None,
+            game: None,
+        }
+    }
+}
+
 pub struct MatchmakingState {
     pub id: u32,
     pub start: u64,
@@ -134,17 +151,7 @@ impl Session {
             id,
             stream: RwLock::new(stream),
             addr,
-            data: RwLock::new(SessionData {
-                player: None,
-                location: 0x64654445,
-                last_ping: SystemTime::now(),
-                net: NetData::default(),
-                hardware_flag: 0,
-                pslm: 0xfff0fff,
-                state: 2,
-                matchmaking: None,
-                game: None,
-            }),
+            data: RwLock::new(SessionData::default()),
         }
     }
 
@@ -237,7 +244,7 @@ impl Session {
     pub async fn write_packet(&self, packet: &OpaquePacket) -> io::Result<()> {
         if log::max_level() >= LevelFilter::Debug {
             debug!("Sent packet TY {:?}", &packet.0.ty);
-            let _= packet.debug_decode();
+            let _ = packet.debug_decode();
         }
         let mut stream = self.stream.write().await;
         let stream = stream.deref_mut();
