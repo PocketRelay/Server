@@ -122,7 +122,9 @@ async fn handle_update_network_info(session: &SessionArc, packet: &OpaquePacket)
     net.ext = req.nqos;
     net.groups = groups;
 
-    session.response_empty(packet).await
+    session.response_empty(packet).await?;
+    session.update_client().await?;
+    Ok(())
 }
 
 packet! {
@@ -144,6 +146,8 @@ async fn handle_update_hardware_flag(session: &SessionArc, packet: &OpaquePacket
 
     let mut session_data = session.data.write().await;
     (*session_data).hardware_flag = req.hardware_flag;
-
-    session.response_empty(packet).await
+    
+    session.response_empty(packet).await?;
+    session.update_client().await?;
+    Ok(())
 }
