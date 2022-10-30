@@ -4,11 +4,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use blaze_pk::{OpaquePacket, Packets, TdfMap};
+use log::debug;
 use tokio::sync::RwLock;
 use crate::blaze::{Session, SessionArc, SessionGame};
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{BlazeError, BlazeResult, GameError, GameResult};
-use crate::game::shared::{notify_game_setup, NotifyAttribsChange, NotifyPlayerJoining, NotifySettingChange, NotifyStateChange};
+use crate::game::shared::{notify_game_setup, NotifyAttribsChange, NotifyPlayerJoining, NotifyPlayerRemoved, NotifySettingChange, NotifyStateChange};
 
 pub struct Games {
     games: RwLock<HashMap<u32, Arc<Game>>>,
@@ -153,6 +154,50 @@ impl Game {
             )
         };
         self.push_all(&packet).await?;
+        Ok(())
+    }
+
+    pub async fn remove_by_id(&self, id: u32) -> BlazeResult<()> {
+        let players = self.players.read().await;
+        let player = players
+            .iter()
+            .find(|player| player.id == id);
+        if let Some(player) = player {
+            self.remove_player(player).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn remove_player(&self, session: &SessionArc) -> BlazeResult<()> {
+
+        let mut session_data = session.data.read().await;
+
+        if let Some(player) = &session_data.player {
+            debug!("Removing player {} from game {}", player.display_name, self.id)
+        } else {
+            debug!("Removing session {} from game {}", session.id, self.id);
+        }
+
+        {
+            let packet = Packets::notify(
+                Components::GameManager(GameManager::PlayerRemoved),
+                &NotifyPlayerRemoved {
+                    id: self.id,
+                    pid: session_data.player_id_safe()
+                }
+            );
+            self.push_all(&packet);
+        }
+
+        drop(session_data);
+
+        {
+            let mut players = self.players.write().await;
+            players.retain(|value| value.id != session.id);
+        }
+
+        // TODO: Host migration notify adminlistchange
+
         Ok(())
     }
 

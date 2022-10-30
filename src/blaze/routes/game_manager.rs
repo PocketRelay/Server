@@ -14,6 +14,7 @@ pub async fn route(session: &SessionArc, component: GameManager, packet: &Opaque
         GameManager::AdvanceGameState => handle_advance_game_state(session, packet).await,
         GameManager::SetGameSettings => handle_set_game_setting(session, packet).await,
         GameManager::SetGameAttributes => handle_set_game_attribs(session, packet).await,
+        GameManager::RemovePlayer => handle_remove_player(session, packet).await,
         component => {
             debug!("Got GameManager({component:?})");
             packet.debug_decode()?;
@@ -196,3 +197,33 @@ async fn handle_set_game_attribs(session: &SessionArc, packet: &OpaquePacket) ->
     game.set_attributes(req.attributes).await?;
     session.response_empty(packet).await
 }
+
+packet! {
+    struct RemovePlayerReq {
+        GID id: u32,
+        PID pid: u32,
+    }
+}
+
+/// Handles removing a player from a game
+///
+/// # Structure
+/// ```
+/// packet(Components.GAME_MANAGER, Commands.REMOVE_PLAYER, 0x0, 0x97) {
+///   triple("BTPL", 0x0, 0x0, 0x0)
+///   number("CNTX", 0x0)
+///   number("GID", 0x48a758)
+///   number("PID", 0x3a5508eb)
+///   number("REAS", 0x6)
+/// }
+/// ```
+async fn handle_remove_player(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+    let req = packet.contents::<RemovePlayerReq>()?;
+    let game = session.games()
+        .find_by_id(req.id)
+        .await
+        .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
+    game.remove_by_id(req.pid).await?;
+    session.response_empty(packet).await
+}
+

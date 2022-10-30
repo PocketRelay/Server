@@ -185,3 +185,17 @@ impl Codec for NotifyAttribsChange {
         tag_u32(output, "GID",self.id)
     }
 }
+
+pub struct NotifyPlayerRemoved {
+    pub id: u32,
+    pub pid: u32,
+}
+
+impl Codec for NotifyPlayerRemoved {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_u8(output, "CNTX", 0);
+        tag_u32(output, "GID", self.id);
+        tag_u32(output, "PID", self.pid);
+        tag_u8(output, "REAS", 0x6);
+    }
+}
