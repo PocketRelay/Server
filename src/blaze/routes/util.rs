@@ -1,12 +1,12 @@
 use crate::blaze::components::Util;
-use crate::blaze::errors::{BlazeError, BlazeResult, HandleResult};
+use crate::blaze::errors::{BlazeError, HandleResult};
 use crate::blaze::shared::TelemetryRes;
 use crate::blaze::SessionArc;
 use crate::database::entities::{
-    player_characters, player_classes, PlayerActiveModel, PlayerCharacterActiveModel,
-    PlayerCharacterEntity, PlayerCharacterModel, PlayerClassActiveModel, PlayerClassEntity,
-    PlayerClassModel, PlayerModel,
+    PlayerActiveModel, PlayerCharacterActiveModel, PlayerCharacterEntity, PlayerCharacterModel,
+    PlayerClassActiveModel, PlayerClassEntity, PlayerClassModel, PlayerModel,
 };
+use crate::database::interface::player_classes::{find_player_character, find_player_class};
 use crate::env;
 use crate::utils::conv::MEStringParser;
 use crate::utils::dmap::load_dmap;
@@ -19,9 +19,7 @@ use blaze_pk::{
 use log::{debug, warn};
 use rust_embed::RustEmbed;
 use sea_orm::ActiveValue::Set;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, ModelTrait, NotSet, QueryFilter,
-};
+use sea_orm::{ActiveModelTrait, IntoActiveModel, ModelTrait};
 use std::time::SystemTime;
 use tokio::try_join;
 
@@ -492,54 +490,20 @@ async fn set_player_data(session: &SessionArc, key: &str, value: String) -> Hand
     Ok(())
 }
 
-async fn get_player_character(
-    session: &SessionArc,
-    index: u16,
-) -> BlazeResult<PlayerCharacterActiveModel> {
-    let player_class = PlayerCharacterEntity::find()
-        .filter(player_characters::Column::Index.eq(index))
-        .one(session.db())
-        .await?;
-    if let Some(value) = player_class {
-        return Ok(value.into_active_model());
-    }
-    let player_id = session.expect_player_id().await?;
-    Ok(PlayerCharacterActiveModel {
-        id: NotSet,
-        player_id: Set(player_id),
-        index: Set(index),
-        kit_name: NotSet,
-        name: NotSet,
-        tint1: NotSet,
-        tint2: NotSet,
-        pattern: NotSet,
-        pattern_color: NotSet,
-        phong: NotSet,
-        emissive: NotSet,
-        skin_tone: NotSet,
-        seconds_played: NotSet,
-        timestamp_year: NotSet,
-        timestamp_month: NotSet,
-        timestamp_day: NotSet,
-        timestamp_seconds: NotSet,
-        powers: NotSet,
-        hotkeys: NotSet,
-        weapons: NotSet,
-        weapon_mods: NotSet,
-        deployed: NotSet,
-        leveled_up: NotSet,
-    })
-}
-
 async fn update_player_character(session: &SessionArc, key: &str, value: String) -> HandleResult {
     if key.len() > 4 {
         let index = key[4..]
             .parse::<u16>()
             .map_err(|_| BlazeError::Other("Invalid index for player class"))?;
-        let mut model = get_player_character(session, index).await?;
+        let db = session.db();
+        let session_data = session.data.read().await;
+        let player = session_data.expect_player()?;
+
+        let mut model = find_player_character(db, player, index).await?;
         if let None = parse_player_character(&mut model, &value) {
             warn!("Failed to fully parse player character: {key} = {value}")
         }
+        drop(session_data);
         model.save(session.db()).await?;
     }
     Ok(())
@@ -596,36 +560,22 @@ fn parse_player_character(model: &mut PlayerCharacterActiveModel, value: &str) -
     Some(())
 }
 
-async fn get_player_class(session: &SessionArc, index: u16) -> BlazeResult<PlayerClassActiveModel> {
-    let player_class = PlayerClassEntity::find()
-        .filter(player_classes::Column::Index.eq(index))
-        .one(session.db())
-        .await?;
-    if let Some(value) = player_class {
-        return Ok(value.into_active_model());
-    }
-    let player_id = session.expect_player_id().await?;
-    Ok(PlayerClassActiveModel {
-        id: NotSet,
-        player_id: Set(player_id),
-        index: Set(index),
-        name: NotSet,
-        level: NotSet,
-        exp: NotSet,
-        promotions: NotSet,
-    })
-}
-
 async fn update_player_class(session: &SessionArc, key: &str, value: String) -> HandleResult {
     if key.len() > 5 {
         let index = key[5..]
             .parse::<u16>()
             .map_err(|_| BlazeError::Other("Invalid index for player class"))?;
-        let mut model = get_player_class(session, index).await?;
+
+        let db = session.db();
+        let session_data = session.data.read().await;
+        let player = session_data.expect_player()?;
+
+        let mut model = find_player_class(db, player, index).await?;
         if let None = parse_player_class(&mut model, &value) {
             warn!("Failed to fully parse player class: {key} = {value}")
         }
-        model.save(session.db()).await?;
+        drop(session_data);
+        model.save(db).await?;
     }
     Ok(())
 }

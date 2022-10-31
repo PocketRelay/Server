@@ -6,10 +6,7 @@ use crate::database::entities::PlayerModel;
 use crate::database::interface::players;
 use crate::database::interface::players::find_by_email;
 use crate::utils::hashing::{hash_password, verify_password};
-use blaze_pk::{
-    packet, tag_list_start, tag_value, Codec, CodecError, CodecResult, OpaquePacket, Packets,
-    Reader, ValueType,
-};
+use blaze_pk::{packet, tag_value, Codec, OpaquePacket, Packets};
 use log::debug;
 use regex::Regex;
 
