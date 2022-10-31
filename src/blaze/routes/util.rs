@@ -2,12 +2,9 @@ use crate::blaze::components::Util;
 use crate::blaze::errors::HandleResult;
 use crate::blaze::shared::TelemetryRes;
 use crate::blaze::SessionArc;
-use crate::database::entities::{
-    PlayerActiveModel, PlayerCharacterEntity, PlayerClassEntity, PlayerModel,
-};
-use crate::database::interface::{player_characters, player_classes};
+use crate::database::interface::players::{find_characters, find_classes};
+use crate::database::interface::{player_characters, player_classes, player_data};
 use crate::env;
-use crate::utils::conv::MEStringParser;
 use crate::utils::dmap::load_dmap;
 use crate::utils::server_unix_time;
 use blaze_pk::{
@@ -15,10 +12,8 @@ use blaze_pk::{
     tag_map_start, tag_str, tag_u16, tag_u32, tag_u8, tag_value, tag_zero, Codec, OpaquePacket,
     TdfMap, ValueType,
 };
-use log::{debug, warn};
+use log::debug;
 use rust_embed::RustEmbed;
-use sea_orm::ActiveValue::Set;
-use sea_orm::{ActiveModelTrait, IntoActiveModel, ModelTrait};
 use std::time::SystemTime;
 use tokio::try_join;
 
@@ -481,82 +476,12 @@ async fn set_player_data(session: &SessionArc, key: &str, value: String) -> Hand
         debug!("Updated player character data: {key}");
     } else {
         debug!("Updating player base data");
-        update_player_data(session, key, value)
+        player_data::update(session, key, value)
             .await
             .map_err(|err| err.context("While updating player data"))?;
         debug!("Updated player base data");
     }
 
-    Ok(())
-}
-
-/// Encodes the base player data into a string format for sending to the client
-fn encode_player_base(model: &PlayerModel) -> String {
-    format!(
-        "20;4;{};-1;0;{};0;{};{};0;{}",
-        model.credits,
-        model.credits_spent,
-        model.games_played,
-        model.seconds_played,
-        model.inventory
-    )
-}
-
-/// Parses the player data stored in the provided value and modifies the player
-/// active model accordingly.
-///
-/// # Structure
-/// ```
-/// 20;4;21474;-1;0;0;0;50;180000;0;fff....(LARGE SEQUENCE OF INVENTORY CHARS)
-/// ```
-fn parse_player_base(model: &mut PlayerActiveModel, value: &str) -> Option<()> {
-    let mut parser = MEStringParser::new(value)?;
-    model.credits = Set(parser.next()?);
-    parser.skip(2); // Skip -1;0
-    model.credits_spent = Set(parser.next()?);
-    parser.skip(1)?;
-    model.games_played = Set(parser.next()?);
-    model.seconds_played = Set(parser.next()?);
-    parser.skip(1);
-    model.inventory = Set(parser.next_str()?);
-    Some(())
-}
-
-/// Updates the provided model reflecting the changes stored in the provided
-/// pair of key and value
-//noinspection SpellCheckingInspection
-fn update_player_model(model: &mut PlayerActiveModel, key: &str, value: String) {
-    match key {
-        "Base" => {
-            if let None = parse_player_base(model, &value) {
-                warn!("Failed to completely parse player base")
-            };
-        }
-        "FaceCodes" => model.face_codes = Set(Some(value)),
-        "NewItem" => model.new_item = Set(Some(value)),
-        "csreward" => {
-            let value = value.parse::<u16>().unwrap_or(0);
-            model.csreward = Set(value)
-        }
-        "Completion" => model.completion = Set(Some(value)),
-        "Progress" => model.progress = Set(Some(value)),
-        "cscompletion" => model.cs_completion = Set(Some(value)),
-        "cstimestamps" => model.cs_timestamps1 = Set(Some(value)),
-        "cstimestamps2" => model.cs_timestamps2 = Set(Some(value)),
-        "cstimestamps3" => model.cs_timestamps3 = Set(Some(value)),
-        _ => {}
-    }
-}
-
-/// Updates the player model stored on this session with the provided key value data pair
-/// persisting the changes to the database and updating the stored model.
-async fn update_player_data(session: &SessionArc, key: &str, value: String) -> HandleResult {
-    let mut session_data = session.data.write().await;
-    let player = session_data.expect_player_owned()?;
-    let mut active = player.into_active_model();
-    update_player_model(&mut active, key, value);
-    let result = active.update(session.db()).await?;
-    session_data.player = Some(result);
     Ok(())
 }
 
@@ -582,11 +507,12 @@ async fn handle_user_settings_load_all(
         let session_data = session.data.read().await;
         let player = session_data.expect_player()?;
 
-        settings.insert("Base", encode_player_base(player));
+        settings.insert("Base", player_data::encode_base(player));
 
-        let classes = player.find_related(PlayerClassEntity).all(session.db());
+        let db = session.db();
 
-        let characters = player.find_related(PlayerCharacterEntity).all(session.db());
+        let classes = find_classes(db, player);
+        let characters = find_characters(db, player);
 
         let (classes, characters) = try_join!(classes, characters)?;
 

@@ -1,29 +1,29 @@
-use crate::database::entities::{players, PlayerActiveModel, PlayerEntity, PlayerModel};
+use crate::database::entities::{player_characters, player_classes, players};
 use crate::database::interface::DbResult;
 use crate::utils::generate_token;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, NotSet,
-    QueryFilter,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait,
+    NotSet, QueryFilter,
 };
 
-type PlayerResult = DbResult<Option<PlayerModel>>;
+type PlayerResult = DbResult<Option<players::Model>>;
 
 pub async fn find_by_id(db: &DatabaseConnection, id: u32) -> PlayerResult {
-    PlayerEntity::find_by_id(id).one(db).await
+    players::Entity::find_by_id(id).one(db).await
 }
 
 pub async fn create_normal(
     db: &DatabaseConnection,
     email: String,
     password: String,
-) -> DbResult<PlayerModel> {
+) -> DbResult<players::Model> {
     let display_name = if email.len() > 99 {
         email[0..99].to_string()
     } else {
         email.clone()
     };
-    let active_model = PlayerActiveModel {
+    let active_model = players::ActiveModel {
         id: NotSet,
         email: Set(email.to_string()),
         display_name: Set(display_name),
@@ -49,14 +49,14 @@ pub async fn create_normal(
 }
 
 pub async fn find_by_email(db: &DatabaseConnection, email: &str) -> PlayerResult {
-    PlayerEntity::find()
+    players::Entity::find()
         .filter(players::Column::Email.eq(email))
         .one(db)
         .await
 }
 
 pub async fn find_by_session(db: &DatabaseConnection, session_token: &str) -> PlayerResult {
-    PlayerEntity::find()
+    players::Entity::find()
         .filter(players::Column::SessionToken.eq(session_token))
         .one(db)
         .await
@@ -64,9 +64,9 @@ pub async fn find_by_session(db: &DatabaseConnection, session_token: &str) -> Pl
 
 pub async fn set_session_token(
     db: &DatabaseConnection,
-    player: PlayerModel,
+    player: players::Model,
     session_token: String,
-) -> DbResult<(PlayerModel, String)> {
+) -> DbResult<(players::Model, String)> {
     let mut active = player.into_active_model();
     active.session_token = Set(Some(session_token.clone()));
     let player = active.update(db).await?;
@@ -75,8 +75,8 @@ pub async fn set_session_token(
 
 pub async fn get_session_token(
     db: &DatabaseConnection,
-    player: PlayerModel,
-) -> DbResult<(PlayerModel, String)> {
+    player: players::Model,
+) -> DbResult<(players::Model, String)> {
     let token = match &player.session_token {
         None => {
             let token = generate_token(128);
@@ -86,4 +86,22 @@ pub async fn get_session_token(
         Some(value) => value.clone(),
     };
     Ok((player, token))
+}
+
+/// Finds all the player class entities related to the provided player
+/// and returns them in a Vec
+pub async fn find_classes(
+    db: &DatabaseConnection,
+    player: &players::Model,
+) -> DbResult<Vec<player_classes::Model>> {
+    player.find_related(player_classes::Entity).all(db).await
+}
+
+/// Finds all the player character entities related to the provided player
+/// and returns them in a Vec
+pub async fn find_characters(
+    db: &DatabaseConnection,
+    player: &players::Model,
+) -> DbResult<Vec<player_characters::Model>> {
+    player.find_related(player_characters::Entity).all(db).await
 }
