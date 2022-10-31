@@ -3,3 +3,4 @@
 .env
 
 app.db
+.vscode/
