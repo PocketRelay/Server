@@ -1,18 +1,18 @@
 mod blaze;
+mod database;
 mod env;
+mod game;
 mod http;
 mod utils;
-mod database;
-mod game;
 
-use std::io;
-use std::sync::Arc;
+use crate::game::Games;
 use dotenvy::dotenv;
 use env_logger::WriteStyle;
 use log::info;
 use sea_orm::DatabaseConnection;
+use std::io;
+use std::sync::Arc;
 use tokio::try_join;
-use crate::game::Games;
 
 /// Global state that is shared throughout the application
 pub struct GlobalState {
@@ -47,4 +47,3 @@ async fn main() -> io::Result<()> {
 
     Ok(())
 }
-

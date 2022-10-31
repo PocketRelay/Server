@@ -1,19 +1,28 @@
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, NotSet, QueryFilter};
-use sea_orm::ActiveValue::Set;
-use crate::database::entities::{PlayerActiveModel, PlayerEntity, PlayerModel, players};
+use crate::database::entities::{players, PlayerActiveModel, PlayerEntity, PlayerModel};
 use crate::database::interface::DbResult;
 use crate::utils::generate_token;
+use sea_orm::ActiveValue::Set;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, NotSet,
+    QueryFilter,
+};
 
 type PlayerResult = DbResult<Option<PlayerModel>>;
 
 pub async fn find_by_id(db: &DatabaseConnection, id: u32) -> PlayerResult {
-    PlayerEntity::find_by_id(id)
-        .one(db)
-        .await
+    PlayerEntity::find_by_id(id).one(db).await
 }
 
-pub async fn create_normal(db: &DatabaseConnection, email: String, password: String) -> DbResult<PlayerModel> {
-    let display_name = if email.len() > 99 { email[0..99].to_string() } else { email.clone() };
+pub async fn create_normal(
+    db: &DatabaseConnection,
+    email: String,
+    password: String,
+) -> DbResult<PlayerModel> {
+    let display_name = if email.len() > 99 {
+        email[0..99].to_string()
+    } else {
+        email.clone()
+    };
     let active_model = PlayerActiveModel {
         id: NotSet,
         email: Set(email.to_string()),
@@ -64,16 +73,17 @@ pub async fn set_session_token(
     Ok((player, session_token))
 }
 
-pub async fn get_session_token(db: &DatabaseConnection, player: PlayerModel) -> DbResult<(PlayerModel, String)> {
-    let token = match &player.session_token{
+pub async fn get_session_token(
+    db: &DatabaseConnection,
+    player: PlayerModel,
+) -> DbResult<(PlayerModel, String)> {
+    let token = match &player.session_token {
         None => {
             let token = generate_token(128);
-            let out = set_session_token(db, player, token)
-                .await?;
-            return Ok(out)
+            let out = set_session_token(db, player, token).await?;
+            return Ok(out);
         }
-        Some(value) => value.clone()
+        Some(value) => value.clone(),
     };
     Ok((player, token))
 }
-

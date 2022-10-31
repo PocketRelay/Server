@@ -1,6 +1,10 @@
-use blaze_pk::{Codec, CodecResult, packet, Reader, Tag, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list_start, tag_map_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_value, tag_var_int_list_empty, tag_zero, TdfOptional, ValueType};
 use crate::blaze::SessionData;
 use crate::database::entities::PlayerModel;
+use blaze_pk::{
+    packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list_start,
+    tag_map_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_value, tag_var_int_list_empty,
+    tag_zero, Codec, CodecResult, Reader, Tag, TdfOptional, ValueType,
+};
 
 pub struct SetSessionDetails<'a> {
     pub session: &'a SessionData,
@@ -70,7 +74,6 @@ packet! {
         ID id: u32
     }
 }
-
 
 /// Structure for storing extended network data
 #[derive(Debug, Copy, Clone, Default)]
@@ -142,7 +145,6 @@ impl Codec for NetGroups {
     }
 }
 
-
 impl NetData {
     pub fn get_groups(&self) -> TdfOptional<NetGroups> {
         if self.is_unset {
@@ -160,7 +162,7 @@ pub struct NetGroup(pub NetAddress, pub Port);
 
 impl Codec for NetGroup {
     fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "IP", self.0.0);
+        tag_u32(output, "IP", self.0 .0);
         tag_u16(output, "PORT", self.1);
         tag_group_end(output);
     }
@@ -184,7 +186,8 @@ pub struct NetAddress(pub u32);
 impl NetAddress {
     /// Converts the provided IPv4 string into a NetAddress
     pub fn from_ipv4(value: &str) -> NetAddress {
-        let parts = value.split(".")
+        let parts = value
+            .split(".")
             .filter_map(|value| value.parse::<u32>().ok())
             .collect::<Vec<u32>>();
         if parts.len() < 4 {
@@ -233,7 +236,6 @@ impl Codec for Sess<'_> {
         tag_u32(output, "UID", self.player.id);
     }
 }
-
 
 /// Complex authentication result structure is manually encoded because it
 /// has complex nesting and output can vary based on inputs provided
@@ -291,14 +293,7 @@ impl<'a> Entitlement<'a> {
     const PC_TAG: &'a str = "ME3PCOffers";
     const GEN_TAG: &'a str = "ME3GenOffers";
 
-    pub fn new_pc(
-        id: u64,
-        pjid: &'a str,
-        prca: u8,
-        prid: &'a str,
-        tag: &'a str,
-        ty: u8,
-    ) -> Self {
+    pub fn new_pc(id: u64, pjid: &'a str, prca: u8, prid: &'a str, tag: &'a str, ty: u8) -> Self {
         Self {
             name: Self::PC_TAG,
             id,
@@ -310,14 +305,7 @@ impl<'a> Entitlement<'a> {
         }
     }
 
-    pub fn new_gen(
-        id: u64,
-        pjid: &'a str,
-        prca: u8,
-        prid: &'a str,
-        tag: &'a str,
-        ty: u8,
-    ) -> Self {
+    pub fn new_gen(id: u64, pjid: &'a str, prca: u8, prid: &'a str, tag: &'a str, ty: u8) -> Self {
         Self {
             name: Self::GEN_TAG,
             id,
@@ -373,7 +361,6 @@ pub struct TermsContent<'a, 'b> {
     pub col: u16,
     pub content: &'b str,
 }
-
 
 impl Codec for TermsContent<'_, '_> {
     //noinspection SpellCheckingInspection

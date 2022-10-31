@@ -1,14 +1,18 @@
-use blaze_pk::{OpaquePacket, packet, TdfMap};
-use log::debug;
 use crate::blaze::components::GameManager;
 use crate::blaze::errors::{BlazeError, GameError, HandleResult};
 use crate::blaze::SessionArc;
 use crate::game::Game;
+use blaze_pk::{packet, OpaquePacket, TdfMap};
+use log::debug;
 
 /// Routing function for handling packets with the `GameManager` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: GameManager, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(
+    session: &SessionArc,
+    component: GameManager,
+    packet: &OpaquePacket,
+) -> HandleResult {
     match component {
         GameManager::CreateGame => handle_create_game(session, packet).await,
         GameManager::AdvanceGameState => handle_advance_game_state(session, packet).await,
@@ -93,13 +97,14 @@ packet! {
 async fn handle_create_game(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<CreateGameReq>()?;
 
-    let game = session.games().new_game(
-        req.name,
-        req.attributes,
-        req.setting,
-    ).await;
+    let game = session
+        .games()
+        .new_game(req.name, req.attributes, req.setting)
+        .await;
 
-    session.response(packet, &CreateGameRes { id: game.id }).await?;
+    session
+        .response(packet, &CreateGameRes { id: game.id })
+        .await?;
     Game::add_player(&game, session).await?;
 
     // TODO: Update matchmaking await.
@@ -126,7 +131,8 @@ packet! {
 ///
 async fn handle_advance_game_state(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<GameStateReq>()?;
-    let game = session.games()
+    let game = session
+        .games()
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
@@ -141,7 +147,6 @@ packet! {
     }
 }
 
-
 /// Handles changing the setting of the game with the provided ID
 ///
 /// # Structure
@@ -154,7 +159,8 @@ packet! {
 ///
 async fn handle_set_game_setting(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<GameSettingReq>()?;
-    let game = session.games()
+    let game = session
+        .games()
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
@@ -191,7 +197,8 @@ packet! {
 ///
 async fn handle_set_game_attribs(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<GameAttribsReq>()?;
-    let game = session.games()
+    let game = session
+        .games()
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
@@ -220,7 +227,8 @@ packet! {
 /// ```
 async fn handle_remove_player(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<RemovePlayerReq>()?;
-    let game = session.games()
+    let game = session
+        .games()
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
@@ -249,11 +257,15 @@ packet! {
 ///   ))
 /// }
 /// ```
-async fn handle_update_mesh_connection(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_update_mesh_connection(
+    session: &SessionArc,
+    packet: &OpaquePacket,
+) -> HandleResult {
     session.response_empty(packet).await?;
 
     let req = packet.contents::<UpdateMeshReq>()?;
-    let game = session.games()
+    let game = session
+        .games()
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;

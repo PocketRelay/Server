@@ -1,21 +1,25 @@
-use blaze_pk::{OpaquePacket, Packets};
-use log::{debug, error, LevelFilter};
 use crate::blaze::components::Components;
 use crate::blaze::errors::{BlazeError, HandleResult};
 use crate::blaze::SessionArc;
+use blaze_pk::{OpaquePacket, Packets};
+use log::{debug, error, LevelFilter};
 
-mod util;
 mod auth;
 mod game_manager;
-mod stats;
 mod messaging;
-mod user_sessions;
 mod other;
+mod stats;
+mod user_sessions;
+mod util;
 
-pub async fn route(session: &SessionArc, component: Components, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(
+    session: &SessionArc,
+    component: Components,
+    packet: &OpaquePacket,
+) -> HandleResult {
     if log::max_level() >= LevelFilter::Debug {
         debug!("Got packet: {:?}", component);
-        let _= packet.debug_decode();
+        let _ = packet.debug_decode();
     }
     let result = match component {
         Components::Authentication(value) => auth::route(session, value, packet).await,
@@ -24,12 +28,18 @@ pub async fn route(session: &SessionArc, component: Components, packet: &OpaqueP
         Components::Util(value) => util::route(session, value, packet).await,
         Components::Messaging(value) => messaging::route(session, value, packet).await,
         Components::UserSessions(value) => user_sessions::route(session, value, packet).await,
-        Components::AssociationLists(value) => other::route_association_lists(session, value, packet).await,
-        Components::GameReporting(value) => other::route_game_reporting(session, value, packet).await,
+        Components::AssociationLists(value) => {
+            other::route_association_lists(session, value, packet).await
+        }
+        Components::GameReporting(value) => {
+            other::route_game_reporting(session, value, packet).await
+        }
         value => {
             debug!("No handler for component {value:?}");
             packet.debug_decode()?;
-            session.write_packet(&Packets::response_empty(packet)).await?;
+            session
+                .write_packet(&Packets::response_empty(packet))
+                .await?;
             Ok(())
         }
     };
@@ -43,4 +53,3 @@ pub async fn route(session: &SessionArc, component: Components, packet: &OpaqueP
 
     result
 }
-

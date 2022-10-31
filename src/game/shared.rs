@@ -1,8 +1,12 @@
-use blaze_pk::{Codec, OpaquePacket, packet, Packets, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_list_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8, tag_usize, tag_value, TdfMap, ValueType};
-use crate::blaze::{SessionArc, SessionData};
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{GameError, GameResult};
+use crate::blaze::{SessionArc, SessionData};
 use crate::game::Game;
+use blaze_pk::{
+    packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list,
+    tag_list_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8,
+    tag_usize, tag_value, Codec, OpaquePacket, Packets, TdfMap, ValueType,
+};
 
 pub struct NotifyPlayerJoining<'a> {
     /// ID of the game that the player is joining
@@ -59,15 +63,13 @@ async fn encode_notify_game_setup(
     let players = &*game.players.read().await;
     let player_count = players.len();
 
-
     for player in players {
         player_ids.push(player.id);
         let session_data = player.data.read().await;
         encode_player_data(&session_data, &mut player_data);
     }
 
-    let host = players.get(0)
-        .ok_or(GameError::MissingHost)?;
+    let host = players.get(0).ok_or(GameError::MissingHost)?;
 
     let host_data = host.data.read().await;
     let host_id = host_data.player_id_safe();

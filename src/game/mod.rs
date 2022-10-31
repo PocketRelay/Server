@@ -1,17 +1,20 @@
 mod shared;
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
-use blaze_pk::{OpaquePacket, Packets, TdfMap};
-use log::debug;
-use tokio::sync::RwLock;
-use tokio::try_join;
-use crate::blaze::{SessionArc, SessionGame};
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{BlazeError, BlazeResult, GameError, GameResult};
 use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete};
-use crate::game::shared::{notify_game_setup, NotifyAttribsChange, NotifyPlayerJoining, NotifyPlayerRemoved, NotifySettingChange, NotifyStateChange};
+use crate::blaze::{SessionArc, SessionGame};
+use crate::game::shared::{
+    notify_game_setup, NotifyAttribsChange, NotifyPlayerJoining, NotifyPlayerRemoved,
+    NotifySettingChange, NotifyStateChange,
+};
+use blaze_pk::{OpaquePacket, Packets, TdfMap};
+use log::debug;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tokio::try_join;
 
 pub struct Games {
     games: RwLock<HashMap<u32, Arc<Game>>>,
@@ -41,8 +44,7 @@ impl Games {
 
     pub async fn find_by_id(&self, id: u32) -> Option<Arc<Game>> {
         let games = self.games.read().await;
-        games.get(&id)
-            .cloned()
+        games.get(&id).cloned()
     }
 }
 
@@ -64,12 +66,7 @@ impl Game {
     const GSID: u64 = 0x4000000a76b645;
     const MAX_PLAYERS: usize = 4;
 
-    pub fn new(
-        id: u32,
-        name: String,
-        attributes: TdfMap<String, String>,
-        setting: u16,
-    ) -> Self {
+    pub fn new(id: u32, name: String, attributes: TdfMap<String, String>, setting: u16) -> Self {
         Self {
             id,
             name,
@@ -91,8 +88,7 @@ impl Game {
 
     pub async fn get_host(&self) -> GameResult<SessionArc> {
         let players = self.players.read().await;
-        let player = players.get(0)
-            .ok_or(GameError::MissingHost)?;
+        let player = players.get(0).ok_or(GameError::MissingHost)?;
         Ok(player.clone())
     }
 
@@ -113,10 +109,7 @@ impl Game {
 
         let packet = Packets::notify(
             Components::GameManager(GameManager::GameStateChange),
-            &NotifyStateChange {
-                id: self.id,
-                state,
-            },
+            &NotifyStateChange { id: self.id, state },
         );
         self.push_all(&packet).await?;
         Ok(())
@@ -169,10 +162,7 @@ impl Game {
 
         let packet_a = Packets::notify(
             Components::GameManager(GameManager::PlayerJoinCompleted),
-            &NotifyJoinComplete {
-                gid: self.id,
-                pid,
-            },
+            &NotifyJoinComplete { gid: self.id, pid },
         );
 
         let packet_b = Packets::notify(
@@ -187,19 +177,14 @@ impl Game {
 
         // May need to refactor possible issues could arise.
 
-        try_join!(
-            self.push_all(&packet_a),
-            self.push_all(&packet_b)
-        )?;
+        try_join!(self.push_all(&packet_a), self.push_all(&packet_b))?;
 
         Ok(())
     }
 
     pub async fn remove_by_id(&self, id: u32) -> BlazeResult<()> {
         let players = self.players.read().await;
-        let player = players
-            .iter()
-            .find(|player| player.id == id);
+        let player = players.iter().find(|player| player.id == id);
         if let Some(player) = player {
             self.remove_player(player).await?;
         }
@@ -210,7 +195,10 @@ impl Game {
         let session_data = session.data.read().await;
 
         if let Some(player) = &session_data.player {
-            debug!("Removing player {} from game {}", player.display_name, self.id)
+            debug!(
+                "Removing player {} from game {}",
+                player.display_name, self.id
+            )
         } else {
             debug!("Removing session {} from game {}", session.id, self.id);
         }
@@ -254,9 +242,7 @@ impl Game {
 
         // Set the player session game data
         {
-            let mut session_data = session
-                .data
-                .write().await;
+            let mut session_data = session.data.write().await;
             session_data.game = Some(SessionGame {
                 game: game.clone(),
                 slot,

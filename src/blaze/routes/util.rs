@@ -1,19 +1,29 @@
-use blaze_pk::{Codec, group, OpaquePacket, packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_map_start, tag_str, tag_u16, tag_u32, tag_u8, tag_value, tag_zero, TdfMap, ValueType};
-use std::time::SystemTime;
-use log::{debug, warn};
-use rust_embed::RustEmbed;
-use sea_orm::ActiveValue::Set;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, ModelTrait, NotSet, QueryFilter};
-use tokio::try_join;
 use crate::blaze::components::Util;
 use crate::blaze::errors::{BlazeError, BlazeResult, HandleResult};
-use crate::blaze::SessionArc;
 use crate::blaze::shared::TelemetryRes;
-use crate::database::entities::{player_characters, player_classes, PlayerActiveModel, PlayerCharacterActiveModel, PlayerCharacterEntity, PlayerCharacterModel, PlayerClassActiveModel, PlayerClassEntity, PlayerClassModel, PlayerModel};
+use crate::blaze::SessionArc;
+use crate::database::entities::{
+    player_characters, player_classes, PlayerActiveModel, PlayerCharacterActiveModel,
+    PlayerCharacterEntity, PlayerCharacterModel, PlayerClassActiveModel, PlayerClassEntity,
+    PlayerClassModel, PlayerModel,
+};
 use crate::env;
 use crate::utils::conv::MEStringParser;
 use crate::utils::dmap::load_dmap;
 use crate::utils::server_unix_time;
+use blaze_pk::{
+    group, packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list,
+    tag_map_start, tag_str, tag_u16, tag_u32, tag_u8, tag_value, tag_zero, Codec, OpaquePacket,
+    TdfMap, ValueType,
+};
+use log::{debug, warn};
+use rust_embed::RustEmbed;
+use sea_orm::ActiveValue::Set;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, ModelTrait, NotSet, QueryFilter,
+};
+use std::time::SystemTime;
+use tokio::try_join;
 
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -36,7 +46,6 @@ pub async fn route(session: &SessionArc, component: Util, packet: &OpaquePacket)
     }
 }
 
-
 /// Handles retrieving the details about the telemetry server
 ///
 /// # Structure
@@ -46,7 +55,10 @@ pub async fn route(session: &SessionArc, component: Util, packet: &OpaquePacket)
 ///
 async fn handle_get_telemetry_server(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let ext_host = env::ext_host();
-    let res = TelemetryRes { address: ext_host, session_id: session.id };
+    let res = TelemetryRes {
+        address: ext_host,
+        session_id: session.id,
+    };
     session.response(packet, &res).await
 }
 
@@ -83,7 +95,14 @@ impl Codec for PreAuthRes {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_zero(output, "ANON");
         tag_str(output, "ASRC", SRC_VERSION);
-        tag_list(output, "CIDS", vec![0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803, 0x7805, 0x7806, 0x7d0]);
+        tag_list(
+            output,
+            "CIDS",
+            vec![
+                0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803,
+                0x7805, 0x7806, 0x7d0,
+            ],
+        );
         tag_empty_str(output, "CNGN");
         {
             tag_group_start(output, "CONF");
@@ -175,11 +194,9 @@ async fn handle_pre_auth(session: &SessionArc, packet: &OpaquePacket) -> HandleR
     let host = env::ext_host();
     let port = env::http_port();
 
-    session.response(packet, &PreAuthRes {
-        host,
-        port,
-        config,
-    }).await
+    session
+        .response(packet, &PreAuthRes { host, port, config })
+        .await
 }
 
 struct PSSDetails {
@@ -338,15 +355,16 @@ async fn handle_fetch_client_config(session: &SessionArc, packet: &OpaquePacket)
             map
         }
         "ME3_BINI_PC_COMPRESSED" => load_dmap(ME3_COALESCED),
-        id => if id.starts_with("ME3_LIVE_TLK_PC_") {
-            let lang = &id[16..];
-            talk_file(lang)
-        } else {
-            TdfMap::empty()
+        id => {
+            if id.starts_with("ME3_LIVE_TLK_PC_") {
+                let lang = &id[16..];
+                talk_file(lang)
+            } else {
+                TdfMap::empty()
+            }
         }
     };
-    session.response(packet, &FetchConfigRes { config })
-        .await
+    session.response(packet, &FetchConfigRes { config }).await
 }
 
 /// Contents of the default talk dmap file
@@ -453,17 +471,20 @@ async fn handle_user_settings_save(session: &SessionArc, packet: &OpaquePacket) 
 async fn set_player_data(session: &SessionArc, key: &str, value: String) -> HandleResult {
     if key.starts_with("class") {
         debug!("Updating player class data: {key}");
-        update_player_class(session, key, value).await
+        update_player_class(session, key, value)
+            .await
             .map_err(|err| err.context("While updating player class"))?;
         debug!("Updated player class data: {key}");
     } else if key.starts_with("char") {
         debug!("Updating player character data: {key}");
-        update_player_character(session, key, value).await
+        update_player_character(session, key, value)
+            .await
             .map_err(|err| err.context("While updating player character"))?;
         debug!("Updated player character data: {key}");
     } else {
         debug!("Updating player base data");
-        update_player_data(session, key, value).await
+        update_player_data(session, key, value)
+            .await
             .map_err(|err| err.context("While updating player data"))?;
         debug!("Updated player base data");
     }
@@ -471,7 +492,10 @@ async fn set_player_data(session: &SessionArc, key: &str, value: String) -> Hand
     Ok(())
 }
 
-async fn get_player_character(session: &SessionArc, index: u16) -> BlazeResult<PlayerCharacterActiveModel> {
+async fn get_player_character(
+    session: &SessionArc,
+    index: u16,
+) -> BlazeResult<PlayerCharacterActiveModel> {
     let player_class = PlayerCharacterEntity::find()
         .filter(player_characters::Column::Index.eq(index))
         .one(session.db())
@@ -627,10 +651,7 @@ fn parse_player_class(model: &mut PlayerClassActiveModel, value: &str) -> Option
 fn encode_player_class(model: &PlayerClassModel) -> String {
     format!(
         "20;4;{};{};{};{}",
-        model.name,
-        model.level,
-        model.exp,
-        model.promotions
+        model.name, model.level, model.exp, model.promotions
     )
 }
 
@@ -676,19 +697,18 @@ fn update_player_model(model: &mut PlayerActiveModel, key: &str, value: String) 
                 warn!("Failed to completely parse player base")
             };
         }
-        "FaceCodes" => { model.face_codes = Set(Some(value)) }
-        "NewItem" => { model.new_item = Set(Some(value)) }
+        "FaceCodes" => model.face_codes = Set(Some(value)),
+        "NewItem" => model.new_item = Set(Some(value)),
         "csreward" => {
-            let value = value.parse::<u16>()
-                .unwrap_or(0);
+            let value = value.parse::<u16>().unwrap_or(0);
             model.csreward = Set(value)
         }
-        "Completion" => { model.completion = Set(Some(value)) }
-        "Progress" => { model.progress = Set(Some(value)) }
-        "cscompletion" => { model.cs_completion = Set(Some(value)) }
-        "cstimestamps" => { model.cs_timestamps1 = Set(Some(value)) }
-        "cstimestamps2" => { model.cs_timestamps2 = Set(Some(value)) }
-        "cstimestamps3" => { model.cs_timestamps3 = Set(Some(value)) }
+        "Completion" => model.completion = Set(Some(value)),
+        "Progress" => model.progress = Set(Some(value)),
+        "cscompletion" => model.cs_completion = Set(Some(value)),
+        "cstimestamps" => model.cs_timestamps1 = Set(Some(value)),
+        "cstimestamps2" => model.cs_timestamps2 = Set(Some(value)),
+        "cstimestamps3" => model.cs_timestamps3 = Set(Some(value)),
         _ => {}
     }
 }
@@ -718,7 +738,10 @@ packet! {
 /// ```
 /// packet(Components.UTIL, Commands.USER_SETTINGS_LOAD_ALL, 0x17) {}
 /// ```
-async fn handle_user_settings_load_all(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_user_settings_load_all(
+    session: &SessionArc,
+    packet: &OpaquePacket,
+) -> HandleResult {
     let mut settings = TdfMap::<String, String>::new();
     {
         let session_data = session.data.read().await;
@@ -726,13 +749,9 @@ async fn handle_user_settings_load_all(session: &SessionArc, packet: &OpaquePack
 
         settings.insert("Base", encode_player_base(player));
 
-        let classes = player
-            .find_related(PlayerClassEntity)
-            .all(session.db());
+        let classes = player.find_related(PlayerClassEntity).all(session.db());
 
-        let characters = player
-            .find_related(PlayerCharacterEntity)
-            .all(session.db());
+        let characters = player.find_related(PlayerCharacterEntity).all(session.db());
 
         let (classes, characters) = try_join!(classes, characters)?;
 
@@ -764,5 +783,7 @@ async fn handle_user_settings_load_all(session: &SessionArc, packet: &OpaquePack
         insert_optional(&mut settings, "NewItem", &player.new_item);
         insert_optional(&mut settings, "Progress", &player.progress);
     }
-    session.response(packet, &UserSettingsAll { settings }).await
+    session
+        .response(packet, &UserSettingsAll { settings })
+        .await
 }

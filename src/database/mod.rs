@@ -1,10 +1,10 @@
+use crate::env;
+use log::info;
+use migration::{Migrator, MigratorTrait};
+use sea_orm::DatabaseConnection;
 use std::io;
 use std::path::Path;
-use log::info;
-use sea_orm::DatabaseConnection;
 use tokio::fs::File;
-use migration::{Migrator, MigratorTrait};
-use crate::env;
 
 pub mod entities;
 pub mod interface;
@@ -19,27 +19,23 @@ pub async fn connect() -> io::Result<DatabaseConnection> {
     }
 
     let con_str = format!("sqlite:{db_file}");
-    let connection = sea_orm::Database::connect(&con_str)
-        .await
-        .map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Unable to create database connection: {err:?}")
-            )
-        })?;
+    let connection = sea_orm::Database::connect(&con_str).await.map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Unable to create database connection: {err:?}"),
+        )
+    })?;
 
     info!("Connected to database: {con_str}");
 
     info!("Running migrations...");
 
-    Migrator::up(&connection, None)
-        .await
-        .map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Unable to run database migrations: {err:?}")
-            )
-        })?;
+    Migrator::up(&connection, None).await.map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Unable to run database migrations: {err:?}"),
+        )
+    })?;
 
     info!("Migrations complete.");
 

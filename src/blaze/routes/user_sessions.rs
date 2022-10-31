@@ -1,17 +1,21 @@
-use blaze_pk::{Codec, CodecResult, OpaquePacket, packet, Reader, Tag, TdfMap, TdfOptional};
-use log::{debug, warn};
 use crate::blaze::components::UserSessions;
 use crate::blaze::errors::{HandleResult, LoginError};
 use crate::blaze::routes::auth::{complete_auth, login_error};
 use crate::blaze::routes::util::QOSS_KEY;
-use crate::blaze::SessionArc;
 use crate::blaze::shared::{NetExt, NetGroups};
+use crate::blaze::SessionArc;
 use crate::database::interface::players::find_by_session;
+use blaze_pk::{packet, Codec, CodecResult, OpaquePacket, Reader, Tag, TdfMap, TdfOptional};
+use log::{debug, warn};
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: UserSessions, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(
+    session: &SessionArc,
+    component: UserSessions,
+    packet: &OpaquePacket,
+) -> HandleResult {
     match component {
         UserSessions::ResumeSession => handle_resume_session(session, packet).await,
         UserSessions::UpdateNetworkInfo => handle_update_network_info(session, packet).await,
@@ -42,7 +46,6 @@ async fn handle_resume_session(session: &SessionArc, packet: &OpaquePacket) -> H
     complete_auth(session, packet, player, true).await
 }
 
-
 #[derive(Debug)]
 struct UpdateNetworkInfo {
     address: TdfOptional<NetGroups>,
@@ -63,7 +66,6 @@ impl Codec for UpdateNetworkInfo {
         })
     }
 }
-
 
 /// Handles updating the stored networking information for the current session
 /// this is required for clients to be able to connect to each-other
@@ -108,7 +110,8 @@ async fn handle_update_network_info(session: &SessionArc, packet: &OpaquePacket)
 
     const DEFAULT_PSLM: u32 = 0xfff0fff;
 
-    let pslm = req.nlmp
+    let pslm = req
+        .nlmp
         .map(|mut value| value.take(QOSS_KEY).unwrap_or(DEFAULT_PSLM))
         .unwrap_or(DEFAULT_PSLM);
     {

@@ -1,8 +1,11 @@
-use blaze_pk::{Codec, encode_str, OpaquePacket, packet, tag_group_end, tag_list_start, tag_map_start, tag_pair, tag_str, tag_u32, tag_u8, ValueType};
-use log::debug;
 use crate::blaze::components::Stats;
 use crate::blaze::errors::HandleResult;
 use crate::blaze::SessionArc;
+use blaze_pk::{
+    encode_str, packet, tag_group_end, tag_list_start, tag_map_start, tag_pair, tag_str, tag_u32,
+    tag_u8, Codec, OpaquePacket, ValueType,
+};
+use log::debug;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -21,7 +24,6 @@ pub async fn route(session: &SessionArc, component: Stats, packet: &OpaquePacket
     }
 }
 
-
 struct EntityCount {
     count: u32,
 }
@@ -31,7 +33,6 @@ impl Codec for EntityCount {
         tag_u32(output, "CNT", self.count);
     }
 }
-
 
 /// Handles returning the number of leaderboard objects present.
 /// This is currently not implemented
@@ -48,7 +49,10 @@ impl Codec for EntityCount {
 ///   number("POFF", 0x0)
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_leaderboard_entity_count(
+    session: &SessionArc,
+    packet: &OpaquePacket,
+) -> HandleResult {
     session.response(packet, &EntityCount { count: 1 }).await
 }
 
@@ -59,7 +63,6 @@ impl Codec for EmptyLeaderboard {
         tag_list_start(output, "LDLS", ValueType::Group, 0);
     }
 }
-
 
 /// Handles returning a centered leaderboard object. This is currently not implemented
 ///
@@ -117,8 +120,9 @@ fn get_locale_name(code: &str) -> String {
         "ja" => "Japan",
         "pl" => "Poland",
         "ru" => "Russia",
-        value => value
-    }.to_string()
+        value => value,
+    }
+    .to_string()
 }
 
 struct LeaderboardGroup<'a> {
@@ -155,7 +159,11 @@ impl Codec for LeaderboardGroup<'_> {
                 tag_str(output, "FRMT", "%d");
                 tag_str(output, "KIND", "");
                 tag_str(output, "LDSC", self.sdsc);
-                tag_str(output, "META", "W=200, HMC=tableColHeader3, REMC=tableRowEntry3");
+                tag_str(
+                    output,
+                    "META",
+                    "W=200, HMC=tableColHeader3, REMC=tableRowEntry3",
+                );
                 tag_str(output, "NAME", self.sname);
                 tag_str(output, "SDSC", self.sdsc);
                 tag_u8(output, "TYPE", 0x0);

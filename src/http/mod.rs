@@ -1,15 +1,14 @@
-use std::io;
-use std::sync::Arc;
-use actix_web::{App, HttpServer};
+use crate::GlobalState;
 use actix_web::middleware::Logger;
 use actix_web::web::Data;
+use actix_web::{App, HttpServer};
 use log::info;
-use crate::GlobalState;
+use std::io;
+use std::sync::Arc;
 
 mod routes;
 
 pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
-
     let http_port = crate::env::http_port();
     info!("Starting HTTP Server on (0.0.0.0:{http_port})");
 
@@ -19,7 +18,7 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
             .wrap(Logger::default())
             .configure(routes::configure)
     })
-        .bind(("0.0.0.0", http_port))?
-        .run()
-        .await
+    .bind(("0.0.0.0", http_port))?
+    .run()
+    .await
 }

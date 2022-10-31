@@ -28,9 +28,9 @@ pub enum Relation {
     )]
     SelfRef,
     #[sea_orm(
-    belongs_to = "super::players::Entity",
-    from = "Column::PlayerId",
-    to = "super::players::Column::Id"
+        belongs_to = "super::players::Entity",
+        from = "Column::PlayerId",
+        to = "super::players::Column::Id"
     )]
     Player,
 }

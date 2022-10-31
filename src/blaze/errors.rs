@@ -1,7 +1,7 @@
-use blaze_pk::{CodecError, OpaquePacket, packet};
+use blaze_pk::{packet, CodecError, OpaquePacket};
 use derive_more::From;
-use std::io;
 use sea_orm::DbErr;
+use std::io;
 
 pub type HandleResult = Result<(), BlazeError>;
 pub type BlazeResult<T> = Result<T, BlazeError>;
@@ -20,7 +20,6 @@ pub enum BlazeError {
     Context(String, Box<BlazeError>),
     Game(GameError),
 }
-
 
 impl BlazeError {
     /// Provides additional context to the error
@@ -43,7 +42,6 @@ pub enum GameError {
     UnknownGame(u32),
     Context(&'static str, Box<GameError>),
 }
-
 
 impl GameError {
     /// Provides additional context to the error
@@ -95,4 +93,3 @@ impl Default for LoginErrorRes {
         LoginErrorRes { pnam: "", uid: 0 }
     }
 }
-

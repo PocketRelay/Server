@@ -1,30 +1,43 @@
-use blaze_pk::{Codec, CodecError, CodecResult, OpaquePacket, packet, Packets, Reader, tag_list_start, ValueType};
-use log::debug;
-use regex::Regex;
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
-use crate::blaze::SessionArc;
 use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
+use crate::blaze::SessionArc;
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players;
 use crate::database::interface::players::find_by_email;
 use crate::utils::hashing::{hash_password, verify_password};
+use blaze_pk::{
+    packet, tag_list_start, tag_value, Codec, CodecError, CodecResult, OpaquePacket, Packets,
+    Reader, ValueType,
+};
+use log::debug;
+use regex::Regex;
 
 /// Routing function for handling packets with the `Authentication` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: Authentication, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(
+    session: &SessionArc,
+    component: Authentication,
+    packet: &OpaquePacket,
+) -> HandleResult {
     match component {
         Authentication::SilentLogin => handle_silent_login(session, packet).await,
         Authentication::Logout => handle_logout(session, packet).await,
         Authentication::Login => handle_login(session, packet).await,
-        Authentication::ListUserEntitlements2 => handle_list_user_entitlements_2(session, packet).await,
+        Authentication::ListUserEntitlements2 => {
+            handle_list_user_entitlements_2(session, packet).await
+        }
         Authentication::CreateAccount => handle_create_account(session, packet).await,
         Authentication::LoginPersona => handle_login_persona(session, packet).await,
         Authentication::PasswordForgot => handle_forgot_password(session, packet).await,
         Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(session, packet).await,
-        Authentication::GetTermsOfServiceConent => handle_terms_of_service_content(session, packet).await,
-        Authentication::GetPrivacyPolicyContent => handle_privacy_policy_content(session, packet).await,
+        Authentication::GetTermsOfServiceConent => {
+            handle_terms_of_service_content(session, packet).await
+        }
+        Authentication::GetPrivacyPolicyContent => {
+            handle_privacy_policy_content(session, packet).await
+        }
         Authentication::GetPasswordRules => handle_get_password_rules(session, packet).await,
         Authentication::GetAuthToken => handle_get_auth_token(session, packet).await,
         Authentication::OriginLogin => handle_origin_login(session, packet).await,
@@ -35,7 +48,6 @@ pub async fn route(session: &SessionArc, component: Authentication, packet: &Opa
         }
     }
 }
-
 
 packet! {
     struct SilentLoginReq {
@@ -86,7 +98,12 @@ async fn handle_silent_login(session: &SessionArc, packet: &OpaquePacket) -> Han
 
 /// Completes the authentication process for the provided session using the provided Player
 /// Model as the authenticated player.
-pub async fn complete_auth(session: &SessionArc, packet: &OpaquePacket, player: PlayerModel, silent: bool) -> HandleResult {
+pub async fn complete_auth(
+    session: &SessionArc,
+    packet: &OpaquePacket,
+    player: PlayerModel,
+    silent: bool,
+) -> HandleResult {
     debug!("Completing authentication");
     session.set_player(Some(player)).await;
     debug!("Set player");
@@ -119,15 +136,16 @@ pub async fn complete_auth(session: &SessionArc, packet: &OpaquePacket, player: 
 /// packet(Components.AUTHENTICATION, Commands.LOGOUT, 0x0, 0x7) {}
 /// ```
 async fn handle_logout(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    debug!("Logging out for session:");
-    debug!("ID = {}", &session.id);
+    debug!("Logging out for session: (ID: {})", &session.id);
     session.set_player(None).await;
     session.response_empty(packet).await
 }
 
 fn is_email(email: &str) -> bool {
-    let regex = Regex::new(r#"^([a-z0-9_+]([a-z0-9_+.]*[a-z0-9_+])?)@([a-z0-9]+([\-.][a-z0-9]+)*\.[a-z]{2,6})"#)
-        .unwrap();
+    let regex = Regex::new(
+        r#"^([a-z0-9_+]([a-z0-9_+.]*[a-z0-9_+])?)@([a-z0-9]+([\-.][a-z0-9]+)*\.[a-z]{2,6})"#,
+    )
+    .unwrap();
     regex.is_match(email)
 }
 
@@ -157,7 +175,10 @@ async fn handle_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResu
     let password = req.password;
 
     if !is_email(&email) {
-        debug!("Client attempted to login with invalid email address: {}", &email);
+        debug!(
+            "Client attempted to login with invalid email address: {}",
+            &email
+        );
         return Err(login_error(packet, LoginError::InvalidEmail));
     }
 
@@ -217,16 +238,14 @@ async fn handle_create_account(session: &SessionArc, packet: &OpaquePacket) -> H
         return Err(login_error(packet, LoginError::InvalidEmail));
     }
 
-    let email_exists = find_by_email(session.db(), &email)
-        .await?
-        .is_some();
+    let email_exists = find_by_email(session.db(), &email).await?.is_some();
 
     if email_exists {
         return Err(login_error(packet, LoginError::EmailAlreadyInUse));
     }
 
-    let hashed_password = hash_password(&password)
-        .map_err(|_| BlazeError::Other("Failed to hash user password"))?;
+    let hashed_password =
+        hash_password(&password).map_err(|_| BlazeError::Other("Failed to hash user password"))?;
 
     let player = players::create_normal(session.db(), email, hashed_password).await?;
 
@@ -271,17 +290,9 @@ struct LUERes<'a> {
 
 impl Codec for LUERes<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
-        tag_list_start(output, "NLST", ValueType::Group, self.list.len());
-        for value in &self.list {
-            value.encode(output);
-        }
-    }
-
-    fn decode(_reader: &mut Reader) -> CodecResult<Self> {
-        Err(CodecError::InvalidAction("Not allowed to decode"))
+        tag_value(output, "NLST", &self.list);
     }
 }
-
 
 /// Handles list user entitlements 2 responses requests which contains information
 /// about certain content the user has access two
@@ -304,7 +315,10 @@ impl Codec for LUERes<'_> {
 ///   number("TYPE", 0x0)
 /// }
 /// ```
-async fn handle_list_user_entitlements_2(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_list_user_entitlements_2(
+    session: &SessionArc,
+    packet: &OpaquePacket,
+) -> HandleResult {
     let req = packet.contents::<LUEReq>()?;
     let tag = req.tag;
     if !tag.is_empty() {
@@ -314,46 +328,222 @@ async fn handle_list_user_entitlements_2(session: &SessionArc, packet: &OpaquePa
     const GEN_TAG: &str = "ME3GenOffers";
     let list = vec![
         // Project 10 = $10 Multiplayer Pass (Entitlement Required For Online Access)
-        Entitlement::new_pc(0xec5090c43f, "303107", 2, "DR:229644400", "PROJECT10_CODE_CONSUMED", 1),
-        Entitlement::new_pc(0xec3e4d793f, "304141", 2, "DR:230773600", "PROJECT10_CODE_CONSUMED_LE1", 1),
-        Entitlement::new_pc(0xec3e4d793f, "304141", 2, "DR:230773600", "PROJECT10_CODE_CONSUMED_LE1", 1),
-
+        Entitlement::new_pc(
+            0xec5090c43f,
+            "303107",
+            2,
+            "DR:229644400",
+            "PROJECT10_CODE_CONSUMED",
+            1,
+        ),
+        Entitlement::new_pc(
+            0xec3e4d793f,
+            "304141",
+            2,
+            "DR:230773600",
+            "PROJECT10_CODE_CONSUMED_LE1",
+            1,
+        ),
+        Entitlement::new_pc(
+            0xec3e4d793f,
+            "304141",
+            2,
+            "DR:230773600",
+            "PROJECT10_CODE_CONSUMED_LE1",
+            1,
+        ),
         // Jeeze so many online pass entitlements
-        Entitlement::new_pc(0xec50b255ff, "300241", 2, "OFB-MASS:44370", "ONLINE_ACCESS", 1),
-        Entitlement::new_pc(0xec50a620ff, "300241", 2, "OFB-MASS:49465", "ONLINE_ACCESS", 1),
-        Entitlement::new_pc(0xec508db6ff, "303107", 2, "DR:229644400", "ONLINE_ACCESS", 1),
-        Entitlement::new_pc(0xec3e5393bf, "300241", 2, "OFB-EAST:46112", "ONLINE_ACCESS", 1),
-        Entitlement::new_pc(0xec3e50867f, "304141", 2, "DR:230773600", "ONLINE_ACCESS", 1),
+        Entitlement::new_pc(
+            0xec50b255ff,
+            "300241",
+            2,
+            "OFB-MASS:44370",
+            "ONLINE_ACCESS",
+            1,
+        ),
+        Entitlement::new_pc(
+            0xec50a620ff,
+            "300241",
+            2,
+            "OFB-MASS:49465",
+            "ONLINE_ACCESS",
+            1,
+        ),
+        Entitlement::new_pc(
+            0xec508db6ff,
+            "303107",
+            2,
+            "DR:229644400",
+            "ONLINE_ACCESS",
+            1,
+        ),
+        Entitlement::new_pc(
+            0xec3e5393bf,
+            "300241",
+            2,
+            "OFB-EAST:46112",
+            "ONLINE_ACCESS",
+            1,
+        ),
+        Entitlement::new_pc(
+            0xec3e50867f,
+            "304141",
+            2,
+            "DR:230773600",
+            "ONLINE_ACCESS",
+            1,
+        ),
         Entitlement::new_gen(0xec4495bfff, "303107", 0, "", "ONLINE_ACCESS_GAW_PC", 1),
         Entitlement::new_gen(0xea234c3e7f, "303107", 2, "", "ONLINE_ACCESS_GAW_XBL2", 1),
-
         // Singleplayer DLC
-        Entitlement::new_pc(0xec3e62d5ff, "300241", 2, "OFB-MASS:51074", "ME3_PRC_EXTENDEDCUT", 5),
-        Entitlement::new_pc(0xec50b5633f, "300241", 2, "OFB-MASS:44370", "ME3_PRC_PROTHEAN", 5),
-        Entitlement::new_pc(0xec3e56a0ff, "300241", 2, "OFB-EAST:46112", "ME3_PRC_PROTHEAN", 5),
-        Entitlement::new_pc(0xec50b8707f, "300241", 2, "OFB-MASS:52001", "ME3_PRC_LEVIATHAN", 5),
-        Entitlement::new_pc(0xec50ac3b7f, "300241", 2, "OFB-MASS:55146", "ME3_PRC_OMEGA", 5),
-        Entitlement::new_pc(0xec5093d17f, "300241", 2, "OFB-EAST:58040", "MET_BONUS_CONTENT_DW", 5),
-
+        Entitlement::new_pc(
+            0xec3e62d5ff,
+            "300241",
+            2,
+            "OFB-MASS:51074",
+            "ME3_PRC_EXTENDEDCUT",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec50b5633f,
+            "300241",
+            2,
+            "OFB-MASS:44370",
+            "ME3_PRC_PROTHEAN",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec3e56a0ff,
+            "300241",
+            2,
+            "OFB-EAST:46112",
+            "ME3_PRC_PROTHEAN",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec50b8707f,
+            "300241",
+            2,
+            "OFB-MASS:52001",
+            "ME3_PRC_LEVIATHAN",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec50ac3b7f,
+            "300241",
+            2,
+            "OFB-MASS:55146",
+            "ME3_PRC_OMEGA",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec5093d17f,
+            "300241",
+            2,
+            "OFB-EAST:58040",
+            "MET_BONUS_CONTENT_DW",
+            5,
+        ),
         // Singleplayer Packs
-        Entitlement::new_pc(0xec50bb7dbf, "300241", 2, "OFB-MASS:56984", "ME3_MTX_APP01", 5),
-        Entitlement::new_pc(0xec5099ebff, "300241", 2, "OFB-MASS:49032", "ME3_MTX_GUN01", 5),
-        Entitlement::new_pc(0xec50c1983f, "300241", 2, "OFB-MASS:55147", "ME3_MTX_GUN02", 5),
-
+        Entitlement::new_pc(
+            0xec50bb7dbf,
+            "300241",
+            2,
+            "OFB-MASS:56984",
+            "ME3_MTX_APP01",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec5099ebff,
+            "300241",
+            2,
+            "OFB-MASS:49032",
+            "ME3_MTX_GUN01",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec50c1983f,
+            "300241",
+            2,
+            "OFB-MASS:55147",
+            "ME3_MTX_GUN02",
+            5,
+        ),
         // Multiplayer DLC
-        Entitlement::new_pc(0xec50a0067f, "300241", 2, "OFB-MASS:47872", "ME3_PRC_RESURGENCE", 5),
-        Entitlement::new_pc(0xec50a92e3f, "300241", 2, "OFB-MASS:49465", "ME3_PRC_REBELLION", 5),
-        Entitlement::new_pc(0xec5096debf, "300241", 2, "OFB-MASS:51073", "ME3_PRC_EARTH", 5),
-        Entitlement::new_pc(0xec509cf93f, "300241", 2, "OFB-MASS:52000", "ME3_PRC_GOBIG", 5),
-        Entitlement::new_pc(0xec50a313bf, "300241", 2, "OFB-MASS:59712", "ME3_PRC_MP5", 5),
-
+        Entitlement::new_pc(
+            0xec50a0067f,
+            "300241",
+            2,
+            "OFB-MASS:47872",
+            "ME3_PRC_RESURGENCE",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec50a92e3f,
+            "300241",
+            2,
+            "OFB-MASS:49465",
+            "ME3_PRC_REBELLION",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec5096debf,
+            "300241",
+            2,
+            "OFB-MASS:51073",
+            "ME3_PRC_EARTH",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec509cf93f,
+            "300241",
+            2,
+            "OFB-MASS:52000",
+            "ME3_PRC_GOBIG",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec50a313bf,
+            "300241",
+            2,
+            "OFB-MASS:59712",
+            "ME3_PRC_MP5",
+            5,
+        ),
         // Collectors Edition
-        Entitlement::new_pc(0xec3e5fc8bf, "300241", 2, "OFB-MASS:46484", "ME3_MTX_COLLECTORS_EDITION", 5),
-        Entitlement::new_pc(0xec3e5cbb7f, "300241", 2, "OFB-MASS:46483", "ME3_MTX_DIGITAL_ART_BOOKS", 5),
-        Entitlement::new_gen(0xec3e59ae3f, "300241", 2, "OFB-MASS:46482", "ME3_MTX_SOUNDTRACK", 5),
-
+        Entitlement::new_pc(
+            0xec3e5fc8bf,
+            "300241",
+            2,
+            "OFB-MASS:46484",
+            "ME3_MTX_COLLECTORS_EDITION",
+            5,
+        ),
+        Entitlement::new_pc(
+            0xec3e5cbb7f,
+            "300241",
+            2,
+            "OFB-MASS:46483",
+            "ME3_MTX_DIGITAL_ART_BOOKS",
+            5,
+        ),
+        Entitlement::new_gen(
+            0xec3e59ae3f,
+            "300241",
+            2,
+            "OFB-MASS:46482",
+            "ME3_MTX_SOUNDTRACK",
+            5,
+        ),
         // Darkhorse Redeem Code (Character boosters and Collector Assault Rifle)
-        Entitlement::new_pc(0xec50be8aff, "300241", 2, "OFB-MASS:61524", "ME3_PRC_DARKHORSECOMIC", 5),
+        Entitlement::new_pc(
+            0xec50be8aff,
+            "300241",
+            2,
+            "OFB-MASS:61524",
+            "ME3_PRC_DARKHORSECOMIC",
+            5,
+        ),
     ];
     let response = LUERes { list };
     session.response(packet, &response).await
@@ -382,7 +572,6 @@ async fn handle_login_persona(session: &SessionArc, packet: &OpaquePacket) -> Ha
     debug!("Persona login complete");
     Ok(())
 }
-
 
 packet! {
     struct ForgotPaswdReq {
@@ -424,7 +613,8 @@ async fn handle_get_legal_docs_info(session: &SessionArc, packet: &OpaquePacket)
 }
 
 /// The default terms of service document
-const DEFAULT_TERMS_OF_SERVICE: &str = include_str!("../../../resources/defaults/term_of_service.html");
+const DEFAULT_TERMS_OF_SERVICE: &str =
+    include_str!("../../../resources/defaults/term_of_service.html");
 
 /// Handles serving the contents of the terms of service. This is an HTML document which is
 /// rendered inside the game when you click the button for viewing terms of service.
@@ -439,17 +629,26 @@ const DEFAULT_TERMS_OF_SERVICE: &str = include_str!("../../../resources/defaults
 /// }
 /// ```
 ///
-async fn handle_terms_of_service_content(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_terms_of_service_content(
+    session: &SessionArc,
+    packet: &OpaquePacket,
+) -> HandleResult {
     // TODO: Attempt to load local terms of service before reverting to default
-    session.response(packet, &TermsContent {
-        path: "webterms/au/en/pc/default/09082020/02042022",
-        content: DEFAULT_TERMS_OF_SERVICE,
-        col: 0xdaed,
-    }).await
+    session
+        .response(
+            packet,
+            &TermsContent {
+                path: "webterms/au/en/pc/default/09082020/02042022",
+                content: DEFAULT_TERMS_OF_SERVICE,
+                col: 0xdaed,
+            },
+        )
+        .await
 }
 
 /// The default privacy policy document
-const DEFAULT_PRIVACY_POLICY: &str = include_str!("../../../resources/defaults/privacy_policy.html");
+const DEFAULT_PRIVACY_POLICY: &str =
+    include_str!("../../../resources/defaults/privacy_policy.html");
 
 /// Handles serving the contents of the privacy policy. This is an HTML document which is
 /// rendered inside the game when you click the button for viewing privacy policy.
@@ -464,13 +663,21 @@ const DEFAULT_PRIVACY_POLICY: &str = include_str!("../../../resources/defaults/p
 /// }
 /// ```
 ///
-async fn handle_privacy_policy_content(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_privacy_policy_content(
+    session: &SessionArc,
+    packet: &OpaquePacket,
+) -> HandleResult {
     // TODO: Attempt to load local privacy policy before reverting to default
-    session.response(packet, &TermsContent {
-        path: "webprivacy/au/en/pc/default/08202020/02042022",
-        content: DEFAULT_PRIVACY_POLICY,
-        col: 0xc99c,
-    }).await
+    session
+        .response(
+            packet,
+            &TermsContent {
+                path: "webprivacy/au/en/pc/default/08202020/02042022",
+                content: DEFAULT_PRIVACY_POLICY,
+                col: 0xc99c,
+            },
+        )
+        .await
 }
 
 packet! {
@@ -499,7 +706,6 @@ packet! {
     }
 }
 
-
 /// Handles retrieving an authentication token for use with the Galaxy At War HTTP service
 /// however in this case we are just using the player ID in hex format as the token.
 ///
@@ -511,7 +717,5 @@ async fn handle_get_auth_token(session: &SessionArc, packet: &OpaquePacket) -> H
     let session_data = session.data.read().await;
     let player = session_data.expect_player()?;
     let value = format!("{:X}", player.id);
-    session.response(packet, &GetAuthRes {
-        auth: value
-    }).await
+    session.response(packet, &GetAuthRes { auth: value }).await
 }

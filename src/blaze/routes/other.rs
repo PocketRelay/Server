@@ -1,13 +1,20 @@
-use blaze_pk::{Codec, OpaquePacket, Packets, tag_group_end, tag_group_start, tag_list_start, tag_str, tag_triple, tag_u8, tag_var_int_list_empty, tag_zero, ValueType};
-use log::debug;
 use crate::blaze::components::{AssociationLists, Components, GameReporting};
 use crate::blaze::errors::HandleResult;
 use crate::blaze::SessionArc;
+use blaze_pk::{
+    tag_group_end, tag_group_start, tag_list_start, tag_str, tag_triple, tag_u8,
+    tag_var_int_list_empty, tag_zero, Codec, OpaquePacket, Packets, ValueType,
+};
+use log::debug;
 
 /// Routing function for handling packets with the `GameReporting` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route_game_reporting(session: &SessionArc, component: GameReporting, packet: &OpaquePacket) -> HandleResult {
+pub async fn route_game_reporting(
+    session: &SessionArc,
+    component: GameReporting,
+    packet: &OpaquePacket,
+) -> HandleResult {
     match component {
         GameReporting::SubmitOfflineGameReport => handle_submit_offline(session, packet).await,
         component => {
@@ -71,7 +78,11 @@ impl Codec for GameReportResult {
 /// Routing function for handling packets with the `AssociationLists` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route_association_lists(session: &SessionArc, component: AssociationLists, packet: &OpaquePacket) -> HandleResult {
+pub async fn route_association_lists(
+    session: &SessionArc,
+    component: AssociationLists,
+    packet: &OpaquePacket,
+) -> HandleResult {
     match component {
         AssociationLists::GetLists => handle_get_lists(session, packet).await,
         component => {

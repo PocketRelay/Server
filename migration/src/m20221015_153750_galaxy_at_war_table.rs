@@ -1,5 +1,5 @@
-use sea_orm_migration::prelude::*;
 use crate::m20221015_142649_players_table::Players;
+use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -17,49 +17,45 @@ impl MigrationTrait for Migration {
                             .integer()
                             .not_null()
                             .auto_increment()
-                            .primary_key()
+                            .primary_key(),
                     )
-                    .col(
-                        ColumnDef::new(GalaxyAtWar::PlayerId)
-                            .integer()
-                            .not_null()
-                    )
+                    .col(ColumnDef::new(GalaxyAtWar::PlayerId).integer().not_null())
                     .col(
                         ColumnDef::new(GalaxyAtWar::LastModified)
                             .date_time()
-                            .not_null()
+                            .not_null(),
                     )
                     .col(
                         ColumnDef::new(GalaxyAtWar::GroupA)
                             .integer_len(8)
-                            .not_null()
+                            .not_null(),
                     )
                     .col(
                         ColumnDef::new(GalaxyAtWar::GroupB)
                             .integer_len(8)
-                            .not_null()
+                            .not_null(),
                     )
                     .col(
                         ColumnDef::new(GalaxyAtWar::GroupC)
                             .integer_len(8)
-                            .not_null()
+                            .not_null(),
                     )
                     .col(
                         ColumnDef::new(GalaxyAtWar::GroupD)
                             .integer_len(8)
-                            .not_null()
+                            .not_null(),
                     )
                     .col(
                         ColumnDef::new(GalaxyAtWar::GroupE)
                             .integer_len(8)
-                            .not_null()
+                            .not_null(),
                     )
                     .foreign_key(
                         ForeignKey::create()
                             .from(GalaxyAtWar::Table, GalaxyAtWar::PlayerId)
-                            .to(Players::Table, Players::Id)
+                            .to(Players::Table, Players::Id),
                     )
-                    .to_owned()
+                    .to_owned(),
             )
             .await
     }

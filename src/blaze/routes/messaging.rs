@@ -1,17 +1,24 @@
-use blaze_pk::{Codec, encode_str, OpaquePacket, Packets, tag_group_end, tag_group_start, tag_map_start, tag_str, tag_triple, tag_u64, tag_u8, ValueType};
-use log::debug;
-use crate::blaze::components::{Components, Messaging};
+use crate::blaze::components::{Components, Messaging, UserSessions};
 use crate::blaze::errors::HandleResult;
 use crate::blaze::SessionArc;
 use crate::database::entities::PlayerModel;
 use crate::env;
 use crate::env::VERSION;
 use crate::utils::server_unix_time;
+use blaze_pk::{
+    encode_str, tag_group_end, tag_group_start, tag_map_start, tag_str, tag_triple, tag_u64,
+    tag_u8, Codec, OpaquePacket, PacketComponents, Packets, ValueType,
+};
+use log::debug;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: Messaging, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(
+    session: &SessionArc,
+    component: Messaging,
+    packet: &OpaquePacket,
+) -> HandleResult {
     match component {
         Messaging::FetchMessages => handle_fetch_messages(session, packet).await,
         component => {
@@ -45,7 +52,9 @@ impl Codec for MenuMessage<'_> {
         tag_u8(output, "FLAG", 0x1);
         tag_u8(output, "MGID", 0x1);
         tag_str(output, "NAME", &self.message);
-        let player_ref = (0x7802 /*USER_SESSIONS*/, 0x1 /*SET_SESSION*/, self.player.id);
+
+        let ref_value = Components::UserSessions(UserSessions::SetSession).values();
+        let player_ref = (ref_value.0, ref_value.1, self.player.id);
 
         {
             tag_group_start(output, "PYLD");
@@ -130,5 +139,3 @@ fn get_menu_message(session: &SessionArc, player: &PlayerModel) -> String {
     message.push(char::from(0x0A));
     message
 }
-
-

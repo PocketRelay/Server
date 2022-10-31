@@ -1,5 +1,5 @@
-use actix_web::{get, HttpResponse, Responder, web};
 use actix_web::web::ServiceConfig;
+use actix_web::{get, web, HttpResponse, Responder};
 use rust_embed::RustEmbed;
 
 /// Public resource content folder
@@ -16,10 +16,13 @@ async fn content(path: web::Path<String>) -> impl Responder {
     let path = path.into_inner();
     if let Some(file) = PublicContent::get(&path) {
         HttpResponse::Ok()
-            .content_type(mime_guess::from_path(&path).first_or_octet_stream().as_ref())
+            .content_type(
+                mime_guess::from_path(&path)
+                    .first_or_octet_stream()
+                    .as_ref(),
+            )
             .body(file.data.into_owned())
     } else {
-        HttpResponse::NotFound()
-            .body("Not Found")
+        HttpResponse::NotFound().body("Not Found")
     }
 }

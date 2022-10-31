@@ -1,8 +1,8 @@
 use actix_web::web::ServiceConfig;
 
-mod server;
-mod public;
 mod gaw;
+mod public;
+mod server;
 
 pub fn configure(cfg: &mut ServiceConfig) {
     server::configure(cfg);

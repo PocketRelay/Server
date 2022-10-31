@@ -6,7 +6,7 @@ pub fn load_dmap(contents: &str) -> TdfMap<String, String> {
     for line in contents.lines() {
         let (key, value) = match line.split_once("=") {
             Some(v) => v,
-            _ => continue
+            _ => continue,
         };
         map.insert(key, value)
     }

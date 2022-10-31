@@ -1,28 +1,29 @@
-use std::cmp;
-use std::num::ParseIntError;
-use actix_web::{get, HttpResponse, Responder, ResponseError};
-use actix_web::http::header::ContentType;
-use actix_web::http::StatusCode;
-use actix_web::web::{Data, Path, Query, scope, ServiceConfig};
-use chrono::Local;
-use derive_more::{Display, From};
-use sea_orm::{ActiveModelTrait, DatabaseConnection, DbErr, IntoActiveModel, ModelTrait, NotSet};
-use sea_orm::ActiveValue::Set;
-use serde::Deserialize;
-use tokio::try_join;
-use crate::database::entities::{GalaxyAtWarActiveModel, GalaxyAtWarEntity, GalaxyAtWarModel, PlayerClassEntity, PlayerModel};
+use crate::database::entities::{
+    GalaxyAtWarActiveModel, GalaxyAtWarEntity, GalaxyAtWarModel, PlayerClassEntity, PlayerModel,
+};
 use crate::database::interface::players::{find_by_id, get_session_token};
 use crate::{env, GlobalState};
+use actix_web::http::header::ContentType;
+use actix_web::http::StatusCode;
+use actix_web::web::{scope, Data, Path, Query, ServiceConfig};
+use actix_web::{get, HttpResponse, Responder, ResponseError};
+use chrono::Local;
+use derive_more::{Display, From};
+use sea_orm::ActiveValue::Set;
+use sea_orm::{ActiveModelTrait, DatabaseConnection, DbErr, IntoActiveModel, ModelTrait, NotSet};
+use serde::Deserialize;
+use std::cmp;
+use std::num::ParseIntError;
+use tokio::try_join;
 
 pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(
         scope("gaw")
             .service(authenticate)
             .service(get_ratings)
-            .service(increase_ratings)
+            .service(increase_ratings),
     );
 }
-
 
 #[derive(Debug, Display, From)]
 enum GAWError {
@@ -50,7 +51,7 @@ async fn gaw_player(db: &DatabaseConnection, id: &str) -> GAWResult<PlayerModel>
     let id = u32::from_str_radix(id, 16)?;
     match find_by_id(db, id).await? {
         Some(value) => Ok(value),
-        None => Err(GAWError::UnknownID)
+        None => Err(GAWError::UnknownID),
     }
 }
 
@@ -60,7 +61,10 @@ struct AuthQuery {
 }
 
 #[get("authentication/sharedTokenLogin")]
-async fn authenticate(query: Query<AuthQuery>, global: Data<GlobalState>) -> GAWResult<impl Responder> {
+async fn authenticate(
+    query: Query<AuthQuery>,
+    global: Data<GlobalState>,
+) -> GAWResult<impl Responder> {
     let player = gaw_player(&global.db, &query.auth).await?;
     let (player, token) = get_session_token(&global.db, player).await?;
 
@@ -68,7 +72,8 @@ async fn authenticate(query: Query<AuthQuery>, global: Data<GlobalState>) -> GAW
     let sess = format!("{:x}", id);
     let display_name = player.display_name;
 
-    let response = format!(r#"<?xml version="1.0" encoding="UTF-8"?>
+    let response = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
 <fulllogin>
     <canageup>0</canageup>
     <legaldochost/>
@@ -95,7 +100,8 @@ async fn authenticate(query: Query<AuthQuery>, global: Data<GlobalState>) -> GAW
     <toshost/>
     <termsofserviceuri/>
     <tosuri/>
-</fulllogin>"#);
+</fulllogin>"#
+    );
 
     Ok(HttpResponse::build(StatusCode::OK)
         .content_type(ContentType::xml())
@@ -114,11 +120,14 @@ struct IncreaseQuery {
     d: Option<String>,
     #[serde(rename = "rinc|4")]
     e: Option<String>,
-
 }
 
 #[get("galaxyatwar/increaseRatings/{id}")]
-async fn increase_ratings(id: Path<String>, query: Query<IncreaseQuery>, global: Data<GlobalState>) -> GAWResult<impl Responder> {
+async fn increase_ratings(
+    id: Path<String>,
+    query: Query<IncreaseQuery>,
+    global: Data<GlobalState>,
+) -> GAWResult<impl Responder> {
     let id = id.into_inner();
     let player = gaw_player(&global.db, &id).await?;
 
@@ -175,12 +184,12 @@ const GAW_MAX_VALUE: u16 = 10099;
 
 /// Attempts to find a galaxy at war data linked to the provided player
 /// creating a new one if there is not already one.
-async fn get_galaxy_at_war(db: &DatabaseConnection, player: &PlayerModel) -> GAWResult<GalaxyAtWarModel> {
-    let existing = player.find_related(GalaxyAtWarEntity)
-        .one(db)
-        .await?;
-    let current_time = Local::now()
-        .naive_local();
+async fn get_galaxy_at_war(
+    db: &DatabaseConnection,
+    player: &PlayerModel,
+) -> GAWResult<GalaxyAtWarModel> {
+    let existing = player.find_related(GalaxyAtWarEntity).one(db).await?;
+    let current_time = Local::now().naive_local();
     match existing {
         None => {
             let gaw = GalaxyAtWarActiveModel {
@@ -195,20 +204,22 @@ async fn get_galaxy_at_war(db: &DatabaseConnection, player: &PlayerModel) -> GAW
             };
             Ok(gaw.insert(db).await?)
         }
-        Some(value) => apply_gaw_decay(db, value).await
+        Some(value) => apply_gaw_decay(db, value).await,
     }
 }
 
 /// Applies the galaxy at war decay values to the provided galaxy at war model to
 /// ensure that the values accurately reflect the amount removed.
-async fn apply_gaw_decay(db: &DatabaseConnection, value: GalaxyAtWarModel) -> GAWResult<GalaxyAtWarModel> {
+async fn apply_gaw_decay(
+    db: &DatabaseConnection,
+    value: GalaxyAtWarModel,
+) -> GAWResult<GalaxyAtWarModel> {
     let decay = env::gaw_daily_decay();
     if decay <= 0.0 {
         return Ok(value);
     }
 
-    let current_time = Local::now()
-        .naive_local();
+    let current_time = Local::now().naive_local();
 
     let days_passed = (current_time - value.last_modified).num_days() as f32;
     let decay_value = (decay * days_passed * 100.0) as u16;
@@ -227,9 +238,7 @@ async fn apply_gaw_decay(db: &DatabaseConnection, value: GalaxyAtWarModel) -> GA
     value.group_d = Set(d);
     value.group_e = Set(e);
 
-    let value = value
-        .update(db)
-        .await?;
+    let value = value.update(db).await?;
 
     Ok(value)
 }
@@ -242,7 +251,8 @@ fn ratings_response(promotions: u32, ratings: GalaxyAtWarModel) -> impl Responde
     let d = ratings.group_d;
     let e = ratings.group_e;
     let level = (a + b + c + d + e) / 5;
-    let response = format!(r#"<?xml version="1.0" encoding="UTF-8"?>
+    let response = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
 <galaxyatwargetratings>
     <ratings>
         <ratings>{a}</ratings>
@@ -265,7 +275,8 @@ fn ratings_response(promotions: u32, ratings: GalaxyAtWarModel) -> impl Responde
         <assets>0</assets>
     </assets>
 </galaxyatwargetratings>
-"#);
+"#
+    );
     HttpResponse::build(StatusCode::OK)
         .content_type(ContentType::xml())
         .body(response)
@@ -280,10 +291,7 @@ async fn get_promotions(db: &DatabaseConnection, player: &PlayerModel) -> GAWRes
         return Ok(0);
     }
     Ok(match player.find_related(PlayerClassEntity).all(db).await {
-        Ok(classes) => classes
-            .iter()
-            .map(|value| value.promotions)
-            .sum(),
-        Err(_) => 0
+        Ok(classes) => classes.iter().map(|value| value.promotions).sum(),
+        Err(_) => 0,
     })
 }
