@@ -1,15 +1,19 @@
+use log::warn;
+use sea_orm::ActiveModelTrait;
 use sea_orm::{
     ActiveValue::NotSet, ActiveValue::Set, ColumnTrait, DatabaseConnection, IntoActiveModel,
     ModelTrait, QueryFilter,
 };
 
-use crate::blaze::errors::BlazeResult;
-use crate::database::entities::{player_characters, player_classes, players};
+use crate::blaze::errors::{BlazeError, BlazeResult};
+use crate::blaze::SessionArc;
+use crate::database::entities::{player_classes, players};
+use crate::utils::conv::MEStringParser;
 
 /// Attempts to find a player class relating to the provided player in the database
 /// using its index and relation to the player. If None could be found a new value
 /// will be created and returned instead.
-pub async fn find_player_class(
+async fn find(
     db: &DatabaseConnection,
     player: &players::Model,
     index: u16,
@@ -33,47 +37,60 @@ pub async fn find_player_class(
     })
 }
 
-/// Attempts to find a player character relating to the provided player in the database
-/// using its index and relation to the player. If None could be found a new value
-/// will be created and returned instead.
-pub async fn find_player_character(
-    db: &DatabaseConnection,
-    player: &players::Model,
-    index: u16,
-) -> BlazeResult<player_characters::ActiveModel> {
-    let player_character = player
-        .find_related(player_characters::Entity)
-        .filter(player_characters::Column::Index.eq(index))
-        .one(db)
-        .await?;
+/// Attempts to parse the provided player character data string and update the fields
+/// on the provided active player character model. Will return a None option if parsing
+/// failed.
+///
+/// # Format
+/// ```
+/// 20;4;Adept;20;0;50
+/// 20;4;NAME;LEVEL;EXP;PROMOTIONS
+/// ```
+fn parse(model: &mut player_classes::ActiveModel, value: &str) -> Option<()> {
+    let mut parser = MEStringParser::new(value)?;
+    model.name = Set(parser.next_str()?);
+    model.level = Set(parser.next()?);
+    model.exp = Set(parser.next()?);
+    model.promotions = Set(parser.next()?);
+    Some(())
+}
 
-    if let Some(player_character) = player_character {
-        return Ok(player_character.into_active_model());
+/// Attempts to parse the class index from the provided
+/// class key. If the key is too short or doesn't contain
+/// an index then an error is returned
+fn parse_index(key: &str) -> BlazeResult<u16> {
+    if key.len() <= 5 {
+        return Err(BlazeError::Other("Player class key missing index"));
+    }
+    key[5..]
+        .parse()
+        .map_err(|_| BlazeError::Other("Player class key was not an integer"))
+}
+
+/// Attempts to update the player character stored at the provided index by
+/// parsing the provided value and updating the database with any parsed changes.
+pub async fn update(session: &SessionArc, key: &str, value: &str) -> BlazeResult<()> {
+    let index = parse_index(key)?;
+    let db = session.db();
+    let session_data = session.data.read().await;
+
+    let player = session_data.expect_player()?;
+    let mut model = find(db, player, index).await?;
+    if let None = parse(&mut model, value) {
+        warn!("Failed to fully parse player class: {key} = {value}");
     }
 
-    Ok(player_characters::ActiveModel {
-        id: NotSet,
-        player_id: Set(player.id),
-        index: Set(index),
-        kit_name: NotSet,
-        name: NotSet,
-        tint1: NotSet,
-        tint2: NotSet,
-        pattern: NotSet,
-        pattern_color: NotSet,
-        phong: NotSet,
-        emissive: NotSet,
-        skin_tone: NotSet,
-        seconds_played: NotSet,
-        timestamp_year: NotSet,
-        timestamp_month: NotSet,
-        timestamp_day: NotSet,
-        timestamp_seconds: NotSet,
-        powers: NotSet,
-        hotkeys: NotSet,
-        weapons: NotSet,
-        weapon_mods: NotSet,
-        deployed: NotSet,
-        leveled_up: NotSet,
-    })
+    drop(session_data);
+
+    model.save(db).await?;
+    Ok(())
+}
+
+/// Encodes the provided player character model into the ME string
+/// encoded value to send as apart of the settings map
+pub fn encode(model: &player_classes::Model) -> String {
+    format!(
+        "20;4;{};{};{};{}",
+        model.name, model.level, model.exp, model.promotions
+    )
 }

@@ -1,12 +1,11 @@
 use crate::blaze::components::Util;
-use crate::blaze::errors::{BlazeError, HandleResult};
+use crate::blaze::errors::HandleResult;
 use crate::blaze::shared::TelemetryRes;
 use crate::blaze::SessionArc;
 use crate::database::entities::{
-    PlayerActiveModel, PlayerCharacterActiveModel, PlayerCharacterEntity, PlayerCharacterModel,
-    PlayerClassActiveModel, PlayerClassEntity, PlayerClassModel, PlayerModel,
+    PlayerActiveModel, PlayerCharacterEntity, PlayerClassEntity, PlayerModel,
 };
-use crate::database::interface::player_classes::{find_player_character, find_player_class};
+use crate::database::interface::{player_characters, player_classes};
 use crate::env;
 use crate::utils::conv::MEStringParser;
 use crate::utils::dmap::load_dmap;
@@ -469,15 +468,16 @@ async fn handle_user_settings_save(session: &SessionArc, packet: &OpaquePacket) 
 async fn set_player_data(session: &SessionArc, key: &str, value: String) -> HandleResult {
     if key.starts_with("class") {
         debug!("Updating player class data: {key}");
-        update_player_class(session, key, value)
+        player_classes::update(session, key, &value)
             .await
             .map_err(|err| err.context("While updating player class"))?;
         debug!("Updated player class data: {key}");
     } else if key.starts_with("char") {
         debug!("Updating player character data: {key}");
-        update_player_character(session, key, value)
+        player_characters::update(session, key, &value)
             .await
             .map_err(|err| err.context("While updating player character"))?;
+
         debug!("Updated player character data: {key}");
     } else {
         debug!("Updating player base data");
@@ -488,121 +488,6 @@ async fn set_player_data(session: &SessionArc, key: &str, value: String) -> Hand
     }
 
     Ok(())
-}
-
-async fn update_player_character(session: &SessionArc, key: &str, value: String) -> HandleResult {
-    if key.len() > 4 {
-        let index = key[4..]
-            .parse::<u16>()
-            .map_err(|_| BlazeError::Other("Invalid index for player class"))?;
-        let db = session.db();
-        let session_data = session.data.read().await;
-        let player = session_data.expect_player()?;
-
-        let mut model = find_player_character(db, player, index).await?;
-        if let None = parse_player_character(&mut model, &value) {
-            warn!("Failed to fully parse player character: {key} = {value}")
-        }
-        drop(session_data);
-        model.save(session.db()).await?;
-    }
-    Ok(())
-}
-
-fn encode_player_character(model: &PlayerCharacterModel) -> String {
-    format!(
-        "20;4;{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{}",
-        model.kit_name,
-        model.name,
-        model.tint1,
-        model.tint2,
-        model.pattern,
-        model.pattern_color,
-        model.phong,
-        model.emissive,
-        model.skin_tone,
-        model.seconds_played,
-        model.timestamp_year,
-        model.timestamp_month,
-        model.timestamp_day,
-        model.timestamp_seconds,
-        model.powers,
-        model.hotkeys,
-        model.weapons,
-        model.weapon_mods,
-        if model.deployed { "True" } else { "False" },
-        if model.leveled_up { "True" } else { "False" },
-    )
-}
-
-fn parse_player_character(model: &mut PlayerCharacterActiveModel, value: &str) -> Option<()> {
-    let mut parser = MEStringParser::new(value)?;
-    model.kit_name = Set(parser.next_str()?);
-    model.name = Set(parser.next()?);
-    model.tint1 = Set(parser.next()?);
-    model.tint2 = Set(parser.next()?);
-    model.pattern = Set(parser.next()?);
-    model.pattern_color = Set(parser.next()?);
-    model.phong = Set(parser.next()?);
-    model.emissive = Set(parser.next()?);
-    model.skin_tone = Set(parser.next()?);
-    model.seconds_played = Set(parser.next()?);
-    model.timestamp_year = Set(parser.next()?);
-    model.timestamp_month = Set(parser.next()?);
-    model.timestamp_day = Set(parser.next()?);
-    model.timestamp_seconds = Set(parser.next()?);
-    model.powers = Set(parser.next_str()?);
-    model.hotkeys = Set(parser.next_str()?);
-    model.weapons = Set(parser.next_str()?);
-    model.weapon_mods = Set(parser.next_str()?);
-    model.deployed = Set(parser.next_bool()?);
-    model.leveled_up = Set(parser.next_bool()?);
-    Some(())
-}
-
-async fn update_player_class(session: &SessionArc, key: &str, value: String) -> HandleResult {
-    if key.len() > 5 {
-        let index = key[5..]
-            .parse::<u16>()
-            .map_err(|_| BlazeError::Other("Invalid index for player class"))?;
-
-        let db = session.db();
-        let session_data = session.data.read().await;
-        let player = session_data.expect_player()?;
-
-        let mut model = find_player_class(db, player, index).await?;
-        if let None = parse_player_class(&mut model, &value) {
-            warn!("Failed to fully parse player class: {key} = {value}")
-        }
-        drop(session_data);
-        model.save(db).await?;
-    }
-    Ok(())
-}
-
-/// Parses the player class data stored in the provided value and modifies the provided
-/// player class model accordingly
-///
-/// # Structure
-/// ```
-/// 20;4;Adept;20;0;50
-/// ```
-///
-fn parse_player_class(model: &mut PlayerClassActiveModel, value: &str) -> Option<()> {
-    let mut parser = MEStringParser::new(value)?;
-    model.name = Set(parser.next_str()?);
-    model.level = Set(parser.next()?);
-    model.exp = Set(parser.next()?);
-    model.promotions = Set(parser.next()?);
-    Some(())
-}
-
-/// Encodes a player class model into a string format for sending to the client
-fn encode_player_class(model: &PlayerClassModel) -> String {
-    format!(
-        "20;4;{};{};{};{}",
-        model.name, model.level, model.exp, model.promotions
-    )
 }
 
 /// Encodes the base player data into a string format for sending to the client
@@ -707,13 +592,13 @@ async fn handle_user_settings_load_all(
 
         let mut index = 0;
         for char in characters {
-            settings.insert(format!("char{}", index), encode_player_character(&char));
+            settings.insert(format!("char{}", index), player_characters::encode(&char));
             index += 1;
         }
 
         index = 0;
         for class in classes {
-            settings.insert(format!("class{}", index), encode_player_class(&class));
+            settings.insert(format!("class{}", index), player_classes::encode(&class));
             index += 1;
         }
 

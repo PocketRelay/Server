@@ -2,7 +2,6 @@ use log::LevelFilter;
 use std::str::FromStr;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const ADDRESS: &str = "gosredirector.ea.com";
 
 pub fn ext_host() -> String {
     const ENV_KEY: &str = "PR_EXT_HOST";
