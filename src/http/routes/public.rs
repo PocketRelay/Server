@@ -4,7 +4,7 @@ use rust_embed::RustEmbed;
 
 /// Public resource content folder
 #[derive(RustEmbed)]
-#[folder = "resources/public"]
+#[folder = "src/resources/public"]
 struct PublicContent;
 
 pub fn configure(cfg: &mut ServiceConfig) {

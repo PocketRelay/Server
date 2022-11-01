@@ -611,7 +611,7 @@ async fn handle_get_legal_docs_info(session: &SessionArc, packet: &OpaquePacket)
 
 /// The default terms of service document
 const DEFAULT_TERMS_OF_SERVICE: &str =
-    include_str!("../../../resources/defaults/term_of_service.html");
+    include_str!("../../resources/defaults/term_of_service.html");
 
 /// Handles serving the contents of the terms of service. This is an HTML document which is
 /// rendered inside the game when you click the button for viewing terms of service.
@@ -644,8 +644,7 @@ async fn handle_terms_of_service_content(
 }
 
 /// The default privacy policy document
-const DEFAULT_PRIVACY_POLICY: &str =
-    include_str!("../../../resources/defaults/privacy_policy.html");
+const DEFAULT_PRIVACY_POLICY: &str = include_str!("../../resources/defaults/privacy_policy.html");
 
 /// Handles serving the contents of the privacy policy. This is an HTML document which is
 /// rendered inside the game when you click the button for viewing privacy policy.
