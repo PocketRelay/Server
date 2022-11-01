@@ -38,8 +38,10 @@ pub fn menu_message() -> String {
     std::env::var(ENV_KEY).unwrap_or_else(|_| DEFAULT.to_string())
 }
 
-pub fn database_file() -> &'static str {
-    return "app.db";
+pub fn database_file() -> String {
+    const ENV_KEY: &str = "PR_DATABASE_FILE";
+    const DEFAULT: &str = "app.db";
+    std::env::var(ENV_KEY).unwrap_or_else(|_| DEFAULT.to_string())
 }
 
 pub fn gaw_daily_decay() -> f32 {
