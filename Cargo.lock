@@ -479,7 +479,9 @@ dependencies = [
 
 [[package]]
 name = "blaze-pk"
-version = "0.3.2"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41b8f7c2986b75d9eef76393e3633bf7e7cdeb58db637ed3cf254e68c3d7579e"
 dependencies = [
  "tokio",
 ]
