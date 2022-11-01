@@ -1,3 +1,5 @@
+pub mod enums;
+pub mod matchmaking;
 mod shared;
 
 use crate::blaze::components::{Components, GameManager};
