@@ -18,12 +18,13 @@ pub enum MatchRules {
 impl MatchRules {
     /// Parses a match rule from the provided key and value pair
     /// the key being the rule key present in the matchmaking query.
-    pub fn parse(key: &str, value: &str) -> Self {
-        match key {
+    pub fn parse(key: &str, value: &str) -> Option<Self> {
+        Some(match key {
             GameMap::RULE => Self::Map(GameMap::from_value(value)),
             EnemyType::RULE => Self::Enemy(EnemyType::from_value(value)),
             Difficulty::RULE => Self::Enemy(Difficulty::from_value(value)),
-        }
+            _ => return None,
+        })
     }
 
     /// Function for finding the attribute key for the
@@ -56,6 +57,11 @@ pub struct RuleSet {
 }
 
 impl RuleSet {
+    /// Creates a new rule set from the provided vec of match rules.
+    pub fn new(values: Vec<MatchRules>) -> Self {
+        Self { values }
+    }
+
     /// Attempts to see if the provided game matches the rules
     /// in this rule set. Its okay for the values of rules to be
     /// missing and rules with unknown values are treated as a

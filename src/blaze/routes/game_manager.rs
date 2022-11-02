@@ -1,9 +1,10 @@
 use crate::blaze::components::GameManager;
 use crate::blaze::errors::{BlazeError, GameError, HandleResult};
 use crate::blaze::SessionArc;
+use crate::game::matchmaking::{MatchRules, RuleSet};
 use crate::game::Game;
 use blaze_pk::{group, packet, OpaquePacket, TdfMap};
-use log::debug;
+use log::{debug, info};
 
 /// Routing function for handling packets with the `GameManager` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -275,13 +276,13 @@ async fn handle_update_mesh_connection(
 
 packet! {
     struct MatchmakingReq {
-
+        CRIT criteria: MatchCriteria,
     }
 }
 
 group! {
     struct MatchCriteria {
-
+        RLST rules: Vec<Rule>
     }
 }
 
@@ -290,6 +291,16 @@ group! {
         NAME name: String,
         VALU value: String,
     }
+}
+
+fn parse_ruleset(rules: Vec<Rule>) -> RuleSet {
+    let out = Vec::new();
+    for rule in rules {
+        if let Some(match_rule) = MatchRules::parse(&rule.name, &rule.value) {
+            out.push(match_rule);
+        }
+    }
+    RuleSet::new(out)
 }
 
 /// Handles either directly joining a game or placing the
@@ -301,25 +312,12 @@ group! {
 ///  tripple("BTPL", 0x0, 0x0, 0x0)
 ///  +group("CRIT") {
 ///    +group("CUST") {}
-///     +group("DNF") {
-///       number("DNF", 0x65)
-///     }
-///     +group("GEO") {
-///       text("THLD", "")
-///     }
-///     +group("GNAM") {
-///       text("SUBS", "")
-///     }
-///     +group("NAT") {
-///       text("THLD", "hostBalancing")
-///     }
-///     +group("PSR") {
-///       text("THLD", "")
-///     }
-///     +group("RANK") {
-///       text("THLD", "")
-///       number("VALU", 0x1)
-///     }
+///     +group("DNF") { number("DNF", 0x65) }
+///     +group("GEO") { text("THLD", "") }
+///     +group("GNAM") { text("SUBS", "") }
+///     +group("NAT") { text("THLD", "hostBalancing")   }
+///     +group("PSR") { text("THLD", "") }
+///     +group("RANK") { text("THLD", "") }
 ///     list("RLST", listOf(
 ///       group {
 ///         text("NAME", "ME3_gameStateMatchRule")
@@ -429,5 +427,14 @@ group! {
 /// }
 /// ```
 async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+    {
+        let session_data = session.data.read().await;
+        let player = session_data.expect_player()?;
+        info!("Player {} started matchmaking", player.display_name);
+    }
+
+    let req = packet.contents::<MatchmakingReq>()?;
+    let ruleset = parse_ruleset(req.criteria.rules);
+
     Ok(())
 }
