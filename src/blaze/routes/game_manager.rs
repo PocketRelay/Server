@@ -22,6 +22,7 @@ pub async fn route(
         GameManager::RemovePlayer => handle_remove_player(session, packet).await,
         GameManager::UpdateMeshConnection => handle_update_mesh_connection(session, packet).await,
         GameManager::StartMatchaking => handle_start_matchmaking(session, packet).await,
+        GameManager::CancelMatchmaking => handle_cancel_matchmaking(session, packet).await,
         component => {
             debug!("Got GameManager({component:?})");
             packet.debug_decode()?;
@@ -465,4 +466,27 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -
     }
 
     Ok(())
+}
+
+/// Handles cancelling matchmaking for the current session removing
+/// itself from the matchmaking queue.
+///
+/// # Structure
+/// ```
+/// packet(Components.GAME_MANAGER, Commands.CANCEL_MATCHMAKING, 0x54) {
+///  number("MSID", 0x10d2d0df)
+/// }
+/// ```
+async fn handle_cancel_matchmaking(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+    {
+        let session_data = session.data.read().await;
+        let player = session_data.expect_player()?;
+        info!("Player {} cancelled matchmaking", player.display_name);
+    }
+
+    session.global.matchmaking.remove(session).await;
+
+    // TODO: Remove from games if reached join
+
+    session.response_empty(packet).await
 }
