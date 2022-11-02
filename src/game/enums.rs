@@ -1,12 +1,15 @@
 use blaze_pk::TdfMap;
 
+use super::matchmaking::MatchRules;
+
 pub trait MatchRule: PartialEq {
-    fn attr() -> &'static str;
-    fn rule() -> &'static str;
-
-    fn from_key(value: &str) -> Self;
-
+    fn from_value(value: &str) -> Self;
     fn is_ignored(&self) -> bool;
+
+    fn try_compare(&self, value: &str) -> bool {
+        let other = Self::from_value(value);
+        !other.is_ignored() && other.eq(self)
+    }
 }
 
 macro_rules! match_rule {
@@ -28,6 +31,11 @@ macro_rules! match_rule {
             Other(String),
         }
 
+        impl $name {
+            pub const RULE: &'static str = $rule;
+            pub const ATTR: &'static str = $attr;
+        }
+
         impl PartialEq for $name {
             fn eq(&self, other: &Self) -> bool {
                 match self {
@@ -43,17 +51,12 @@ macro_rules! match_rule {
 
         impl MatchRule for $name {
 
-            fn attr() -> &'static str { $attr }
-            fn rule() -> &'static str { $rule }
-
-            fn from_key(value: &str) -> Self {
-
-                match value {
+            fn from_value(value: &str) -> Self {
+                match &value {
                     $($value => Self::$field,)*
                     "abstain" => Self::Abstain,
-                    value => Self::Other(value.to_string()),
+                    _ => Self::Other(value.to_string()),
                 }
-
             }
 
             fn is_ignored(&self) -> bool {
