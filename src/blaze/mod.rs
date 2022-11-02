@@ -116,6 +116,12 @@ pub struct MatchmakingState {
     pub start: u64,
 }
 
+impl Default for MatchmakingState {
+    fn default() -> Self {
+        Self { id: 1, start: 0 }
+    }
+}
+
 pub struct SessionGame {
     /// Reference to the connected game
     pub game: Arc<Game>,

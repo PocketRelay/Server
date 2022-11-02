@@ -19,7 +19,7 @@ use tokio::sync::RwLock;
 use tokio::try_join;
 
 pub struct Games {
-    games: RwLock<HashMap<u32, Arc<Game>>>,
+    games: RwLock<HashMap<u32, GameArc>>,
     next_id: AtomicU32,
 }
 
@@ -49,6 +49,8 @@ impl Games {
         games.get(&id).cloned()
     }
 }
+
+pub type GameArc = Arc<Game>;
 
 pub struct Game {
     pub id: u32,
@@ -228,7 +230,11 @@ impl Game {
         Ok(())
     }
 
-    pub async fn add_player(game: &Arc<Game>, session: &SessionArc) -> BlazeResult<()> {
+    pub async fn is_joinable(&self) -> bool {
+        self.player_count().await < Self::MAX_PLAYERS
+    }
+
+    pub async fn add_player(game: &GameArc, session: &SessionArc) -> BlazeResult<()> {
         // Game is full cannot add anymore players
         if game.player_count().await >= Self::MAX_PLAYERS {
             return Err(BlazeError::Game(GameError::Full));

@@ -21,6 +21,7 @@ pub async fn route(
         GameManager::SetGameAttributes => handle_set_game_attribs(session, packet).await,
         GameManager::RemovePlayer => handle_remove_player(session, packet).await,
         GameManager::UpdateMeshConnection => handle_update_mesh_connection(session, packet).await,
+        GameManager::StartMatchaking => handle_start_matchmaking(session, packet).await,
         component => {
             debug!("Got GameManager({component:?})");
             packet.debug_decode()?;
@@ -294,13 +295,19 @@ group! {
 }
 
 fn parse_ruleset(rules: Vec<Rule>) -> RuleSet {
-    let out = Vec::new();
+    let mut out = Vec::new();
     for rule in rules {
         if let Some(match_rule) = MatchRules::parse(&rule.name, &rule.value) {
             out.push(match_rule);
         }
     }
     RuleSet::new(out)
+}
+
+packet! {
+    struct MatchmakingRes {
+        MSID id: u32,
+    }
 }
 
 /// Handles either directly joining a game or placing the
@@ -434,7 +441,28 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -
     }
 
     let req = packet.contents::<MatchmakingReq>()?;
-    let ruleset = parse_ruleset(req.criteria.rules);
+    let rules = parse_ruleset(req.criteria.rules);
+
+    let game = session
+        .global
+        .matchmaking
+        .get_or_queue(session, rules, &session.global.games)
+        .await;
+    {
+        let session_data = session.data.read().await;
+        let matchmaking_id = session_data
+            .matchmaking
+            .as_ref()
+            .map(|value| value.id)
+            .unwrap_or(1);
+        session
+            .response(packet, &MatchmakingRes { id: matchmaking_id })
+            .await?;
+    }
+
+    if let Some(game) = game {
+        Game::add_player(&game, session).await?;
+    }
 
     Ok(())
 }

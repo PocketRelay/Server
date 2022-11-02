@@ -1,14 +1,20 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU32, Ordering};
+
+use tokio::sync::RwLock;
+
+use crate::blaze::{MatchmakingState, SessionArc};
+use crate::utils::server_unix_time;
 
 use super::{
     enums::{Difficulty, EnemyType, GameMap, MatchRule},
     Game,
 };
+use super::{GameArc, Games};
 
 /// Structure for known rule types that can be compared
 /// correctly. Unknown rules are simply ignored.
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MatchRules {
     Map(GameMap),
     Enemy(EnemyType),
@@ -22,7 +28,7 @@ impl MatchRules {
         Some(match key {
             GameMap::RULE => Self::Map(GameMap::from_value(value)),
             EnemyType::RULE => Self::Enemy(EnemyType::from_value(value)),
-            Difficulty::RULE => Self::Enemy(Difficulty::from_value(value)),
+            Difficulty::RULE => Self::Difficulty(Difficulty::from_value(value)),
             _ => return None,
         })
     }
@@ -70,7 +76,7 @@ impl RuleSet {
         let game_data = game.data.read().await;
         let attributes = &game_data.attributes;
 
-        for rule in self.values {
+        for rule in &self.values {
             let attr = rule.attr();
             if let Some(value) = attributes.get(attr) {
                 if !rule.try_compare(value) {
@@ -80,5 +86,88 @@ impl RuleSet {
         }
 
         true
+    }
+}
+
+/// Structure for storing the active matchmaking queue
+/// and keeping it updated.
+pub struct Matchmaking {
+    queue: RwLock<VecDeque<(SessionArc, RuleSet)>>,
+    next_id: AtomicU32,
+}
+
+impl Matchmaking {
+    pub fn new() -> Self {
+        Self {
+            queue: RwLock::new(VecDeque::new()),
+            next_id: AtomicU32::new(1),
+        }
+    }
+
+    /// Async handler for when a new game is created in order to update
+    /// the queue checking if any of the other players rule sets match the
+    /// details of the game
+    pub async fn on_game_created(&self, game: &GameArc) {
+        let mut removed_ids = Vec::new();
+        {
+            let queue = self.queue.read().await;
+            for (session, rules) in queue.iter() {
+                if rules.matches(game).await && game.is_joinable().await {
+                    Game::add_player(game, session).await.ok();
+                    removed_ids.push(session.id);
+                }
+            }
+        }
+
+        if removed_ids.len() > 0 {
+            let queue = &mut *self.queue.write().await;
+            queue.retain(|value| !removed_ids.contains(&value.0.id))
+        }
+    }
+
+    /// Attempts to find a game that matches the players provided rule set
+    /// or adds them to the matchmaking queue if one could not be found.
+    pub async fn get_or_queue(
+        &self,
+        session: &SessionArc,
+        rules: RuleSet,
+        games: &Games,
+    ) -> Option<GameArc> {
+        let games = games.games.read().await;
+        for game in games.values() {
+            if rules.matches(game).await {
+                return Some(game.clone());
+            }
+        }
+
+        // Update the player matchmaking data.
+        {
+            let session_data = &mut *session.data.write().await;
+            if let Some(value) = &mut session_data.matchmaking {
+                value.start = server_unix_time();
+            } else {
+                let value = MatchmakingState {
+                    id: self.next_id.fetch_add(1, Ordering::AcqRel),
+                    start: server_unix_time(),
+                };
+                session_data.matchmaking = Some(value);
+            }
+        }
+
+        // Push the player to the end of the queue
+        let queue = &mut *self.queue.write().await;
+        queue.push_back((session.clone(), rules));
+
+        None
+    }
+
+    /// Removes a player from the queue if it exists
+    pub async fn remove(&self, session: &SessionArc) {
+        let queue = &mut *self.queue.write().await;
+        queue.retain(|value| value.0.id != session.id);
+    }
+
+    pub async fn update(&self) {
+        // TODO: Update matchmaking queue with async notifis
     }
 }

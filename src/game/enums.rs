@@ -1,8 +1,4 @@
-use blaze_pk::TdfMap;
-
-use super::matchmaking::MatchRules;
-
-pub trait MatchRule: PartialEq {
+pub trait MatchRule: PartialEq + Sized {
     fn from_value(value: &str) -> Self;
     fn is_ignored(&self) -> bool;
 
@@ -52,7 +48,7 @@ macro_rules! match_rule {
         impl MatchRule for $name {
 
             fn from_value(value: &str) -> Self {
-                match &value {
+                match value {
                     $($value => Self::$field,)*
                     "abstain" => Self::Abstain,
                     _ => Self::Other(value.to_string()),

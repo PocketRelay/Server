@@ -8,6 +8,7 @@ mod utils;
 use crate::game::Games;
 use dotenvy::dotenv;
 use env_logger::WriteStyle;
+use game::matchmaking::Matchmaking;
 use log::info;
 use sea_orm::DatabaseConnection;
 use std::io;
@@ -17,6 +18,7 @@ use tokio::try_join;
 /// Global state that is shared throughout the application
 pub struct GlobalState {
     pub games: Games,
+    pub matchmaking: Matchmaking,
     pub db: DatabaseConnection,
 }
 
@@ -37,7 +39,12 @@ async fn main() -> io::Result<()> {
 
     let db = database::connect().await?;
     let games = Games::new();
-    let global_state = GlobalState { db, games };
+    let matchmaking = Matchmaking::new();
+    let global_state = GlobalState {
+        db,
+        games,
+        matchmaking,
+    };
     let global_state = Arc::new(global_state);
 
     try_join!(
