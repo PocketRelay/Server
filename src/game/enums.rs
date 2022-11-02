@@ -98,7 +98,32 @@ match_rule! {
     VALUES:
         Unknown("map0"),
         Random("random"),
+        // Standard Maps
         FirebaseDagger("map2"),
         FirebaseGhost("map3"),
         FirebaseGiant("map4"),
+        FirebaseReactor("map5"),
+        FirebaseGlacier("map7"),
+        FirebaseWhite("map8"),
+        // Resurgence Pack Maps
+        FirebaseCondor("map9"),
+        FirebaseHydra("map10"),
+        // Rebellion Pack Maps
+        FirebaseJade("map11"),
+        FirebaseGoddess("map13"),
+        // Earth Maps
+        FirebaseRio("map14"),
+        FirebaseVancouver("map15"),
+        FirebaseLondon("map16"),
+        // Retaliation Hazard Maps
+        FirebaseGlacierHazard("map17"),
+        FirebaseDaggerHazard("map18"),
+        FirebaseReactorHazard("map19"),
+        FirebaseGhostHazard("map20"),
+        FirebaseGiantHazard("map21"),
+        FirebaseWhiteHazard("map22")
+
+        // Other Unknowns: map1, map6, map12, map23, map24
+        // map25, map26, map27, map28, map29
+
 }
