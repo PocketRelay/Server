@@ -81,8 +81,8 @@ impl Codec for UpdateNetworkInfo {
 ///         number("PORT", 0x0)
 ///       }
 ///       +group("INIP") {
-///         number("IP", 0xc0a8014e)
-///         number("PORT", 0xe4b)
+///         number("IP", 0x0)
+///         number("PORT", 0x0)
 ///       }
 ///     }
 ///   )

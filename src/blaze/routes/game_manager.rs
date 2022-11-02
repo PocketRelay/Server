@@ -2,7 +2,7 @@ use crate::blaze::components::GameManager;
 use crate::blaze::errors::{BlazeError, GameError, HandleResult};
 use crate::blaze::SessionArc;
 use crate::game::Game;
-use blaze_pk::{packet, OpaquePacket, TdfMap};
+use blaze_pk::{group, packet, OpaquePacket, TdfMap};
 use log::debug;
 
 /// Routing function for handling packets with the `GameManager` component and routing them
@@ -69,11 +69,11 @@ packet! {
 ///     group(start2=true) {
 ///       +group("EXIP") {
 ///         number("IP", 0x0)
-///         number("PORT", 0xe4b)
+///         number("PORT", 0x0)
 ///       }
 ///       +group("INIP") {
-///         number("IP", 0xc0a8014a)
-///         number("PORT", 0xe4b)
+///         number("IP", 0x0)
+///         number("PORT", 0x0)
 ///       }
 ///     }
 ///   ))
@@ -270,5 +270,164 @@ async fn handle_update_mesh_connection(
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
     game.update_mesh_connection(session).await?;
+    Ok(())
+}
+
+packet! {
+    struct MatchmakingReq {
+
+    }
+}
+
+group! {
+    struct MatchCriteria {
+
+    }
+}
+
+group! {
+    struct Rule {
+        NAME name: String,
+        VALU value: String,
+    }
+}
+
+/// Handles either directly joining a game or placing the
+/// session into a matchmaking queue for searching for games.
+///
+/// # Structure
+/// ```
+/// packet(Components.GAME_MANAGER, Commands.START_MATCHMAKING, 0x92) {
+///  tripple("BTPL", 0x0, 0x0, 0x0)
+///  +group("CRIT") {
+///    +group("CUST") {}
+///     +group("DNF") {
+///       number("DNF", 0x65)
+///     }
+///     +group("GEO") {
+///       text("THLD", "")
+///     }
+///     +group("GNAM") {
+///       text("SUBS", "")
+///     }
+///     +group("NAT") {
+///       text("THLD", "hostBalancing")
+///     }
+///     +group("PSR") {
+///       text("THLD", "")
+///     }
+///     +group("RANK") {
+///       text("THLD", "")
+///       number("VALU", 0x1)
+///     }
+///     list("RLST", listOf(
+///       group {
+///         text("NAME", "ME3_gameStateMatchRule")
+///         text("THLD", "quickMatch")
+///         list("VALU", listOf("MATCH_MAKING"))
+///       },
+///       group {
+///         text("NAME", "ME3_gameMapMatchRule")
+///         text("THLD", "quickMatch")
+///         list("VALU", listOf("abstain"))
+///       },
+///       group {
+///         text("NAME", "ME3_gameEnemyTypeRule")
+///         text("THLD", "quickMatch")
+///         list("VALU", listOf("abstain"))
+///       },
+///       group {
+///         text("NAME", "ME3_gameDifficultyRule")
+///         text("THLD", "quickMatch")
+///         list("VALU", listOf("abstain"))
+///       },
+///       group {
+///         text("NAME", "ME3_rule_dlc2500")
+///         text("THLD", "requireExactMatch")
+///         list("VALU", listOf("required"))
+///       },
+///       group {
+///         text("NAME", "ME3_rule_dlc2300")
+///         text("THLD", "requireExactMatch")
+///         list("VALU", listOf("required"))
+///       },
+///       group {
+///         text("NAME", "ME3_rule_dlc2700")
+///         text("THLD", "requireExactMatch")
+///         list("VALU", listOf("required"))
+///       },
+///       group {
+///         text("NAME", "ME3_rule_dlc3050")
+///         text("THLD", "requireExactMatch")
+///         list("VALU", listOf("required"))
+///       },
+///       group {
+///         text("NAME", "ME3_rule_dlc3225")
+///         text("THLD", "requireExactMatch")
+///         list("VALU", listOf("required"))
+///       }
+///     ))
+///     +group("RSZR") {
+///       number("PCAP", 0xffff)
+///       number("PMIN", 0x0)
+///     }
+///     +group("SIZE") {
+///       number("ISSG", 0x0)
+///       number("PCAP", 0x4)
+///       number("PCNT", 0x4)
+///       number("PMIN", 0x2)
+///       text("THLD", "matchAny")
+///     }
+///     +group("TEAM") {
+///       number("PCAP", 0x0)
+///       number("PCNT", 0x0)
+///       number("PMIN", 0x0)
+///       number("SDIF", 0x0)
+///       text("THLD", "")
+///       number("TID", 0xffff)
+///     }
+///     map("UED", mapOf(
+///       "ME3_characterSkill_Rule" to       group {
+///         number("CVAL", 0x0)
+///         text("NAME", "ME3_characterSkill_Rule")
+///         number("OVAL", 0x0)
+///         text("THLD", "quickMatch")
+///       },
+///     ))
+///     +group("VIAB") {
+///       text("THLD", "hostViability")
+///     }
+///     +group("VIRT") {
+///       text("THLD", "")
+///       number("VALU", 0x1)
+///     }
+///   }
+///   number("DUR", 0x1b7740)
+///   number("GENT", 0x0)
+///   text("GNAM", "")
+///   number("GSET", 0x51f)
+///   text("GVER", "ME3-295976325-179181965240128")
+///   number("IGNO", 0x0)
+///   number("MODE", 0x3)
+///   number("NTOP", 0x0)
+///   number("PMAX", 0x0)
+///   optional("PNET",
+///   0x2,
+///     group("VALU") {
+///       +group("EXIP") {
+///         number("IP", 0x0)
+///         number("PORT", 0x0)
+///       }
+///       +group("INIP") {
+///         number("IP", 0x0)
+///         number("PORT", 0x0)
+///       }
+///     }
+///   )
+///   number("QCAP", 0x0)
+///   number("VOIP", 0x2)
+/// }
+/// ```
+async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     Ok(())
 }
