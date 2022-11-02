@@ -110,7 +110,7 @@ async fn handle_create_game(session: &SessionArc, packet: &OpaquePacket) -> Hand
         .await?;
     Game::add_player(&game, session).await?;
 
-    // TODO: Update matchmaking await.
+    session.global.matchmaking.on_game_created(&game).await;
 
     Ok(())
 }
