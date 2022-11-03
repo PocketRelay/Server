@@ -28,7 +28,6 @@ impl Codec for InstanceRequest {
 pub struct InstanceResponse {
     pub host: String,
     pub port: u16,
-    pub secu: bool,
 }
 
 group! {
@@ -48,7 +47,6 @@ impl Codec for InstanceResponse {
                 ))
             }
         };
-        let secu = Tag::expect(reader, "SECU")?;
-        Ok(InstanceResponse { host, port, secu })
+        Ok(InstanceResponse { host, port })
     }
 }

@@ -29,7 +29,6 @@ type Stream = BlazeStream<TcpStream>;
 pub struct Retriever {
     host: String,
     port: u16,
-    secu: bool,
 }
 
 impl Retriever {
@@ -40,11 +39,13 @@ impl Retriever {
         let main_host = spawn_blocking(move || Self::get_main_host(redirector_host))
             .await
             .ok()??;
-        debug!("Retriever setup complete.");
+        debug!(
+            "Retriever setup complete. (Host: {} Port: {})",
+            &main_host.host, main_host.port
+        );
         Some(Retriever {
             host: main_host.host,
             port: main_host.port,
-            secu: main_host.secu,
         })
     }
 
