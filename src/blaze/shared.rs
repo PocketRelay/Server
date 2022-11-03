@@ -339,6 +339,10 @@ impl Codec for Entitlement<'_> {
         tag_u8(output, "VER", 0);
         tag_group_end(output);
     }
+
+    fn value_type() -> ValueType {
+        ValueType::Group
+    }
 }
 
 #[derive(Debug)]
