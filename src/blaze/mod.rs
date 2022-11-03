@@ -16,9 +16,12 @@ use std::net::SocketAddr;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::RwLock;
+use tokio::sync::{
+    broadcast::{self, Receiver},
+    Mutex, RwLock,
+};
+use tokio::{io, select, signal};
 
 pub mod components;
 pub mod errors;
@@ -33,10 +36,24 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
 
     let mut session_id = 0;
 
-    loop {
-        let (stream, addr) = listener.accept().await?;
+    let (shutt_send, mut shutt_recv) = broadcast::channel(16);
+    tokio::spawn(async move {
+        signal::ctrl_c().await;
+        shutt_send.send(true);
+    });
 
-        let session = Session::new(global.clone(), session_id, stream, addr);
+    loop {
+        let (stream, addr) = select! {
+            value = listener.accept() => value?,
+            _ = shutt_recv.recv() => break,
+        };
+        let session = Session::new(
+            global.clone(),
+            shutt_recv.resubscribe(),
+            session_id,
+            stream,
+            addr,
+        );
         let session = Arc::new(session);
         info!(
             "New Session Started (ID: {}, ADDR: {:?})",
@@ -45,15 +62,22 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
         session_id += 1;
         tokio::spawn(process_session(session));
     }
+    Ok(())
 }
 
 /// Function for processing a session loops until the session is no longer readable.
 /// Reads packets and routes them with the routing function.
 async fn process_session(session: SessionArc) {
+    let shutt_recv = &mut *session.shutt_recv.lock().await;
     loop {
-        let (component, packet) = match session.read_packet().await {
-            Ok(value) => value,
-            Err(_) => break,
+        let (component, packet) = select! {
+            res = session.read_packet() => {
+                    match res {
+                    Ok(value) => value,
+                    Err(_) => break,
+                }
+            }
+            _ = shutt_recv.recv() => {break;},
         };
 
         match routes::route(&session, component, &packet).await {
@@ -68,6 +92,7 @@ async fn process_session(session: SessionArc) {
 
 pub struct Session {
     pub global: Arc<GlobalState>,
+    pub shutt_recv: Mutex<Receiver<bool>>,
     pub id: u32,
     pub stream: RwLock<TcpStream>,
     pub addr: SocketAddr,
@@ -155,9 +180,16 @@ impl Session {
 
     /// This function creates a new session from the provided values and wraps
     /// the session in the necessary locks and Arc
-    fn new(global: Arc<GlobalState>, id: u32, stream: TcpStream, addr: SocketAddr) -> Session {
+    fn new(
+        global: Arc<GlobalState>,
+        shutt_recv: Receiver<bool>,
+        id: u32,
+        stream: TcpStream,
+        addr: SocketAddr,
+    ) -> Session {
         Self {
             global,
+            shutt_recv: Mutex::new(shutt_recv),
             id,
             stream: RwLock::new(stream),
             addr,
