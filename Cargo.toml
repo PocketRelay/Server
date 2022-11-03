@@ -23,6 +23,7 @@ actix-web = "4"
 # Serialization and packets
 blaze-pk = { version = "0.3.4", features = ["async"] }
 serde = { version = "1.0", features = ["derive"] }
+blaze-ssl = "0.1.2"
 
 # Database dependencies
 migration = { path = "migration" }
@@ -38,6 +39,7 @@ derive_more = "0.99.17"
 regex = "1"
 rand = "0.8.5"
 chrono = "0.4"
+dnsclient = { version = "0.1.17" }
 
 # Password hashing
 rand_core = { version = "0.6", features = ["std"] }

@@ -3,6 +3,7 @@ mod database;
 mod env;
 mod game;
 mod http;
+mod retriever;
 mod utils;
 
 use crate::game::Games;
