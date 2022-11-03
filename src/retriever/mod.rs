@@ -8,7 +8,7 @@ use std::{
 use blaze_pk::{Codec, OpaquePacket, PacketType, Packets};
 use blaze_ssl::stream::{BlazeStream, StreamMode};
 use dnsclient::{sync::DNSClient, UpstreamServer};
-use log::{debug, error, info};
+use log::{debug, error};
 use tokio::task::spawn_blocking;
 
 use crate::{
@@ -113,6 +113,8 @@ impl RetSession {
         component: Components,
         value: &OpaquePacket,
     ) -> BlazeResult<()> {
+        debug!("Got notify packet: {component:?}");
+        value.debug_decode()?;
         Ok(())
     }
 
@@ -136,7 +138,6 @@ impl RetSession {
                     Ok(value) => value,
                     Err(_) => return Err(BlazeError::Other("Unable to read / decode packet")),
                 };
-            response.debug_decode()?;
             if response.0.ty == PacketType::Notify {
                 self.handle_notify(component, &response).ok();
                 continue;
