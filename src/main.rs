@@ -15,7 +15,8 @@ use retriever::Retriever;
 use sea_orm::DatabaseConnection;
 use std::io;
 use std::sync::Arc;
-use tokio::try_join;
+use tokio::sync::broadcast::{self, Receiver};
+use tokio::{select, signal};
 
 /// Global state that is shared throughout the application
 pub struct GlobalState {
@@ -23,6 +24,7 @@ pub struct GlobalState {
     pub matchmaking: Matchmaking,
     pub db: DatabaseConnection,
     pub retriever: Option<Retriever>,
+    pub shutdown_recv: Receiver<bool>,
 }
 
 #[tokio::main]
@@ -43,21 +45,27 @@ async fn main() -> io::Result<()> {
     let db = database::connect().await?;
     let games = Games::new();
     let matchmaking = Matchmaking::new();
-
     let retriever = Retriever::new().await;
 
+    let (shutdown_send, shutdown_recv) = broadcast::channel(16);
     let global_state = GlobalState {
         db,
         games,
         matchmaking,
         retriever,
+        shutdown_recv,
     };
     let global_state = Arc::new(global_state);
 
-    try_join!(
-        http::start_server(global_state.clone()),
-        blaze::start_server(global_state)
-    )?;
+    select! {
+        result = http::start_server(global_state.clone()) => { result? },
+        result = blaze::start_server(global_state) => { result? },
+        _ = signal::ctrl_c() => {
+            shutdown_send
+                .send(true)
+                .expect("Failed to send shutdown signal");
+        }
+    }
 
     Ok(())
 }
