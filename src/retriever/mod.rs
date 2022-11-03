@@ -21,6 +21,9 @@ use crate::{
 
 mod shared;
 
+/// Type for SSL wrapped blaze stream
+type Stream = BlazeStream<TcpStream>;
+
 /// Structure for the retrievier system which contains the host address
 /// for the official game server in order to make further connections
 pub struct Retriever {
@@ -62,14 +65,13 @@ impl Retriever {
         Some(ip)
     }
 
-    fn get_main_host(host: String) -> Option<InstanceResponse> {
-        debug!("Connecting to official redirector");
-        let stream = TcpStream::connect((host.clone(), Self::REDIRECT_PORT))
+    fn session(host: &str, port: u16) -> Option<RetSession> {
+        let addr = (host.clone(), port);
+        let stream = TcpStream::connect(addr)
             .map_err(|err| {
                 error!(
                     "Failed to connect to redirector server at {}:{}; Cause: {err:?}",
-                    host,
-                    Self::REDIRECT_PORT
+                    host, port
                 );
                 err
             })
@@ -78,41 +80,31 @@ impl Retriever {
             .map_err(|err| {
                 error!(
                     "Failed to connect to redirector server at {}:{}; Cause: {err:?}",
-                    host,
-                    Self::REDIRECT_PORT
+                    host, port
                 );
                 err
             })
             .ok()?;
-        let mut session = RetSession::new(stream);
+        Some(RetSession::new(stream))
+    }
+
+    fn get_main_host(host: String) -> Option<InstanceResponse> {
+        debug!("Connecting to official redirector");
+        let mut session = Self::session(&host, Self::REDIRECT_PORT)?;
         debug!("Connected to official redirector");
-
         debug!("Requesting details from official server");
-        let res: InstanceResponse = session
-            .request(
-                Components::Redirector(Redirector::GetServerInstance),
-                &InstanceRequest,
-            )
-            .map_err(|err| {
-                error!("Failed to request server instance: {err:?}");
-                err
-            })
-            .ok()?;
-
-        info!("Instance details:\n{:#?}", &res);
-
-        Some(res)
+        session.get_main_instance().ok()
     }
 }
 
 /// Session implementation for a retriever client
 struct RetSession {
     id: u16,
-    stream: BlazeStream<TcpStream>,
+    stream: Stream,
 }
 
 impl RetSession {
-    pub fn new(stream: BlazeStream<TcpStream>) -> Self {
+    pub fn new(stream: Stream) -> Self {
         Self { id: 0, stream }
     }
 
@@ -155,5 +147,16 @@ impl RetSession {
             let contents = response.contents::<T>()?;
             return Ok(contents);
         }
+    }
+
+    fn get_main_instance(&mut self) -> BlazeResult<InstanceResponse> {
+        self.request::<InstanceRequest, InstanceResponse>(
+            Components::Redirector(Redirector::GetServerInstance),
+            &InstanceRequest,
+        )
+        .map_err(|err| {
+            error!("Failed to request server instance: {err:?}");
+            BlazeError::Other("Unable to obtain main instance")
+        })
     }
 }
