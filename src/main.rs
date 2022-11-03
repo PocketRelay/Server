@@ -11,6 +11,7 @@ use dotenvy::dotenv;
 use env_logger::WriteStyle;
 use game::matchmaking::Matchmaking;
 use log::info;
+use retriever::Retriever;
 use sea_orm::DatabaseConnection;
 use std::io;
 use std::sync::Arc;
@@ -21,6 +22,7 @@ pub struct GlobalState {
     pub games: Games,
     pub matchmaking: Matchmaking,
     pub db: DatabaseConnection,
+    pub retriever: Option<Retriever>,
 }
 
 #[tokio::main]
@@ -41,10 +43,14 @@ async fn main() -> io::Result<()> {
     let db = database::connect().await?;
     let games = Games::new();
     let matchmaking = Matchmaking::new();
+
+    let retriever = Retriever::new().await;
+
     let global_state = GlobalState {
         db,
         games,
         matchmaking,
+        retriever,
     };
     let global_state = Arc::new(global_state);
 

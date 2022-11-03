@@ -1,14 +1,23 @@
 //! Module for retrieving data from the official Mass Effect 3 Servers
 
-use std::{io::Write, net::TcpStream, sync::atomic::AtomicU16};
+use std::{
+    io::Write,
+    net::{Ipv4Addr, SocketAddrV4, TcpStream},
+};
 
-use blaze_pk::{Codec, OpaquePacket, Packets, SimpleCounter};
-use blaze_ssl::stream::{BlazeResult, BlazeStream, StreamMode};
+use blaze_pk::{Codec, OpaquePacket, PacketType, Packets};
+use blaze_ssl::stream::{BlazeStream, StreamMode};
 use dnsclient::{sync::DNSClient, UpstreamServer};
-use log::{debug, error};
+use log::{debug, error, info};
 use tokio::task::spawn_blocking;
 
-use crate::blaze::components::Components;
+use crate::{
+    blaze::{
+        components::{Components, Redirector},
+        errors::{BlazeError, BlazeResult},
+    },
+    retriever::shared::{InstanceRequest, InstanceResponse},
+};
 
 mod shared;
 
@@ -17,15 +26,23 @@ mod shared;
 pub struct Retriever {
     host: String,
     port: u16,
+    secu: bool,
 }
 
 impl Retriever {
-    /// The address of the DNS server to use for DNS lookups
-    const DNS_ADDRESS: (&str, u16) = ("1.1.1.1", 53);
     const REDIRECT_PORT: u16 = 42127;
 
     pub async fn new() -> Option<Retriever> {
         let redirector_host = spawn_blocking(Self::get_redirector_host).await.ok()??;
+        let main_host = spawn_blocking(move || Self::get_main_host(redirector_host))
+            .await
+            .ok()??;
+        debug!("Retriever setup complete.");
+        Some(Retriever {
+            host: main_host.host,
+            port: main_host.port,
+            secu: main_host.secu,
+        })
     }
 
     /// Attempts to find the real address for gosredirector.ea.com
@@ -34,19 +51,20 @@ impl Retriever {
     ///
     /// Will return None if this process failed.
     fn get_redirector_host() -> Option<String> {
-        debug!("Attempting lookup for gosredirector.ea.com")
-        let upstream = UpstreamServer::new(DNS_ADDRESS);
+        debug!("Attempting lookup for gosredirector.ea.com");
+        let addr = SocketAddrV4::new(Ipv4Addr::new(1, 1, 1, 1), 53);
+        let upstream = UpstreamServer::new(addr);
         let dns_client = DNSClient::new(vec![upstream]);
-        let result = dns_client.query_a(name).ok()?;
+        let mut result = dns_client.query_a("gosredirector.ea.com").ok()?;
         let result = result.pop()?;
         let ip = format!("{}", result);
         debug!("Lookup Complete: {}", &ip);
         Some(ip)
     }
 
-    fn get_main_host(host: &str) -> Option<String> {
+    fn get_main_host(host: String) -> Option<InstanceResponse> {
         debug!("Connecting to official redirector");
-        let stream = TcpStream::connect((host, Self::REDIRECT_PORT))
+        let stream = TcpStream::connect((host.clone(), Self::REDIRECT_PORT))
             .map_err(|err| {
                 error!(
                     "Failed to connect to redirector server at {}:{}; Cause: {err:?}",
@@ -69,27 +87,73 @@ impl Retriever {
         let mut session = RetSession::new(stream);
         debug!("Connected to official redirector");
 
+        debug!("Requesting details from official server");
+        let res: InstanceResponse = session
+            .request(
+                Components::Redirector(Redirector::GetServerInstance),
+                &InstanceRequest,
+            )
+            .map_err(|err| {
+                error!("Failed to request server instance: {err:?}");
+                err
+            })
+            .ok()?;
 
+        info!("Instance details:\n{:#?}", &res);
+
+        Some(res)
     }
 }
 
 /// Session implementation for a retriever client
 struct RetSession {
-    counter: SimpleCounter,
+    id: u16,
     stream: BlazeStream<TcpStream>,
 }
 
 impl RetSession {
     pub fn new(stream: BlazeStream<TcpStream>) -> Self {
-        Self {
-            counter: SimpleCounter::new(),
-            stream,
-        }
+        Self { id: 0, stream }
     }
 
-    pub fn request<T: Codec>(&mut self, component: Components, contents: &T) -> BlazeResult<()> {
-        let packet = Packets::request(&mut self.counter, component, contents);
-        packet.write(&mut self.stream)?;
+    pub fn handle_notify(
+        &mut self,
+        component: Components,
+        value: &OpaquePacket,
+    ) -> BlazeResult<()> {
         Ok(())
+    }
+
+    /// Writes a request packet returning the recieved response packet
+    pub fn request<Req: Codec, Res: Codec>(
+        &mut self,
+        component: Components,
+        contents: &Req,
+    ) -> BlazeResult<Res> {
+        let request = Packets::request(self.id, component, contents);
+        request.write(&mut self.stream)?;
+        self.stream.flush()?;
+        self.id += 1;
+        self.expect_response(&request)
+    }
+
+    fn expect_response<T: Codec>(&mut self, request: &OpaquePacket) -> BlazeResult<T> {
+        loop {
+            let (component, response): (Components, OpaquePacket) =
+                match OpaquePacket::read_typed(&mut self.stream) {
+                    Ok(value) => value,
+                    Err(_) => return Err(BlazeError::Other("Unable to read / decode packet")),
+                };
+            response.debug_decode()?;
+            if response.0.ty == PacketType::Notify {
+                self.handle_notify(component, &response).ok();
+                continue;
+            }
+            if !response.0.path_matches(&request.0) {
+                continue;
+            }
+            let contents = response.contents::<T>()?;
+            return Ok(contents);
+        }
     }
 }
