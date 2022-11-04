@@ -125,7 +125,7 @@ async fn handle_fetch_messages(session: &SessionArc, packet: &OpaquePacket) -> H
 /// - {n} = Player Display Name
 /// - {ip} = Session IP Address
 fn get_menu_message(session: &SessionArc, player: &PlayerModel) -> String {
-    let mut message = env::menu_message();
+    let mut message = env::str_env(env::MENU_MESSAGE);
     if message.contains("{v}") {
         message = message.replace("{v}", VERSION);
     }

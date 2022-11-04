@@ -12,7 +12,7 @@ pub mod interface;
 pub async fn connect() -> io::Result<DatabaseConnection> {
     info!("Connecting to database..");
 
-    let db_file = env::database_file();
+    let db_file = env::str_env(env::DATABASE_FILE);
     let file_path = Path::new(&db_file);
     if let Some(parent) = file_path.parent() {
         if !parent.exists() {

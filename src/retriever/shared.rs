@@ -1,6 +1,6 @@
 use blaze_pk::{
-    group, tag_str, tag_u32, tag_u8, tag_value, Codec, CodecError, CodecResult, Reader, Tag,
-    TdfOptional,
+    group, packet, tag_str, tag_u32, tag_u8, tag_value, Codec, CodecError, CodecResult, Reader,
+    Tag, TdfMap, TdfOptional,
 };
 
 /// Packet encoding for Redirector GetServerInstance packets
@@ -48,5 +48,49 @@ impl Codec for InstanceResponse {
             }
         };
         Ok(InstanceResponse { host, port })
+    }
+}
+
+pub struct OriginLoginRes {
+    pub email: String,
+    pub display_name: String,
+}
+
+group! {
+    struct OriginSess {
+        MAIL mail: String,
+        PDTL data: OriginPlayerData,
+    }
+}
+
+group! {
+    struct OriginPlayerData {
+        DSNM display_name: String
+    }
+}
+
+impl Codec for OriginLoginRes {
+    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+        let sess = Tag::expect::<OriginSess>(reader, "SESS")?;
+        Ok(Self {
+            email: sess.mail,
+            display_name: sess.data.display_name,
+        })
+    }
+}
+pub struct OriginLoginReq {
+    pub token: String,
+}
+
+impl Codec for OriginLoginReq {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_str(output, "AUTH", &self.token);
+        tag_u8(output, "TYPE", 0x1);
+    }
+}
+
+packet! {
+    struct UserSettingsAll {
+        SMAP value: TdfMap<String, String>
     }
 }

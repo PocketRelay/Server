@@ -12,10 +12,12 @@ use crate::{
         components::{Components, Redirector},
         errors::{BlazeError, BlazeResult},
     },
+    env,
     retriever::shared::{InstanceRequest, InstanceResponse},
     utils::dns::lookup_host,
 };
 
+pub mod origin;
 mod shared;
 
 /// Type for SSL wrapped blaze stream
@@ -41,6 +43,10 @@ impl Retriever {
     /// connection to the redirector server and obtains the IP and Port
     /// of the Official server.
     pub async fn new() -> Option<Retriever> {
+        if !env::bool_env(env::RETRIEVER) {
+            return None;
+        }
+
         let redirector_host = lookup_host(Self::REDIRECTOR_HOST).await?;
         let (host, port) = spawn_blocking(move || Self::get_main_host(redirector_host))
             .await
@@ -59,10 +65,15 @@ impl Retriever {
         let instance = session.get_main_instance().ok()?;
         Some((instance.host, instance.port))
     }
+
+    /// Returns a new session to the main server
+    pub fn session(&self) -> Option<RetSession> {
+        RetSession::new(&self.host, self.port)
+    }
 }
 
 /// Session implementation for a retriever client
-struct RetSession {
+pub struct RetSession {
     /// The ID for the next request packet
     id: u16,
     /// The underlying SSL / TCP stream connection
@@ -116,6 +127,17 @@ impl RetSession {
         contents: &Req,
     ) -> BlazeResult<Res> {
         let request = Packets::request(self.id, component, contents);
+        request.write(&mut self.stream)?;
+        self.stream.flush()?;
+        self.id += 1;
+        self.expect_response(&request)
+    }
+
+    /// Writes a request packet and waits until the response packet is
+    /// recieved returning the contents of that response packet. The
+    /// request will have no content
+    pub fn request_empty<Res: Codec>(&mut self, component: Components) -> BlazeResult<Res> {
+        let request = Packets::request_empty(self.id, component);
         request.write(&mut self.stream)?;
         self.stream.flush()?;
         self.id += 1;

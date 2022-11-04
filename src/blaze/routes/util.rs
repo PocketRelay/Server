@@ -46,7 +46,7 @@ pub async fn route(session: &SessionArc, component: Util, packet: &OpaquePacket)
 /// ```
 ///
 async fn handle_get_telemetry_server(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let ext_host = env::ext_host();
+    let ext_host = env::str_env(env::EXT_HOST);
     let res = TelemetryRes {
         address: ext_host,
         session_id: session.id,
@@ -183,8 +183,8 @@ async fn handle_pre_auth(session: &SessionArc, packet: &OpaquePacket) -> HandleR
     config.insert("voipHeadsetUpdateRate", VOIP_HEADSET_UPDATE_RATE);
     config.insert("xlspConnectionIdleTimeout", XLSP_CONNECTION_IDLE_TIMEOUT);
 
-    let host = env::ext_host();
-    let port = env::http_port();
+    let host = env::str_env(env::EXT_HOST);
+    let port = env::u16_env(env::HTTP_PORT);
 
     session
         .response(packet, &PreAuthRes { host, port, config })
@@ -253,7 +253,7 @@ impl Codec for PostAuthRes {
 /// packet(Components.UTIL, Commands.POST_AUTH, 0x1b) {}
 /// ```
 async fn handle_post_auth(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let ext_host = env::ext_host();
+    let ext_host = env::str_env(env::EXT_HOST);
     let res = PostAuthRes {
         session_id: session.id,
         ticker: TickerDetails {
@@ -385,8 +385,8 @@ fn talk_file(lang: &str) -> TdfMap<String, String> {
 /// these urls are set to (gosredirector.ea.com) because the client will
 /// redirect this host and handling proxying itself
 fn data_config() -> TdfMap<String, String> {
-    let ext_host = env::ext_host();
-    let http_port = env::http_port();
+    let ext_host = env::str_env(env::EXT_HOST);
+    let http_port = env::u16_env(env::HTTP_PORT);
 
     let prefix = format!("http://{ext_host}:{http_port}");
 

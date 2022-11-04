@@ -5,6 +5,7 @@ use crate::blaze::shared::{
 };
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
+use crate::env;
 use crate::game::{Game, Games};
 use crate::utils::generate_token;
 use crate::GlobalState;
@@ -27,7 +28,7 @@ pub mod shared;
 
 /// Starts the main Blaze server with the provided global state.
 pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
-    let main_port = crate::env::main_port();
+    let main_port = env::u16_env(env::MAIN_PORT);
     info!("Starting Main Server on (0.0.0.0:{main_port})");
     let listener = TcpListener::bind(("0.0.0.0", main_port)).await?;
 
