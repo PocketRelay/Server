@@ -112,7 +112,7 @@ async fn handle_update_network_info(session: &SessionArc, packet: &OpaquePacket)
 
     let pslm = req
         .nlmp
-        .map(|mut value| value.take(QOSS_KEY).unwrap_or(DEFAULT_PSLM))
+        .map(|mut value| value.get_owned(QOSS_KEY).unwrap_or(DEFAULT_PSLM))
         .unwrap_or(DEFAULT_PSLM);
     {
         let session_data = &mut *session.data.write().await;

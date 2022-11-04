@@ -13,22 +13,19 @@ pub async fn find_by_id(db: &DatabaseConnection, id: u32) -> PlayerResult {
     players::Entity::find_by_id(id).one(db).await
 }
 
-pub async fn create_normal(
+pub async fn create(
     db: &DatabaseConnection,
     email: String,
+    display_name: String,
     password: String,
+    origin: bool,
 ) -> DbResult<players::Model> {
-    let display_name = if email.len() > 99 {
-        email[0..99].to_string()
-    } else {
-        email.clone()
-    };
     let active_model = players::ActiveModel {
         id: NotSet,
         email: Set(email.to_string()),
         display_name: Set(display_name),
         session_token: NotSet,
-        origin: Set(false),
+        origin: Set(origin),
         password: Set(password),
         credits: NotSet,
         credits_spent: NotSet,
@@ -48,7 +45,18 @@ pub async fn create_normal(
     active_model.insert(db).await
 }
 
-pub async fn find_by_email(db: &DatabaseConnection, email: &str) -> PlayerResult {
+pub async fn find_by_email(db: &DatabaseConnection, email: &str, origin: bool) -> PlayerResult {
+    players::Entity::find()
+        .filter(
+            players::Column::Email
+                .eq(email)
+                .and(players::Column::Origin.eq(origin)),
+        )
+        .one(db)
+        .await
+}
+
+pub async fn find_by_email_any(db: &DatabaseConnection, email: &str) -> PlayerResult {
     players::Entity::find()
         .filter(players::Column::Email.eq(email))
         .one(db)

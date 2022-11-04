@@ -1,5 +1,6 @@
+use blaze_pk::TdfMap;
 use log::warn;
-use sea_orm::{ActiveModelTrait, IntoActiveModel, Set};
+use sea_orm::{ActiveModelTrait, DatabaseConnection, IntoActiveModel, Set};
 
 use crate::{
     blaze::{errors::BlazeResult, SessionArc},
@@ -73,4 +74,37 @@ pub async fn update(session: &SessionArc, key: &str, value: String) -> BlazeResu
     let player = model.update(session.db()).await?;
     session_data.player = Some(player);
     Ok(())
+}
+
+pub async fn update_all(
+    db: &DatabaseConnection,
+    player: players::Model,
+    values: TdfMap<String, String>,
+) -> BlazeResult<players::Model> {
+    let mut others = Vec::new();
+    for (key, value) in values {
+        if key.starts_with("class") {
+            super::player_classes::update_with(db, &player, &key, &value)
+                .await
+                .map_err(|err| err.context("While updating player class"))
+                .ok();
+        } else if key.starts_with("char") {
+            super::player_characters::update_with(db, &player, &key, &value)
+                .await
+                .map_err(|err| err.context("While updating player character"))
+                .ok();
+        } else {
+            others.push((key, value));
+        }
+    }
+    if others.len() > 0 {
+        let mut model = player.into_active_model();
+        for (key, value) in others {
+            modify(&mut model, &key, value);
+        }
+        let model = model.update(db).await?;
+        Ok(model)
+    } else {
+        Ok(player)
+    }
 }

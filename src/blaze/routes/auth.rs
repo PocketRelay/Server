@@ -3,8 +3,8 @@ use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
 use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
 use crate::blaze::SessionArc;
 use crate::database::entities::PlayerModel;
-use crate::database::interface::players;
 use crate::database::interface::players::find_by_email;
+use crate::database::interface::players::{self, find_by_email_any};
 use crate::utils::hashing::{hash_password, verify_password};
 use blaze_pk::{packet, tag_value, Codec, OpaquePacket, Packets};
 use log::debug;
@@ -179,7 +179,7 @@ async fn handle_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResu
         return Err(login_error(packet, LoginError::InvalidEmail));
     }
 
-    let player = find_by_email(session.db(), &email)
+    let player = find_by_email(session.db(), &email, false)
         .await?
         .ok_or_else(|| login_error(packet, LoginError::EmailNotFound))?;
 
@@ -235,7 +235,7 @@ async fn handle_create_account(session: &SessionArc, packet: &OpaquePacket) -> H
         return Err(login_error(packet, LoginError::InvalidEmail));
     }
 
-    let email_exists = find_by_email(session.db(), &email).await?.is_some();
+    let email_exists = find_by_email_any(session.db(), &email).await?.is_some();
 
     if email_exists {
         return Err(login_error(packet, LoginError::EmailAlreadyInUse));
@@ -244,7 +244,13 @@ async fn handle_create_account(session: &SessionArc, packet: &OpaquePacket) -> H
     let hashed_password =
         hash_password(&password).map_err(|_| BlazeError::Other("Failed to hash user password"))?;
 
-    let player = players::create_normal(session.db(), email, hashed_password).await?;
+    let display_name = if email.len() > 99 {
+        email[0..99].to_string()
+    } else {
+        email.clone()
+    };
+
+    let player = players::create(session.db(), email, display_name, hashed_password, true).await?;
 
     complete_auth(session, packet, player, false).await?;
     Ok(())

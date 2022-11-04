@@ -67,22 +67,28 @@ fn parse_index(key: &str) -> BlazeResult<u16> {
         .map_err(|_| BlazeError::Other("Player class key was not an integer"))
 }
 
-/// Attempts to update the player character stored at the provided index by
-/// parsing the provided value and updating the database with any parsed changes.
-pub async fn update(session: &SessionArc, key: &str, value: &str) -> BlazeResult<()> {
+pub async fn update_with(
+    db: &DatabaseConnection,
+    player: &players::Model,
+    key: &str,
+    value: &str,
+) -> BlazeResult<()> {
     let index = parse_index(key)?;
-    let db = session.db();
-    let session_data = session.data.read().await;
-
-    let player = session_data.expect_player()?;
     let mut model = find(db, player, index).await?;
     if let None = parse(&mut model, value) {
         warn!("Failed to fully parse player class: {key} = {value}");
     }
-
-    drop(session_data);
-
     model.save(db).await?;
+    Ok(())
+}
+
+/// Attempts to update the player character stored at the provided index by
+/// parsing the provided value and updating the database with any parsed changes.
+pub async fn update(session: &SessionArc, key: &str, value: &str) -> BlazeResult<()> {
+    let db = session.db();
+    let session_data = session.data.read().await;
+    let player = session_data.expect_player()?;
+    update_with(db, player, key, value).await?;
     Ok(())
 }
 
