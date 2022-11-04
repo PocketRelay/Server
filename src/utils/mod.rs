@@ -3,6 +3,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub mod conv;
 pub mod dmap;
+pub mod dns;
 pub mod hashing;
 
 /// Generates a random alphanumeric token of the provided length
