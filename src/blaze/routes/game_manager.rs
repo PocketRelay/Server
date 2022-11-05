@@ -291,14 +291,17 @@ group! {
 group! {
     struct Rule {
         NAME name: String,
-        VALU value: String,
+        VALU value: Vec<String>,
     }
 }
 
 fn parse_ruleset(rules: Vec<Rule>) -> RuleSet {
     let mut out = Vec::new();
     for rule in rules {
-        if let Some(match_rule) = MatchRules::parse(&rule.name, &rule.value) {
+        let Some(value) = rule.value.first() else {
+            continue;
+        };
+        if let Some(match_rule) = MatchRules::parse(&rule.name, value) {
             out.push(match_rule);
         }
     }
