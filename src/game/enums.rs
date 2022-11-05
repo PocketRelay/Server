@@ -4,7 +4,7 @@ pub trait MatchRule: PartialEq + Sized {
 
     fn try_compare(&self, value: &str) -> bool {
         let other = Self::from_value(value);
-        !other.is_ignored() && other.eq(self)
+        self.is_ignored() || other.eq(self)
     }
 }
 
