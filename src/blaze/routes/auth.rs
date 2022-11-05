@@ -275,9 +275,25 @@ packet! {
 /// ```
 async fn handle_origin_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<OriginLoginReq>()?;
-    // TODO: Implement origin login
     debug!("Origin login request with token: {}", &req.token);
-    session.response_empty(packet).await
+    let Some(retriever) = session.retriever() else {
+        debug!("Unable to authenticate Origin user retriever is disabled or unavailable.");
+        return session.response_empty(packet).await
+    };
+
+    let player = retriever.get_origin_player(session.db(), req.token).await;
+    let Some(player) = player else {
+        debug!("Unable to authenticate Origin failed to retrieve user");
+        return session.response_empty(packet).await
+    };
+
+    debug!("Origin authentication success");
+    debug!("ID = {}", &player.id);
+    debug!("Username = {}", &player.display_name);
+    debug!("Email = {}", &player.email);
+
+    complete_auth(session, packet, player, true).await?;
+    Ok(())
 }
 
 packet! {

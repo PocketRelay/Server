@@ -32,7 +32,7 @@ impl Retriever {
     /// official server using the provided origin auth token.
     pub async fn get_origin_player(
         &self,
-        db: DatabaseConnection,
+        db: &DatabaseConnection,
         token: String,
     ) -> Option<players::Model> {
         if !env::bool_env(env::ORIGIN_FETCH) {
@@ -64,6 +64,7 @@ impl Retriever {
                     let data = spawn_blocking(move || session.get_extra_data())
                         .await
                         .ok()?;
+
                     match data {
                         Some(values) => {
                             player = player_data::update_all(&db, player, values).await.ok()?;

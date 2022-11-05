@@ -7,6 +7,7 @@ use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
 use crate::env;
 use crate::game::{Game, Games};
+use crate::retriever::Retriever;
 use crate::utils::generate_token;
 use crate::GlobalState;
 use blaze_pk::{Codec, OpaquePacket, PacketResult, Packets};
@@ -213,6 +214,12 @@ impl Session {
     /// state data.
     pub fn db(&self) -> &DatabaseConnection {
         &self.global.db
+    }
+
+    /// Returns a reference to the retriever instance if there is one
+    /// present.
+    pub fn retriever(&self) -> Option<&Retriever> {
+        self.global.retriever.as_ref()
     }
 
     /// Returns a reference to the games manager from the global
