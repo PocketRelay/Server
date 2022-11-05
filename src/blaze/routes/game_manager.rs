@@ -438,33 +438,37 @@ packet! {
 /// }
 /// ```
 async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+    let req = packet.contents::<MatchmakingReq>()?;
     {
         let session_data = session.data.read().await;
         let player = session_data.expect_player()?;
         info!("Player {} started matchmaking", player.display_name);
     }
 
-    let req = packet.contents::<MatchmakingReq>()?;
     let rules = parse_ruleset(req.criteria.rules);
 
+    debug!("Checking for games before adding to queue");
     let game = session
         .global
         .matchmaking
         .get_or_queue(session, rules, &session.global.games)
         .await;
     {
+        debug!("Check complete");
         let session_data = session.data.read().await;
         let matchmaking_id = session_data
             .matchmaking
             .as_ref()
             .map(|value| value.id)
             .unwrap_or(1);
+        debug!("Matchmaking ID: {}", matchmaking_id);
         session
             .response(packet, &MatchmakingRes { id: matchmaking_id })
             .await?;
     }
 
     if let Some(game) = game {
+        debug!("Found matching game");
         Game::add_player(&game, session).await?;
     }
 

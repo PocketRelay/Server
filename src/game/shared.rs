@@ -5,7 +5,7 @@ use crate::game::Game;
 use blaze_pk::{
     packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list,
     tag_list_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8,
-    tag_usize, tag_value, Codec, OpaquePacket, Packets, TdfMap, ValueType,
+    tag_usize, tag_value, Codec, OpaquePacket, Packets, Tag, TdfMap, ValueType,
 };
 
 pub struct NotifyPlayerJoining<'a> {
@@ -64,8 +64,8 @@ async fn encode_notify_game_setup(
     let player_count = players.len();
 
     for player in players {
-        player_ids.push(player.id);
         let session_data = player.data.read().await;
+        player_ids.push(session_data.player_id_safe());
         encode_player_data(&session_data, &mut player_data);
     }
 
@@ -88,9 +88,15 @@ async fn encode_notify_game_setup(
         tag_u16(output, "GSTA", game_data.state);
         drop(game_data);
         tag_empty_str(output, "GTYP");
+
         {
             tag_list_start(output, "HNET", ValueType::Optional, 1);
-            host_data.net.get_groups().encode(output);
+            output.push(0); // Optional type;
+            {
+                tag_group_start(output, "VALU");
+                output.push(2);
+                host_data.net.groups.encode(output);
+            }
         }
 
         tag_u32(output, "HSES", host_id);

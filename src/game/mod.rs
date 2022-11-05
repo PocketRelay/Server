@@ -236,7 +236,7 @@ impl Game {
 
     pub async fn add_player(game: &GameArc, session: &SessionArc) -> BlazeResult<()> {
         // Game is full cannot add anymore players
-        if game.player_count().await >= Self::MAX_PLAYERS {
+        if !game.is_joinable().await {
             return Err(BlazeError::Game(GameError::Full));
         }
 
@@ -251,6 +251,7 @@ impl Game {
         // Set the player session game data
         {
             let mut session_data = session.data.write().await;
+            session_data.matchmaking = None;
             session_data.game = Some(SessionGame {
                 game: game.clone(),
                 slot,
@@ -273,6 +274,7 @@ impl Game {
 
             // Update session details for other players and send join notifies
             {
+                debug!("Sending join information & updates to other players");
                 let players = &*game.players.read().await;
                 for player in players {
                     player.write_packet(&join_notify).await?;
@@ -281,12 +283,15 @@ impl Game {
                         player.update_for(&session).await?;
                     }
                 }
+                debug!("Done sending join information")
             }
         }
 
         let setup = notify_game_setup(game, &session).await?;
         session.write_packet(&setup).await?;
         session.update_client().await?;
+
+        debug!("Finished adding player");
 
         Ok(())
     }

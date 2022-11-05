@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use log::debug;
 use tokio::sync::RwLock;
 
 use crate::blaze::{MatchmakingState, SessionArc};
@@ -79,9 +80,15 @@ impl RuleSet {
         for rule in &self.values {
             let attr = rule.attr();
             if let Some(value) = attributes.get(attr) {
+                debug!("Comparing {rule:?} {attr} {value}");
                 if !rule.try_compare(value) {
+                    debug!("Doesn't Match");
                     return false;
+                } else {
+                    debug!("Matches")
                 }
+            } else {
+                debug!("Game didn't have attr {rule:?} {attr}");
             }
         }
 
@@ -136,6 +143,7 @@ impl Matchmaking {
         let games = games.games.read().await;
         for game in games.values() {
             if rules.matches(game).await {
+                println!("Found matching game {}", &game.name);
                 return Some(game.clone());
             }
         }
@@ -153,10 +161,12 @@ impl Matchmaking {
                 session_data.matchmaking = Some(value);
             }
         }
+        debug!("Updated player matchmaking data");
 
         // Push the player to the end of the queue
         let queue = &mut *self.queue.write().await;
         queue.push_back((session.clone(), rules));
+        debug!("Added player to back of queue");
 
         None
     }
