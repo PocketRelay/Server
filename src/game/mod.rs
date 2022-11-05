@@ -243,7 +243,7 @@ impl Game {
         // Add the player to the players list returning the slot it was added to
         let slot = {
             let mut players = game.players.write().await;
-            let slot = players.len();
+            let slot = players.len() + 1;
             players.push(session.clone());
             slot
         };
@@ -259,11 +259,11 @@ impl Game {
         }
 
         // Joining player is not the host player
-        if slot != 0 {
+        if slot != 1 {
             let join_notify = {
                 let session_data = session.data.read().await;
                 let content = NotifyPlayerJoining {
-                    id: 0,
+                    id: game.id,
                     session: &session_data,
                 };
                 Packets::notify(
