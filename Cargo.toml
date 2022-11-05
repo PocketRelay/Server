@@ -50,3 +50,7 @@ password-hash = "0.4.2"
 # Resource / HTTP embedding
 rust-embed={ version = "6.4.1", features = ["debug-embed"]}
 mime_guess = "2.0.4"
+
+[profile.release]
+strip = true
+lto = true
