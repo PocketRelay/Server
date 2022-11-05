@@ -22,8 +22,8 @@ features present in the [Kotlin Server (https://github.com/PocketRelay/ServerKot
 - Class and character data saving
 - Galaxy at war
 - Creating games and playing alone (Not able to join yet matchmaking hasn't been added)
+- Origin fetching and authentication
   
 ### Planned / In progress
 - Matchmaking
-- Origin fetching and authentication
 - Proper client application 
