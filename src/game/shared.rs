@@ -5,7 +5,7 @@ use crate::game::Game;
 use blaze_pk::{
     packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list,
     tag_list_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8,
-    tag_usize, tag_value, Codec, OpaquePacket, Packets, Tag, TdfMap, ValueType,
+    tag_usize, tag_value, Codec, OpaquePacket, Packets, TdfMap, ValueType,
 };
 
 pub struct NotifyPlayerJoining<'a> {

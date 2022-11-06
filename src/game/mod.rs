@@ -251,7 +251,6 @@ impl Game {
         // Set the player session game data
         {
             let mut session_data = session.data.write().await;
-            session_data.matchmaking = None;
             session_data.game = Some(SessionGame {
                 game: game.clone(),
                 slot,
