@@ -33,6 +33,7 @@ pub fn encode_player_data(session: &SessionData, output: &mut Vec<u8>) {
     tag_u32(output, "PID", player_id);
     tag_value(output, "PNET", &session.net.get_groups());
     tag_usize(output, "SID", session.game_slot_safe());
+    tag_u8(output, "SLOT", 0);
     tag_u8(output, "STAT", session.state);
     tag_u16(output, "TIDX", 0xffff);
     tag_u8(output, "TIME", 0);
@@ -90,10 +91,8 @@ async fn encode_notify_game_setup(
         tag_empty_str(output, "GTYP");
 
         {
-            tag_list_start(output, "HNET", ValueType::Optional, 1);
-            output.push(0); // Optional type;
+            tag_list_start(output, "HNET", ValueType::Group, 1);
             {
-                tag_group_start(output, "VALU");
                 output.push(2);
                 host_data.net.groups.encode(output);
             }
@@ -139,10 +138,10 @@ async fn encode_notify_game_setup(
     tag_list_start(output, "PROS", ValueType::Group, player_count);
     output.extend_from_slice(&player_data);
 
-    tag_optional_start(output, "REAS", 0x0);
-    {
-        tag_group_start(output, "VALU");
-        if session.game_slot_safe() != 0 {
+    if session.game_slot_safe() != 0 {
+        tag_optional_start(output, "REAS", 0x3);
+        {
+            tag_group_start(output, "VALU");
             tag_u16(output, "FIT", 0x3f7a);
             tag_u16(output, "MAXF", 0x5460);
             let mid = session
@@ -153,10 +152,15 @@ async fn encode_notify_game_setup(
             tag_u32(output, "MSID", mid);
             tag_u8(output, "RLST", 0x2);
             tag_u32(output, "USID", session.player_id_safe());
-        } else {
-            tag_u8(output, "DCTX", 0x0);
+            tag_group_end(output);
         }
-        tag_group_end(output);
+    } else {
+        tag_optional_start(output, "REAS", 0x0);
+        {
+            tag_group_start(output, "VALU");
+            tag_u8(output, "DCTX", 0x0);
+            tag_group_end(output);
+        }
     }
     Ok(())
 }
