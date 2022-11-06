@@ -5,7 +5,7 @@ mod shared;
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{BlazeError, BlazeResult, GameError, GameResult};
 use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete};
-use crate::blaze::{SessionArc, SessionGame};
+use crate::blaze::{Session, SessionArc, SessionGame};
 use crate::game::shared::{
     notify_game_setup, NotifyAttribsChange, NotifyPlayerJoining, NotifyPlayerRemoved,
     NotifySettingChange, NotifyStateChange,
@@ -48,6 +48,43 @@ impl Games {
         let games = self.games.read().await;
         games.get(&id).cloned()
     }
+
+    pub async fn release(&self, game: GameArc) {
+        let games = &mut *self.games.write().await;
+        // Remove game from known games
+        let Some(game) = games.remove(&game.id) else { return; };
+        let players = &mut *game.players.write().await;
+        while let Some(player) = players.pop() {
+            let session_data = &mut *player.data.write().await;
+            session_data.game = None;
+        }
+    }
+
+    pub async fn release_player(&self, player: &Session) {
+        debug!("Releasing player (Session ID: {})", player.id);
+
+        let game = {
+            let session_data = &mut *player.data.write().await;
+            let Some(game) = session_data.game.take() else { return; };
+            game.game
+        };
+
+        debug!(
+            "Releasing player from game (Name: {}, ID: {}, Session ID: {})",
+            &game.name, &game.id, player.id
+        );
+        game.remove_player(player).await.ok();
+        debug!("Checking if game can be removed");
+        self.remove_if_empty(game).await;
+    }
+
+    pub async fn remove_if_empty(&self, game: GameArc) {
+        if game.player_count().await > 0 {
+            return;
+        }
+        debug!("Removing empty game (Name: {}, ID: {}", &game.name, game.id);
+        self.release(game).await;
+    }
 }
 
 pub type GameArc = Arc<Game>;
@@ -57,6 +94,12 @@ pub struct Game {
     pub name: String,
     pub data: RwLock<GameData>,
     pub players: RwLock<Vec<SessionArc>>,
+}
+
+impl Drop for Game {
+    fn drop(&mut self) {
+        debug!("Game {} {} has been dropped", self.name, self.id)
+    }
 }
 
 pub struct GameData {
@@ -195,35 +238,37 @@ impl Game {
         Ok(())
     }
 
-    pub async fn remove_player(&self, session: &SessionArc) -> BlazeResult<()> {
-        let session_data = session.data.read().await;
-
-        if let Some(player) = &session_data.player {
-            debug!(
-                "Removing player {} from game {}",
-                player.display_name, self.id
-            )
-        } else {
-            debug!("Removing session {} from game {}", session.id, self.id);
-        }
-
-        {
-            let packet = Packets::notify(
-                Components::GameManager(GameManager::PlayerRemoved),
-                &NotifyPlayerRemoved {
-                    id: self.id,
-                    pid: session_data.player_id_safe(),
-                },
-            );
-            self.push_all(&packet).await?;
-        }
-
-        drop(session_data);
-
+    pub async fn remove_player(&self, session: &Session) -> BlazeResult<()> {
         {
             let mut players = self.players.write().await;
             players.retain(|value| value.id != session.id);
+            debug!("Removed player from players list (ID: {})", session.id)
         }
+
+        let player_id = {
+            let session_data = &mut *session.data.write().await;
+            session_data.game = None;
+            if let Some(player) = &session_data.player {
+                debug!(
+                    "Removing player {} from game {}",
+                    player.display_name, self.id
+                );
+                self.id
+            } else {
+                debug!("Removing session {} from game {}", session.id, self.id);
+                1
+            }
+        };
+
+        let packet = Packets::notify(
+            Components::GameManager(GameManager::PlayerRemoved),
+            &NotifyPlayerRemoved {
+                id: self.id,
+                pid: player_id,
+            },
+        );
+        self.push_all(&packet).await?;
+        session.write_packet(&packet).await?;
 
         // TODO: Host migration notify adminlistchange
 

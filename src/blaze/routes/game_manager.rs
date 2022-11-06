@@ -230,13 +230,15 @@ packet! {
 /// ```
 async fn handle_remove_player(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<RemovePlayerReq>()?;
-    let game = session
-        .games()
+    let games = session.games();
+    let game = games
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
     game.remove_by_id(req.pid).await?;
-    session.response_empty(packet).await
+    games.remove_if_empty(game).await;
+    session.response_empty(packet).await?;
+    Ok(())
 }
 
 packet! {
@@ -491,9 +493,10 @@ async fn handle_cancel_matchmaking(session: &SessionArc, packet: &OpaquePacket) 
         info!("Player {} cancelled matchmaking", player.display_name);
     }
 
-    session.global.matchmaking.remove(session).await;
+    session.response_empty(packet).await?;
 
-    // TODO: Remove from games if reached join
+    session.matchmaking().remove(session).await;
+    session.games().release_player(session).await;
 
-    session.response_empty(packet).await
+    Ok(())
 }

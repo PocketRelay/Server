@@ -6,6 +6,7 @@ use crate::blaze::shared::{
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
 use crate::env;
+use crate::game::matchmaking::Matchmaking;
 use crate::game::{Game, Games};
 use crate::retriever::Retriever;
 use crate::utils::generate_token;
@@ -75,7 +76,7 @@ async fn process_session(session: SessionArc) {
             }
         }
     }
-    session.release();
+    session.release().await;
 }
 
 pub struct Session {
@@ -84,6 +85,12 @@ pub struct Session {
     pub stream: RwLock<TcpStream>,
     pub addr: SocketAddr,
     pub data: RwLock<SessionData>,
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        debug!("Session with id {} dropped", self.id)
+    }
 }
 
 // Type for session wrapped in an arc
@@ -160,9 +167,10 @@ impl Session {
         Ok(())
     }
 
-    pub fn release(&self) {
-        info!("Session {} was released", self.id)
-        // TODO: Release the session removing all references to it
+    pub async fn release(&self) {
+        debug!("Releasing session {}", self.id);
+        self.games().release_player(self).await;
+        info!("Session {} was released", self.id);
     }
 
     /// This function creates a new session from the provided values and wraps
@@ -226,6 +234,12 @@ impl Session {
     /// state data.
     pub fn games(&self) -> &Games {
         &self.global.games
+    }
+
+    /// Returns a reference to the matchmaking manager from the global
+    /// state data.
+    pub fn matchmaking(&self) -> &Matchmaking {
+        &self.global.matchmaking
     }
 
     /// Obtains the session token for the player linked to this session
