@@ -13,6 +13,7 @@ use crate::game::shared::{
 use blaze_pk::{OpaquePacket, Packets, TdfMap};
 use log::debug;
 use std::collections::HashMap;
+use std::io;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -139,12 +140,15 @@ impl Game {
         Ok(player.clone())
     }
 
-    pub async fn push_all(&self, packet: &OpaquePacket) -> GameResult<()> {
+    pub async fn push_all(&self, packet: &OpaquePacket) -> io::Result<()> {
         let players = &*self.players.read().await;
-        for player in players {
-            player.write_packet(packet).await?;
-            // TODO: Handle disconnects here.
-        }
+        let futures: Vec<_> = players
+            .iter()
+            .map(|value| value.write_packet(packet))
+            .collect();
+
+        // TODO: Handle errors for each players
+        let _ = futures::future::join_all(futures).await;
         Ok(())
     }
 
@@ -267,8 +271,8 @@ impl Game {
                 pid: player_id,
             },
         );
-        self.push_all(&packet).await?;
-        session.write_packet(&packet).await?;
+
+        try_join!(self.push_all(&packet), session.write_packet(&packet))?;
 
         // TODO: Host migration notify adminlistchange
 
@@ -277,6 +281,22 @@ impl Game {
 
     pub async fn is_joinable(&self) -> bool {
         self.player_count().await < Self::MAX_PLAYERS
+    }
+
+    pub async fn update_clients_for(&self, session: &SessionArc) -> io::Result<()> {
+        debug!("Updating session information of other players");
+        let players = &*self.players.read().await;
+
+        let futures: Vec<_> = players
+            .iter()
+            .map(|value| value.update_for(session))
+            .collect();
+
+        let _ = futures::future::join_all(futures).await;
+        // TODO: Handle update failure.
+
+        debug!("Done updating session information");
+        Ok(())
     }
 
     pub async fn add_player(game: &GameArc, session: &SessionArc) -> BlazeResult<()> {
@@ -303,33 +323,23 @@ impl Game {
         }
 
         // Joining player is not the host player
-        if slot != 1 {
-            let join_notify = {
-                let session_data = session.data.read().await;
-                let content = NotifyPlayerJoining {
-                    id: game.id,
-                    session: &session_data,
-                };
-                Packets::notify(
-                    Components::GameManager(GameManager::PlayerJoining),
-                    &content,
-                )
+        let join_notify = {
+            let session_data = session.data.read().await;
+            let content = NotifyPlayerJoining {
+                id: game.id,
+                session: &session_data,
             };
+            Packets::notify(
+                Components::GameManager(GameManager::PlayerJoining),
+                &content,
+            )
+        };
 
-            // Update session details for other players and send join notifies
-            {
-                debug!("Sending join information & updates to other players");
-                let players = &*game.players.read().await;
-                for player in players {
-                    player.write_packet(&join_notify).await?;
-                    // TODO: Handle disconnects here.
-                    if player.id != session.id {
-                        player.update_for(&session).await?;
-                    }
-                }
-                debug!("Done sending join information")
-            }
-        }
+        // Update session details for other players and send join notifies
+        try_join!(
+            game.push_all(&join_notify),
+            game.update_clients_for(session)
+        )?;
 
         let setup = notify_game_setup(game, &session).await?;
         session.write_packet(&setup).await?;

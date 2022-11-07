@@ -185,9 +185,9 @@ impl Session {
         }
     }
 
-    pub async fn update_for(&self, other: &SessionArc) -> BlazeResult<()> {
+    pub async fn update_for(&self, other: &SessionArc) -> io::Result<()> {
         let data = self.data.read().await;
-        let player = data.expect_player()?;
+        let Some(player) = &data.player else { return Ok(()) };
         let update_ext_data = Packets::notify(
             Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
             &UpdateExtDataAttr {
@@ -202,7 +202,6 @@ impl Session {
                 player,
             },
         );
-
         other.write_packet(&session_details).await?;
         other.write_packet(&update_ext_data).await?;
         Ok(())
