@@ -34,7 +34,7 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
     info!("Starting Main Server on (0.0.0.0:{main_port})");
     let listener = TcpListener::bind(("0.0.0.0", main_port)).await?;
 
-    let mut session_id = 0;
+    let mut session_id = 1;
     let mut shutdown_recv = global.shutdown_recv.resubscribe();
 
     loop {
@@ -68,6 +68,20 @@ async fn process_session(session: SessionArc) {
             }
             _ = shutdown_recv.recv() => {break;},
         };
+
+        if log::max_level() >= LevelFilter::Debug {
+            debug!(
+                "\n Session Read Packet: ({}): {:?} {:?}",
+                session.debug_info().await,
+                &packet.0.ty,
+                &component
+            );
+
+            match packet.debug_decode() {
+                Ok(value) => debug!("{}", value),
+                Err(err) => debug!("Packet Malformed: {err:?}"),
+            }
+        }
 
         match routes::route(&session, component, &packet).await {
             Ok(_) => {}
@@ -152,18 +166,21 @@ impl Session {
     pub async fn set_state(&self, state: u8) -> BlazeResult<()> {
         let mut data = self.data.write().await;
         data.state = state;
-        if let Some(sess_game) = &data.game {
-            let game = &sess_game.game;
-            let packet = Packets::notify(
-                Components::GameManager(GameManager::GamePlayerStateChange),
-                &SessionStateChange {
-                    gid: game.id,
-                    pid: self.id,
-                    state,
-                },
-            );
-            game.push_all(&packet).await?;
-        }
+
+        let Some(player) = &data.player else {return Ok(())};
+        let Some(sess_game) = &data.game else {return Ok(())};
+
+        let game = &sess_game.game;
+        let packet = Packets::notify(
+            Components::GameManager(GameManager::GamePlayerStateChange),
+            &SessionStateChange {
+                gid: game.id,
+                pid: player.id,
+                state,
+            },
+        );
+        game.push_all(&packet).await?;
+
         Ok(())
     }
 
@@ -188,13 +205,6 @@ impl Session {
     pub async fn update_for(&self, other: &SessionArc) -> io::Result<()> {
         let data = self.data.read().await;
         let Some(player) = &data.player else { return Ok(()) };
-        let update_ext_data = Packets::notify(
-            Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
-            &UpdateExtDataAttr {
-                flags: 0x3,
-                id: player.id,
-            },
-        );
         let session_details = Packets::notify(
             Components::UserSessions(UserSessions::SessionDetails),
             &SessionDetails {
@@ -202,6 +212,14 @@ impl Session {
                 player,
             },
         );
+        let update_ext_data = Packets::notify(
+            Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
+            &UpdateExtDataAttr {
+                flags: 0x3,
+                id: player.id,
+            },
+        );
+        drop(data);
         other.write_packet(&session_details).await?;
         other.write_packet(&update_ext_data).await?;
         Ok(())
@@ -303,7 +321,11 @@ impl Session {
     /// required locks and writes the packet to the stream.
     pub async fn write_packet(&self, packet: &OpaquePacket) -> io::Result<()> {
         if log::max_level() >= LevelFilter::Debug {
-            debug!("Sent packet TY {:?}", &packet.0.ty);
+            debug!(
+                "\n Session Write Packet: ({}): {:?}",
+                self.debug_info().await,
+                &packet.0.ty
+            );
 
             match packet.debug_decode() {
                 Ok(value) => debug!("{}", value),
@@ -315,6 +337,23 @@ impl Session {
         let mut stream = self.stream.write().await;
         let stream = stream.deref_mut();
         packet.write_async(stream).await
+    }
+
+    pub async fn debug_info(&self) -> String {
+        let session_data = self.data.read().await;
+        if let Some(player) = &session_data.player {
+            format!("Name: {}, ID: {}", player.display_name, player.id)
+        } else {
+            format!("ID: {}", self.id)
+        }
+    }
+
+    /// Writes all the provided packets in order.
+    pub async fn write_packets(&self, packets: &Vec<&OpaquePacket>) -> io::Result<()> {
+        for packet in packets {
+            self.write_packet(packet).await?;
+        }
+        Ok(())
     }
 
     /// Function for asynchronously reading a packet from the provided session. Acquires the

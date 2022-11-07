@@ -153,6 +153,17 @@ impl Game {
         Ok(())
     }
 
+    pub async fn push_all_list(&self, packets: &Vec<&OpaquePacket>) -> io::Result<()> {
+        let players = &*self.players.read().await;
+        let futures: Vec<_> = players
+            .iter()
+            .map(|value| value.write_packets(packets))
+            .collect();
+        // TODO: Handle errors for each players
+        let _ = futures::future::join_all(futures).await;
+        Ok(())
+    }
+
     pub async fn set_state(&self, state: u16) -> BlazeResult<()> {
         {
             let mut data = self.data.write().await;
@@ -207,6 +218,13 @@ impl Game {
     pub async fn update_mesh_connection(&self, session: &SessionArc) -> BlazeResult<()> {
         session.set_state(4).await?;
 
+        let host_id = {
+            let players = self.players.read().await;
+            let host = players.get(0).ok_or_else(|| BlazeError::MissingPlayer)?;
+            let session_data = host.data.read().await;
+            session_data.player_id_safe()
+        };
+
         let pid = {
             let session_data = session.data.read().await;
             session_data.player_id_safe()
@@ -218,18 +236,17 @@ impl Game {
         );
 
         let packet_b = Packets::notify(
-            Components::GameManager(GameManager::PlayerJoinCompleted),
+            Components::GameManager(GameManager::AdminListChange),
             &NotifyAdminListChange {
                 alst: pid,
                 gid: self.id,
                 oper: 0,
-                uid: pid,
+                uid: host_id,
             },
         );
 
-        // May need to refactor possible issues could arise.
-
-        try_join!(self.push_all(&packet_a), self.push_all(&packet_b))?;
+        let packets = vec![&packet_a, &packet_b];
+        self.push_all_list(&packets).await?;
 
         Ok(())
     }
@@ -319,6 +336,7 @@ impl Game {
         // Set the player session game data
         session.set_game(game.clone(), slot).await;
 
+        // Don't send if this is the host joining
         if slot != 0 {
             // Joining player is not the host player
             let join_notify = {

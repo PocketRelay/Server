@@ -1,10 +1,14 @@
+use std::f32::consts::E;
+use std::net::{IpAddr, SocketAddr};
+
 use crate::blaze::components::UserSessions;
 use crate::blaze::errors::{HandleResult, LoginError};
 use crate::blaze::routes::auth::{complete_auth, login_error};
 use crate::blaze::routes::util::QOSS_KEY;
-use crate::blaze::shared::{NetExt, NetGroups};
+use crate::blaze::shared::{NetAddress, NetExt, NetGroup, NetGroups};
 use crate::blaze::SessionArc;
 use crate::database::interface::players::find_by_session;
+use crate::utils::ip::public_address;
 use blaze_pk::{packet, Codec, CodecResult, OpaquePacket, Reader, Tag, TdfMap, TdfOptional};
 use log::{debug, warn};
 
@@ -121,12 +125,39 @@ async fn handle_update_network_info(session: &SessionArc, packet: &OpaquePacket)
         net.is_unset = false;
         net.ext = req.nqos;
         net.groups = groups;
+        update_missing_external(session, &mut net.groups).await;
     }
 
     session.response_empty(packet).await?;
     session.update_client().await?;
     debug!("Done update networking");
     Ok(())
+}
+
+pub async fn update_missing_external(session: &SessionArc, groups: &mut NetGroups) {
+    let external = &mut groups.external;
+    if external.0.is_invalid() || external.1 == 0 {
+        // Match port with internal address
+        external.1 = groups.internal.1;
+        external.0 = get_address_from(&session.addr).await;
+    }
+}
+
+pub async fn get_address_from(value: &SocketAddr) -> NetAddress {
+    let ip = value.ip();
+    if let IpAddr::V4(value) = ip {
+        // Value is local or private
+        if value.is_loopback() || value.is_private() {
+            if let Some(public_addr) = public_address().await {
+                return NetAddress::from_ipv4(&public_addr);
+            }
+        }
+        let value = format!("{}", value);
+        NetAddress::from_ipv4(&value)
+    } else {
+        // Don't know how to handle IPv6 addresses
+        return NetAddress(0);
+    }
 }
 
 packet! {

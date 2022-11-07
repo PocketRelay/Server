@@ -5,6 +5,7 @@ pub mod conv;
 pub mod dmap;
 pub mod dns;
 pub mod hashing;
+pub mod ip;
 
 /// Generates a random alphanumeric token of the provided length
 pub fn generate_token(len: usize) -> String {

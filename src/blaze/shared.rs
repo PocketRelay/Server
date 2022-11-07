@@ -49,6 +49,10 @@ impl Codec for SessionData {
         }
         tag_group_end(output);
     }
+
+    fn value_type() -> ValueType {
+        ValueType::Group
+    }
 }
 
 //noinspection SpellCheckingInspection
@@ -184,6 +188,10 @@ impl Codec for NetGroup {
 pub struct NetAddress(pub u32);
 
 impl NetAddress {
+    pub fn is_invalid(&self) -> bool {
+        self.0 == 0
+    }
+
     /// Converts the provided IPv4 string into a NetAddress
     pub fn from_ipv4(value: &str) -> NetAddress {
         let parts = value

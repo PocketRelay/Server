@@ -2,7 +2,7 @@ use crate::blaze::components::Components;
 use crate::blaze::errors::{BlazeError, HandleResult};
 use crate::blaze::SessionArc;
 use blaze_pk::{OpaquePacket, Packets};
-use log::{debug, error, LevelFilter};
+use log::{debug, error};
 
 mod auth;
 mod game_manager;
@@ -17,13 +17,6 @@ pub async fn route(
     component: Components,
     packet: &OpaquePacket,
 ) -> HandleResult {
-    if log::max_level() >= LevelFilter::Debug {
-        debug!("Got packet: {:?}", component);
-        match packet.debug_decode() {
-            Ok(value) => debug!("{}", value),
-            Err(err) => debug!("Packet Malformed: {err:?}"),
-        }
-    }
     let result = match component {
         Components::Authentication(value) => auth::route(session, value, packet).await,
         Components::GameManager(value) => game_manager::route(session, value, packet).await,
