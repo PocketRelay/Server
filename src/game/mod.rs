@@ -5,7 +5,7 @@ mod shared;
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{BlazeError, BlazeResult, GameError, GameResult};
 use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete};
-use crate::blaze::{Session, SessionArc, SessionGame};
+use crate::blaze::{Session, SessionArc};
 use crate::game::shared::{
     notify_game_setup, NotifyAttribsChange, NotifyPlayerJoining, NotifyPlayerRemoved,
     NotifySettingChange, NotifyStateChange,

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::blaze::SessionData;
 use crate::database::entities::PlayerModel;
 use blaze_pk::{
@@ -184,8 +186,19 @@ impl Codec for NetGroup {
 }
 
 /// Structure for wrapping a Blaze networking address
-#[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
+#[derive(Copy, Clone, Default, Eq, PartialEq)]
 pub struct NetAddress(pub u32);
+
+impl Debug for NetAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_invalid() {
+            f.write_str("INVALID_ADDR")
+        } else {
+            let value = self.to_ipv4();
+            f.write_str(&value)
+        }
+    }
+}
 
 impl NetAddress {
     pub fn is_invalid(&self) -> bool {

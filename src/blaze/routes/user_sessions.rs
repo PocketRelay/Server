@@ -1,11 +1,10 @@
-use std::f32::consts::E;
 use std::net::{IpAddr, SocketAddr};
 
 use crate::blaze::components::UserSessions;
 use crate::blaze::errors::{HandleResult, LoginError};
 use crate::blaze::routes::auth::{complete_auth, login_error};
 use crate::blaze::routes::util::QOSS_KEY;
-use crate::blaze::shared::{NetAddress, NetExt, NetGroup, NetGroups};
+use crate::blaze::shared::{NetAddress, NetExt, NetGroups};
 use crate::blaze::SessionArc;
 use crate::database::interface::players::find_by_session;
 use crate::utils::ip::public_address;
@@ -126,6 +125,7 @@ async fn handle_update_network_info(session: &SessionArc, packet: &OpaquePacket)
         net.ext = req.nqos;
         net.groups = groups;
         update_missing_external(session, &mut net.groups).await;
+        debug!("Updating networking:\n{:#?}", net)
     }
 
     session.response_empty(packet).await?;
