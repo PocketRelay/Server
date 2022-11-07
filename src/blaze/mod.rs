@@ -321,16 +321,21 @@ impl Session {
     /// required locks and writes the packet to the stream.
     pub async fn write_packet(&self, packet: &OpaquePacket) -> io::Result<()> {
         if log::max_level() >= LevelFilter::Debug {
+            let header = &packet.0;
             debug!(
                 "\n Session Write Packet: ({}): {:?}",
                 self.debug_info().await,
-                &packet.0.ty
+                header.ty
             );
 
-            match packet.debug_decode() {
-                Ok(value) => debug!("{}", value),
-                Err(err) => {
-                    warn!("Sent malformed packet to client: {err:?}");
+            if !(header.component == 1 && header.command == 29)
+                && !(header.component == 9 && header.command == 1)
+            {
+                match packet.debug_decode() {
+                    Ok(value) => debug!("{}", value),
+                    Err(err) => {
+                        warn!("Sent malformed packet to client: {err:?}");
+                    }
                 }
             }
         }
