@@ -19,7 +19,10 @@ pub async fn route(
 ) -> HandleResult {
     if log::max_level() >= LevelFilter::Debug {
         debug!("Got packet: {:?}", component);
-        let _ = packet.debug_decode();
+        match packet.debug_decode() {
+            Ok(value) => debug!("{}", value),
+            Err(err) => debug!("Packet Malformed: {err:?}"),
+        }
     }
     let result = match component {
         Components::Authentication(value) => auth::route(session, value, packet).await,

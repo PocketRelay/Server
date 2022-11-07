@@ -7,13 +7,13 @@ use crate::database::entities::PlayerModel;
 use crate::database::interface::players::set_session_token;
 use crate::env;
 use crate::game::matchmaking::Matchmaking;
-use crate::game::{Game, Games};
+use crate::game::{Game, GameArc, Games};
 use crate::retriever::Retriever;
 use crate::utils::generate_token;
 use crate::GlobalState;
 use blaze_pk::{Codec, OpaquePacket, PacketResult, Packets};
 use errors::HandleResult;
-use log::{debug, error, info, LevelFilter};
+use log::{debug, error, info, warn, LevelFilter};
 use sea_orm::DatabaseConnection;
 use std::net::SocketAddr;
 use std::ops::DerefMut;
@@ -210,9 +210,15 @@ impl Session {
     /// Sends a Components::UserSessions(UserSessions::SetSession) packet to the client updating
     /// the clients session information with the copy stored on the server.
     pub async fn update_client(&self) -> BlazeResult<()> {
-        let data = self.data.read().await;
-        let res = SetSessionDetails { session: &data };
-        let packet = Packets::notify(Components::UserSessions(UserSessions::SetSession), &res);
+        let packet = {
+            let session_data = self.data.read().await;
+            Packets::notify(
+                Components::UserSessions(UserSessions::SetSession),
+                &SetSessionDetails {
+                    session: &session_data,
+                },
+            )
+        };
         self.write_packet(&packet).await?;
         Ok(())
     }
@@ -264,6 +270,17 @@ impl Session {
         Ok(token)
     }
 
+    /// Sets the current game value for this session
+    pub async fn set_game(&self, game: GameArc, slot: usize) {
+        let mut session_data = self.data.write().await;
+        session_data.game = Some(SessionGame { game, slot });
+    }
+
+    pub async fn clear_game(&self) {
+        let mut session_data = self.data.write().await;
+        session_data.game = None;
+    }
+
     /// Sets the player stored in this session to the provided player. This
     /// wrapper allows state that depends on this session having a player to
     /// be updated accordingly such as games
@@ -287,7 +304,13 @@ impl Session {
     pub async fn write_packet(&self, packet: &OpaquePacket) -> io::Result<()> {
         if log::max_level() >= LevelFilter::Debug {
             debug!("Sent packet TY {:?}", &packet.0.ty);
-            let _ = packet.debug_decode();
+
+            match packet.debug_decode() {
+                Ok(value) => debug!("{}", value),
+                Err(err) => {
+                    warn!("Sent malformed packet to client: {err:?}");
+                }
+            }
         }
         let mut stream = self.stream.write().await;
         let stream = stream.deref_mut();

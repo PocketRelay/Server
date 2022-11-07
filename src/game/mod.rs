@@ -51,14 +51,15 @@ impl Games {
     }
 
     pub async fn release(&self, game: GameArc) {
-        let games = &mut *self.games.write().await;
-        // Remove game from known games
-        let Some(game) = games.remove(&game.id) else { return; };
-        let players = &mut *game.players.write().await;
-        while let Some(player) = players.pop() {
-            let session_data = &mut *player.data.write().await;
-            session_data.game = None;
+        {
+            let mut games = self.games.write().await;
+            games.remove(&game.id);
         }
+
+        let players = &mut *game.players.write().await;
+        let futures: Vec<_> = players.iter().map(|value| value.clear_game()).collect();
+        let _ = futures::future::join_all(futures).await;
+        players.clear();
     }
 
     pub async fn release_player(&self, player: &Session) {
@@ -289,6 +290,7 @@ impl Game {
 
         let futures: Vec<_> = players
             .iter()
+            .filter(|value| value.id != session.id)
             .map(|value| value.update_for(session))
             .collect();
 
@@ -300,46 +302,42 @@ impl Game {
     }
 
     pub async fn add_player(game: &GameArc, session: &SessionArc) -> BlazeResult<()> {
-        // Game is full cannot add anymore players
-        if !game.is_joinable().await {
-            return Err(BlazeError::Game(GameError::Full));
-        }
-
         // Add the player to the players list returning the slot it was added to
         let slot = {
             let mut players = game.players.write().await;
-            let slot = players.len() + 1;
+            let player_count = players.len();
+
+            // Game is full cannot add anymore players
+            if player_count >= Self::MAX_PLAYERS {
+                return Err(BlazeError::Game(GameError::Full));
+            }
+
             players.push(session.clone());
-            slot
+            player_count
         };
 
         // Set the player session game data
-        {
-            let mut session_data = session.data.write().await;
-            session_data.game = Some(SessionGame {
-                game: game.clone(),
-                slot,
-            })
+        session.set_game(game.clone(), slot).await;
+
+        if slot != 0 {
+            // Joining player is not the host player
+            let join_notify = {
+                let session_data = session.data.read().await;
+                let content = NotifyPlayerJoining {
+                    id: game.id,
+                    session: &session_data,
+                };
+                Packets::notify(
+                    Components::GameManager(GameManager::PlayerJoining),
+                    &content,
+                )
+            };
+
+            // Update session details for other players and send join notifies
+            game.push_all(&join_notify).await?;
         }
 
-        // Joining player is not the host player
-        let join_notify = {
-            let session_data = session.data.read().await;
-            let content = NotifyPlayerJoining {
-                id: game.id,
-                session: &session_data,
-            };
-            Packets::notify(
-                Components::GameManager(GameManager::PlayerJoining),
-                &content,
-            )
-        };
-
-        // Update session details for other players and send join notifies
-        try_join!(
-            game.push_all(&join_notify),
-            game.update_clients_for(session)
-        )?;
+        game.update_clients_for(session).await?;
 
         let setup = notify_game_setup(game, &session).await?;
         session.write_packet(&setup).await?;
