@@ -11,9 +11,9 @@ use crate::game::{Game, GameArc, Games};
 use crate::retriever::Retriever;
 use crate::utils::generate_token;
 use crate::GlobalState;
-use blaze_pk::{Codec, OpaquePacket, PacketResult, Packets};
+use blaze_pk::{Codec, OpaquePacket, PacketComponents, PacketResult, PacketType, Packets, Tag, Reader};
 use errors::HandleResult;
-use log::{debug, error, info, warn, LevelFilter};
+use log::{debug, error, info};
 use sea_orm::DatabaseConnection;
 use std::net::SocketAddr;
 use std::ops::DerefMut;
@@ -69,19 +69,7 @@ async fn process_session(session: SessionArc) {
             _ = shutdown_recv.recv() => {break;},
         };
 
-        if log::max_level() >= LevelFilter::Debug {
-            debug!(
-                "\n Session Read Packet: ({}): {:?} {:?}",
-                session.debug_info().await,
-                &packet.0.ty,
-                &component
-            );
-
-            match packet.debug_decode() {
-                Ok(value) => debug!("{}", value),
-                Err(err) => debug!("Packet Malformed: {err:?}"),
-            }
-        }
+        session.debug_log_packet("Read", &packet).await;
 
         match routes::route(&session, component, &packet).await {
             Ok(_) => {}
@@ -317,28 +305,55 @@ impl Session {
         }
     }
 
+    pub async fn debug_log_packet(&self, action: &str, packet: &OpaquePacket) {
+        if !log::log_enabled!(log::Level::Debug) {
+            return;     
+        }
+        let header = &packet.0;
+        let component = Components::from_values(
+            header.component,
+            header.command,
+            header.ty == PacketType::Notify,
+        );
+        let debug_info = self.debug_info().await;
+
+        // Filter out packets we don't want to log because they are often large
+        if component == Components::Authentication(components::Authentication::ListUserEntitlements2)
+        || component == Components::Util(components::Util::FetchClientConfig)
+        || component == Components::Util(components::Util::UserSettingsLoadAll) {
+            // Write bare minimum information
+            debug!("\nSession {} Packet\nInfo: ({})\nComponent: {:?}\nType: {:?}", action, debug_info, component, header.ty);
+            return;
+        }
+
+
+        let mut reader = Reader::new(&packet.1);
+        let mut out = String::new();
+        out.push_str("{\n");
+        match Tag::stringify(&mut reader, &mut out, 1) {
+            Ok(_) => {},
+            Err(err) => {
+                // Include decoding error in message
+                debug!(
+                    "\nSession {} Packet\nInfo: ({})\nComponent: {:?}\nType: {:?}\nExtra: Content was malformed\nError: {:?}\nPartial Content: {}",
+                    action, 
+                    debug_info,
+                    component, 
+                    header.ty, 
+                    err,
+                    out
+                );
+                return;
+            }
+        };
+        out.push('}');
+        debug!("\nSession {} Packet\nInfo: ({})\nComponent: {:?}\nType: {:?}\nContent: {}", action, debug_info, component, header.ty, out);
+    }
+
     /// Function for asynchronously writing a packet to the provided session. Acquires the
     /// required locks and writes the packet to the stream.
     pub async fn write_packet(&self, packet: &OpaquePacket) -> io::Result<()> {
-        if log::max_level() >= LevelFilter::Debug {
-            let header = &packet.0;
-            debug!(
-                "\n Session Write Packet: ({}): {:?}",
-                self.debug_info().await,
-                header.ty
-            );
-
-            if !(header.component == 1 && header.command == 29)
-                && !(header.component == 9 && header.command == 1)
-            {
-                match packet.debug_decode() {
-                    Ok(value) => debug!("{}", value),
-                    Err(err) => {
-                        warn!("Sent malformed packet to client: {err:?}");
-                    }
-                }
-            }
-        }
+        self.debug_log_packet("Wrote", packet).await;
         let mut stream = self.stream.write().await;
         let stream = stream.deref_mut();
         packet.write_async(stream).await
