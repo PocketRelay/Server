@@ -150,7 +150,7 @@ async fn encode_notify_game_setup(
                 .map(|value| value.id)
                 .unwrap_or(1);
             tag_u32(output, "MSID", mid);
-            tag_u8(output, "RLST", 0x2);
+            tag_u8(output, "RSLT", 0x2);
             tag_u32(output, "USID", session.player_id_safe());
             tag_group_end(output);
         }
