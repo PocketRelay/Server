@@ -331,6 +331,13 @@ impl Session {
 
         let debug_info = &*self.debug_state.read().await;
 
+        // Filter out ping packets entirely as they happen often and don't contain
+        // any relevant info.
+        if component == Components::Util(components::Util::Ping) 
+        || component == Components::Util(components::Util::SuspendUserPing) {
+            return;
+        }
+
         // Filter out packets we don't want to log because they are often large
         if component == Components::Authentication(components::Authentication::ListUserEntitlements2)
         || component == Components::Util(components::Util::FetchClientConfig)
