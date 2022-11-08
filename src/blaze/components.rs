@@ -240,10 +240,7 @@ define_components! {
     }
 
     UserSessions (0x7802) {
-        SetSession (0x1)
-        SessionDetails (0x2)
         FetchExtendedData (0x3)
-        UpdateExtendedDataAttribute (0x5)
         UpdateHardwareFlags (0x8)
         LookupUser (0xC)
         LookupUsers (0xD)
@@ -257,6 +254,12 @@ define_components! {
         LookupUserSessionID (0x20)
         FetchLastLocaleUsedAndAuthError (0x21)
         FetchUserFirstLastAuthTime (0x22)
-        ResumeSession (0x23)
+        ResumeSession (0x23);
+
+        notify {
+            SetSession (0x1)
+            SessionDetails (0x2)
+            UpdateExtendedDataAttribute (0x5)
+        }
     }
 }

@@ -204,7 +204,7 @@ impl Game {
         let packet = {
             let data = self.data.read().await;
             Packets::notify(
-                Components::GameManager(GameManager::GameSettingsChange),
+                Components::GameManager(GameManager::GameAttribChange),
                 &NotifyAttribsChange {
                     id: self.id,
                     attributes: &data.attributes,
