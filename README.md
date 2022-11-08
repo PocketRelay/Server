@@ -21,9 +21,11 @@ features present in the [Kotlin Server (https://github.com/PocketRelay/ServerKot
   - Working authentication for cracked clients (Origin fetching not setup yet), Creating accounts
 - Class and character data saving
 - Galaxy at war
-- Creating games and playing alone (Not able to join yet matchmaking hasn't been added)
+- Creating games and playing alone 
+  - Possible to join games through matchmaking if they've already been created but waiting in the matchmaking queue currently doesn't work
+- Matchmaking 
+  - Only works for games that already exist. Queue isn't currently correctly implemented
 - Origin fetching and authentication
   
 ### Planned / In progress
-- Matchmaking
 - Proper client application 
