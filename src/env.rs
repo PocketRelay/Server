@@ -16,6 +16,7 @@ pub const GAW_PROMOTIONS: (&str, bool) = ("PR_GAW_PROMOTIONS", true);
 pub const RETRIEVER: (&str, bool) = ("PR_RETRIEVER", true);
 pub const ORIGIN_FETCH: (&str, bool) = ("PR_ORIGIN_FETCH", true);
 pub const ORIGIN_FETCH_DATA: (&str, bool) = ("PR_ORIGIN_FETCH_DATA", true);
+pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
 
 pub fn logging_level() -> LevelFilter {
     const ENV_KEY: &str = "PR_LOG_LEVEL";

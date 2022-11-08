@@ -33,7 +33,7 @@ sea-orm = { version = "^0", features = [ "sqlx-sqlite", "runtime-tokio-rustls", 
 
 # Logging
 log = "0.4.17"
-env_logger = "0.9.1"
+log4rs = { version = "1.2.0", features = [ "gzip"] }
 
 # Utilities
 dotenvy = "0.15.5"

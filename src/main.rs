@@ -8,7 +8,6 @@ mod utils;
 
 use crate::game::Games;
 use dotenvy::dotenv;
-use env_logger::WriteStyle;
 use game::matchmaking::Matchmaking;
 use log::info;
 use retriever::Retriever;
@@ -31,14 +30,7 @@ pub struct GlobalState {
 async fn main() -> io::Result<()> {
     dotenv().ok();
 
-    let logging_level = env::logging_level();
-
-    env_logger::builder()
-        .filter_module("pocket_relay", logging_level)
-        .filter_module("actix_web", logging_level)
-        .filter_module("actix", logging_level)
-        .write_style(WriteStyle::Always)
-        .init();
+    utils::init_logger();
 
     info!("Starting Pocket Relay v{}", env::VERSION);
 
