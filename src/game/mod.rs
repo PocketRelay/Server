@@ -218,6 +218,8 @@ impl Game {
     pub async fn update_mesh_connection(&self, session: &SessionArc) -> BlazeResult<()> {
         session.set_state(4).await?;
 
+        debug!("Updating Mesh Connection");
+
         let host_id = {
             let players = self.players.read().await;
             let host = players.get(0).ok_or_else(|| BlazeError::MissingPlayer)?;
@@ -225,10 +227,14 @@ impl Game {
             session_data.player_id_safe()
         };
 
+        debug!("Mesh host ID: {}", host_id);
+
         let pid = {
             let session_data = session.data.read().await;
             session_data.player_id_safe()
         };
+
+        debug!("Mesh player ID: {}", pid);
 
         let packet_a = Packets::notify(
             Components::GameManager(GameManager::PlayerJoinCompleted),
@@ -247,6 +253,8 @@ impl Game {
 
         let packets = vec![&packet_a, &packet_b];
         self.push_all_list(&packets).await?;
+
+        debug!("Finished updating mesh connections");
 
         Ok(())
     }
