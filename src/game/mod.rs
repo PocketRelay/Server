@@ -11,7 +11,7 @@ use crate::game::shared::{
     NotifySettingChange, NotifyStateChange,
 };
 use blaze_pk::{OpaquePacket, Packets, TdfMap};
-use log::debug;
+use log::{debug, warn};
 use std::collections::HashMap;
 use std::io;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -259,11 +259,30 @@ impl Game {
         Ok(())
     }
 
+    pub async fn find_player_by_id(&self, id: u32) -> Option<SessionArc> {
+        let players = &*self.players.read().await;
+        for player in players {
+            let Some(player_id) = player.player_id().await else { continue; };
+            if player_id == id {
+                return Some(player.clone());
+            }
+        }
+        None
+    }
+
     pub async fn remove_by_id(&self, id: u32) -> BlazeResult<()> {
-        let players = self.players.read().await;
-        let player = players.iter().find(|player| player.id == id);
-        if let Some(player) = player {
-            self.remove_player(player).await?;
+        debug!(
+            "Attempting to remove player from game (PID: {}, GID: {})",
+            id, self.id
+        );
+        if let Some(player) = self.find_player_by_id(id).await {
+            debug!("Found player to remove. Removing player");
+            self.remove_player(&player).await?;
+        } else {
+            warn!(
+                "Unable to find player with (ID: {}) in game (Name: {}, ID: {})",
+                id, self.name, self.id
+            );
         }
         Ok(())
     }
@@ -346,27 +365,34 @@ impl Game {
 
         // Don't send if this is the host joining
         if slot != 0 {
+            debug!("Creating join notify");
             // Joining player is not the host player
             let join_notify = {
                 let session_data = session.data.read().await;
-                let content = NotifyPlayerJoining {
-                    id: game.id,
-                    session: &session_data,
-                };
                 Packets::notify(
                     Components::GameManager(GameManager::PlayerJoining),
-                    &content,
+                    &NotifyPlayerJoining {
+                        id: game.id,
+                        session: &session_data,
+                    },
                 )
             };
+
+            debug!("Pushing join notify to players");
 
             // Update session details for other players and send join notifies
             game.push_all(&join_notify).await?;
         }
 
+        debug!("Updating clients");
         game.update_clients_for(session).await?;
 
         let setup = notify_game_setup(game, &session).await?;
+        debug!("Finished generating notify packet");
+
         session.write_packet(&setup).await?;
+        debug!("Finished writing notify packet");
+
         session.update_client().await?;
 
         debug!("Finished adding player");

@@ -44,8 +44,10 @@ pub fn encode_player_data(session: &SessionData, output: &mut Vec<u8>) {
 
 pub async fn notify_game_setup(game: &Game, session: &SessionArc) -> GameResult<OpaquePacket> {
     let mut output = Vec::new();
-    let session_data = session.data.read().await;
-    encode_notify_game_setup(game, &session_data, &mut output).await?;
+    {
+        let session_data = session.data.read().await;
+        encode_notify_game_setup(game, &session_data, &mut output).await?;
+    }
     Ok(Packets::notify_raw(
         Components::GameManager(GameManager::GameSetup),
         output,
