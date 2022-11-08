@@ -385,7 +385,7 @@ impl Session {
     }
 
     /// Writes all the provided packets in order.
-    pub async fn write_packets(&self, packets: &Vec<&OpaquePacket>) -> io::Result<()> {
+    pub async fn write_packets(&self, packets: &Vec<OpaquePacket>) -> io::Result<()> {
         for packet in packets {
             self.write_packet(packet).await?;
         }
@@ -439,6 +439,11 @@ impl Session {
     pub async fn player_id(&self) -> Option<u32> {
         let session_data = self.data.read().await;
         session_data.player.as_ref().map(|player| player.id)
+    }
+
+    pub async fn player_id_safe(&self) -> u32 {
+        let session_data = self.data.read().await;
+        session_data.player_id_safe()
     }
 
     pub async fn expect_player_id(&self) -> BlazeResult<u32> {

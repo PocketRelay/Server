@@ -2,13 +2,13 @@ pub mod enums;
 pub mod matchmaking;
 mod shared;
 
-use crate::blaze::components::{Components, GameManager};
+use crate::blaze::components::{Components, GameManager, UserSessions};
 use crate::blaze::errors::{BlazeError, BlazeResult, GameError, GameResult};
 use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete};
 use crate::blaze::{Session, SessionArc};
 use crate::game::shared::{
-    notify_game_setup, NotifyAttribsChange, NotifyPlayerJoining, NotifyPlayerRemoved,
-    NotifySettingChange, NotifyStateChange,
+    notify_game_setup, FetchExtendedData, NotifyAttribsChange, NotifyPlayerJoining,
+    NotifyPlayerRemoved, NotifySettingChange, NotifyStateChange,
 };
 use blaze_pk::{OpaquePacket, Packets, TdfMap};
 use log::{debug, warn};
@@ -153,7 +153,20 @@ impl Game {
         Ok(())
     }
 
-    pub async fn push_all_list(&self, packets: &Vec<&OpaquePacket>) -> io::Result<()> {
+    pub async fn push_all_excl_host(&self, packet: &OpaquePacket) -> io::Result<()> {
+        let players = &*self.players.read().await;
+        let futures: Vec<_> = players
+            .iter()
+            .skip(1)
+            .map(|value| value.write_packet(packet))
+            .collect();
+
+        // TODO: Handle errors for each players
+        let _ = futures::future::join_all(futures).await;
+        Ok(())
+    }
+
+    pub async fn push_all_list(&self, packets: &Vec<OpaquePacket>) -> io::Result<()> {
         let players = &*self.players.read().await;
         let futures: Vec<_> = players
             .iter()
@@ -216,6 +229,11 @@ impl Game {
     }
 
     pub async fn update_mesh_connection(&self, session: &SessionArc) -> BlazeResult<()> {
+        if !self.is_player(session).await {
+            session.set_state(2).await?;
+            return Ok(());
+        }
+
         session.set_state(4).await?;
 
         debug!("Updating Mesh Connection");
@@ -251,7 +269,7 @@ impl Game {
             },
         );
 
-        let packets = vec![&packet_a, &packet_b];
+        let packets = vec![packet_a, packet_b];
         self.push_all_list(&packets).await?;
 
         debug!("Finished updating mesh connections");
@@ -268,6 +286,11 @@ impl Game {
             }
         }
         None
+    }
+
+    async fn is_player(&self, session: &Session) -> bool {
+        let players = self.players.read().await;
+        players.iter().any(|value| value.id == session.id)
     }
 
     pub async fn remove_by_id(&self, id: u32) -> BlazeResult<()> {
@@ -319,9 +342,58 @@ impl Game {
 
         try_join!(self.push_all(&packet), session.write_packet(&packet))?;
 
-        // TODO: Host migration notify adminlistchange
+        debug!("Sent removal notify");
+
+        let Some(host) = self.get_host().await.ok() else {
+            debug!("Migrating host");
+            self.migrate_host().await;
+            return Ok(());
+        };
+
+        let host_id = host.player_id_safe().await;
+
+        let packet = Packets::notify(
+            Components::GameManager(GameManager::AdminListChange),
+            &NotifyAdminListChange {
+                alst: session.player_id_safe().await,
+                gid: self.id,
+                oper: 1,
+                uid: host_id,
+            },
+        );
+
+        self.push_all(&packet).await?;
+        debug!("Sent admin list changed notify");
+
+        {
+            let host_packet = Packets::notify(
+                Components::UserSessions(UserSessions::FetchExtendedData),
+                &FetchExtendedData { id: host_id },
+            );
+            let packets = {
+                let players = &*self.players.read().await;
+                let mut packets = Vec::with_capacity(players.len());
+                for player in players {
+                    let id = player.player_id_safe().await;
+                    packets.push(Packets::notify(
+                        Components::UserSessions(UserSessions::FetchExtendedData),
+                        &FetchExtendedData { id },
+                    ));
+                }
+                packets
+            };
+
+            try_join!(
+                self.push_all_excl_host(&host_packet),
+                host.write_packets(&packets)
+            )?;
+        }
 
         Ok(())
+    }
+
+    pub async fn migrate_host(&self) {
+        // TODO: Implement
     }
 
     pub async fn is_joinable(&self) -> bool {

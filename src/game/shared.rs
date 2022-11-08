@@ -206,3 +206,9 @@ impl Codec for NotifyPlayerRemoved {
         tag_u8(output, "REAS", 0x6);
     }
 }
+
+packet! {
+    struct FetchExtendedData {
+        BUID id: u32
+    }
+}
