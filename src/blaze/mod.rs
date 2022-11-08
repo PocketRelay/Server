@@ -343,7 +343,7 @@ impl Session {
 
         let mut reader = Reader::new(&packet.1);
         let mut out = String::new();
-        out.push('{');
+        out.push_str("{\n");
         match Tag::stringify(&mut reader, &mut out, 1) {
             Ok(_) => {},
             Err(err) => {
@@ -360,9 +360,9 @@ impl Session {
                 return;
             }
         };
-        // Only append new line if some content was decoded
-        if out.len() > 1 {
-            out.push('\n');
+        if out.len() == 2 {
+            // Remove new line if nothing else was appended
+            out.pop();
         }
         out.push('}');
         debug!("\nSession {} Packet\nInfo: ({})\nComponent: {:?}\nType: {:?}\nContent: {}", action, debug_info, component, header.ty, out);
