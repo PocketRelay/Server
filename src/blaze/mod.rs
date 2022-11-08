@@ -87,6 +87,9 @@ pub struct Session {
     pub stream: RwLock<TcpStream>,
     pub addr: SocketAddr,
     pub data: RwLock<SessionData>,
+    
+    // Debug logging extra information
+    pub debug_state: RwLock<String>,
 }
 
 impl Drop for Session {
@@ -187,6 +190,7 @@ impl Session {
             stream: RwLock::new(stream),
             addr,
             data: RwLock::new(SessionData::default()),
+            debug_state: RwLock::new(format!("ID: {}", id))
         }
     }
 
@@ -287,14 +291,23 @@ impl Session {
         session_data.game = None;
     }
 
+    async fn set_debug_state(&self, value: &str) {
+        let state = &mut *self.debug_state.write().await;
+        state.clear();
+        state.push_str(value);
+    
+    }
+
     /// Sets the player stored in this session to the provided player. This
     /// wrapper allows state that depends on this session having a player to
     /// be updated accordingly such as games
     pub async fn set_player(&self, player: Option<PlayerModel>) {
         let mut session_data = self.data.write().await;
         let existing = if let Some(player) = player {
+            self.set_debug_state(&format!("Name: {}, ID: {}", player.display_name, player.id)).await;
             session_data.player.replace(player)
         } else {
+            self.set_debug_state(&format!("ID: {}", self.id)).await;
             session_data.player.take()
         };
         if let Some(existing) = existing {
@@ -315,7 +328,8 @@ impl Session {
             header.command,
             header.ty == PacketType::Notify,
         );
-        let debug_info = self.debug_info().await;
+
+        let debug_info = &*self.debug_state.read().await;
 
         // Filter out packets we don't want to log because they are often large
         if component == Components::Authentication(components::Authentication::ListUserEntitlements2)
@@ -361,15 +375,6 @@ impl Session {
         let mut stream = self.stream.write().await;
         let stream = stream.deref_mut();
         packet.write_async(stream).await
-    }
-
-    pub async fn debug_info(&self) -> String {
-        let session_data = self.data.read().await;
-        if let Some(player) = &session_data.player {
-            format!("Name: {}, ID: {}", player.display_name, player.id)
-        } else {
-            format!("ID: {}", self.id)
-        }
     }
 
     /// Writes all the provided packets in order.
