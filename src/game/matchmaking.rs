@@ -115,13 +115,18 @@ impl Matchmaking {
     /// the queue checking if any of the other players rule sets match the
     /// details of the game
     pub async fn on_game_created(&self, game: &GameArc) {
+        debug!("Matchmaking game created. Checking queue for players...");
         let mut removed_ids = Vec::new();
         {
             let queue = self.queue.read().await;
             for (session, rules) in queue.iter() {
                 if rules.matches(game).await && game.is_joinable().await {
-                    Game::add_player(game, session).await.ok();
-                    removed_ids.push(session.id);
+                    debug!("Found player from queue. Adding them to the game.");
+                    if let Ok(_) = Game::add_player(game, session).await {
+                        removed_ids.push(session.id);
+                    } else {
+                        break;
+                    }
                 }
             }
         }
