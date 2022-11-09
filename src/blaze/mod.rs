@@ -20,7 +20,7 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Mutex};
 use tokio::{io, select};
 
 pub mod components;
@@ -84,7 +84,7 @@ async fn process_session(session: SessionArc) {
 pub struct Session {
     pub global: Arc<GlobalState>,
     pub id: u32,
-    pub stream: RwLock<TcpStream>,
+    pub stream: Mutex<TcpStream>,
     pub addr: SocketAddr,
     pub data: RwLock<SessionData>,
     
@@ -154,6 +154,19 @@ pub struct SessionGame {
 }
 
 impl Session {
+    /// This function creates a new session from the provided values and wraps
+    /// the session in the necessary locks and Arc
+    fn new(global: Arc<GlobalState>, id: u32, stream: TcpStream, addr: SocketAddr) -> Session {
+        Self {
+            global,
+            id,
+            stream: Mutex::new(stream),
+            addr,
+            data: RwLock::new(SessionData::default()),
+            debug_state: RwLock::new(format!("ID: {}", id))
+        }
+    }
+
     pub async fn set_state(&self, state: u8) -> BlazeResult<()> {
         let mut data = self.data.write().await;
         data.state = state;
@@ -179,19 +192,6 @@ impl Session {
         debug!("Releasing session {}", self.id);
         self.games().release_player(self).await;
         info!("Session {} was released", self.id);
-    }
-
-    /// This function creates a new session from the provided values and wraps
-    /// the session in the necessary locks and Arc
-    fn new(global: Arc<GlobalState>, id: u32, stream: TcpStream, addr: SocketAddr) -> Session {
-        Self {
-            global,
-            id,
-            stream: RwLock::new(stream),
-            addr,
-            data: RwLock::new(SessionData::default()),
-            debug_state: RwLock::new(format!("ID: {}", id))
-        }
     }
 
     pub async fn update_for(&self, other: &SessionArc) -> io::Result<()> {
@@ -378,16 +378,18 @@ impl Session {
     /// Function for asynchronously writing a packet to the provided session. Acquires the
     /// required locks and writes the packet to the stream.
     pub async fn write_packet(&self, packet: &OpaquePacket) -> io::Result<()> {
+        let stream = &mut *self.stream.lock().await;
+        packet.write_async(stream).await?;
         self.debug_log_packet("Wrote", packet).await;
-        let mut stream = self.stream.write().await;
-        let stream = stream.deref_mut();
-        packet.write_async(stream).await
+        Ok(())
     }
 
     /// Writes all the provided packets in order.
     pub async fn write_packets(&self, packets: &Vec<OpaquePacket>) -> io::Result<()> {
+        let stream = &mut *self.stream.lock().await;
         for packet in packets {
-            self.write_packet(packet).await?;
+            packet.write_async(stream).await?;
+            self.debug_log_packet("Wrote", packet).await;
         }
         Ok(())
     }
@@ -395,8 +397,7 @@ impl Session {
     /// Function for asynchronously reading a packet from the provided session. Acquires the
     /// required locks and reads a packet returning the Component and packet.
     async fn read_packet(&self) -> PacketResult<(Components, OpaquePacket)> {
-        let mut stream = self.stream.write().await;
-        let stream = stream.deref_mut();
+        let stream = &mut *self.stream.lock().await;
         OpaquePacket::read_async_typed(stream).await
     }
 
