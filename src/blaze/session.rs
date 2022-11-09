@@ -5,12 +5,20 @@
 
 use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc, time::SystemTime};
 
-use crate::{database::entities::players, game::GameArc, GlobalStateArc};
+use crate::{
+    blaze::errors::BlazeError,
+    database::{entities::players, interface::players::set_session_token},
+    game::{matchmaking::Matchmaking, GameArc, Games},
+    retriever::Retriever,
+    utils::generate_token,
+    GlobalStateArc,
+};
 
 use blaze_pk::{
     Codec, OpaquePacket, PacketComponents, PacketResult, PacketType, Packets, Reader, Tag,
 };
 use log::{debug, error, log_enabled};
+use sea_orm::DatabaseConnection;
 use tokio::{
     io::AsyncWriteExt,
     net::TcpStream,
@@ -19,7 +27,7 @@ use tokio::{
 
 use super::{
     components::{self, Components},
-    errors::HandleResult,
+    errors::{BlazeResult, HandleResult},
     shared::NetData,
 };
 
@@ -29,7 +37,7 @@ use super::{
 pub struct Session {
     /// Reference to the global state. In order to access
     /// the database and other shared functionality
-    pub global: GlobalStateArc,
+    global: GlobalStateArc,
 
     /// Unique identifier for this session.
     pub id: u32,
@@ -273,6 +281,106 @@ impl Session {
         self.write_immediate(&packet).await?;
         Ok(())
     }
+
+    /// Function for retrieving a reference to the database
+    /// stored on the global state attached to this session
+    pub fn db(&self) -> &DatabaseConnection {
+        &self.global.db
+    }
+
+    /// Function for retrieving a reference to the retriever
+    /// stored on the global state if one is present
+    pub fn retriever(&self) -> Option<&Retriever> {
+        self.global.retriever.as_ref()
+    }
+
+    /// Function for retrieving a reference to the games
+    /// manager stored on the global state attached to this session
+    pub fn games(&self) -> &Games {
+        &self.global.games
+    }
+
+    /// Function for retrieving a reference to the matchmaking
+    /// manager stored on the global state attached to this session
+    pub fn matchmaking(&self) -> &Matchmaking {
+        &self.global.matchmaking
+    }
+
+    /// Retrieves the ID of the underlying player returning on failure
+    /// will return 1 as a fallback value.
+    pub async fn player_id_safe(&self) -> u32 {
+        let session_data = self.data.read().await;
+        session_data.id_safe()
+    }
+
+    /// Attempts to retrieve the ID of the underlying player
+    /// will return None if there is no player
+    pub async fn player_id(&self) -> Option<u32> {
+        let session_data = self.data.read().await;
+        session_data.player.as_ref().map(|player| player.id)
+    }
+
+    /// Sets the debug state value to the provided value
+    async fn set_debug_state(&self, value: String) {
+        let state = &mut *self.debug_state.write().await;
+        state.clear();
+        state.push_str(&value);
+    }
+
+    /// Sets the player thats attached to this session. Will log information
+    /// about the previous player if there was one
+    pub async fn set_player(&self, player: Option<players::Model>) {
+        let session_data = &mut *self.data.write().await;
+
+        let existing = match player {
+            Some(player) => {
+                let debug_state = format!(
+                    "Name: {}, ID: {}, SID: {}",
+                    player.display_name, player.id, self.id
+                );
+                self.set_debug_state(debug_state).await;
+                session_data.player.replace(player)
+            }
+            None => {
+                let debug_state = format!("SID: {}", self.id);
+                self.set_debug_state(debug_state).await;
+                session_data.player.take()
+            }
+        };
+
+        if let Some(existing) = existing {
+            debug!(
+                "Swapped authentication from:\nPrevious (ID: {}, Username: {}, Email: {})",
+                existing.id, existing.display_name, existing.email,
+            );
+        }
+    }
+
+    /// Attempts to get the session token stored on the database
+    /// player object attached to this session but if there is not
+    /// one it will create a new session token and update the player
+    pub async fn session_token(&self) -> BlazeResult<String> {
+        {
+            let session_data = self.data.read().await;
+            let Some(player) = session_data.player.as_ref() else {
+                debug!("Attempted to load session token while not authenticated (SID: {})", self.id);
+                return Err(BlazeError::MissingPlayer)
+            };
+            if let Some(token) = player.session_token.as_ref() {
+                return Ok(token.clone());
+            }
+        }
+
+        let token = generate_token(128);
+        let session_data = &mut *self.data.write().await;
+        let player = session_data
+            .player
+            .take()
+            .ok_or(BlazeError::MissingPlayer)?;
+        let (player, token) = set_session_token(self.db(), player, token).await?;
+        let _ = session_data.player.insert(player);
+        Ok(token)
+    }
 }
 
 /// Type for session wrapped in Arc
@@ -400,6 +508,23 @@ impl Default for SessionData {
             matchmaking: false,
             game: None,
         }
+    }
+}
+
+impl SessionData {
+    /// Retrieves the `display_name` of the player attached to this
+    /// session data or if there is no player attached an empty string.
+    pub fn name_safe(&self) -> String {
+        self.player
+            .as_ref()
+            .map(|value| value.display_name.clone())
+            .unwrap_or_else(|| String::new())
+    }
+
+    /// Retrieves the `id` of the player attached to this
+    /// session data or if there is no player attached the value 1.
+    pub fn id_safe(&self) -> u32 {
+        self.player.as_ref().map(|value| value.id).unwrap_or(1)
     }
 }
 

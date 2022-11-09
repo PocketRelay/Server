@@ -3,7 +3,10 @@ use log::warn;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, IntoActiveModel, Set};
 
 use crate::{
-    blaze::{errors::BlazeResult, SessionArc},
+    blaze::{
+        errors::{BlazeError, BlazeResult},
+        SessionArc,
+    },
     database::entities::players,
     utils::conv::MEStringParser,
 };
@@ -68,7 +71,7 @@ fn modify(model: &mut players::ActiveModel, key: &str, value: String) {
 /// persisting the changes to the database and updating the stored model.
 pub async fn update(session: &SessionArc, key: &str, value: String) -> BlazeResult<()> {
     let mut session_data = session.data.write().await;
-    let player = session_data.expect_player_owned()?;
+    let Some(player) = session_data.player.take() else{return Err(BlazeError::MissingPlayer);};
     let mut model = player.into_active_model();
     modify(&mut model, key, value);
     let player = model.update(session.db()).await?;

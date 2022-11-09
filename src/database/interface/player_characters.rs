@@ -1,4 +1,4 @@
-use crate::blaze::errors::{BlazeError, BlazeResult};
+use crate::blaze::errors::{BlazeError, BlazeResult, OtherError};
 use crate::blaze::SessionArc;
 use crate::database::entities::{player_characters, players};
 use crate::utils::conv::MEStringParser;
@@ -114,7 +114,10 @@ pub async fn update_with(
 pub async fn update(session: &SessionArc, key: &str, value: &str) -> BlazeResult<()> {
     let db = session.db();
     let session_data = session.data.read().await;
-    let player = session_data.expect_player()?;
+    let Some(player) = session_data.player.as_ref() else {
+        warn!("Client attempted to update player character while not authenticated. (SID: {})", session.id);
+        return Err(BlazeError::MissingPlayer);
+    };
     update_with(db, player, key, value).await?;
     Ok(())
 }

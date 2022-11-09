@@ -234,7 +234,12 @@ impl Session {
     pub async fn session_token(&self) -> BlazeResult<String> {
         {
             let session_data = self.data.read().await;
-            let player = session_data.expect_player()?;
+
+            let Some(player) = session_data.player.as_ref() else {
+                debug!("Attempted to load session token while not authenticated (SID: {})", self.id);
+                return Err(BlazeError::MissingPlayer)
+            };
+
             if let Some(token) = &player.session_token {
                 return Ok(token.clone());
             }
@@ -461,12 +466,6 @@ impl Session {
         session_data.player_id_safe()
     }
 
-    pub async fn expect_player_id(&self) -> BlazeResult<u32> {
-        let session_data = self.data.read().await;
-        let player = session_data.expect_player()?;
-        Ok(player.id)
-    }
-
     /// Returns a reference to the database connection from the global
     /// state data.
     pub fn db(&self) -> &DatabaseConnection {
@@ -504,19 +503,4 @@ impl SessionData {
         self.player.as_ref().map(|value| value.id).unwrap_or(1)
     }
 
-    pub fn game_id_safe(&self) -> u32 {
-        self.game.as_ref().map(|game| game.game.id).unwrap_or(1)
-    }
-
-    pub fn game_slot_safe(&self) -> usize {
-        self.game.as_ref().map(|game| game.slot).unwrap_or(1)
-    }
-
-    pub fn expect_player(&self) -> BlazeResult<&PlayerModel> {
-        self.player.as_ref().ok_or(BlazeError::MissingPlayer)
-    }
-
-    pub fn expect_player_owned(&mut self) -> BlazeResult<PlayerModel> {
-        self.player.take().ok_or(BlazeError::MissingPlayer)
-    }
 }

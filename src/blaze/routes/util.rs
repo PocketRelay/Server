@@ -1,5 +1,5 @@
 use crate::blaze::components::Util;
-use crate::blaze::errors::HandleResult;
+use crate::blaze::errors::{HandleResult, OtherError};
 use crate::blaze::shared::TelemetryRes;
 use crate::blaze::SessionArc;
 use crate::database::interface::players::{find_characters, find_classes};
@@ -12,7 +12,7 @@ use blaze_pk::{
     tag_map_start, tag_str, tag_u16, tag_u32, tag_u8, tag_value, tag_zero, Codec, OpaquePacket,
     TdfMap, ValueType,
 };
-use log::debug;
+use log::{debug, warn};
 use rust_embed::RustEmbed;
 use std::time::SystemTime;
 use tokio::try_join;
@@ -505,7 +505,11 @@ async fn handle_user_settings_load_all(
     let mut settings = TdfMap::<String, String>::new();
     {
         let session_data = session.data.read().await;
-        let player = session_data.expect_player()?;
+
+        let Some(player) = session_data.player.as_ref() else {
+            warn!("Client attempted to load settings without being authenticated. (SID: {})", session.id);
+            return session.response_error_empty(packet, OtherError::Unknown).await;
+        };
 
         settings.insert("Base", player_data::encode_base(player));
 

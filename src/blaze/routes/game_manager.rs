@@ -1,10 +1,10 @@
 use crate::blaze::components::GameManager;
-use crate::blaze::errors::{BlazeError, GameError, HandleResult};
+use crate::blaze::errors::{BlazeError, GameError, HandleResult, OtherError};
 use crate::blaze::SessionArc;
 use crate::game::matchmaking::{MatchRules, RuleSet};
 use crate::game::Game;
 use blaze_pk::{group, packet, OpaquePacket, TdfMap};
-use log::{debug, info};
+use log::{debug, info, warn};
 
 /// Routing function for handling packets with the `GameManager` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -442,7 +442,10 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -
     let req = packet.contents::<MatchmakingReq>()?;
     {
         let session_data = session.data.read().await;
-        let player = session_data.expect_player()?;
+        let Some(player) = session_data.player.as_ref() else {
+            warn!("Client attempted to matchmake while not authenticated. (SID: {})", session.id);
+            return session.response_error_empty(packet, OtherError::Unknown);
+        };
         info!("Player {} started matchmaking", player.display_name);
     }
 
@@ -481,7 +484,10 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -
 async fn handle_cancel_matchmaking(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     {
         let session_data = session.data.read().await;
-        let player = session_data.expect_player()?;
+        let Some(player) = session_data.player.as_ref() else {
+            warn!("Client attempted to cancel matchmaking while not authenticated. (SID: {})", session.id);
+            return session.response_error_empty(packet, OtherError::Unknown).await;
+        };
         info!("Player {} cancelled matchmaking", player.display_name);
     }
 

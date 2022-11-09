@@ -24,15 +24,18 @@ impl Codec for NotifyPlayerJoining<'_> {
 }
 
 pub fn encode_player_data(session: &SessionData, output: &mut Vec<u8>) {
+    let Some(player) = session.player else {return;};
+    let Some(game) = session.game else { return; };
+
     tag_empty_blob(output, "BLOB");
     tag_u8(output, "EXID", 0);
-    tag_u32(output, "GID", session.game_id_safe());
+    tag_u32(output, "GID", game.game.id);
     tag_u32(output, "LOC", session.location);
-    tag_str(output, "NAME", &session.player_name_safe());
+    tag_str(output, "NAME", &player.display_name);
     let player_id = session.player_id_safe();
     tag_u32(output, "PID", player_id);
     tag_value(output, "PNET", &session.net.get_groups());
-    tag_usize(output, "SID", session.game_slot_safe());
+    tag_usize(output, "SID", game.slot);
     tag_u8(output, "SLOT", 0);
     tag_u8(output, "STAT", session.state);
     tag_u16(output, "TIDX", 0xffff);
@@ -138,7 +141,13 @@ async fn encode_notify_game_setup(
     tag_list_start(output, "PROS", ValueType::Group, player_count);
     output.extend_from_slice(&player_data);
 
-    if session_data.game_slot_safe() != 0 {
+    let game_slot = session_data
+        .game
+        .as_ref()
+        .map(|value| value.slot)
+        .unwrap_or(0);
+
+    if game_slot != 0 {
         tag_optional_start(output, "REAS", 0x3);
         {
             tag_group_start(output, "VALU");

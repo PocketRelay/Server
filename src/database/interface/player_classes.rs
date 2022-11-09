@@ -87,7 +87,10 @@ pub async fn update_with(
 pub async fn update(session: &SessionArc, key: &str, value: &str) -> BlazeResult<()> {
     let db = session.db();
     let session_data = session.data.read().await;
-    let player = session_data.expect_player()?;
+    let Some(player) = session_data.player.as_ref() else {
+        warn!("Client attempted to update player class while not authenticated. (SID: {})", session.id);
+        return Err(BlazeError::MissingPlayer);
+    };
     update_with(db, player, key, value).await?;
     Ok(())
 }

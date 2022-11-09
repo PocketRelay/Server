@@ -7,7 +7,7 @@ use crate::database::interface::players::find_by_email;
 use crate::database::interface::players::{self, find_by_email_any};
 use crate::utils::hashing::{hash_password, verify_password};
 use blaze_pk::{packet, tag_value, Codec, OpaquePacket, Packets};
-use log::debug;
+use log::{debug, error, warn};
 use regex::Regex;
 
 /// Routing function for handling packets with the `Authentication` component and routing them
@@ -107,7 +107,11 @@ pub async fn complete_auth(
     let session_token = session.session_token().await?;
     debug!("Session token: {}", session_token);
     let session_data = session.data.read().await;
-    let player = session_data.expect_player()?;
+    let Some(player) = session_data.player.as_ref() else {
+        error!("Failed to complete auth player was somehow missing");
+        return session.response_empty(packet).await;
+    };
+
     let response = AuthRes {
         sess: Sess {
             session_token,
@@ -580,7 +584,11 @@ async fn handle_login_persona(session: &SessionArc, packet: &OpaquePacket) -> Ha
     debug!("Logging into persona");
     let session_token = session.session_token().await?;
     let session_data = session.data.read().await;
-    let player = session_data.expect_player()?;
+
+    let Some(player) = session_data.player.as_ref() else {
+        warn!("Client attempted to login to persona without being authenticated");
+        return Err(login_error(packet, LoginError::InvalidSession))
+    };
     let response = Sess {
         session_token,
         player,
@@ -731,7 +739,10 @@ packet! {
 /// ```
 async fn handle_get_auth_token(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let session_data = session.data.read().await;
-    let player = session_data.expect_player()?;
+    let Some(player) = session_data.player.as_ref() else {
+        warn!("Client attempted to get auth token while not authenticated. (SID: {})", session.id);
+        return Err(login_error(packet, LoginError::InvalidSession))
+    };
     let value = format!("{:X}", player.id);
     session.response(packet, &GetAuthRes { auth: value }).await
 }

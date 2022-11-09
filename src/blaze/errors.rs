@@ -50,6 +50,15 @@ impl GameError {
     }
 }
 
+/// Error placeholder for error codes that need to be
+/// found or documented
+#[derive(Debug, Clone)]
+#[repr(u16)]
+#[allow(unused)]
+pub enum OtherError {
+    Unknown = 0x0,
+}
+
 /// Enum for errors relating to authentication
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -73,6 +82,12 @@ pub enum LoginError {
     FailedNoLoginAction = 0x4004,
     ServerUnavailableNothing = 0x4005,
     ConnectionLost = 0x4007,
+}
+
+impl Into<u16> for OtherError {
+    fn into(self) -> u16 {
+        self as u16
+    }
 }
 
 impl Into<u16> for LoginError {
