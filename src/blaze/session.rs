@@ -3,16 +3,25 @@
 //! behind Arc's and are cloned into Games and other resources. Sesssion must be
 //! removed from all other structs in the release function.
 
-use std::{collections::VecDeque, net::SocketAddr, sync::Arc, time::SystemTime};
+use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc, time::SystemTime};
 
 use crate::{database::entities::players, game::GameArc, GlobalStateArc};
-use log::debug;
+
+use blaze_pk::{
+    Codec, OpaquePacket, PacketComponents, PacketResult, PacketType, Packets, Reader, Tag,
+};
+use log::{debug, error, log_enabled};
 use tokio::{
+    io::AsyncWriteExt,
     net::TcpStream,
     sync::{mpsc, Mutex, RwLock},
 };
 
-use super::shared::NetData;
+use super::{
+    components::{self, Components},
+    errors::HandleResult,
+    shared::NetData,
+};
 
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
@@ -42,6 +51,230 @@ pub struct Session {
     debug_state: RwLock<String>,
 }
 
+impl Session {
+    /// Creates a new session with the provided id and connection details then spawns
+    /// it as a new async task for the process function.
+    pub fn spawn(global: GlobalStateArc, id: u32, values: (TcpStream, SocketAddr)) {
+        let (flush_send, flush_recv) = mpsc::channel(1);
+        let session = Self {
+            global,
+            id,
+            stream: Mutex::new(values.0),
+            addr: values.1,
+            data: RwLock::new(SessionData::default()),
+            buffer: SessionBuffer::new(flush_send),
+            debug_state: RwLock::new(format!("ID: {}", id)),
+        };
+        let session = Arc::new(session);
+        tokio::spawn(Self::process(session, flush_recv));
+    }
+
+    /// Processes the session by reading packets and flushing outbound content.
+    async fn process(session: SessionArc, mut flush_recv: mpsc::Receiver<()>) {
+        loop {}
+    }
+
+    /// Logs the contents of the provided packet to the debug output along with
+    /// the header information and basic session information.
+    ///
+    /// `action` The name of the action this packet is undergoing.
+    ///          (e.g. Writing or Reading)
+    /// `packet` The packet that is being logged
+    async fn debug_log_packet(&self, action: &str, packet: &OpaquePacket) {
+        // Skip if debug logging is disabled
+        if !log_enabled!(log::Level::Debug) {
+            return;
+        }
+
+        let header = &packet.0;
+        let component = Components::from_values(
+            header.component,
+            header.command,
+            header.ty == PacketType::Notify,
+        );
+
+        if Self::is_debug_ignored(&component) {
+            return;
+        }
+
+        let debug_info = &*self.debug_state.read().await;
+
+        let mut message = format!(
+            "
+        Session {} Packet
+        Info: ({})
+        Component: {:?}
+        Type: {:?}
+        ID: {}",
+            action, debug_info, component, header.ty, header.id
+        );
+
+        if Self::is_debug_minified(&component) {
+            debug!("{}", message);
+            return;
+        }
+
+        let mut reader = Reader::new(&packet.1);
+        let mut out = String::new();
+        out.push_str("{\n");
+        match Tag::stringify(&mut reader, &mut out, 1) {
+            Ok(_) => {}
+            Err(err) => {
+                message.push_str("\nExtra: Content was malformed");
+                message.push_str(&format!("\nError: {:?}", err));
+                message.push_str(&format!("\nPartial Content: {}", out));
+                debug!("{}", message);
+                return;
+            }
+        };
+        if out.len() == 2 {
+            // Remove new line if nothing else was appended
+            out.pop();
+        }
+        out.push('}');
+        message.push_str(&format!("\nContent: {}", out));
+        debug!("{}", message);
+    }
+
+    /// Checks whether the provided `component` is ignored completely
+    /// when debug logging. This is for packets such as Ping and SuspendUserPing
+    /// where they occur frequently but provide no useful data for debugging.
+    fn is_debug_ignored(component: &Components) -> bool {
+        Components::Util(components::Util::Ping).eq(component)
+            || Components::Util(components::Util::SuspendUserPing).eq(component)
+    }
+
+    /// Checks whether the provided `component` should have its contents
+    /// hidden when being debug printed. Used to hide the contents of
+    /// larger packets.
+    fn is_debug_minified(component: &Components) -> bool {
+        Components::Authentication(components::Authentication::ListUserEntitlements2).eq(component)
+            || Components::Util(components::Util::FetchClientConfig).eq(component)
+            || Components::Util(components::Util::UserSettingsLoadAll).eq(component)
+    }
+
+    /// Writes the provided packet to the underlying buffer to be
+    /// flushed later.
+    pub async fn write(&self, packet: &OpaquePacket) {
+        self.debug_log_packet("Queued Write", packet).await;
+        self.buffer.write(packet).await;
+    }
+
+    /// Writes all the provided packets to the underlying buffer to
+    /// be flushed later.
+    pub async fn write_all(&self, packets: &Vec<OpaquePacket>) {
+        for packet in packets {
+            self.debug_log_packet("Queued Write", packet).await;
+        }
+        self.buffer.write_all(packets).await;
+    }
+
+    /// Writes the provided packet directly to the underlying stream
+    /// rather than pushing to the buffer. Only use when handling
+    /// responses will cause long blocks because will wait for all
+    /// the data to be written.
+    pub async fn write_immediate(&self, packet: &OpaquePacket) -> io::Result<()> {
+        let stream = &mut *self.stream.lock().await;
+        packet.write_async(stream).await?;
+        self.debug_log_packet("Wrote", packet).await;
+        Ok(())
+    }
+
+    /// Writes all the provided packets directly to the underlying stream
+    /// rather than pushing to the buffer. Only use when handling
+    /// responses will cause long blocks because will wait for all
+    /// the data to be written.
+    pub async fn write_all_immediate(&self, packets: &Vec<OpaquePacket>) -> io::Result<()> {
+        let stream = &mut *self.stream.lock().await;
+        for packet in packets {
+            packet.write_async(stream).await?;
+            self.debug_log_packet("Wrote", packet).await;
+        }
+        Ok(())
+    }
+
+    /// Attempts to read a packet from the client stream.
+    async fn read(&self) -> PacketResult<(Components, OpaquePacket)> {
+        let stream = &mut *self.stream.lock().await;
+        OpaquePacket::read_async_typed(stream).await
+    }
+
+    /// Shortcut for response packets. These are written directly as they are
+    /// only ever used client processing tasks.
+    ///
+    /// `packet`   The packet to respond to.
+    /// `contents` The contents of the response packet.
+    ///
+    pub async fn response<T: Codec>(&self, packet: &OpaquePacket, contents: &T) -> HandleResult {
+        let response = Packets::response(packet, contents);
+        self.write_immediate(&response).await?;
+        Ok(())
+    }
+
+    /// Shortcut for responses that have empty contents.
+    ///
+    /// `packet` The packet to respond to.
+    pub async fn response_empty(&self, packet: &OpaquePacket) -> HandleResult {
+        let response = Packets::response_empty(packet);
+        self.write_immediate(&response).await?;
+        Ok(())
+    }
+
+    /// Shortcut for error response packets. These are written directly as they are
+    /// only ever used client processing tasks.
+    ///
+    /// `packet`   The packet to respond to.
+    /// `error`    The error for the packet.
+    /// `contents` The contents of the response packet.
+    pub async fn response_error<T: Codec>(
+        &self,
+        packet: &OpaquePacket,
+        error: impl Into<u16>,
+        contents: &T,
+    ) -> HandleResult {
+        let response = Packets::error(packet, error, contents);
+        self.write_immediate(&response).await?;
+        Ok(())
+    }
+
+    /// Shortcut for error responses that have empty contents
+    ///
+    /// `packet` The packet to respond to.
+    /// `error`  The error for the packet.
+    pub async fn response_error_empty(
+        &self,
+        packet: &OpaquePacket,
+        error: impl Into<u16>,
+    ) -> HandleResult {
+        let response = Packets::error_empty(packet, error);
+        self.write_immediate(&response).await?;
+        Ok(())
+    }
+
+    /// Writes a new notify packet to the outbound buffer.
+    ///
+    /// `component` The component for the packet.
+    /// `contents`  The contents of the packet.
+    pub async fn notify<T: Codec>(&self, component: Components, contents: &T) {
+        let packet = Packets::notify(component, contents);
+        self.write(&packet).await;
+    }
+
+    /// Writes a new notify packet directly to the client stream
+    ///
+    /// `component` The component for the packet.
+    /// `contents`  The contents of the packet.
+    pub async fn notify_immediate<T: Codec>(
+        &self,
+        component: Components,
+        contents: &T,
+    ) -> HandleResult {
+        let packet = Packets::notify(component, contents);
+        self.write_immediate(&packet).await?;
+        Ok(())
+    }
+}
+
 /// Type for session wrapped in Arc
 pub type SessionArc = Arc<Session>;
 
@@ -59,6 +292,69 @@ struct SessionBuffer {
     /// Sender for telling the session processor when the queue needs
     /// to be flushed.
     flush: mpsc::Sender<()>,
+}
+
+impl SessionBuffer {
+    /// Creates a new session buffer with the provided flush sender
+    pub fn new(flush_send: mpsc::Sender<()>) -> Self {
+        Self {
+            queue: Mutex::new(VecDeque::new()),
+            flush: flush_send,
+        }
+    }
+
+    /// Writes the contents of the provided packet to the underlying
+    /// queue and sends a flush state.
+    async fn write(&self, packet: &OpaquePacket) {
+        let queue = &mut *self.queue.lock().await;
+        let contents = packet.encode_bytes();
+        queue.push_back(contents);
+        self.flush.try_send(()).ok();
+    }
+
+    /// Writes the contents of the provided packets to the underlying
+    /// queue and sends a flush state. Function for writing multiple
+    /// without having to aquire the lock again or sending multiple flushes
+    async fn write_all(&self, packets: &Vec<OpaquePacket>) {
+        let queue = &mut *self.queue.lock().await;
+        for packet in packets {
+            let contents = packet.encode_bytes();
+            queue.push_back(contents);
+        }
+        self.flush.try_send(()).ok();
+    }
+
+    /// Flushes the contents of the queue writing them to the stream
+    /// on the provided `session` if the queue is not empty.
+    async fn flush(&self, session: &Session) {
+        let queue = &mut *self.queue.lock().await;
+        if queue.is_empty() {
+            return;
+        }
+        // Counter for the number of items written
+        let mut write_count = 0usize;
+        let stream = &mut *session.stream.lock().await;
+
+        while let Some(item) = queue.pop_front() {
+            match stream.write_all(&item).await {
+                Ok(_) => {
+                    write_count += 1;
+                }
+                Err(err) => {
+                    error!(
+                        "Error occurred while flushing session (SID: {}): {:?}",
+                        session.id, err
+                    );
+                    return;
+                }
+            }
+        }
+
+        debug!(
+            "Flushed session (SID: {}, Count: {})",
+            session.id, write_count
+        )
+    }
 }
 
 /// Structure for storing session data that is mutated often. This
@@ -90,6 +386,21 @@ pub struct SessionData {
 
     /// Game details if the player is in a game.
     pub game: Option<SessionGame>,
+}
+
+impl Default for SessionData {
+    fn default() -> Self {
+        Self {
+            player: None,
+            location: 0x64654445,
+            last_ping: SystemTime::now(),
+            net: NetData::default(),
+            hardware_flag: 0,
+            state: 2,
+            matchmaking: false,
+            game: None,
+        }
+    }
 }
 
 /// Structure for storing information about the game
