@@ -47,7 +47,7 @@ pub fn init_logger() {
 
     let pattern = Box::new(PatternEncoder::new("[{d} {h({l})} {M}] {m}{n}"));
     let stdout = ConsoleAppender::builder().encoder(pattern.clone()).build();
-    let size_limit = 10 * 1024; // 10kb max file size before roll
+    let size_limit = 1024 * 1024; // 1mb max file size before roll
     let size_trigger = SizeTrigger::new(size_limit);
     let window_size = 5;
 
