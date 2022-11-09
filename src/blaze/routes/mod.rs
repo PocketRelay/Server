@@ -17,7 +17,7 @@ pub async fn route(
     component: Components,
     packet: &OpaquePacket,
 ) -> HandleResult {
-    let result = match component {
+    match component {
         Components::Authentication(value) => auth::route(session, value, packet).await,
         Components::GameManager(value) => game_manager::route(session, value, packet).await,
         Components::Stats(value) => stats::route(session, value, packet).await,
@@ -35,14 +35,5 @@ pub async fn route(
             packet.debug_decode()?;
             session.response_empty(packet).await
         }
-    };
-
-    if let Err(BlazeError::Response(response)) = &result {
-        error!("Sending error response");
-        // Send error responses
-        session.write_immediate(response).await?;
-        return Ok(());
     }
-
-    result
 }

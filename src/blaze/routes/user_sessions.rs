@@ -1,8 +1,8 @@
 use std::net::{IpAddr, SocketAddr};
 
 use crate::blaze::components::UserSessions;
-use crate::blaze::errors::{HandleResult, LoginError};
-use crate::blaze::routes::auth::{complete_auth, login_error};
+use crate::blaze::errors::{HandleResult, ServerError};
+use crate::blaze::routes::auth::complete_auth;
 use crate::blaze::session::SessionArc;
 use crate::blaze::shared::{NetAddress, NetExt, NetGroups};
 use crate::database::interface::players::find_by_session;
@@ -42,9 +42,11 @@ packet! {
 /// *To be recorded*
 async fn handle_resume_session(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<ResumeSession>()?;
-    let player = find_by_session(session.db(), &req.session_token)
-        .await?
-        .ok_or_else(|| login_error(packet, LoginError::InvalidSession))?;
+    let Some(player) = find_by_session(session.db(), &req.session_token).await? else {
+        return session
+            .response_error_empty(packet, ServerError::InvalidSession)
+            .await;
+    };
     complete_auth(session, packet, player, true).await
 }
 

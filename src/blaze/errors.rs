@@ -1,11 +1,10 @@
-use blaze_pk::{packet, CodecError, OpaquePacket};
+use blaze_pk::CodecError;
 use derive_more::From;
 use sea_orm::DbErr;
 use std::io;
 
 pub type HandleResult = Result<(), BlazeError>;
 pub type BlazeResult<T> = Result<T, BlazeError>;
-pub type GameResult<T> = Result<T, GameError>;
 
 #[derive(Debug, From)]
 pub enum BlazeError {
@@ -14,11 +13,7 @@ pub enum BlazeError {
     Other(&'static str),
     Database(DbErr),
     MissingPlayer,
-    // Response error type. Responds with the provided response through
-    // the redirect handler
-    Response(OpaquePacket),
     Context(String, Box<BlazeError>),
-    Game(GameError),
 }
 
 impl BlazeError {
@@ -33,37 +28,11 @@ impl BlazeError {
     }
 }
 
-#[derive(Debug, From)]
-pub enum GameError {
-    IO(io::Error),
-    Full,
-    MissingHost,
-    Other(&'static str),
-    UnknownGame(u32),
-    Context(&'static str, Box<GameError>),
-}
-
-impl GameError {
-    /// Provides additional context to the error
-    pub fn context(self, context: &'static str) -> GameError {
-        GameError::Context(context, Box::new(self))
-    }
-}
-
-/// Error placeholder for error codes that need to be
-/// found or documented
+///  Enum for server error values
 #[derive(Debug, Clone)]
 #[repr(u16)]
 #[allow(unused)]
-pub enum OtherError {
-    Unknown = 0x0,
-}
-
-/// Enum for errors relating to authentication
-#[derive(Debug, Clone)]
-#[repr(u16)]
-#[allow(unused)]
-pub enum LoginError {
+pub enum ServerError {
     ServerUnavailable = 0x0,
     EmailNotFound = 0xB,
     WrongPassword = 0xC,
@@ -84,27 +53,8 @@ pub enum LoginError {
     ConnectionLost = 0x4007,
 }
 
-impl Into<u16> for OtherError {
+impl Into<u16> for ServerError {
     fn into(self) -> u16 {
         self as u16
-    }
-}
-
-impl Into<u16> for LoginError {
-    fn into(self) -> u16 {
-        self as u16
-    }
-}
-
-packet! {
-    struct LoginErrorRes {
-        PNAM pnam: &'static str,
-        UID uid: u8
-    }
-}
-
-impl Default for LoginErrorRes {
-    fn default() -> Self {
-        LoginErrorRes { pnam: "", uid: 0 }
     }
 }

@@ -1,5 +1,5 @@
 use crate::blaze::components::GameManager;
-use crate::blaze::errors::{BlazeError, GameError, HandleResult, OtherError};
+use crate::blaze::errors::{HandleResult, ServerError};
 use crate::blaze::session::SessionArc;
 use crate::game::matchmaking::{MatchRules, RuleSet};
 use crate::game::Game;
@@ -134,11 +134,17 @@ packet! {
 ///
 async fn handle_advance_game_state(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<GameStateReq>()?;
-    let game = session
+    let Some(game) = session
         .games()
         .find_by_id(req.id)
-        .await
-        .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
+        .await else 
+    {
+        warn!(
+            "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
+            req.id, session.id
+        );
+        return session.response_error_empty(packet, ServerError::InvalidInformation).await;
+    };
     game.set_state(req.state).await;
     session.response_empty(packet).await
 }
@@ -162,11 +168,17 @@ packet! {
 ///
 async fn handle_set_game_setting(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<GameSettingReq>()?;
-    let game = session
+    let Some(game) = session
         .games()
         .find_by_id(req.id)
-        .await
-        .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
+        .await else 
+    {
+        warn!(
+            "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
+            req.id, session.id
+        );
+        return session.response_error_empty(packet, ServerError::InvalidInformation).await;
+    };
     game.set_setting(req.setting).await;
     session.response_empty(packet).await
 }
@@ -200,11 +212,17 @@ packet! {
 ///
 async fn handle_set_game_attribs(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<GameAttribsReq>()?;
-    let game = session
+    let Some(game) = session
         .games()
         .find_by_id(req.id)
-        .await
-        .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
+        .await else 
+    {
+        warn!(
+            "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
+            req.id, session.id
+        );
+        return session.response_error_empty(packet, ServerError::InvalidInformation).await;
+    };
     game.set_attributes(req.attributes).await;
     session.response_empty(packet).await
 }
@@ -231,10 +249,16 @@ packet! {
 async fn handle_remove_player(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<RemovePlayerReq>()?;
     let games = session.games();
-    let game = games
+    let Some(game) = games
         .find_by_id(req.id)
-        .await
-        .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
+        .await else 
+    {
+        warn!(
+            "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
+            req.id, session.id
+        );
+        return session.response_error_empty(packet, ServerError::InvalidInformation).await;
+    };
     game.remove_by_id(req.pid).await;
     games.remove_if_empty(game).await;
     session.response_empty(packet).await
@@ -268,11 +292,17 @@ async fn handle_update_mesh_connection(
     session.response_empty(packet).await?;
 
     let req = packet.contents::<UpdateMeshReq>()?;
-    let game = session
+    let Some(game) = session
         .games()
         .find_by_id(req.id)
-        .await
-        .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
+        .await else 
+    {
+        warn!(
+            "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
+            req.id, session.id
+        );
+        return session.response_error_empty(packet, ServerError::InvalidInformation).await;
+    };
     game.update_mesh_connection(session).await;
     Ok(())
 }
@@ -444,7 +474,7 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -
         let session_data = session.data.read().await;
         let Some(player) = session_data.player.as_ref() else {
             warn!("Client attempted to matchmake while not authenticated. (SID: {})", session.id);
-            return session.response_error_empty(packet, OtherError::Unknown).await;
+            return session.response_error_empty(packet, ServerError::FailedNoLoginAction).await;
         };
         info!("Player {} started matchmaking", player.display_name);
     }
@@ -485,7 +515,7 @@ async fn handle_cancel_matchmaking(session: &SessionArc, packet: &OpaquePacket) 
         let session_data = session.data.read().await;
         let Some(player) = session_data.player.as_ref() else {
             warn!("Client attempted to cancel matchmaking while not authenticated. (SID: {})", session.id);
-            return session.response_error_empty(packet, OtherError::Unknown).await;
+            return session.response_error_empty(packet, ServerError::FailedNoLoginAction).await;
         };
         info!("Player {} cancelled matchmaking", player.display_name);
     }

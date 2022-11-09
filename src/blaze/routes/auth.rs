@@ -1,5 +1,5 @@
 use crate::blaze::components::Authentication;
-use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
+use crate::blaze::errors::{BlazeError, HandleResult, ServerError};
 use crate::blaze::session::SessionArc;
 use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
 use crate::database::entities::PlayerModel;
@@ -53,11 +53,6 @@ packet! {
     }
 }
 
-/// Creates a new blaze error response from the provided login error
-pub fn login_error(packet: &OpaquePacket, error: LoginError) -> BlazeError {
-    BlazeError::Response(Packets::error(packet, error, &LoginErrorRes::default()))
-}
-
 /// Handles silent authentication from a client (Token based authentication) If the token provided
 /// by the client is correct the session is updated accordingly to match the player
 /// # Structure
@@ -76,12 +71,14 @@ async fn handle_silent_login(session: &SessionArc, packet: &OpaquePacket) -> Han
 
     debug!("Attempted silent authentication: {id} ({token})");
 
-    let player = players::find_by_id(session.db(), id)
-        .await?
-        .ok_or_else(|| login_error(packet, LoginError::InvalidSession))?;
+    let Some(player) = players::find_by_id(session.db(), id).await? else {
+        return session.response_error_empty(packet, ServerError::InvalidSession).await;
+    };
 
     if player.session_token.ne(&Some(token)) {
-        return Err(login_error(packet, LoginError::InvalidSession));
+        return session
+            .response_error_empty(packet, ServerError::InvalidSession)
+            .await;
     }
 
     debug!("Silent authentication success");
@@ -179,18 +176,24 @@ async fn handle_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResu
             "Client attempted to login with invalid email address: {}",
             &email
         );
-        return Err(login_error(packet, LoginError::InvalidEmail));
+        return session
+            .response_error_empty(packet, ServerError::InvalidEmail)
+            .await;
     }
 
-    let player = find_by_email(session.db(), &email, false)
-        .await?
-        .ok_or_else(|| login_error(packet, LoginError::EmailNotFound))?;
+    let Some(player) = find_by_email(session.db(), &email, false).await? else {
+        return session
+            .response_error_empty(packet, ServerError::EmailNotFound)
+            .await;
+    };
 
     debug!("Attempting login for {}", player.email);
 
     if !verify_password(&password, &player.password) {
         debug!("Client provided password did not match stored hash");
-        return Err(login_error(packet, LoginError::WrongPassword));
+        return session
+            .response_error_empty(packet, ServerError::WrongPassword)
+            .await;
     }
 
     complete_auth(session, packet, player, false).await?;
@@ -235,13 +238,17 @@ async fn handle_create_account(session: &SessionArc, packet: &OpaquePacket) -> H
     let password = req.password;
 
     if !is_email(&email) {
-        return Err(login_error(packet, LoginError::InvalidEmail));
+        return session
+            .response_error_empty(packet, ServerError::InvalidEmail)
+            .await;
     }
 
     let email_exists = find_by_email_any(session.db(), &email).await?.is_some();
 
     if email_exists {
-        return Err(login_error(packet, LoginError::EmailAlreadyInUse));
+        return session
+            .response_error_empty(packet, ServerError::EmailAlreadyInUse)
+            .await;
     }
 
     let hashed_password =
@@ -587,7 +594,9 @@ async fn handle_login_persona(session: &SessionArc, packet: &OpaquePacket) -> Ha
 
     let Some(player) = session_data.player.as_ref() else {
         warn!("Client attempted to login to persona without being authenticated");
-        return Err(login_error(packet, LoginError::InvalidSession))
+        return session
+            .response_error_empty(packet, ServerError::FailedNoLoginAction)
+            .await;
     };
     let response = Sess {
         session_token,
@@ -617,7 +626,9 @@ packet! {
 async fn handle_forgot_password(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<ForgotPaswdReq>()?;
     if !is_email(&req.email) {
-        return Err(login_error(packet, LoginError::InvalidEmail));
+        return session
+            .response_error_empty(packet, ServerError::InvalidEmail)
+            .await;
     }
     debug!("Got request for password rest for email: {}", &req.email);
     session.response_empty(packet).await
@@ -741,7 +752,9 @@ async fn handle_get_auth_token(session: &SessionArc, packet: &OpaquePacket) -> H
     let session_data = session.data.read().await;
     let Some(player) = session_data.player.as_ref() else {
         warn!("Client attempted to get auth token while not authenticated. (SID: {})", session.id);
-        return Err(login_error(packet, LoginError::InvalidSession))
+        return session
+            .response_error_empty(packet, ServerError::FailedNoLoginAction)
+            .await;
     };
     let value = format!("{:X}", player.id);
     session.response(packet, &GetAuthRes { auth: value }).await

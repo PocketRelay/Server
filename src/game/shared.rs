@@ -1,5 +1,5 @@
 use crate::blaze::components::{Components, GameManager};
-use crate::blaze::errors::{GameError, GameResult};
+use crate::blaze::errors::{BlazeError, BlazeResult};
 use crate::blaze::session::{SessionArc, SessionData};
 use crate::game::Game;
 use blaze_pk::{
@@ -45,7 +45,7 @@ pub fn encode_player_data(session_data: &SessionData, output: &mut Vec<u8>) {
     tag_group_end(output);
 }
 
-pub async fn notify_game_setup(game: &Game, session: &SessionArc) -> GameResult<OpaquePacket> {
+pub async fn notify_game_setup(game: &Game, session: &SessionArc) -> BlazeResult<OpaquePacket> {
     let mut output = Vec::new();
     encode_notify_game_setup(game, session, &mut output).await?;
     Ok(Packets::notify_raw(
@@ -59,7 +59,7 @@ async fn encode_notify_game_setup(
     game: &Game,
     session: &SessionArc,
     output: &mut Vec<u8>,
-) -> GameResult<()> {
+) -> BlazeResult<()> {
     let session_data = session.data.read().await;
     let mut player_data = Vec::new();
     let mut player_ids = Vec::new();
@@ -73,7 +73,9 @@ async fn encode_notify_game_setup(
         encode_player_data(&session_data, &mut player_data);
     }
 
-    let host = players.get(0).ok_or(GameError::MissingHost)?;
+    let host = players
+        .get(0)
+        .ok_or_else(|| BlazeError::Other("Missing Host"))?;
 
     let host_data = host.data.read().await;
     let host_id = host_data.id_safe();

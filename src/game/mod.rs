@@ -3,7 +3,7 @@ pub mod matchmaking;
 mod shared;
 
 use crate::blaze::components::{Components, GameManager, UserSessions};
-use crate::blaze::errors::{BlazeError, BlazeResult, GameError};
+use crate::blaze::errors::BlazeResult;
 use crate::blaze::session::{Session, SessionArc};
 use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete};
 use crate::game::shared::{
@@ -11,7 +11,7 @@ use crate::game::shared::{
     NotifyPlayerRemoved, NotifySettingChange, NotifyStateChange,
 };
 use blaze_pk::{OpaquePacket, Packets, TdfMap};
-use log::{debug, warn};
+use log::{debug, error, warn};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -408,7 +408,11 @@ impl Game {
 
             // Game is full cannot add anymore players
             if player_count >= Self::MAX_PLAYERS {
-                return Err(BlazeError::Game(GameError::Full));
+                error!(
+                    "Tried to add player to full game (SID: {}, GID: {})",
+                    session.id, game.id,
+                );
+                return Ok(());
             }
 
             players.push(session.clone());

@@ -1,5 +1,5 @@
 use crate::blaze::components::Util;
-use crate::blaze::errors::{HandleResult, OtherError};
+use crate::blaze::errors::{BlazeError, HandleResult, ServerError};
 use crate::blaze::session::SessionArc;
 use crate::blaze::shared::TelemetryRes;
 use crate::database::interface::players::{find_characters, find_classes};
@@ -456,8 +456,15 @@ packet! {
 /// ```
 async fn handle_user_settings_save(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<UserSettingsSave>()?;
-    set_player_data(session, &req.key, req.value).await?;
-    session.response_empty(packet).await
+    if let Err(err) = set_player_data(session, &req.key, req.value).await {
+        let error = match err {
+            BlazeError::MissingPlayer => ServerError::FailedNoLoginAction,
+            _ => ServerError::ServerUnavailable,
+        };
+        session.response_error_empty(packet, error).await
+    } else {
+        session.response_empty(packet).await
+    }
 }
 
 async fn set_player_data(session: &SessionArc, key: &str, value: String) -> HandleResult {
@@ -508,7 +515,7 @@ async fn handle_user_settings_load_all(
 
         let Some(player) = session_data.player.as_ref() else {
             warn!("Client attempted to load settings without being authenticated. (SID: {})", session.id);
-            return session.response_error_empty(packet, OtherError::Unknown).await;
+            return session.response_error_empty(packet, ServerError::FailedNoLoginAction).await;
         };
 
         settings.insert("Base", player_data::encode_base(player));
