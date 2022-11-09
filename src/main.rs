@@ -23,7 +23,7 @@ pub struct GlobalState {
     pub matchmaking: Matchmaking,
     pub db: DatabaseConnection,
     pub retriever: Option<Retriever>,
-    pub shutdown_recv: Receiver<bool>,
+    pub shutdown: Receiver<()>,
 }
 
 pub type GlobalStateArc = Arc<GlobalState>;
@@ -47,7 +47,7 @@ async fn main() -> io::Result<()> {
         games,
         matchmaking,
         retriever,
-        shutdown_recv,
+        shutdown: shutdown_recv,
     };
     let global_state = Arc::new(global_state);
     select! {
@@ -55,7 +55,7 @@ async fn main() -> io::Result<()> {
         result = blaze::start_server(global_state) => { result? },
         _ = signal::ctrl_c() => {
             shutdown_send
-                .send(true)
+                .send(())
                 .expect("Failed to send shutdown signal");
         }
     }

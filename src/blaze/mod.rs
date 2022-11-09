@@ -37,7 +37,7 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
     let listener = TcpListener::bind(("0.0.0.0", main_port)).await?;
 
     let mut session_id = 1;
-    let mut shutdown_recv = global.shutdown_recv.resubscribe();
+    let mut shutdown_recv = global.shutdown.resubscribe();
 
     loop {
         let (stream, addr) = select! {
@@ -60,7 +60,7 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
 /// Function for processing a session loops until the session is no longer readable.
 /// Reads packets and routes them with the routing function.
 async fn process_session(session: SessionArc, mut flush_recv: mpsc::Receiver<bool>) {
-    let mut shutdown_recv = session.global.shutdown_recv.resubscribe();
+    let mut shutdown_recv = session.global.shutdown.resubscribe();
     loop {
         let (component, packet) = select! {
             _ = flush_recv.recv() => {

@@ -17,18 +17,20 @@ use crate::{
 use blaze_pk::{
     Codec, OpaquePacket, PacketComponents, PacketResult, PacketType, Packets, Reader, Tag,
 };
-use log::{debug, error, log_enabled};
+use log::{debug, error, info, log_enabled};
 use sea_orm::DatabaseConnection;
 use tokio::{
     io::AsyncWriteExt,
     net::TcpStream,
+    select,
     sync::{mpsc, Mutex, RwLock},
 };
 
 use super::{
-    components::{self, Components},
+    components::{self, Components, GameManager, UserSessions},
     errors::{BlazeResult, HandleResult},
-    shared::NetData,
+    routes,
+    shared::{NetData, SessionDetails, SessionStateChange, SetSessionDetails, UpdateExtDataAttr},
 };
 
 /// Structure for storing a client session. This includes the
@@ -78,8 +80,45 @@ impl Session {
     }
 
     /// Processes the session by reading packets and flushing outbound content.
-    async fn process(session: SessionArc, mut flush_recv: mpsc::Receiver<()>) {
-        loop {}
+    ///
+    /// `session` The session to process
+    /// `flush`   The reciever for the flush messages
+    async fn process(session: SessionArc, mut flush: mpsc::Receiver<()>) {
+        let mut shutdown = session.global.shutdown.resubscribe();
+        loop {
+            select! {
+                _ = flush.recv() => { session.flush().await; }
+                result = session.read() => {
+                    if let Ok((component, packet)) = result {
+                        Self::process_packet(&session, component, &packet).await;
+                    } else {
+                        break;
+                    }
+                }
+                _ = shutdown.recv() => {
+                    debug!("Shutting down session (SID: {})", session.id);
+                    break;
+                }
+            };
+        }
+    }
+
+    /// Handles processing a recieved packet from the `process` function. This includes a
+    /// component for routing and the actual packet itself. The buffer is flushed after
+    /// routing is complete.
+    ///
+    /// `session`   The session to process the packet for
+    /// `component` The component of the packet for routing
+    /// `packet`    The packet itself
+    async fn process_packet(session: &SessionArc, component: Components, packet: &OpaquePacket) {
+        Self::debug_log_packet(session, "Read", packet).await;
+        if let Err(err) = routes::route(session, component, packet).await {
+            error!(
+                "Error occurred while routing (SID: {}): {:?}",
+                session.id, err
+            );
+        }
+        session.flush().await;
     }
 
     /// Logs the contents of the provided packet to the debug output along with
@@ -159,6 +198,11 @@ impl Session {
         Components::Authentication(components::Authentication::ListUserEntitlements2).eq(component)
             || Components::Util(components::Util::FetchClientConfig).eq(component)
             || Components::Util(components::Util::UserSettingsLoadAll).eq(component)
+    }
+
+    /// Flushes the output buffer
+    pub async fn flush(&self) {
+        self.buffer.flush(self);
     }
 
     /// Writes the provided packet to the underlying buffer to be
@@ -321,6 +365,8 @@ impl Session {
     }
 
     /// Sets the debug state value to the provided value
+    ///
+    /// `value` The new debug state value.
     async fn set_debug_state(&self, value: String) {
         let state = &mut *self.debug_state.write().await;
         state.clear();
@@ -329,6 +375,8 @@ impl Session {
 
     /// Sets the player thats attached to this session. Will log information
     /// about the previous player if there was one
+    ///
+    /// `player` The player to set the state to or None to clear the player
     pub async fn set_player(&self, player: Option<players::Model>) {
         let session_data = &mut *self.data.write().await;
 
@@ -381,6 +429,93 @@ impl Session {
         let _ = session_data.player.insert(player);
         Ok(token)
     }
+
+    /// Sets the game details for the current session
+    ///
+    /// `game` The game the player has joined.
+    /// `slot` The slot in the game the player is in.
+    pub async fn set_game(&self, game: GameArc, slot: usize) {
+        let session_data = &mut *self.data.write().await;
+        session_data.game = Some(SessionGame::new(game, slot))
+    }
+
+    /// Clears the game details for the current session
+    pub async fn clear_game(&self) {
+        let session_data = &mut *self.data.write().await;
+        session_data.game = None
+    }
+
+    /// Updates the state for this session. Will send the state
+    /// change to all the players in the current game including
+    /// the client.
+    ///
+    /// `state` The new state for this ession
+    pub async fn set_state(&self, state: u8) {
+        let session_data = &mut *self.data.write().await;
+        session_data.state = state;
+
+        let Some(player) = &session_data.player else {return;};
+        let Some(game) = &session_data.game.map(|value| value.game) else {return;};
+
+        let packet = Packets::notify(
+            Components::GameManager(GameManager::GamePlayerStateChange),
+            &SessionStateChange {
+                gid: game.id,
+                pid: player.id,
+                state,
+            },
+        );
+        game.push_all(&packet).await;
+    }
+
+    /// Updates the data stored on the client so that it matches
+    /// the data stored in this session
+    pub async fn update_client(&self) {
+        let session_data = &*self.data.read().await;
+        self.notify(
+            Components::UserSessions(UserSessions::SetSession),
+            &SetSessionDetails {
+                session: session_data,
+            },
+        )
+        .await;
+    }
+
+    /// Updates the provided session with the session information
+    /// for this session.
+    ///
+    /// `other` The session to sent the updated details to
+    pub async fn update_for(&self, other: &SessionArc) {
+        let session_data = &*self.data.read().await;
+        let Some(player) = session_data.player.as_ref() else {return;};
+        let packets = vec![
+            Packets::notify(
+                Components::UserSessions(UserSessions::SessionDetails),
+                &SessionDetails {
+                    session: session_data,
+                    player,
+                },
+            ),
+            Packets::notify(
+                Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
+                &UpdateExtDataAttr {
+                    flags: 0x3,
+                    id: player.id,
+                },
+            ),
+        ];
+        other.write_all(&packets).await;
+    }
+
+    /// Releases the session removing its references from everywhere
+    /// that it is stored so that it can be dropped
+    async fn release(&self) {
+        debug!("Releasing Session (SID: {})", self.id);
+        self.games().release_player(self).await;
+        self.matchmaking().remove(self).await;
+        info!("Session was released (SID: {})", self.id);
+        self.buffer.flush(self).await;
+    }
 }
 
 /// Type for session wrapped in Arc
@@ -404,6 +539,8 @@ struct SessionBuffer {
 
 impl SessionBuffer {
     /// Creates a new session buffer with the provided flush sender
+    ///
+    /// `flush_send` The sender for sending flush notifications
     pub fn new(flush_send: mpsc::Sender<()>) -> Self {
         Self {
             queue: Mutex::new(VecDeque::new()),
@@ -413,6 +550,8 @@ impl SessionBuffer {
 
     /// Writes the contents of the provided packet to the underlying
     /// queue and sends a flush state.
+    ///
+    /// `packet` The packet to write to the buffer queue.
     async fn write(&self, packet: &OpaquePacket) {
         let queue = &mut *self.queue.lock().await;
         let contents = packet.encode_bytes();
@@ -423,6 +562,8 @@ impl SessionBuffer {
     /// Writes the contents of the provided packets to the underlying
     /// queue and sends a flush state. Function for writing multiple
     /// without having to aquire the lock again or sending multiple flushes
+    ///
+    /// `packets` The packets to write to the buffer queue.
     async fn write_all(&self, packets: &Vec<OpaquePacket>) {
         let queue = &mut *self.queue.lock().await;
         for packet in packets {
@@ -434,6 +575,8 @@ impl SessionBuffer {
 
     /// Flushes the contents of the queue writing them to the stream
     /// on the provided `session` if the queue is not empty.
+    ///
+    /// `session` The session containing the stream to flush the buffer too
     async fn flush(&self, session: &Session) {
         let queue = &mut *self.queue.lock().await;
         if queue.is_empty() {
@@ -531,8 +674,18 @@ impl SessionData {
 /// Structure for storing information about the game
 /// which a session is connected to.
 pub struct SessionGame {
-    /// Reference to the game that the player is in.
+    /// Reference to the game that the player is in
     pub game: GameArc,
-    /// The slot in the game which the player is in.
+    /// The slot in the game which the player is in
     pub slot: usize,
+}
+
+impl SessionGame {
+    /// Creates a new session game from the provided game and slot
+    ///
+    /// `game` Reference to the game the player is apart of
+    /// `slot` The slot the player is in
+    pub fn new(game: GameArc, slot: usize) -> Self {
+        SessionGame { game, slot }
+    }
 }

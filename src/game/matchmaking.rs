@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use log::debug;
 use tokio::sync::RwLock;
 
-use crate::blaze::SessionArc;
+use crate::blaze::{Session, SessionArc};
 
 use super::{
     enums::{Difficulty, EnemyType, GameMap, MatchRule},
@@ -166,7 +166,7 @@ impl Matchmaking {
     }
 
     /// Removes a player from the queue if it exists
-    pub async fn remove(&self, session: &SessionArc) {
+    pub async fn remove(&self, session: &Session) {
         let queue = &mut *self.queue.write().await;
         queue.retain(|value| value.0.id != session.id);
     }
