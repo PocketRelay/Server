@@ -1,11 +1,9 @@
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use log::debug;
 use tokio::sync::RwLock;
 
-use crate::blaze::{MatchmakingState, SessionArc};
-use crate::utils::server_unix_time;
+use crate::blaze::SessionArc;
 
 use super::{
     enums::{Difficulty, EnemyType, GameMap, MatchRule},
@@ -100,14 +98,12 @@ impl RuleSet {
 /// and keeping it updated.
 pub struct Matchmaking {
     queue: RwLock<VecDeque<(SessionArc, RuleSet)>>,
-    next_id: AtomicU32,
 }
 
 impl Matchmaking {
     pub fn new() -> Self {
         Self {
             queue: RwLock::new(VecDeque::new()),
-            next_id: AtomicU32::new(1),
         }
     }
 
@@ -156,16 +152,9 @@ impl Matchmaking {
         // Update the player matchmaking data.
         {
             let session_data = &mut *session.data.write().await;
-            if let Some(value) = &mut session_data.matchmaking {
-                value.start = server_unix_time();
-            } else {
-                let value = MatchmakingState {
-                    id: self.next_id.fetch_add(1, Ordering::AcqRel),
-                    start: server_unix_time(),
-                };
-                session_data.matchmaking = Some(value);
-            }
+            session_data.matchmaking = true;
         }
+
         debug!("Updated player matchmaking data");
 
         // Push the player to the end of the queue

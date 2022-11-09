@@ -26,6 +26,8 @@ pub struct GlobalState {
     pub shutdown_recv: Receiver<bool>,
 }
 
+pub type GlobalStateArc = Arc<GlobalState>;
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
     dotenv().ok();
@@ -48,7 +50,6 @@ async fn main() -> io::Result<()> {
         shutdown_recv,
     };
     let global_state = Arc::new(global_state);
-
     select! {
         result = http::start_server(global_state.clone()) => { result? },
         result = blaze::start_server(global_state) => { result? },

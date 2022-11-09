@@ -44,10 +44,7 @@ pub fn encode_player_data(session: &SessionData, output: &mut Vec<u8>) {
 
 pub async fn notify_game_setup(game: &Game, session: &SessionArc) -> GameResult<OpaquePacket> {
     let mut output = Vec::new();
-    {
-        let session_data = session.data.read().await;
-        encode_notify_game_setup(game, &session_data, &mut output).await?;
-    }
+    encode_notify_game_setup(game, session, &mut output).await?;
     Ok(Packets::notify_raw(
         Components::GameManager(GameManager::GameSetup),
         output,
@@ -57,9 +54,10 @@ pub async fn notify_game_setup(game: &Game, session: &SessionArc) -> GameResult<
 //noinspection SpellCheckingInspection
 async fn encode_notify_game_setup(
     game: &Game,
-    session: &SessionData,
+    session: &SessionArc,
     output: &mut Vec<u8>,
 ) -> GameResult<()> {
+    let session_data = session.data.read().await;
     let mut player_data = Vec::new();
     let mut player_ids = Vec::new();
 
@@ -140,20 +138,15 @@ async fn encode_notify_game_setup(
     tag_list_start(output, "PROS", ValueType::Group, player_count);
     output.extend_from_slice(&player_data);
 
-    if session.game_slot_safe() != 0 {
+    if session_data.game_slot_safe() != 0 {
         tag_optional_start(output, "REAS", 0x3);
         {
             tag_group_start(output, "VALU");
             tag_u16(output, "FIT", 0x3f7a);
             tag_u16(output, "MAXF", 0x5460);
-            let mid = session
-                .matchmaking
-                .as_ref()
-                .map(|value| value.id)
-                .unwrap_or(1);
-            tag_u32(output, "MSID", mid);
+            tag_u32(output, "MSID", session.id);
             tag_u8(output, "RSLT", 0x2);
-            tag_u32(output, "USID", session.player_id_safe());
+            tag_u32(output, "USID", session_data.player_id_safe());
             tag_group_end(output);
         }
     } else {

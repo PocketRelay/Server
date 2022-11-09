@@ -455,16 +455,9 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -
         .get_or_queue(session, rules, &session.global.games)
         .await;
     {
-        debug!("Check complete");
-        let session_data = session.data.read().await;
-        let matchmaking_id = session_data
-            .matchmaking
-            .as_ref()
-            .map(|value| value.id)
-            .unwrap_or(1);
-        debug!("Matchmaking ID: {}", matchmaking_id);
+        debug!("Matchmaking ID: {}", session.id);
         session
-            .response(packet, &MatchmakingRes { id: matchmaking_id })
+            .response(packet, &MatchmakingRes { id: session.id })
             .await?;
     }
 

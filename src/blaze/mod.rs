@@ -28,6 +28,7 @@ pub mod components;
 pub mod errors;
 mod routes;
 pub mod shared;
+pub mod session;
 
 /// Starts the main Blaze server with the provided global state.
 pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
@@ -123,10 +124,9 @@ pub struct SessionData {
     // Networking
     pub net: NetData,
     pub hardware_flag: u16,
-    pub pslm: u32,
 
     pub state: u8,
-    pub matchmaking: Option<MatchmakingState>,
+    pub matchmaking: bool,
 
     // Game Details
     pub game: Option<SessionGame>,
@@ -140,22 +140,10 @@ impl Default for SessionData {
             last_ping: SystemTime::now(),
             net: NetData::default(),
             hardware_flag: 0,
-            pslm: 0xfff0fff,
             state: 2,
-            matchmaking: None,
+            matchmaking: false,
             game: None,
         }
-    }
-}
-
-pub struct MatchmakingState {
-    pub id: u32,
-    pub start: u64,
-}
-
-impl Default for MatchmakingState {
-    fn default() -> Self {
-        Self { id: 1, start: 0 }
     }
 }
 
@@ -238,30 +226,6 @@ impl Session {
                 session: &session_data,
             },
         ).await;
-    }
-
-    /// Returns a reference to the database connection from the global
-    /// state data.
-    pub fn db(&self) -> &DatabaseConnection {
-        &self.global.db
-    }
-
-    /// Returns a reference to the retriever instance if there is one
-    /// present.
-    pub fn retriever(&self) -> Option<&Retriever> {
-        self.global.retriever.as_ref()
-    }
-
-    /// Returns a reference to the games manager from the global
-    /// state data.
-    pub fn games(&self) -> &Games {
-        &self.global.games
-    }
-
-    /// Returns a reference to the matchmaking manager from the global
-    /// state data.
-    pub fn matchmaking(&self) -> &Matchmaking {
-        &self.global.matchmaking
     }
 
     /// Obtains the session token for the player linked to this session
@@ -502,6 +466,30 @@ impl Session {
         let player = session_data.expect_player()?;
         Ok(player.id)
     }
+
+    /// Returns a reference to the database connection from the global
+    /// state data.
+    pub fn db(&self) -> &DatabaseConnection {
+        &self.global.db
+    }
+
+    /// Returns a reference to the retriever instance if there is one
+    /// present.
+    pub fn retriever(&self) -> Option<&Retriever> {
+        self.global.retriever.as_ref()
+    }
+
+    /// Returns a reference to the games manager from the global
+    /// state data.
+    pub fn games(&self) -> &Games {
+        &self.global.games
+    }
+
+    /// Returns a reference to the matchmaking manager from the global
+    /// state data.
+    pub fn matchmaking(&self) -> &Matchmaking {
+        &self.global.matchmaking
+    }
 }
 
 impl SessionData {
@@ -530,11 +518,5 @@ impl SessionData {
 
     pub fn expect_player_owned(&mut self) -> BlazeResult<PlayerModel> {
         self.player.take().ok_or(BlazeError::MissingPlayer)
-    }
-
-    /// Function for retrieving the ID of the current game that this player
-    /// is apart of (currently always zero)
-    pub fn game_id(&self) -> u32 {
-        0
     }
 }

@@ -3,7 +3,6 @@ use std::net::{IpAddr, SocketAddr};
 use crate::blaze::components::UserSessions;
 use crate::blaze::errors::{HandleResult, LoginError};
 use crate::blaze::routes::auth::{complete_auth, login_error};
-use crate::blaze::routes::util::QOSS_KEY;
 use crate::blaze::shared::{NetAddress, NetExt, NetGroups};
 use crate::blaze::SessionArc;
 use crate::database::interface::players::find_by_session;
@@ -52,21 +51,15 @@ async fn handle_resume_session(session: &SessionArc, packet: &OpaquePacket) -> H
 #[derive(Debug)]
 struct UpdateNetworkInfo {
     address: TdfOptional<NetGroups>,
-    nlmp: Option<TdfMap<String, u32>>,
     nqos: NetExt,
 }
 
 impl Codec for UpdateNetworkInfo {
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
         let address = Tag::expect(reader, "ADDR")?;
-        let nlmp = Tag::try_expect(reader, "NLMP")?;
         let nqos = Tag::expect(reader, "NQOS")?;
 
-        Ok(Self {
-            address,
-            nlmp,
-            nqos,
-        })
+        Ok(Self { address, nqos })
     }
 }
 
@@ -111,15 +104,8 @@ async fn handle_update_network_info(session: &SessionArc, packet: &OpaquePacket)
         }
     };
 
-    const DEFAULT_PSLM: u32 = 0xfff0fff;
-
-    let pslm = req
-        .nlmp
-        .map(|mut value| value.get_owned(QOSS_KEY).unwrap_or(DEFAULT_PSLM))
-        .unwrap_or(DEFAULT_PSLM);
     {
         let session_data = &mut *session.data.write().await;
-        session_data.pslm = pslm;
         let mut net = &mut session_data.net;
         net.is_unset = false;
         net.ext = req.nqos;

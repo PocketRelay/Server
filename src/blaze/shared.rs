@@ -41,7 +41,7 @@ impl Codec for SessionData {
         tag_u16(output, "HWFG", self.hardware_flag);
         {
             tag_list_start(output, "PSLM", ValueType::VarInt, 1);
-            self.pslm.encode(output);
+            0xfff0fff.encode(output);
         }
         tag_value(output, "QDAT", &self.net.ext);
         tag_u8(output, "UATT", 0);
