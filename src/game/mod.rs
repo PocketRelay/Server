@@ -81,6 +81,7 @@ impl Games {
 
     pub async fn remove_if_empty(&self, game: GameArc) {
         if game.player_count().await > 0 {
+            debug!("Game not empy. Leaving it.");
             return;
         }
         debug!("Removing empty game (Name: {}, ID: {}", &game.name, game.id);
@@ -375,6 +376,8 @@ impl Game {
                 host.write_packets(&packets)
             );
         };
+
+        debug!("Done removing player");
     }
 
     pub async fn migrate_host(&self) {

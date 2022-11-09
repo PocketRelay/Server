@@ -209,25 +209,23 @@ impl Session {
     }
 
     pub async fn update_for(&self, other: &SessionArc) {
-        {
-            let data = self.data.read().await;
-            let Some(player) = &data.player else { return; };
-            other.notify(
-                Components::UserSessions(UserSessions::SessionDetails) , 
-                &SessionDetails {
-                    session: &data,
-                    player,
-                }
-            ).await;
+        let data = self.data.read().await;
+        let Some(player) = &data.player else { return; };
+        other.notify(
+            Components::UserSessions(UserSessions::SessionDetails) , 
+            &SessionDetails {
+                session: &data,
+                player,
+            }
+        ).await;
 
-            other.notify(
-            Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
-                &UpdateExtDataAttr {
-                    flags: 0x3,
-                    id: player.id,
-                },
-            ).await;
-        }   
+        other.notify(
+        Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
+            &UpdateExtDataAttr {
+                flags: 0x3,
+                id: player.id,
+            },
+        ).await;
     }
 
     /// Sends a Components::UserSessions(UserSessions::SetSession) packet to the client updating
@@ -313,7 +311,7 @@ impl Session {
     pub async fn set_player(&self, player: Option<PlayerModel>) {
         let mut session_data = self.data.write().await;
         let existing = if let Some(player) = player {
-            self.set_debug_state(&format!("Name: {}, ID: {}", player.display_name, player.id)).await;
+            self.set_debug_state(&format!("Name: {}, ID: {}, SID: {}", player.display_name, player.id, self.id)).await;
             session_data.player.replace(player)
         } else {
             self.set_debug_state(&format!("ID: {}", self.id)).await;
@@ -417,16 +415,21 @@ impl Session {
         if write_queue.is_empty() {
             return;
         }
+        let mut count = 0;
+
         let stream = &mut *self.stream.lock().await;
         while let Some(item) = write_queue.pop_front() {
             match stream.write_all(&item).await {
-                Ok(_) => {},
+                Ok(_) => {
+                    count += 1;
+                },
                 Err(err) => {
                     error!("Error while flushing session (ID: {}): {:?}", self.id, err);
                     return;
                 }
             }
         }  
+        debug!("Session Flushed (ID: {}, Count: {})", self.id, count);
     }
 
 

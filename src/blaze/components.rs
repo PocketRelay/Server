@@ -240,7 +240,6 @@ define_components! {
     }
 
     UserSessions (0x7802) {
-        FetchExtendedData (0x3)
         UpdateHardwareFlags (0x8)
         LookupUser (0xC)
         LookupUsers (0xD)
@@ -260,6 +259,7 @@ define_components! {
             SetSession (0x1)
             SessionDetails (0x2)
             UpdateExtendedDataAttribute (0x5)
+            FetchExtendedData (0x3)
         }
     }
 }
