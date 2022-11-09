@@ -7,7 +7,7 @@ use crate::env::VERSION;
 use crate::utils::server_unix_time;
 use blaze_pk::{
     encode_str, tag_group_end, tag_group_start, tag_map_start, tag_str, tag_triple, tag_u64,
-    tag_u8, Codec, OpaquePacket, PacketComponents, Packets, ValueType,
+    tag_u8, Codec, OpaquePacket, PacketComponents, ValueType,
 };
 use log::debug;
 
@@ -112,8 +112,9 @@ async fn handle_fetch_messages(session: &SessionArc, packet: &OpaquePacket) -> H
         time,
     };
 
-    let packet = Packets::notify(Components::Messaging(Messaging::SendMessage), &response);
-    session.write_packet(&packet).await?;
+    session
+        .notify_immediate(Components::Messaging(Messaging::SendMessage), &response)
+        .await?;
     Ok(())
 }
 

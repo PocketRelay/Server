@@ -117,12 +117,11 @@ pub async fn complete_auth(
     };
 
     debug!("Sending session response");
-    session.response(packet, &response).await?;
     if silent {
         debug!("Sending session update");
-        session.update_for(session).await?;
+        session.update_for(session).await;
     }
-    Ok(())
+    session.response(packet, &response).await
 }
 
 /// Handles logging out by the client this removes any current player data from the
@@ -586,10 +585,9 @@ async fn handle_login_persona(session: &SessionArc, packet: &OpaquePacket) -> Ha
         session_token,
         player,
     };
-    session.response(packet, &response).await?;
-    session.update_for(session).await?;
     debug!("Persona login complete");
-    Ok(())
+    session.update_for(session).await;
+    session.response(packet, &response).await
 }
 
 packet! {

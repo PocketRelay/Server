@@ -3,7 +3,7 @@ use crate::blaze::errors::HandleResult;
 use crate::blaze::SessionArc;
 use blaze_pk::{
     tag_group_end, tag_group_start, tag_list_start, tag_str, tag_triple, tag_u8,
-    tag_var_int_list_empty, tag_zero, Codec, OpaquePacket, Packets, ValueType,
+    tag_var_int_list_empty, tag_zero, Codec, OpaquePacket, ValueType,
 };
 use log::debug;
 
@@ -52,13 +52,12 @@ pub async fn route_game_reporting(
 /// ```
 async fn handle_submit_offline(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     session.response_empty(packet).await?;
-
-    let packet = Packets::notify(
-        Components::GameReporting(GameReporting::NotifyGameReportSubmitted),
-        &GameReportResult,
-    );
-    session.write_packet(&packet).await?;
-
+    session
+        .notify_immediate(
+            Components::GameReporting(GameReporting::NotifyGameReportSubmitted),
+            &GameReportResult,
+        )
+        .await?;
     Ok(())
 }
 

@@ -139,7 +139,7 @@ async fn handle_advance_game_state(session: &SessionArc, packet: &OpaquePacket) 
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
-    game.set_state(req.state).await?;
+    game.set_state(req.state).await;
     session.response_empty(packet).await
 }
 
@@ -167,7 +167,7 @@ async fn handle_set_game_setting(session: &SessionArc, packet: &OpaquePacket) ->
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
-    game.set_setting(req.setting).await?;
+    game.set_setting(req.setting).await;
     session.response_empty(packet).await
 }
 
@@ -205,7 +205,7 @@ async fn handle_set_game_attribs(session: &SessionArc, packet: &OpaquePacket) ->
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
-    game.set_attributes(req.attributes).await?;
+    game.set_attributes(req.attributes).await;
     session.response_empty(packet).await
 }
 
@@ -235,10 +235,9 @@ async fn handle_remove_player(session: &SessionArc, packet: &OpaquePacket) -> Ha
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
-    game.remove_by_id(req.pid).await?;
+    game.remove_by_id(req.pid).await;
     games.remove_if_empty(game).await;
-    session.response_empty(packet).await?;
-    Ok(())
+    session.response_empty(packet).await
 }
 
 packet! {
@@ -274,7 +273,7 @@ async fn handle_update_mesh_connection(
         .find_by_id(req.id)
         .await
         .ok_or_else(|| BlazeError::Game(GameError::UnknownGame(req.id)))?;
-    game.update_mesh_connection(session).await?;
+    game.update_mesh_connection(session).await;
     Ok(())
 }
 

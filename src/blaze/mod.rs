@@ -15,12 +15,13 @@ use blaze_pk::{Codec, OpaquePacket, PacketComponents, PacketResult, PacketType, 
 use errors::HandleResult;
 use log::{debug, error, info};
 use sea_orm::DatabaseConnection;
+use tokio::io::AsyncWriteExt;
+use std::collections::VecDeque;
 use std::net::SocketAddr;
-use std::ops::DerefMut;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{SystemTime};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{RwLock, Mutex, mpsc};
 use tokio::{io, select};
 
 pub mod components;
@@ -42,24 +43,29 @@ pub async fn start_server(global: Arc<GlobalState>) -> io::Result<()> {
             value = listener.accept() => value?,
             _ = shutdown_recv.recv() => break,
         };
-        let session = Session::new(global.clone(), session_id, stream, addr);
+        let (flush_send, flush_recv) = mpsc::channel(1);
+        let session = Session::new(global.clone(), session_id, stream, addr, flush_send);
         let session = Arc::new(session);
         info!(
             "New Session Started (ID: {}, ADDR: {:?})",
             session.id, session.addr
         );
         session_id += 1;
-        tokio::spawn(process_session(session));
+        tokio::spawn(process_session(session, flush_recv));
     }
     Ok(())
 }
 
 /// Function for processing a session loops until the session is no longer readable.
 /// Reads packets and routes them with the routing function.
-async fn process_session(session: SessionArc) {
+async fn process_session(session: SessionArc, mut flush_recv: mpsc::Receiver<bool>) {
     let mut shutdown_recv = session.global.shutdown_recv.resubscribe();
     loop {
         let (component, packet) = select! {
+            _ = flush_recv.recv() => {
+                session.flush().await;
+                continue; 
+            }
             res = session.read_packet() => {
                     match res {
                     Ok(value) => value,
@@ -77,9 +83,13 @@ async fn process_session(session: SessionArc) {
                 error!("Session {} got err {:?} while routing", session.id, err)
             }
         }
+
+        session.flush().await;
     }
     session.release().await;
 }
+
+
 
 pub struct Session {
     pub global: Arc<GlobalState>,
@@ -87,6 +97,9 @@ pub struct Session {
     pub stream: Mutex<TcpStream>,
     pub addr: SocketAddr,
     pub data: RwLock<SessionData>,
+
+    pub flush_sender: mpsc::Sender<bool>,
+    pub write_buffer: Mutex<VecDeque<Vec<u8>>>,
     
     // Debug logging extra information
     pub debug_state: RwLock<String>,
@@ -156,23 +169,25 @@ pub struct SessionGame {
 impl Session {
     /// This function creates a new session from the provided values and wraps
     /// the session in the necessary locks and Arc
-    fn new(global: Arc<GlobalState>, id: u32, stream: TcpStream, addr: SocketAddr) -> Session {
+    fn new(global: Arc<GlobalState>, id: u32, stream: TcpStream, addr: SocketAddr, flush_sender: mpsc::Sender<bool>) -> Session {
         Self {
             global,
             id,
             stream: Mutex::new(stream),
             addr,
+            flush_sender,
             data: RwLock::new(SessionData::default()),
+            write_buffer: Mutex::new(VecDeque::new()),
             debug_state: RwLock::new(format!("ID: {}", id))
         }
     }
 
-    pub async fn set_state(&self, state: u8) -> BlazeResult<()> {
+    pub async fn set_state(&self, state: u8) {
         let mut data = self.data.write().await;
         data.state = state;
 
-        let Some(player) = &data.player else {return Ok(())};
-        let Some(sess_game) = &data.game else {return Ok(())};
+        let Some(player) = &data.player else {return;};
+        let Some(sess_game) = &data.game else {return;};
 
         let game = &sess_game.game;
         let packet = Packets::notify(
@@ -183,54 +198,48 @@ impl Session {
                 state,
             },
         );
-        game.push_all(&packet).await?;
-
-        Ok(())
+        game.push_all(&packet).await;
     }
 
     pub async fn release(&self) {
         debug!("Releasing session {}", self.id);
         self.games().release_player(self).await;
         info!("Session {} was released", self.id);
+        self.flush().await;
     }
 
-    pub async fn update_for(&self, other: &SessionArc) -> io::Result<()> {
-        let data = self.data.read().await;
-        let Some(player) = &data.player else { return Ok(()) };
-        let session_details = Packets::notify(
-            Components::UserSessions(UserSessions::SessionDetails),
-            &SessionDetails {
-                session: &data,
-                player,
-            },
-        );
-        let update_ext_data = Packets::notify(
+    pub async fn update_for(&self, other: &SessionArc) {
+        {
+            let data = self.data.read().await;
+            let Some(player) = &data.player else { return; };
+            other.notify(
+                Components::UserSessions(UserSessions::SessionDetails) , 
+                &SessionDetails {
+                    session: &data,
+                    player,
+                }
+            ).await;
+
+            other.notify(
             Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
-            &UpdateExtDataAttr {
-                flags: 0x3,
-                id: player.id,
-            },
-        );
-        drop(data);
-        other.write_packet(&session_details).await?;
-        other.write_packet(&update_ext_data).await?;
-        Ok(())
+                &UpdateExtDataAttr {
+                    flags: 0x3,
+                    id: player.id,
+                },
+            ).await;
+        }   
     }
 
     /// Sends a Components::UserSessions(UserSessions::SetSession) packet to the client updating
     /// the clients session information with the copy stored on the server.
-    pub async fn update_client(&self) -> BlazeResult<()> {
-        let packet = {
-            let session_data = self.data.read().await;
-            Packets::notify(
-                Components::UserSessions(UserSessions::SetSession),
-                &SetSessionDetails {
-                    session: &session_data,
-                },
-            )
-        };
-        self.write_packet(&packet).await?;
-        Ok(())
+    pub async fn update_client(&self) {
+        let session_data = self.data.read().await;
+        self.notify(
+            Components::UserSessions(UserSessions::SetSession),
+            &SetSessionDetails {
+                session: &session_data,
+            },
+        ).await;
     }
 
     /// Returns a reference to the database connection from the global
@@ -377,7 +386,15 @@ impl Session {
 
     /// Function for asynchronously writing a packet to the provided session. Acquires the
     /// required locks and writes the packet to the stream.
-    pub async fn write_packet(&self, packet: &OpaquePacket) -> io::Result<()> {
+    pub async fn write_packet(&self, packet: &OpaquePacket) {
+        self.debug_log_packet("Queued Write", packet).await;
+        let write_queue = &mut *self.write_buffer.lock().await;
+        let contents = packet.encode_bytes();
+        write_queue.push_back(contents);
+        self.flush_sender.try_send(true).ok();
+    }
+
+    pub async fn write_packet_direct(&self, packet: &OpaquePacket) -> io::Result<()> {
         let stream = &mut *self.stream.lock().await;
         packet.write_async(stream).await?;
         self.debug_log_packet("Wrote", packet).await;
@@ -385,12 +402,42 @@ impl Session {
     }
 
     /// Writes all the provided packets in order.
-    pub async fn write_packets(&self, packets: &Vec<OpaquePacket>) -> io::Result<()> {
-        let stream = &mut *self.stream.lock().await;
+    pub async fn write_packets(&self, packets: &Vec<OpaquePacket>) {
+        let write_queue = &mut *self.write_buffer.lock().await;
         for packet in packets {
-            packet.write_async(stream).await?;
-            self.debug_log_packet("Wrote", packet).await;
+            self.debug_log_packet("Queued Write", packet).await;
+            let contents = packet.encode_bytes();
+            write_queue.push_back(contents);
         }
+        self.flush_sender.try_send(true).ok();
+    }
+
+    pub async fn flush(&self) {
+        let write_queue = &mut *self.write_buffer.lock().await;
+        if write_queue.is_empty() {
+            return;
+        }
+        let stream = &mut *self.stream.lock().await;
+        while let Some(item) = write_queue.pop_front() {
+            match stream.write_all(&item).await {
+                Ok(_) => {},
+                Err(err) => {
+                    error!("Error while flushing session (ID: {}): {:?}", self.id, err);
+                    return;
+                }
+            }
+        }  
+    }
+
+
+    pub async fn notify<T: Codec>(&self, component: Components, contents: &T) {
+        self.write_packet(&Packets::notify(component, contents))
+            .await;
+    }
+
+    pub async fn notify_immediate<T: Codec>(&self, component: Components, contents: &T) -> HandleResult {
+        self.write_packet_direct(&Packets::notify(component, contents))
+            .await?;
         Ok(())
     }
 
@@ -403,14 +450,14 @@ impl Session {
 
     #[inline]
     pub async fn response<T: Codec>(&self, packet: &OpaquePacket, contents: &T) -> HandleResult {
-        self.write_packet(&Packets::response(packet, contents))
+        self.write_packet_direct(&Packets::response(packet, contents))
             .await?;
         Ok(())
     }
 
     #[inline]
     pub async fn response_empty(&self, packet: &OpaquePacket) -> HandleResult {
-        self.write_packet(&Packets::response_empty(packet)).await?;
+        self.write_packet_direct(&Packets::response_empty(packet)).await?;
         Ok(())
     }
 
@@ -421,7 +468,7 @@ impl Session {
         error: impl Into<u16>,
         contents: &T,
     ) -> HandleResult {
-        self.write_packet(&Packets::error(packet, error, contents))
+        self.write_packet_direct(&Packets::error(packet, error, contents))
             .await?;
         Ok(())
     }
@@ -432,7 +479,7 @@ impl Session {
         packet: &OpaquePacket,
         error: impl Into<u16>,
     ) -> HandleResult {
-        self.write_packet(&Packets::error_empty(packet, error))
+        self.write_packet_direct(&Packets::error_empty(packet, error))
             .await?;
         Ok(())
     }

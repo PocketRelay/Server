@@ -13,11 +13,10 @@ use crate::game::shared::{
 use blaze_pk::{OpaquePacket, Packets, TdfMap};
 use log::{debug, warn};
 use std::collections::HashMap;
-use std::io;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use tokio::join;
 use tokio::sync::RwLock;
-use tokio::try_join;
 
 pub struct Games {
     games: RwLock<HashMap<u32, GameArc>>,
@@ -75,7 +74,7 @@ impl Games {
             "Releasing player from game (Name: {}, ID: {}, Session ID: {})",
             &game.name, &game.id, player.id
         );
-        game.remove_player(player).await.ok();
+        game.remove_player(player).await;
         debug!("Checking if game can be removed");
         self.remove_if_empty(game).await;
     }
@@ -141,7 +140,7 @@ impl Game {
         Ok(player.clone())
     }
 
-    pub async fn push_all(&self, packet: &OpaquePacket) -> io::Result<()> {
+    pub async fn push_all(&self, packet: &OpaquePacket) {
         let players = &*self.players.read().await;
         let futures: Vec<_> = players
             .iter()
@@ -150,10 +149,9 @@ impl Game {
 
         // TODO: Handle errors for each players
         let _ = futures::future::join_all(futures).await;
-        Ok(())
     }
 
-    pub async fn push_all_excl_host(&self, packet: &OpaquePacket) -> io::Result<()> {
+    pub async fn push_all_excl_host(&self, packet: &OpaquePacket) {
         let players = &*self.players.read().await;
         let futures: Vec<_> = players
             .iter()
@@ -163,10 +161,9 @@ impl Game {
 
         // TODO: Handle errors for each players
         let _ = futures::future::join_all(futures).await;
-        Ok(())
     }
 
-    pub async fn push_all_list(&self, packets: &Vec<OpaquePacket>) -> io::Result<()> {
+    pub async fn push_all_list(&self, packets: &Vec<OpaquePacket>) {
         let players = &*self.players.read().await;
         let futures: Vec<_> = players
             .iter()
@@ -174,24 +171,22 @@ impl Game {
             .collect();
         // TODO: Handle errors for each players
         let _ = futures::future::join_all(futures).await;
-        Ok(())
     }
 
-    pub async fn set_state(&self, state: u16) -> BlazeResult<()> {
+    pub async fn set_state(&self, state: u16) {
         {
-            let mut data = self.data.write().await;
-            (*data).state = state;
+            let data = &mut *self.data.write().await;
+            data.state = state;
         }
 
         let packet = Packets::notify(
             Components::GameManager(GameManager::GameStateChange),
             &NotifyStateChange { id: self.id, state },
         );
-        self.push_all(&packet).await?;
-        Ok(())
+        self.push_all(&packet).await;
     }
 
-    pub async fn set_setting(&self, setting: u16) -> BlazeResult<()> {
+    pub async fn set_setting(&self, setting: u16) {
         {
             let mut data = self.data.write().await;
             (*data).setting = setting;
@@ -204,14 +199,13 @@ impl Game {
                 setting,
             },
         );
-        self.push_all(&packet).await?;
-        Ok(())
+        self.push_all(&packet).await;
     }
 
-    pub async fn set_attributes(&self, attributes: TdfMap<String, String>) -> BlazeResult<()> {
+    pub async fn set_attributes(&self, attributes: TdfMap<String, String>) {
         {
-            let mut data = self.data.write().await;
-            (*data).attributes.extend(attributes)
+            let data = &mut *self.data.write().await;
+            data.attributes.extend(attributes)
         }
 
         let packet = {
@@ -224,23 +218,25 @@ impl Game {
                 },
             )
         };
-        self.push_all(&packet).await?;
-        Ok(())
+        self.push_all(&packet).await;
     }
 
-    pub async fn update_mesh_connection(&self, session: &SessionArc) -> BlazeResult<()> {
+    pub async fn update_mesh_connection(&self, session: &SessionArc) {
         if !self.is_player(session).await {
-            session.set_state(2).await?;
-            return Ok(());
+            session.set_state(2).await;
+            return;
         }
 
-        session.set_state(4).await?;
+        session.set_state(4).await;
 
         debug!("Updating Mesh Connection");
 
         let host_id = {
             let players = self.players.read().await;
-            let host = players.get(0).ok_or_else(|| BlazeError::MissingPlayer)?;
+            let Some(host) = players.get(0) else {
+                debug!("Game didn't have host unable to connect mesh");
+                return;
+            };
             let session_data = host.data.read().await;
             session_data.player_id_safe()
         };
@@ -270,11 +266,9 @@ impl Game {
         );
 
         let packets = vec![packet_a, packet_b];
-        self.push_all_list(&packets).await?;
+        self.push_all_list(&packets).await;
 
         debug!("Finished updating mesh connections");
-
-        Ok(())
     }
 
     pub async fn find_player_by_id(&self, id: u32) -> Option<SessionArc> {
@@ -293,24 +287,23 @@ impl Game {
         players.iter().any(|value| value.id == session.id)
     }
 
-    pub async fn remove_by_id(&self, id: u32) -> BlazeResult<()> {
+    pub async fn remove_by_id(&self, id: u32) {
         debug!(
             "Attempting to remove player from game (PID: {}, GID: {})",
             id, self.id
         );
         if let Some(player) = self.find_player_by_id(id).await {
             debug!("Found player to remove. Removing player");
-            self.remove_player(&player).await?;
+            self.remove_player(&player).await;
         } else {
             warn!(
                 "Unable to find player with (ID: {}) in game (Name: {}, ID: {})",
                 id, self.name, self.id
             );
         }
-        Ok(())
     }
 
-    pub async fn remove_player(&self, session: &Session) -> BlazeResult<()> {
+    pub async fn remove_player(&self, session: &Session) {
         {
             let mut players = self.players.write().await;
             players.retain(|value| value.id != session.id);
@@ -340,14 +333,14 @@ impl Game {
             },
         );
 
-        try_join!(self.push_all(&packet), session.write_packet(&packet))?;
+        join!(self.push_all(&packet), session.write_packet(&packet));
 
         debug!("Sent removal notify");
 
         let Some(host) = self.get_host().await.ok() else {
             debug!("Migrating host");
             self.migrate_host().await;
-            return Ok(());
+            return;
         };
 
         let host_id = host.player_id_safe().await;
@@ -362,7 +355,7 @@ impl Game {
             },
         );
 
-        self.push_all(&packet).await?;
+        self.push_all(&packet).await;
         debug!("Sent admin list changed notify");
 
         {
@@ -383,13 +376,11 @@ impl Game {
                 packets
             };
 
-            try_join!(
+            join!(
                 self.push_all_excl_host(&host_packet),
                 host.write_packets(&packets)
-            )?;
-        }
-
-        Ok(())
+            );
+        };
     }
 
     pub async fn migrate_host(&self) {
@@ -400,7 +391,7 @@ impl Game {
         self.player_count().await < Self::MAX_PLAYERS
     }
 
-    pub async fn update_clients_for(&self, session: &SessionArc) -> io::Result<()> {
+    pub async fn update_clients_for(&self, session: &SessionArc) {
         debug!("Updating session information of other players");
         let players = &*self.players.read().await;
 
@@ -411,10 +402,8 @@ impl Game {
             .collect();
 
         let _ = futures::future::join_all(futures).await;
-        // TODO: Handle update failure.
 
         debug!("Done updating session information");
-        Ok(())
     }
 
     pub async fn add_player(game: &GameArc, session: &SessionArc) -> BlazeResult<()> {
@@ -437,9 +426,9 @@ impl Game {
 
         // Don't send if this is the host joining
         if slot != 0 {
+            // Update session details for other players and send join notifies
             debug!("Creating join notify");
-            // Joining player is not the host player
-            let join_notify = {
+            let packet = {
                 let session_data = session.data.read().await;
                 Packets::notify(
                     Components::GameManager(GameManager::PlayerJoining),
@@ -449,23 +438,20 @@ impl Game {
                     },
                 )
             };
-
             debug!("Pushing join notify to players");
-
-            // Update session details for other players and send join notifies
-            game.push_all(&join_notify).await?;
+            game.push_all(&packet).await;
         }
 
         debug!("Updating clients");
-        game.update_clients_for(session).await?;
+        game.update_clients_for(session).await;
 
         let setup = notify_game_setup(game, &session).await?;
         debug!("Finished generating notify packet");
 
-        session.write_packet(&setup).await?;
+        session.write_packet(&setup).await;
         debug!("Finished writing notify packet");
 
-        session.update_client().await?;
+        session.update_client().await;
 
         debug!("Finished adding player");
 

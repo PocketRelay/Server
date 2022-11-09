@@ -128,10 +128,9 @@ async fn handle_update_network_info(session: &SessionArc, packet: &OpaquePacket)
         debug!("Updating networking:\n{:#?}", net)
     }
 
-    session.response_empty(packet).await?;
-    session.update_client().await?;
+    session.update_client().await;
     debug!("Done update networking");
-    Ok(())
+    session.response_empty(packet).await
 }
 
 pub async fn update_missing_external(session: &SessionArc, groups: &mut NetGroups) {
@@ -180,8 +179,7 @@ async fn handle_update_hardware_flag(session: &SessionArc, packet: &OpaquePacket
         let session_data = &mut *session.data.write().await;
         session_data.hardware_flag = req.hardware_flag;
     }
-    session.response_empty(packet).await?;
-    session.update_client().await?;
+    session.update_client().await;
     debug!("Done updating hardware flag");
-    Ok(())
+    session.response_empty(packet).await
 }

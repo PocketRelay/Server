@@ -1,7 +1,7 @@
 use crate::blaze::components::Components;
 use crate::blaze::errors::{BlazeError, HandleResult};
 use crate::blaze::SessionArc;
-use blaze_pk::{OpaquePacket, Packets};
+use blaze_pk::OpaquePacket;
 use log::{debug, error};
 
 mod auth;
@@ -33,17 +33,14 @@ pub async fn route(
         value => {
             debug!("No handler for component {value:?}");
             packet.debug_decode()?;
-            session
-                .write_packet(&Packets::response_empty(packet))
-                .await?;
-            Ok(())
+            session.response_empty(packet).await
         }
     };
 
     if let Err(BlazeError::Response(response)) = &result {
         error!("Sending error response");
         // Send error responses
-        session.write_packet(response).await?;
+        session.write_packet_direct(response).await?;
         return Ok(());
     }
 
