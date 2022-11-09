@@ -3,7 +3,7 @@ pub mod matchmaking;
 mod shared;
 
 use crate::blaze::components::{Components, GameManager, UserSessions};
-use crate::blaze::errors::{BlazeError, BlazeResult, GameError, GameResult};
+use crate::blaze::errors::{BlazeError, BlazeResult, GameError};
 use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete};
 use crate::blaze::{Session, SessionArc};
 use crate::game::shared::{
@@ -331,7 +331,7 @@ impl Game {
 
         debug!("Sent removal notify");
 
-        let players = self.players.read().await;
+        let players = &*self.players.read().await;
         let Some(host) = players.get(0) else {
             debug!("Migrating host");
             self.migrate_host().await;
