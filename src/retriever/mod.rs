@@ -20,6 +20,9 @@ use crate::{
 pub mod origin;
 mod shared;
 
+#[cfg(test)]
+mod test;
+
 /// Type for SSL wrapped blaze stream
 type Stream = BlazeStream<TcpStream>;
 
@@ -130,6 +133,22 @@ impl RetSession {
         request.write(&mut self.stream)?;
         self.stream.flush()?;
         self.id += 1;
+        let response = self.expect_response(&request)?;
+        let contents = response.contents::<Res>()?;
+        Ok(contents)
+    }
+
+    /// Writes a request packet and waits until the response packet is
+    /// recieved returning the contents of that response packet.
+    pub fn request_raw<Req: Codec>(
+        &mut self,
+        component: Components,
+        contents: &Req,
+    ) -> BlazeResult<OpaquePacket> {
+        let request = Packets::request(self.id, component, contents);
+        request.write(&mut self.stream)?;
+        self.stream.flush()?;
+        self.id += 1;
         self.expect_response(&request)
     }
 
@@ -141,12 +160,24 @@ impl RetSession {
         request.write(&mut self.stream)?;
         self.stream.flush()?;
         self.id += 1;
+        let response = self.expect_response(&request)?;
+        let contents = response.contents::<Res>()?;
+        Ok(contents)
+    }
+
+    /// Writes a request packet and waits until the response packet is
+    /// recieved returning the raw response packet
+    pub fn request_empty_raw(&mut self, component: Components) -> BlazeResult<OpaquePacket> {
+        let request = Packets::request_empty(self.id, component);
+        request.write(&mut self.stream)?;
+        self.stream.flush()?;
+        self.id += 1;
         self.expect_response(&request)
     }
 
     /// Waits for a response packet to be recieved any notification packets
     /// that are recieved are handled in the handle_notify function.
-    fn expect_response<T: Codec>(&mut self, request: &OpaquePacket) -> BlazeResult<T> {
+    fn expect_response(&mut self, request: &OpaquePacket) -> BlazeResult<OpaquePacket> {
         loop {
             let (component, response): (Components, OpaquePacket) =
                 match OpaquePacket::read_typed(&mut self.stream) {
@@ -160,8 +191,7 @@ impl RetSession {
             if !response.0.path_matches(&request.0) {
                 continue;
             }
-            let contents = response.contents::<T>()?;
-            return Ok(contents);
+            return Ok(response);
         }
     }
 
