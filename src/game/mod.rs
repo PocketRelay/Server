@@ -134,12 +134,6 @@ impl Game {
         players.len()
     }
 
-    pub async fn get_host(&self) -> GameResult<SessionArc> {
-        let players = self.players.read().await;
-        let player = players.get(0).ok_or(GameError::MissingHost)?;
-        Ok(player.clone())
-    }
-
     pub async fn push_all(&self, packet: &OpaquePacket) {
         let players = &*self.players.read().await;
         let futures: Vec<_> = players
@@ -337,7 +331,8 @@ impl Game {
 
         debug!("Sent removal notify");
 
-        let Some(host) = self.get_host().await.ok() else {
+        let players = self.players.read().await;
+        let Some(host) = players.get(0) else {
             debug!("Migrating host");
             self.migrate_host().await;
             return;
@@ -364,7 +359,6 @@ impl Game {
                 &FetchExtendedData { id: host_id },
             );
             let packets = {
-                let players = &*self.players.read().await;
                 let mut packets = Vec::with_capacity(players.len());
                 for player in players {
                     let id = player.player_id_safe().await;
