@@ -6,7 +6,7 @@ use sea_orm::{
 };
 
 use crate::blaze::errors::{BlazeError, BlazeResult};
-use crate::blaze::SessionArc;
+use crate::blaze::session::SessionArc;
 use crate::database::entities::{player_classes, players};
 use crate::utils::conv::MEStringParser;
 

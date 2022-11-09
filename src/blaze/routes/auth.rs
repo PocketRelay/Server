@@ -1,7 +1,7 @@
 use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, LoginError, LoginErrorRes};
+use crate::blaze::session::SessionArc;
 use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
-use crate::blaze::SessionArc;
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::find_by_email;
 use crate::database::interface::players::{self, find_by_email_any};

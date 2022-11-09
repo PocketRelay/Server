@@ -9,10 +9,9 @@ mod utils;
 use crate::game::Games;
 use dotenvy::dotenv;
 use game::matchmaking::Matchmaking;
-use log::info;
+use log::{error, info};
 use retriever::Retriever;
 use sea_orm::DatabaseConnection;
-use std::io;
 use std::sync::Arc;
 use tokio::sync::broadcast::{self, Receiver};
 use tokio::{select, signal};
@@ -29,14 +28,21 @@ pub struct GlobalState {
 pub type GlobalStateArc = Arc<GlobalState>;
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
+async fn main() {
     dotenv().ok();
 
     utils::init_logger();
 
     info!("Starting Pocket Relay v{}", env::VERSION);
 
-    let db = database::connect().await?;
+    let db = match database::connect().await {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Unable to connect to database: {:?}", err);
+            panic!();
+        }
+    };
+
     let games = Games::new();
     let matchmaking = Matchmaking::new();
     let retriever = Retriever::new().await;
@@ -51,14 +57,12 @@ async fn main() -> io::Result<()> {
     };
     let global_state = Arc::new(global_state);
     select! {
-        result = http::start_server(global_state.clone()) => { result? },
-        result = blaze::start_server(global_state) => { result? },
+        _ = http::start_server(global_state.clone()) => { },
+        _ = blaze::start_server(global_state) => { },
         _ = signal::ctrl_c() => {
             shutdown_send
                 .send(())
                 .expect("Failed to send shutdown signal");
         }
-    }
-
-    Ok(())
+    };
 }

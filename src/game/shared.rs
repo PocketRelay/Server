@@ -1,6 +1,6 @@
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::errors::{GameError, GameResult};
-use crate::blaze::{SessionArc, SessionData};
+use crate::blaze::session::{SessionArc, SessionData};
 use crate::game::Game;
 use blaze_pk::{
     packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list,
@@ -23,21 +23,21 @@ impl Codec for NotifyPlayerJoining<'_> {
     }
 }
 
-pub fn encode_player_data(session: &SessionData, output: &mut Vec<u8>) {
-    let Some(player) = session.player else {return;};
-    let Some(game) = session.game else { return; };
+pub fn encode_player_data(session_data: &SessionData, output: &mut Vec<u8>) {
+    let Some(player) = session_data.player.as_ref() else {return;};
+    let Some(game) = session_data.game.as_ref() else { return; };
 
     tag_empty_blob(output, "BLOB");
     tag_u8(output, "EXID", 0);
     tag_u32(output, "GID", game.game.id);
-    tag_u32(output, "LOC", session.location);
+    tag_u32(output, "LOC", session_data.location);
     tag_str(output, "NAME", &player.display_name);
-    let player_id = session.player_id_safe();
+    let player_id = session_data.id_safe();
     tag_u32(output, "PID", player_id);
-    tag_value(output, "PNET", &session.net.get_groups());
+    tag_value(output, "PNET", &session_data.net.get_groups());
     tag_usize(output, "SID", game.slot);
     tag_u8(output, "SLOT", 0);
-    tag_u8(output, "STAT", session.state);
+    tag_u8(output, "STAT", session_data.state);
     tag_u16(output, "TIDX", 0xffff);
     tag_u8(output, "TIME", 0);
     tag_triple(output, "UGID", &(0, 0, 0));
@@ -69,14 +69,14 @@ async fn encode_notify_game_setup(
 
     for player in players {
         let session_data = player.data.read().await;
-        player_ids.push(session_data.player_id_safe());
+        player_ids.push(session_data.id_safe());
         encode_player_data(&session_data, &mut player_data);
     }
 
     let host = players.get(0).ok_or(GameError::MissingHost)?;
 
     let host_data = host.data.read().await;
-    let host_id = host_data.player_id_safe();
+    let host_id = host_data.id_safe();
 
     {
         let game_data = game.data.read().await;
@@ -155,7 +155,7 @@ async fn encode_notify_game_setup(
             tag_u16(output, "MAXF", 0x5460);
             tag_u32(output, "MSID", session.id);
             tag_u8(output, "RSLT", 0x2);
-            tag_u32(output, "USID", session_data.player_id_safe());
+            tag_u32(output, "USID", session_data.id_safe());
             tag_group_end(output);
         }
     } else {

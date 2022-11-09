@@ -1,6 +1,6 @@
 use crate::blaze::components::{Components, Messaging, UserSessions};
 use crate::blaze::errors::HandleResult;
-use crate::blaze::SessionArc;
+use crate::blaze::session::SessionArc;
 use crate::database::entities::PlayerModel;
 use crate::env;
 use crate::env::VERSION;

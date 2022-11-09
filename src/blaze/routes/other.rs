@@ -1,6 +1,6 @@
 use crate::blaze::components::{AssociationLists, Components, GameReporting};
 use crate::blaze::errors::HandleResult;
-use crate::blaze::SessionArc;
+use crate::blaze::session::SessionArc;
 use blaze_pk::{
     tag_group_end, tag_group_start, tag_list_start, tag_str, tag_triple, tag_u8,
     tag_var_int_list_empty, tag_zero, Codec, OpaquePacket, ValueType,

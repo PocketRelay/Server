@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use log::debug;
 use tokio::sync::RwLock;
 
-use crate::blaze::{Session, SessionArc};
+use crate::blaze::session::{Session, SessionArc};
 
 use super::{
     enums::{Difficulty, EnemyType, GameMap, MatchRule},

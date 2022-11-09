@@ -1,6 +1,6 @@
 use crate::blaze::components::GameManager;
 use crate::blaze::errors::{BlazeError, GameError, HandleResult, OtherError};
-use crate::blaze::SessionArc;
+use crate::blaze::session::SessionArc;
 use crate::game::matchmaking::{MatchRules, RuleSet};
 use crate::game::Game;
 use blaze_pk::{group, packet, OpaquePacket, TdfMap};
@@ -110,7 +110,7 @@ async fn handle_create_game(session: &SessionArc, packet: &OpaquePacket) -> Hand
         .await?;
     Game::add_player(&game, session).await?;
 
-    session.global.matchmaking.on_game_created(&game).await;
+    session.matchmaking().on_game_created(&game).await;
 
     Ok(())
 }
@@ -444,7 +444,7 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -
         let session_data = session.data.read().await;
         let Some(player) = session_data.player.as_ref() else {
             warn!("Client attempted to matchmake while not authenticated. (SID: {})", session.id);
-            return session.response_error_empty(packet, OtherError::Unknown);
+            return session.response_error_empty(packet, OtherError::Unknown).await;
         };
         info!("Player {} started matchmaking", player.display_name);
     }
@@ -453,9 +453,8 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -
 
     debug!("Checking for games before adding to queue");
     let game = session
-        .global
-        .matchmaking
-        .get_or_queue(session, rules, &session.global.games)
+        .matchmaking()
+        .get_or_queue(session, rules, session.games())
         .await;
     {
         debug!("Matchmaking ID: {}", session.id);

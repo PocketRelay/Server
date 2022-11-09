@@ -1,6 +1,6 @@
 use crate::blaze::components::Stats;
 use crate::blaze::errors::HandleResult;
-use crate::blaze::SessionArc;
+use crate::blaze::session::SessionArc;
 use blaze_pk::{
     encode_str, packet, tag_group_end, tag_list_start, tag_map_start, tag_pair, tag_str, tag_u32,
     tag_u8, Codec, OpaquePacket, ValueType,

@@ -5,7 +5,7 @@ use sea_orm::{ActiveModelTrait, DatabaseConnection, IntoActiveModel, Set};
 use crate::{
     blaze::{
         errors::{BlazeError, BlazeResult},
-        SessionArc,
+        session::SessionArc,
     },
     database::entities::players,
     utils::conv::MEStringParser,

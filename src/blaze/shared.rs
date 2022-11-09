@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::blaze::SessionData;
+use crate::blaze::session::SessionData;
 use crate::database::entities::PlayerModel;
 use blaze_pk::{
     packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list_start,
@@ -16,7 +16,7 @@ pub struct SetSessionDetails<'a> {
 impl Codec for SetSessionDetails<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
         self.session.encode(output);
-        tag_u32(output, "USID", self.session.player_id_safe());
+        tag_u32(output, "USID", self.session.id_safe());
     }
 }
 

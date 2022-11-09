@@ -101,6 +101,7 @@ impl Session {
                 }
             };
         }
+        session.release().await;
     }
 
     /// Handles processing a recieved packet from the `process` function. This includes a
@@ -146,15 +147,20 @@ impl Session {
 
         let debug_info = &*self.debug_state.read().await;
 
-        let mut message = format!(
-            "
-        Session {} Packet
-        Info: ({})
-        Component: {:?}
-        Type: {:?}
-        ID: {}",
-            action, debug_info, component, header.ty, header.id
-        );
+        let mut message = String::new();
+        message.push_str("\nSession ");
+        message.push_str(action);
+        message.push_str(" Packet");
+
+        {
+            message.push_str("\nInfo: (");
+            message.push_str(debug_info);
+            message.push(')');
+        }
+
+        message.push_str(&format!("\nComponent: {:?}", component));
+        message.push_str(&format!("\nType: {:?}", header.ty));
+        message.push_str(&format!("\nID: {}", header.id));
 
         if Self::is_debug_minified(&component) {
             debug!("{}", message);
@@ -202,7 +208,7 @@ impl Session {
 
     /// Flushes the output buffer
     pub async fn flush(&self) {
-        self.buffer.flush(self);
+        self.buffer.flush(self).await;
     }
 
     /// Writes the provided packet to the underlying buffer to be
@@ -455,7 +461,8 @@ impl Session {
         session_data.state = state;
 
         let Some(player) = &session_data.player else {return;};
-        let Some(game) = &session_data.game.map(|value| value.game) else {return;};
+        let Some(game) = &session_data.game else {return;};
+        let game = &game.game;
 
         let packet = Packets::notify(
             Components::GameManager(GameManager::GamePlayerStateChange),

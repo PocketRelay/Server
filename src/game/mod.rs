@@ -4,8 +4,8 @@ mod shared;
 
 use crate::blaze::components::{Components, GameManager, UserSessions};
 use crate::blaze::errors::{BlazeError, BlazeResult, GameError};
+use crate::blaze::session::{Session, SessionArc};
 use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete};
-use crate::blaze::{Session, SessionArc};
 use crate::game::shared::{
     notify_game_setup, FetchExtendedData, NotifyAttribsChange, NotifyPlayerJoining,
     NotifyPlayerRemoved, NotifySettingChange, NotifyStateChange,
@@ -137,10 +137,7 @@ impl Game {
 
     pub async fn push_all(&self, packet: &OpaquePacket) {
         let players = &*self.players.read().await;
-        let futures: Vec<_> = players
-            .iter()
-            .map(|value| value.write_packet(packet))
-            .collect();
+        let futures: Vec<_> = players.iter().map(|value| value.write(packet)).collect();
 
         // TODO: Handle errors for each players
         let _ = futures::future::join_all(futures).await;
@@ -151,7 +148,7 @@ impl Game {
         let futures: Vec<_> = players
             .iter()
             .skip(1)
-            .map(|value| value.write_packet(packet))
+            .map(|value| value.write(packet))
             .collect();
 
         // TODO: Handle errors for each players
@@ -162,7 +159,7 @@ impl Game {
         let players = &*self.players.read().await;
         let futures: Vec<_> = players
             .iter()
-            .map(|value| value.write_packets(packets))
+            .map(|value| value.write_all(packets))
             .collect();
         // TODO: Handle errors for each players
         let _ = futures::future::join_all(futures).await;
@@ -233,14 +230,14 @@ impl Game {
                 return;
             };
             let session_data = host.data.read().await;
-            session_data.player_id_safe()
+            session_data.id_safe()
         };
 
         debug!("Mesh host ID: {}", host_id);
 
         let pid = {
             let session_data = session.data.read().await;
-            session_data.player_id_safe()
+            session_data.id_safe()
         };
 
         debug!("Mesh player ID: {}", pid);
@@ -328,7 +325,7 @@ impl Game {
             },
         );
 
-        join!(self.push_all(&packet), session.write_packet(&packet));
+        join!(self.push_all(&packet), session.write(&packet));
 
         debug!("Sent removal notify");
 
@@ -373,7 +370,7 @@ impl Game {
 
             join!(
                 self.push_all_excl_host(&host_packet),
-                host.write_packets(&packets)
+                host.write_all(&packets)
             );
         };
 
@@ -445,7 +442,7 @@ impl Game {
         let setup = notify_game_setup(game, &session).await?;
         debug!("Finished generating notify packet");
 
-        session.write_packet(&setup).await;
+        session.write(&setup).await;
         debug!("Finished writing notify packet");
 
         session.update_client().await;
