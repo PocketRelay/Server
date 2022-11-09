@@ -1,8 +1,8 @@
 use crate::blaze::components::Components;
-use crate::blaze::errors::{BlazeError, HandleResult};
+use crate::blaze::errors::HandleResult;
 use crate::blaze::session::SessionArc;
 use blaze_pk::OpaquePacket;
-use log::{debug, error};
+use log::debug;
 
 mod auth;
 mod game_manager;
