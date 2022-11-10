@@ -4,7 +4,7 @@ use crate::blaze::session::SessionArc;
 use crate::blaze::shared::TelemetryRes;
 use crate::database::interface::players::{find_characters, find_classes};
 use crate::database::interface::{player_characters, player_classes, player_data};
-use crate::env;
+use crate::env::{self, VERSION};
 use crate::utils::dmap::load_dmap;
 use crate::utils::server_unix_time;
 use blaze_pk::{
@@ -333,7 +333,7 @@ async fn handle_fetch_client_config(session: &SessionArc, packet: &OpaquePacket)
     let fetch_config = packet.contents::<FetchConfigReq>()?;
     let config = match fetch_config.id.as_ref() {
         "ME3_DATA" => data_config(),
-        "ME3_MSG" => TdfMap::empty(),
+        "ME3_MSG" => messages().await,
         "ME3_ENT" => load_dmap(ME3_ENT),
         "ME3_DIME" => {
             let mut map = TdfMap::with_capacity(1);
@@ -376,6 +376,117 @@ fn talk_file(lang: &str) -> TdfMap<String, String> {
         load_dmap(contents.as_ref())
     } else {
         load_dmap(ME3_TLK_DEFAULT)
+    }
+}
+
+/// Loads the messages that should be displayed to the client and
+/// returns them in a list.
+async fn messages() -> TdfMap<String, String> {
+    let mut config = TdfMap::new();
+
+    let intro = Message {
+        end_date: None,
+        image: None,
+        title: Some("Pocket Relay".to_owned()),
+        message: format!(
+            "You are connected to Pocket Relay <font color='#FFFF66'>(v{})</font>",
+            VERSION,
+        ),
+        priority: 1,
+        tracking_id: None,
+        ty: MessageType::MenuTerminal,
+    };
+
+    let messages = vec![intro];
+
+    let mut index = 1;
+    for message in messages {
+        message.append(index, &mut config);
+        index += 1;
+    }
+
+    config.order();
+    config
+}
+
+struct Message {
+    /// The end date of this message
+    end_date: Option<String>,
+    /// Path to the message image dds
+    /// if left blank the game will use
+    /// a default imagee
+    image: Option<String>,
+    /// The title of the mesage
+    title: Option<String>,
+    /// The message text content
+    message: String,
+    /// The message priority
+    priority: u32,
+    /// Unique identifier for this message so that when dismissed it wont
+    /// be shown to the same user again
+    tracking_id: Option<u32>,
+    /// The type of message
+    ty: MessageType,
+}
+
+/// Known types of messages
+#[allow(unused)]
+enum MessageType {
+    /// Displayed on the main menu in the next tab on the terminal
+    MenuTerminal,
+    /// Displayed on the main menu in the scrolling text
+    MenuScrolling,
+    /// Large multiplayer fullscreen notification
+    /// with store button
+    Multiplayer,
+    /// Other unknown value
+    Other(u8),
+}
+
+impl MessageType {
+    fn value(&self) -> u8 {
+        match self {
+            Self::MenuTerminal => 0x0,
+            Self::MenuScrolling => 0x3,
+            Self::Multiplayer => 0x8,
+            Self::Other(value) => *value,
+        }
+    }
+}
+
+impl Message {
+    /// Appends this message to the provided map
+    pub fn append(self, index: usize, map: &mut TdfMap<String, String>) {
+        let langs = ["de", "es", "fr", "it", "ja", "pl", "ru"];
+        let prefix = format!("MSG_{index}_");
+
+        if let Some(end_date) = self.end_date {
+            map.insert(format!("{prefix}endDate"), end_date);
+        }
+
+        if let Some(image) = self.image {
+            map.insert(format!("{prefix}image"), image);
+        }
+
+        map.insert(format!("{prefix}message"), &self.message);
+        for lang in &langs {
+            map.insert(format!("{prefix}message_{lang}"), &self.message);
+        }
+
+        map.insert(format!("{prefix}priority"), self.priority.to_string());
+
+        if let Some(title) = &self.title {
+            map.insert(format!("{prefix}title"), title);
+            for lang in &langs {
+                map.insert(format!("{prefix}title_{lang}"), title);
+            }
+        }
+
+        if let Some(tracking_id) = self.tracking_id {
+            map.insert(format!("{prefix}trackingId"), tracking_id.to_string());
+        }
+
+        map.insert(format!("{prefix}type"), self.ty.value().to_string());
     }
 }
 

@@ -196,14 +196,14 @@ define_components! {
     }
 
     Messaging (0xF) {
-        // Notify
-        SendMessage (0x1)
-
-
         FetchMessages (0x2)
         PurgeMessages (0x3)
         TouchMessages (0x4)
-        GetMessages (0x5)
+        GetMessages (0x5);
+
+        notify {
+            SendMessage (0x1)
+        }
     }
 
     AssociationLists (0x19) {
