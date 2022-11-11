@@ -165,6 +165,13 @@ impl Game {
         let _ = futures::future::join_all(futures).await;
     }
 
+    pub async fn flush_players(&self) {
+        let players = &*self.players.read().await;
+        let futures: Vec<_> = players.iter().map(|value| value.flush()).collect();
+        // TODO: Handle errors for each players
+        let _ = futures::future::join_all(futures).await;
+    }
+
     pub async fn set_state(&self, state: u16) {
         {
             let data = &mut *self.data.write().await;
@@ -295,28 +302,40 @@ impl Game {
         }
     }
 
+    /// Handles removing a player from the game and updating all the
+    /// other players that the player has been removed.
+    ///
+    /// `session` The removed player.
     pub async fn remove_player(&self, session: &Session) {
-        {
-            let mut players = self.players.write().await;
-            players.retain(|value| value.id != session.id);
-            debug!("Removed player from players list (ID: {})", session.id)
-        }
+        self.remove_session(session).await;
+        self.notify_player_removed(session).await;
+        self.notify_admin_removed(session).await;
+        self.notify_fetch_data(session).await;
+        debug!("Done removing player");
+    }
 
-        let player_id = {
-            let session_data = &mut *session.data.write().await;
-            session_data.game = None;
-            if let Some(player) = &session_data.player {
-                debug!(
-                    "Removing player {} from game {}",
-                    player.display_name, self.id
-                );
-                self.id
-            } else {
-                debug!("Removing session {} from game {}", session.id, self.id);
-                1
-            }
-        };
+    /// Removes the provided session from the players list of this game
+    /// and clears the game state stored on the session
+    ///
+    /// `session` The session to remove.
+    async fn remove_session(&self, session: &Session) {
+        session.clear_game().await;
 
+        let mut players = self.players.write().await;
+        players.retain(|value| value.id != session.id);
+        debug!("Removed session from players list (SID: {})", session.id)
+    }
+
+    /// Notifies all players in the game and the provided session that
+    /// the provided session was removed from the game.
+    ///
+    /// `session` The session that was removed from the game
+    async fn notify_player_removed(&self, session: &Session) {
+        let player_id = session.player_id_safe().await;
+        debug!(
+            "Removing session from game (SID: {}, PID: {}, GID: {})",
+            session.id, player_id, self.id
+        );
         let packet = Packets::notify(
             Components::GameManager(GameManager::PlayerRemoved),
             &NotifyPlayerRemoved {
@@ -324,19 +343,24 @@ impl Game {
                 pid: player_id,
             },
         );
-
         join!(self.push_all(&packet), session.write(&packet));
+        debug!("Notified clients of removed player");
+    }
 
-        debug!("Sent removal notify");
-
-        let players = &*self.players.read().await;
-        let Some(host) = players.get(0) else {
-            debug!("Migrating host");
-            self.migrate_host().await;
-            return;
+    /// Notifies all players in the game that the a player was
+    /// removed from the admin list. Will migrate the host
+    /// player if one is not present.
+    ///
+    /// `session` The player removed from the admin list
+    async fn notify_admin_removed(&self, session: &Session) {
+        let host_id = {
+            let players = &*self.players.read().await;
+            if let Some(host) = players.first() {
+                host.player_id_safe().await
+            } else {
+                self.migrate_host().await.unwrap_or(1)
+            }
         };
-
-        let host_id = host.player_id_safe().await;
 
         let packet = Packets::notify(
             Components::GameManager(GameManager::AdminListChange),
@@ -347,38 +371,51 @@ impl Game {
                 uid: host_id,
             },
         );
-
         self.push_all(&packet).await;
-        debug!("Sent admin list changed notify");
-
-        {
-            let host_packet = Packets::notify(
-                Components::UserSessions(UserSessions::FetchExtendedData),
-                &FetchExtendedData { id: host_id },
-            );
-            let packets = {
-                let mut packets = Vec::with_capacity(players.len());
-                for player in players {
-                    let id = player.player_id_safe().await;
-                    packets.push(Packets::notify(
-                        Components::UserSessions(UserSessions::FetchExtendedData),
-                        &FetchExtendedData { id },
-                    ));
-                }
-                packets
-            };
-
-            join!(
-                self.push_all_excl_host(&host_packet),
-                host.write_all(&packets)
-            );
-        };
-
-        debug!("Done removing player");
+        debug!("Notified clients of admin list change");
     }
 
-    pub async fn migrate_host(&self) {
+    /// Notifies all the players in the game to fetch the extended
+    /// data for the provided session and the session to do the same
+    /// for all the players.
+    ///
+    /// `session` The session to fetch data
+    async fn notify_fetch_data(&self, session: &Session) {
+        let session_id = session.player_id_safe().await;
+        let session_packet = Packets::notify(
+            Components::UserSessions(UserSessions::FetchExtendedData),
+            &FetchExtendedData { id: session_id },
+        );
+
+        let player_ids = {
+            let players = &*self.players.read().await;
+            let player_ids = players
+                .iter()
+                .map(|value| value.player_id_safe())
+                .collect::<Vec<_>>();
+            futures::future::join_all(player_ids).await
+        };
+
+        let mut player_packets = Vec::with_capacity(player_ids.len());
+        for player_id in player_ids {
+            player_packets.push(Packets::notify(
+                Components::UserSessions(UserSessions::FetchExtendedData),
+                &FetchExtendedData { id: player_id },
+            ));
+        }
+
+        join!(
+            self.push_all(&session_packet),
+            session.write_all(&player_packets)
+        );
+    }
+
+    /// Unimplemented host migration functionality
+    /// returning the player ID of the new host if
+    /// one is available
+    pub async fn migrate_host(&self) -> Option<u32> {
         // TODO: Implement
+        None
     }
 
     pub async fn is_joinable(&self) -> bool {
