@@ -1,13 +1,13 @@
 use crate::blaze::components::{Components, Messaging, UserSessions};
 use crate::blaze::errors::HandleResult;
 use crate::blaze::session::SessionArc;
-use crate::database::entities::players;
 use crate::env;
 use crate::env::VERSION;
 use blaze_pk::{
     encode_str, tag_group_end, tag_group_start, tag_map_start, tag_str, tag_triple, tag_u64,
     tag_u8, Codec, OpaquePacket, PacketComponents, ValueType,
 };
+use database::players;
 use log::debug;
 use utils::time::server_unix_time;
 

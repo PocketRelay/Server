@@ -2,10 +2,13 @@ use std::path::Path;
 
 mod migration;
 
-pub mod entities;
-pub mod interfaces;
+mod entities;
+mod interfaces;
 
-use interfaces::galaxy_at_war::GalaxyAtWarInterface;
+pub use interfaces::{
+    galaxy_at_war::GalaxyAtWarInterface, player_characters::PlayerCharactersInterface,
+    player_classes::PlayerClassesInterface, players::PlayersInterface,
+};
 use log::{debug, info};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{Database as SeaDatabase, DatabaseConnection};
@@ -14,6 +17,8 @@ use tokio::{
     io,
 };
 
+pub use entities::*;
+
 pub use sea_orm::DbErr;
 pub type DbResult<T> = Result<T, DbErr>;
 
@@ -21,7 +26,6 @@ pub type DbResult<T> = Result<T, DbErr>;
 /// for accessing the database without exposing any normal database access
 pub struct Database {
     connection: DatabaseConnection,
-    pub gaw: GalaxyAtWarInterface,
 }
 
 impl Database {
@@ -49,10 +53,7 @@ impl Database {
             .expect("Unable to run database migrations");
         debug!("Migrations complete");
 
-        Self {
-            connection,
-            gaw: GalaxyAtWarInterface,
-        }
+        Self { connection }
     }
 
     /// Ensures the provided path exists and will attempt to

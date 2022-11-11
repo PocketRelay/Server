@@ -1,6 +1,6 @@
 use blaze_pk::CodecError;
+use database::DbErr;
 use derive_more::From;
-use sea_orm::DbErr;
 use std::io;
 
 pub type HandleResult = Result<(), BlazeError>;

@@ -2,12 +2,8 @@ use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, ServerError};
 use crate::blaze::session::SessionArc;
 use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
-use crate::database::entities::players;
-use crate::database::interface::players::find_by_email;
-use crate::database::interface::players::{
-    create as create_player, find_by_email_any, find_by_id as find_player_by_id,
-};
 use blaze_pk::{packet, tag_value, Codec, OpaquePacket};
+use database::{players, PlayersInterface};
 use log::{debug, error, warn};
 use regex::Regex;
 use utils::hashing::{hash_password, verify_password};
@@ -73,7 +69,7 @@ async fn handle_silent_login(session: &SessionArc, packet: &OpaquePacket) -> Han
 
     debug!("Attempted silent authentication: {id} ({token})");
 
-    let Some(player) = find_player_by_id(session.db(), id).await? else {
+    let Some(player) = PlayersInterface::by_id(session.db(), id).await? else {
         return session.response_error_empty(packet, ServerError::InvalidSession).await;
     };
 
@@ -183,7 +179,7 @@ async fn handle_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResu
             .await;
     }
 
-    let Some(player) = find_by_email(session.db(), &email, false).await? else {
+    let Some(player) = PlayersInterface::by_email(session.db(), &email, false).await? else {
         return session
             .response_error_empty(packet, ServerError::EmailNotFound)
             .await;
@@ -245,7 +241,7 @@ async fn handle_create_account(session: &SessionArc, packet: &OpaquePacket) -> H
             .await;
     }
 
-    let email_exists = find_by_email_any(session.db(), &email).await?.is_some();
+    let email_exists = PlayersInterface::is_email_taken(session.db(), &email).await?;
 
     if email_exists {
         return session
@@ -262,7 +258,8 @@ async fn handle_create_account(session: &SessionArc, packet: &OpaquePacket) -> H
         email.clone()
     };
 
-    let player = create_player(session.db(), email, display_name, hashed_password, false).await?;
+    let player =
+        PlayersInterface::create(session.db(), email, display_name, hashed_password, false).await?;
 
     complete_auth(session, packet, player, false).await?;
     Ok(())

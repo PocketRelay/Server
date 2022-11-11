@@ -1,5 +1,4 @@
 mod blaze;
-mod database;
 mod env;
 mod game;
 mod http;
@@ -7,11 +6,11 @@ mod redirector;
 mod retriever;
 
 use crate::game::Games;
+use database::Database;
 use dotenvy::dotenv;
 use game::matchmaking::Matchmaking;
-use log::{error, info};
+use log::info;
 use retriever::Retriever;
-use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::{self, select, signal};
@@ -20,7 +19,7 @@ use tokio::{self, select, signal};
 pub struct GlobalState {
     pub games: Games,
     pub matchmaking: Matchmaking,
-    pub db: DatabaseConnection,
+    pub db: Database,
     pub retriever: Option<Retriever>,
     pub shutdown: watch::Receiver<()>,
 }
@@ -39,12 +38,9 @@ async fn main() {
 
     info!("Starting Pocket Relay v{}", env::VERSION);
 
-    let db = match database::connect().await {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Unable to connect to database: {:?}", err);
-            panic!();
-        }
+    let db = {
+        let file = env::str_env(env::DATABASE_FILE);
+        Database::connect(file).await
     };
 
     let games = Games::new();

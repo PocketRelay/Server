@@ -1,15 +1,13 @@
-use crate::database::entities::{galaxy_at_war, players};
-use crate::database::interface::gaw::{self, GAW_MAX_VALUE};
-use crate::database::interface::players::{find_by_id, get_session_token};
 use crate::{env, GlobalState};
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
 use actix_web::web::{scope, Data, Path, Query, ServiceConfig};
 use actix_web::{get, HttpResponse, Responder, ResponseError};
+use database::{
+    galaxy_at_war, players, Database, DbErr, DbResult, GalaxyAtWarInterface, PlayersInterface,
+};
 use derive_more::{Display, From};
-use sea_orm::{DatabaseConnection, DbErr};
 use serde::Deserialize;
-use std::cmp;
 use std::num::ParseIntError;
 use tokio::try_join;
 
@@ -44,9 +42,9 @@ impl ResponseError for GAWError {
 type GAWResult<T> = Result<T, GAWError>;
 
 /// Attempts to find a player from the provided GAW ID
-async fn gaw_player(db: &DatabaseConnection, id: &str) -> GAWResult<players::Model> {
+async fn gaw_player(db: &Database, id: &str) -> GAWResult<players::Model> {
     let id = u32::from_str_radix(id, 16)?;
-    match find_by_id(db, id).await? {
+    match PlayersInterface::by_id(db, id).await? {
         Some(value) => Ok(value),
         None => Err(GAWError::UnknownID),
     }
@@ -63,7 +61,7 @@ async fn authenticate(
     global: Data<GlobalState>,
 ) -> GAWResult<impl Responder> {
     let player = gaw_player(&global.db, &query.auth).await?;
-    let (player, token) = get_session_token(&global.db, player).await?;
+    let (player, token) = PlayersInterface::get_token(&global.db, player).await?;
 
     let id = player.id;
     let sess = format!("{:x}", id);
@@ -129,7 +127,11 @@ async fn increase_ratings(
     let player = gaw_player(&global.db, &id).await?;
 
     let (gaw_data, promotions) = try_join!(
-        gaw::find_or_create(&global.db, &player, env::f32_env(env::GAW_DAILY_DECAY)),
+        GalaxyAtWarInterface::find_or_create(
+            &global.db,
+            &player,
+            env::f32_env(env::GAW_DAILY_DECAY)
+        ),
         get_promotions(&global.db, &player, env::bool_env(env::GAW_PROMOTIONS))
     )?;
 
@@ -138,7 +140,7 @@ async fn increase_ratings(
     let c = get_inc_value(gaw_data.group_c, &query.c);
     let d = get_inc_value(gaw_data.group_d, &query.d);
     let e = get_inc_value(gaw_data.group_e, &query.e);
-    let gaw_data = gaw::increase_gaw(&global.db, gaw_data, a, b, c, d, e).await?;
+    let gaw_data = GalaxyAtWarInterface::increase(&global.db, gaw_data, (a, b, c, d, e)).await?;
     Ok(ratings_response(promotions, gaw_data))
 }
 
@@ -147,7 +149,7 @@ fn get_inc_value(old: u16, value: &Option<String>) -> u16 {
         None => old,
         Some(value) => {
             let value = value.parse().unwrap_or(0);
-            cmp::min(old + value, GAW_MAX_VALUE)
+            old + value
         }
     }
 }
@@ -158,7 +160,11 @@ async fn get_ratings(id: Path<String>, global: Data<GlobalState>) -> GAWResult<i
     let player = gaw_player(&global.db, &id).await?;
 
     let (gaw_data, promotions) = try_join!(
-        gaw::find_or_create(&global.db, &player, env::f32_env(env::GAW_DAILY_DECAY)),
+        GalaxyAtWarInterface::find_or_create(
+            &global.db,
+            &player,
+            env::f32_env(env::GAW_DAILY_DECAY)
+        ),
         get_promotions(&global.db, &player, env::bool_env(env::GAW_PROMOTIONS))
     )?;
 
@@ -169,7 +175,7 @@ async fn get_promotions(db: &Database, player: &players::Model, enabled: bool) -
     if !enabled {
         return Ok(0);
     }
-    gaw::find_promotions(&global.db, &player)
+    Ok(GalaxyAtWarInterface::find_promotions(db, &player).await)
 }
 
 /// Returns a XML response generated for the provided ratings

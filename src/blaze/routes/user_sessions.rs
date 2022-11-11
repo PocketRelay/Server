@@ -5,8 +5,8 @@ use crate::blaze::errors::{HandleResult, ServerError};
 use crate::blaze::routes::auth::complete_auth;
 use crate::blaze::session::SessionArc;
 use crate::blaze::shared::{NetAddress, NetExt, NetGroups};
-use crate::database::interface::players::find_by_session;
 use blaze_pk::{packet, Codec, CodecResult, OpaquePacket, Reader, Tag, TdfOptional};
+use database::PlayersInterface;
 use log::{debug, warn};
 use utils::ip::public_address;
 
@@ -42,7 +42,7 @@ packet! {
 /// *To be recorded*
 async fn handle_resume_session(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<ResumeSession>()?;
-    let Some(player) = find_by_session(session.db(), &req.session_token).await? else {
+    let Some(player) = PlayersInterface::by_token(session.db(), &req.session_token).await? else {
         return session
             .response_error_empty(packet, ServerError::InvalidSession)
             .await;

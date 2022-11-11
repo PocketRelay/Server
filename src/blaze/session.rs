@@ -7,19 +7,18 @@ use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc, time::SystemTim
 
 use crate::{
     blaze::errors::BlazeError,
-    database::{entities::players, interface::players::set_session_token},
     game::{matchmaking::Matchmaking, GameArc, Games},
     retriever::Retriever,
     GlobalStateArc,
 };
 
+use database::{players, Database, PlayersInterface};
 use utils::random::generate_token;
 
 use blaze_pk::{
     Codec, OpaquePacket, PacketComponents, PacketResult, PacketType, Packets, Reader, Tag,
 };
 use log::{debug, error, info, log_enabled};
-use sea_orm::DatabaseConnection;
 use tokio::{
     io::AsyncWriteExt,
     net::TcpStream,
@@ -335,7 +334,7 @@ impl Session {
 
     /// Function for retrieving a reference to the database
     /// stored on the global state attached to this session
-    pub fn db(&self) -> &DatabaseConnection {
+    pub fn db(&self) -> &Database {
         &self.global.db
     }
 
@@ -432,7 +431,7 @@ impl Session {
             .player
             .take()
             .ok_or(BlazeError::MissingPlayer)?;
-        let (player, token) = set_session_token(self.db(), player, token).await?;
+        let (player, token) = PlayersInterface::set_token(self.db(), player, token).await?;
         let _ = session_data.player.insert(player);
         Ok(token)
     }

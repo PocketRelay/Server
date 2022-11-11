@@ -1,15 +1,11 @@
 use blaze_pk::TdfMap;
+use database::{players, Database, PlayersInterface};
 use log::{debug, error};
-use sea_orm::DatabaseConnection;
 
 use crate::{
     blaze::{
         components::{Authentication, Components, Util},
         errors::BlazeResult,
-    },
-    database::{
-        entities::players,
-        interface::{player_data, players as players_interface},
     },
     env,
 };
@@ -29,23 +25,19 @@ pub struct OriginDetails {
 impl Retriever {
     /// Async wrapper and enabled checker for fetching origin details from the
     /// official server using the provided origin auth token.
-    pub async fn get_origin_player(
-        &self,
-        db: &DatabaseConnection,
-        token: String,
-    ) -> Option<players::Model> {
+    pub async fn get_origin_player(&self, db: &Database, token: String) -> Option<players::Model> {
         if !env::bool_env(env::ORIGIN_FETCH) {
             return None;
         }
         let mut session = self.session().await?;
         let details = session.get_origin_details(token).await?;
 
-        let player = players_interface::find_by_email(&db, &details.email, true)
+        let player = PlayersInterface::by_email(&db, &details.email, true)
             .await
             .ok()?;
         let player = match player {
             None => {
-                let mut player = players_interface::create(
+                let mut player = PlayersInterface::create(
                     &db,
                     details.email,
                     details.display_name,
@@ -57,7 +49,9 @@ impl Retriever {
                 if env::bool_env(env::ORIGIN_FETCH_DATA) {
                     match session.get_extra_data().await {
                         Some(values) => {
-                            player = player_data::update_all(&db, player, values).await.ok()?;
+                            player = PlayersInterface::update_all(&db, player, values)
+                                .await
+                                .ok()?;
                         }
                         None => {
                             error!(

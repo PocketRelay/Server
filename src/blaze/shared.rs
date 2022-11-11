@@ -1,11 +1,12 @@
 use std::{fmt::Debug, str::Split};
 
-use crate::{blaze::session::SessionData, database::entities::players};
+use crate::blaze::session::SessionData;
 use blaze_pk::{
     packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list_start,
     tag_map_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_value, tag_var_int_list_empty,
     tag_zero, Codec, CodecResult, Reader, Tag, TdfOptional, ValueType,
 };
+use database::players;
 
 pub struct SetSessionDetails<'a> {
     pub session: &'a SessionData,

@@ -1,4 +1,4 @@
-use crate::m20221015_142649_players_table::Players;
+use super::m20221015_142649_players_table::Players;
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]

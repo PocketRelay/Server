@@ -1,15 +1,14 @@
 use crate::blaze::components::Util;
-use crate::blaze::errors::{BlazeError, HandleResult, ServerError};
+use crate::blaze::errors::{HandleResult, ServerError};
 use crate::blaze::session::SessionArc;
 use crate::blaze::shared::TelemetryRes;
-use crate::database::interface::players::{find_characters, find_classes};
-use crate::database::interface::{player_characters, player_classes, player_data};
 use crate::env::{self, VERSION};
 use blaze_pk::{
     group, packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list,
     tag_map_start, tag_str, tag_u16, tag_u32, tag_u8, tag_value, tag_zero, Codec, OpaquePacket,
     TdfMap, ValueType,
 };
+use database::{PlayerCharactersInterface, PlayerClassesInterface, PlayersInterface};
 use log::{debug, warn};
 use rust_embed::RustEmbed;
 use std::time::SystemTime;
@@ -567,40 +566,77 @@ packet! {
 /// ```
 async fn handle_user_settings_save(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<UserSettingsSave>()?;
-    if let Err(err) = set_player_data(session, &req.key, req.value).await {
-        let error = match err {
-            BlazeError::MissingPlayer => ServerError::FailedNoLoginAction,
-            _ => ServerError::ServerUnavailable,
-        };
-        session.response_error_empty(packet, error).await
-    } else {
-        session.response_empty(packet).await
-    }
-}
+    let key = &req.key;
+    let value = req.value;
 
-async fn set_player_data(session: &SessionArc, key: &str, value: String) -> HandleResult {
+    let db = session.db();
     if key.starts_with("class") {
         debug!("Updating player class data: {key}");
-        player_classes::update(session, key, &value)
-            .await
-            .map_err(|err| err.context("While updating player class"))?;
-        debug!("Updated player class data: {key}");
+        let session_data = &*session.data.read().await;
+        let player = match session_data.player.as_ref() {
+            Some(value) => value,
+            None => {
+                return session
+                    .response_error_empty(packet, ServerError::FailedNoLoginAction)
+                    .await;
+            }
+        };
+        match PlayerClassesInterface::update(db, player, key, &value).await {
+            Ok(_) => {}
+            Err(err) => {
+                warn!("Failed to update player class: {err:?}");
+                return session
+                    .response_error_empty(packet, ServerError::ServerUnavailable)
+                    .await;
+            }
+        }
+        debug!("Updating player character data: {key}");
     } else if key.starts_with("char") {
         debug!("Updating player character data: {key}");
-        player_characters::update(session, key, &value)
-            .await
-            .map_err(|err| err.context("While updating player character"))?;
-
+        let session_data = &*session.data.read().await;
+        let player = match session_data.player.as_ref() {
+            Some(value) => value,
+            None => {
+                return session
+                    .response_error_empty(packet, ServerError::FailedNoLoginAction)
+                    .await;
+            }
+        };
+        match PlayerCharactersInterface::update(db, player, key, &value).await {
+            Ok(_) => {}
+            Err(err) => {
+                warn!("Failed to update player character: {err:?}");
+                return session
+                    .response_error_empty(packet, ServerError::ServerUnavailable)
+                    .await;
+            }
+        }
         debug!("Updated player character data: {key}");
     } else {
         debug!("Updating player base data");
-        player_data::update(session, key, value)
-            .await
-            .map_err(|err| err.context("While updating player data"))?;
-        debug!("Updated player base data");
+        let session_data = &mut *session.data.write().await;
+        let player = match session_data.player.take() {
+            Some(value) => value,
+            None => {
+                return session
+                    .response_error_empty(packet, ServerError::FailedNoLoginAction)
+                    .await;
+            }
+        };
+        match PlayersInterface::update(db, player, key, value).await {
+            Ok(player) => {
+                session_data.player = Some(player);
+                debug!("Updated player base data");
+            }
+            Err(err) => {
+                warn!("Failed to update player data: {err:?}");
+                return session
+                    .response_error_empty(packet, ServerError::ServerUnavailable)
+                    .await;
+            }
+        };
     }
-
-    Ok(())
+    session.response_empty(packet).await
 }
 
 packet! {
@@ -629,24 +665,30 @@ async fn handle_user_settings_load_all(
             return session.response_error_empty(packet, ServerError::FailedNoLoginAction).await;
         };
 
-        settings.insert("Base", player_data::encode_base(player));
+        settings.insert("Base", PlayersInterface::encode_base(player));
 
         let db = session.db();
 
-        let classes = find_classes(db, player);
-        let characters = find_characters(db, player);
+        let classes = PlayerClassesInterface::find_all(db, player);
+        let characters = PlayerCharactersInterface::find_all(db, player);
 
         let (classes, characters) = try_join!(classes, characters)?;
 
         let mut index = 0;
         for char in characters {
-            settings.insert(format!("char{}", index), player_characters::encode(&char));
+            settings.insert(
+                format!("char{}", index),
+                PlayerCharactersInterface::encode(&char),
+            );
             index += 1;
         }
 
         index = 0;
         for class in classes {
-            settings.insert(format!("class{}", index), player_classes::encode(&class));
+            settings.insert(
+                format!("class{}", index),
+                PlayerClassesInterface::encode(&class),
+            );
             index += 1;
         }
 
