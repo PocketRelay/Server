@@ -130,7 +130,7 @@ async fn increase_ratings(
 
     let (gaw_data, promotions) = try_join!(
         gaw::find_or_create(&global.db, &player, env::f32_env(env::GAW_DAILY_DECAY)),
-        gaw::find_promotions(&global.db, &player, env::bool_env(env::GAW_PROMOTIONS))
+        get_promotions(&global.db, &player, env::bool_env(env::GAW_PROMOTIONS))
     )?;
 
     let a = get_inc_value(gaw_data.group_a, &query.a);
@@ -159,10 +159,17 @@ async fn get_ratings(id: Path<String>, global: Data<GlobalState>) -> GAWResult<i
 
     let (gaw_data, promotions) = try_join!(
         gaw::find_or_create(&global.db, &player, env::f32_env(env::GAW_DAILY_DECAY)),
-        gaw::find_promotions(&global.db, &player, env::bool_env(env::GAW_PROMOTIONS))
+        get_promotions(&global.db, &player, env::bool_env(env::GAW_PROMOTIONS))
     )?;
 
     Ok(ratings_response(promotions, gaw_data))
+}
+
+async fn get_promotions(db: &Database, player: &players::Model, enabled: bool) -> DbResult<u32> {
+    if !enabled {
+        return Ok(0);
+    }
+    gaw::find_promotions(&global.db, &player)
 }
 
 /// Returns a XML response generated for the provided ratings
