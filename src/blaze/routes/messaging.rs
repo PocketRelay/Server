@@ -1,7 +1,7 @@
 use crate::blaze::components::{Components, Messaging, UserSessions};
 use crate::blaze::errors::HandleResult;
 use crate::blaze::session::SessionArc;
-use crate::database::entities::PlayerModel;
+use crate::database::entities::players;
 use crate::env;
 use crate::env::VERSION;
 use blaze_pk::{
@@ -43,7 +43,7 @@ impl Codec for MessageCount {
 #[derive(Debug)]
 struct MenuMessage<'a> {
     message: String,
-    player: &'a PlayerModel,
+    player: &'a players::Model,
     time: u64,
 }
 
@@ -125,7 +125,7 @@ async fn handle_fetch_messages(session: &SessionArc, packet: &OpaquePacket) -> H
 /// - {v} = Server Version
 /// - {n} = Player Display Name
 /// - {ip} = Session IP Address
-fn get_menu_message(session: &SessionArc, player: &PlayerModel) -> String {
+fn get_menu_message(session: &SessionArc, player: &players::Model) -> String {
     let mut message = env::str_env(env::MENU_MESSAGE);
     if message.contains("{v}") {
         message = message.replace("{v}", VERSION);

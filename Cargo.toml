@@ -11,7 +11,7 @@ keywords = ["EA", "PocketRelay", "MassEffect"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [workspace]
-members = [".", "migration", "utils"]
+members = [".", "utils", "database"]
 
 [dependencies]
 # Async runtime
@@ -26,9 +26,9 @@ serde = { version = "1.0", features = ["derive"] }
 blaze-ssl-async = "0.1.1"
 
 # Database dependencies
-migration = { path = "migration" }
 sea-orm = { version = "^0", features = [ "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
 
+database = { path = "database" }
 utils = { path = "utils" }
 
 # Logging

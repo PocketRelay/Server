@@ -2,9 +2,11 @@ use crate::blaze::components::Authentication;
 use crate::blaze::errors::{BlazeError, HandleResult, ServerError};
 use crate::blaze::session::SessionArc;
 use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
-use crate::database::entities::PlayerModel;
+use crate::database::entities::players;
 use crate::database::interface::players::find_by_email;
-use crate::database::interface::players::{self, find_by_email_any};
+use crate::database::interface::players::{
+    create as create_player, find_by_email_any, find_by_id as find_player_by_id,
+};
 use blaze_pk::{packet, tag_value, Codec, OpaquePacket};
 use log::{debug, error, warn};
 use regex::Regex;
@@ -71,7 +73,7 @@ async fn handle_silent_login(session: &SessionArc, packet: &OpaquePacket) -> Han
 
     debug!("Attempted silent authentication: {id} ({token})");
 
-    let Some(player) = players::find_by_id(session.db(), id).await? else {
+    let Some(player) = find_player_by_id(session.db(), id).await? else {
         return session.response_error_empty(packet, ServerError::InvalidSession).await;
     };
 
@@ -95,7 +97,7 @@ async fn handle_silent_login(session: &SessionArc, packet: &OpaquePacket) -> Han
 pub async fn complete_auth(
     session: &SessionArc,
     packet: &OpaquePacket,
-    player: PlayerModel,
+    player: players::Model,
     silent: bool,
 ) -> HandleResult {
     debug!("Completing authentication");
@@ -260,7 +262,7 @@ async fn handle_create_account(session: &SessionArc, packet: &OpaquePacket) -> H
         email.clone()
     };
 
-    let player = players::create(session.db(), email, display_name, hashed_password, false).await?;
+    let player = create_player(session.db(), email, display_name, hashed_password, false).await?;
 
     complete_auth(session, packet, player, false).await?;
     Ok(())

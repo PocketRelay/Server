@@ -1,7 +1,6 @@
 use std::{fmt::Debug, str::Split};
 
-use crate::blaze::session::SessionData;
-use crate::database::entities::PlayerModel;
+use crate::{blaze::session::SessionData, database::entities::players};
 use blaze_pk::{
     packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list_start,
     tag_map_start, tag_str, tag_u16, tag_u32, tag_u64, tag_u8, tag_value, tag_var_int_list_empty,
@@ -22,7 +21,7 @@ impl Codec for SetSessionDetails<'_> {
 
 pub struct SessionDetails<'a> {
     pub session: &'a SessionData,
-    pub player: &'a PlayerModel,
+    pub player: &'a players::Model,
 }
 
 //noinspection SpellCheckingInspection
@@ -248,7 +247,7 @@ impl NetAddress {
 }
 
 #[inline]
-fn encode_persona(player: &PlayerModel, output: &mut Vec<u8>) {
+fn encode_persona(player: &players::Model, output: &mut Vec<u8>) {
     tag_str(output, "DSNM", &player.display_name);
     tag_zero(output, "LAST");
     tag_u32(output, "PID", player.id);
@@ -260,7 +259,7 @@ fn encode_persona(player: &PlayerModel, output: &mut Vec<u8>) {
 
 #[derive(Debug)]
 pub struct Sess<'a> {
-    pub player: &'a PlayerModel,
+    pub player: &'a players::Model,
     pub session_token: String,
 }
 

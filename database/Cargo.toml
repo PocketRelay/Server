@@ -1,15 +1,21 @@
 [package]
-name = "migration"
+name = "database"
 version = "0.1.0"
 edition = "2021"
-publish = false
-
-[lib]
-name = "migration"
-path = "src/lib.rs"
+description = "Module for accessing the app database"
 
 [dependencies]
 async-std = { version = "^1", features = ["attributes", "tokio1"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Database dependencies
+sea-orm = { version = "^0", features = [ "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
+
+# Logging
+log = "0.4.17"
+
 
 [dependencies.sea-orm-migration]
 version = "^0.9.0"
