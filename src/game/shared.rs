@@ -216,3 +216,18 @@ packet! {
         BUID id: u32
     }
 }
+
+packet! {
+    struct HostMigrateStart {
+        GID id: u32,
+        HOST host: u32,
+        PMIG pmig: u8,
+        SLOT slot: usize,
+    }
+}
+
+packet! {
+    struct HostMigrateFinished {
+        GID id: u32,
+    }
+}

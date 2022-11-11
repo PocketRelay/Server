@@ -446,9 +446,10 @@ impl Session {
     }
 
     /// Clears the game details for the current session
-    pub async fn clear_game(&self) {
+    /// returning the game slot if one is present
+    pub async fn clear_game(&self) -> Option<usize> {
         let session_data = &mut *self.data.write().await;
-        session_data.game = None
+        session_data.game.take().map(|value| value.slot)
     }
 
     /// Updates the state for this session. Will send the state

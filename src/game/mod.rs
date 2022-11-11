@@ -18,6 +18,8 @@ use std::sync::Arc;
 use tokio::join;
 use tokio::sync::RwLock;
 
+use self::shared::{HostMigrateFinished, HostMigrateStart};
+
 pub struct Games {
     games: RwLock<HashMap<u32, GameArc>>,
     next_id: AtomicU32,
@@ -307,11 +309,21 @@ impl Game {
     ///
     /// `session` The removed player.
     pub async fn remove_player(&self, session: &Session) {
+        let game_slot = session.clear_game().await;
         self.remove_session(session).await;
         self.notify_player_removed(session).await;
         self.notify_admin_removed(session).await;
         self.notify_fetch_data(session).await;
         debug!("Done removing player");
+
+        let Some(game_slot) = game_slot else {
+            debug!("Player was missing game slot");
+            return;
+        };
+
+        if game_slot == 0 {
+            self.migrate_host().await;
+        }
     }
 
     /// Removes the provided session from the players list of this game
@@ -319,8 +331,6 @@ impl Game {
     ///
     /// `session` The session to remove.
     async fn remove_session(&self, session: &Session) {
-        session.clear_game().await;
-
         let mut players = self.players.write().await;
         players.retain(|value| value.id != session.id);
         debug!("Removed session from players list (SID: {})", session.id)
@@ -352,13 +362,15 @@ impl Game {
     /// player if one is not present.
     ///
     /// `session` The player removed from the admin list
+    /// `host_id` The ID of the host player for this game
     async fn notify_admin_removed(&self, session: &Session) {
         let host_id = {
             let players = &*self.players.read().await;
             if let Some(host) = players.first() {
                 host.player_id_safe().await
             } else {
-                self.migrate_host().await.unwrap_or(1)
+                // Game has become empty because all players are gone.
+                return;
             }
         };
 
@@ -413,9 +425,69 @@ impl Game {
     /// Unimplemented host migration functionality
     /// returning the player ID of the new host if
     /// one is available
-    pub async fn migrate_host(&self) -> Option<u32> {
-        // TODO: Implement
-        None
+    pub async fn migrate_host(&self) {
+        let players = &*self.players.read().await;
+        let Some(new_host) = players.first() else {
+            // There is no other players available to become host.
+            return;
+        };
+        debug!("Starting host migration");
+        self.notify_migration_start(new_host).await;
+        self.set_state(0x82).await;
+        self.notify_migration_finished().await;
+        self.update_player_slots(players).await;
+        debug!("Finished host migration");
+    }
+
+    /// Notifies all the players in the game that host migration has
+    /// started and that the new host is the provided.
+    ///
+    /// `new_host` The newly decided host for the game.
+    async fn notify_migration_start(&self, new_host: &SessionArc) {
+        let (old_slot, host_id) = {
+            let host_data = new_host.data.read().await;
+            let old_slot = host_data.game.as_ref().map(|value| value.slot).unwrap_or(0);
+            let host_id = host_data.id_safe();
+            (old_slot, host_id)
+        };
+
+        let packet = Packets::notify(
+            Components::GameManager(GameManager::HostMigrationStart),
+            &HostMigrateStart {
+                id: self.id,
+                host: host_id,
+                pmig: 0x2,
+                slot: old_slot,
+            },
+        );
+
+        self.push_all(&packet).await;
+    }
+
+    /// Notifies all the players that host migration is complete
+    async fn notify_migration_finished(&self) {
+        let packet = Packets::notify(
+            Components::GameManager(GameManager::HostMigrationFinished),
+            &HostMigrateFinished { id: self.id },
+        );
+        self.push_all(&packet).await;
+    }
+
+    /// Updates all the player slots ensuring they in the same
+    /// slot that matches the one stored on the session. Will
+    /// send client updates to ensure the client is correct
+    ///
+    /// `players` The players list for the game
+    async fn update_player_slots(&self, players: &Vec<SessionArc>) {
+        for i in 0..players.len() {
+            let player = &players[i];
+            let player_data = &mut *player.data.write().await;
+            let Some(game) = &mut player_data.game else {
+                continue;
+            };
+            game.slot = i;
+            player.update_client().await;
+        }
     }
 
     pub async fn is_joinable(&self) -> bool {
