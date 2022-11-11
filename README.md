@@ -27,3 +27,12 @@ features present in the [Kotlin Server (https://github.com/PocketRelay/ServerKot
   
 ### Planned / In progress
 - Proper client application 
+
+# Structure
+- core *Core application structures and shared state*
+- database *All application database logic and structures*
+- servers *Individual server applications*
+  - http *HTTP Server*
+  - main *Main app server*
+  - redirector *Redirector server*
+- utils *Utilities used throughout the servers and core*
