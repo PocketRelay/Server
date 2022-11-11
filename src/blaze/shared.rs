@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, str::Split};
 
 use crate::blaze::session::SessionData;
 use crate::database::entities::PlayerModel;
@@ -207,15 +207,34 @@ impl NetAddress {
 
     /// Converts the provided IPv4 string into a NetAddress
     pub fn from_ipv4(value: &str) -> NetAddress {
-        let parts = value
-            .split(".")
-            .filter_map(|value| value.parse::<u32>().ok())
-            .collect::<Vec<u32>>();
-        if parts.len() < 4 {
-            return NetAddress(0);
+        if let Some(value) = Self::try_from_ipv4(value) {
+            value
+        } else {
+            NetAddress(0)
         }
-        let value = parts[0] << 24 | parts[1] << 16 | parts[2] << 8 | parts[3];
-        NetAddress(value)
+    }
+
+    /// Attempts to convert the provided IP address string into a
+    /// NetAddress value. If the value is not a valid IPv4 address
+    /// then None will be returned.
+    pub fn try_from_ipv4(value: &str) -> Option<NetAddress> {
+        let mut parts = value.split(".");
+        let a = Self::next_ip_chunk(&mut parts)?;
+        let b = Self::next_ip_chunk(&mut parts)?;
+        let c = Self::next_ip_chunk(&mut parts)?;
+        let d = Self::next_ip_chunk(&mut parts)?;
+
+        let value = a << 24 | b << 16 | c << 8 | d;
+        Some(NetAddress(value))
+    }
+
+    /// Obtains the next IPv4 (u8) chunk value from the provided
+    /// split iterator
+    fn next_ip_chunk(iter: &mut Split<&str>) -> Option<u32> {
+        iter.next()?
+            .parse::<u8>()
+            .map(|value| Some(value as u32))
+            .ok()?
     }
 
     /// Converts the value stored in this NetAddress to an IPv4 string

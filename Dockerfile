@@ -49,11 +49,15 @@ WORKDIR /app
 COPY --from=builder /pocket-relay/target/x86_64-unknown-linux-musl/release/pocket-relay ./
 
 # Environment variable configuration
-ENV PR_EXT_HOST=kme.jacobtread.local
+ENV PR_EXT_HOST=gosredirector.ea.com
+# Ports
+ENV PR_REDIRECTOR_PORT=42127
 ENV PR_MAIN_PORT=14219
 ENV PR_HTTP_PORT=80
+
 ENV PR_LOG_LEVEL=info
 ENV PR_DATABASE_FILE=data/app.db
+
 
 # Volume for storing database file data
 VOLUME /data

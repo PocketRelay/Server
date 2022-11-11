@@ -3,6 +3,7 @@ mod database;
 mod env;
 mod game;
 mod http;
+mod redirector;
 mod retriever;
 mod utils;
 
@@ -58,6 +59,7 @@ async fn main() {
     let global_state = Arc::new(global_state);
     select! {
         _ = http::start_server(global_state.clone()) => { },
+        _ = redirector::start_server(global_state.clone()) => { },
         _ = blaze::start_server(global_state) => { },
         _ = signal::ctrl_c() => {
             shutdown_send
