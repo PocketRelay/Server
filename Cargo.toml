@@ -25,9 +25,6 @@ blaze-pk = { version = "0.4.7", features = ["async", "blaze-ssl-async"] }
 serde = { version = "1.0", features = ["derive"] }
 blaze-ssl-async = "0.1.1"
 
-# Database dependencies
-sea-orm = { version = "^0", features = [ "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
-
 database = { path = "database" }
 utils = { path = "utils" }
 
@@ -37,8 +34,6 @@ log = "0.4.17"
 # Utilities
 dotenvy = "0.15.5"
 derive_more = "0.99.17"
-regex = "1"
-chrono = "0.4"
 
 # Resource / HTTP embedding
 rust-embed={ version = "6.4.1", features = ["debug-embed"]}

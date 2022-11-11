@@ -5,8 +5,10 @@ use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsConte
 use blaze_pk::{packet, tag_value, Codec, OpaquePacket};
 use database::{players, PlayersInterface};
 use log::{debug, error, warn};
-use regex::Regex;
-use utils::hashing::{hash_password, verify_password};
+use utils::{
+    hashing::{hash_password, verify_password},
+    validate::is_email,
+};
 
 /// Routing function for handling packets with the `Authentication` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -134,14 +136,6 @@ async fn handle_logout(session: &SessionArc, packet: &OpaquePacket) -> HandleRes
     debug!("Logging out for session: (ID: {})", &session.id);
     session.set_player(None).await;
     session.response_empty(packet).await
-}
-
-fn is_email(email: &str) -> bool {
-    let regex = Regex::new(
-        r#"^([a-z0-9_+]([a-z0-9_+.]*[a-z0-9_+])?)@([a-z0-9]+([\-.][a-z0-9]+)*\.[a-z]{2,6})"#,
-    )
-    .unwrap();
-    regex.is_match(email)
 }
 
 packet! {

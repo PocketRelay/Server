@@ -10,3 +10,4 @@ pub mod logging;
 pub mod parse;
 pub mod random;
 pub mod time;
+pub mod validate;
