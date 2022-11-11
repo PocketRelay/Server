@@ -1,4 +1,4 @@
-//! Logic for the custom simple dmap file format
+//! Utility for loading dmap files
 use blaze_pk::TdfMap;
 
 /// Loads the dmap format from the provided string.

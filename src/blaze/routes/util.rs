@@ -5,8 +5,6 @@ use crate::blaze::shared::TelemetryRes;
 use crate::database::interface::players::{find_characters, find_classes};
 use crate::database::interface::{player_characters, player_classes, player_data};
 use crate::env::{self, VERSION};
-use crate::utils::dmap::load_dmap;
-use crate::utils::server_unix_time;
 use blaze_pk::{
     group, packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list,
     tag_map_start, tag_str, tag_u16, tag_u32, tag_u8, tag_value, tag_zero, Codec, OpaquePacket,
@@ -16,6 +14,8 @@ use log::{debug, warn};
 use rust_embed::RustEmbed;
 use std::time::SystemTime;
 use tokio::try_join;
+use utils::dmap::load_dmap;
+use utils::time::server_unix_time;
 
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet

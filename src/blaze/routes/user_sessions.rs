@@ -6,9 +6,9 @@ use crate::blaze::routes::auth::complete_auth;
 use crate::blaze::session::SessionArc;
 use crate::blaze::shared::{NetAddress, NetExt, NetGroups};
 use crate::database::interface::players::find_by_session;
-use crate::utils::ip::public_address;
 use blaze_pk::{packet, Codec, CodecResult, OpaquePacket, Reader, Tag, TdfOptional};
 use log::{debug, warn};
+use utils::ip::public_address;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet

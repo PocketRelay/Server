@@ -5,7 +5,6 @@ mod game;
 mod http;
 mod redirector;
 mod retriever;
-mod utils;
 
 use crate::game::Games;
 use dotenvy::dotenv;
@@ -15,7 +14,7 @@ use retriever::Retriever;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::sync::watch;
-use tokio::{select, signal};
+use tokio::{self, select, signal};
 
 /// Global state that is shared throughout the application
 pub struct GlobalState {
@@ -32,7 +31,11 @@ pub type GlobalStateArc = Arc<GlobalState>;
 async fn main() {
     dotenv().ok();
 
-    utils::init_logger();
+    {
+        let logging_level = env::logging_level();
+        let logging_path = env::str_env(env::LOGGING_DIR);
+        utils::logging::init_logger(logging_level, logging_path);
+    }
 
     info!("Starting Pocket Relay v{}", env::VERSION);
 

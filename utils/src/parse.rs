@@ -1,3 +1,5 @@
+//! Utilites for parsing ME3 strings
+
 use std::str::{FromStr, Split};
 
 /// Structure for parsing ME3 format strings which are strings made up of sets

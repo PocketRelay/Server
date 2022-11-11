@@ -10,9 +10,10 @@ use crate::{
     database::{entities::players, interface::players::set_session_token},
     game::{matchmaking::Matchmaking, GameArc, Games},
     retriever::Retriever,
-    utils::generate_token,
     GlobalStateArc,
 };
+
+use utils::random::generate_token;
 
 use blaze_pk::{
     Codec, OpaquePacket, PacketComponents, PacketResult, PacketType, Packets, Reader, Tag,

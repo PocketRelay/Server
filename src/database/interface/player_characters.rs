@@ -1,13 +1,13 @@
 use crate::blaze::errors::{BlazeError, BlazeResult};
 use crate::blaze::session::SessionArc;
 use crate::database::entities::{player_characters, players};
-use crate::utils::conv::MEStringParser;
 use log::warn;
 use sea_orm::ActiveModelTrait;
 use sea_orm::{
     ActiveValue::NotSet, ActiveValue::Set, ColumnTrait, DatabaseConnection, IntoActiveModel,
     ModelTrait, QueryFilter,
 };
+use utils::parse::MEStringParser;
 
 /// Attempts to find a player character relating to the provided player in the database
 /// using its index and relation to the player. If None could be found a new value

@@ -2021,7 +2021,6 @@ name = "pocket-relay"
 version = "0.1.0"
 dependencies = [
  "actix-web",
- "argon2",
  "blaze-pk",
  "blaze-ssl-async",
  "chrono",
@@ -2029,18 +2028,14 @@ dependencies = [
  "dotenvy",
  "futures",
  "log",
- "log4rs",
  "migration",
  "mime_guess",
- "password-hash",
- "rand 0.8.5",
- "rand_core 0.6.4",
  "regex",
- "reqwest",
  "rust-embed",
  "sea-orm",
  "serde",
  "tokio",
+ "utils",
 ]
 
 [[package]]
@@ -3333,6 +3328,22 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+]
+
+[[package]]
+name = "utils"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "blaze-pk",
+ "log",
+ "log4rs",
+ "password-hash",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "reqwest",
+ "serde",
+ "tokio",
 ]
 
 [[package]]

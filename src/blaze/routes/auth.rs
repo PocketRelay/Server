@@ -5,10 +5,10 @@ use crate::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsConte
 use crate::database::entities::PlayerModel;
 use crate::database::interface::players::find_by_email;
 use crate::database::interface::players::{self, find_by_email_any};
-use crate::utils::hashing::{hash_password, verify_password};
 use blaze_pk::{packet, tag_value, Codec, OpaquePacket};
 use log::{debug, error, warn};
 use regex::Regex;
+use utils::hashing::{hash_password, verify_password};
 
 /// Routing function for handling packets with the `Authentication` component and routing them
 /// to the correct routing function. If no routing function is found then the packet

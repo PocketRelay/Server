@@ -1,3 +1,4 @@
+use log::LevelFilter;
 use log4rs::{
     append::{
         console::ConsoleAppender,
@@ -12,39 +13,9 @@ use log4rs::{
     encode::pattern::PatternEncoder,
     Config,
 };
-use rand::{thread_rng, Rng};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-pub mod conv;
-pub mod dmap;
-pub mod dns;
-pub mod hashing;
-pub mod ip;
-
-use crate::env;
-
-/// Generates a random alphanumeric token of the provided length
-pub fn generate_token(len: usize) -> String {
-    thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
-        .take(len)
-        .map(char::from)
-        .collect()
-}
-
-/// Returns the current server unix timestamp in seconds.
-pub fn server_unix_time() -> u64 {
-    let now = SystemTime::now();
-    now.duration_since(UNIX_EPOCH)
-        .unwrap_or_else(|_| Duration::from_secs(0))
-        .as_secs()
-}
 
 /// Initializes the logger
-pub fn init_logger() {
-    let logging_level = env::logging_level();
-    let logging_path = env::str_env(env::LOGGING_DIR);
-
+pub fn init_logger(logging_level: LevelFilter, logging_path: String) {
     let pattern = Box::new(PatternEncoder::new("[{d} {h({l})} {M}] {m}{n}"));
     let stdout = ConsoleAppender::builder().encoder(pattern.clone()).build();
     let size_limit = 1024 * 1024; // 1mb max file size before roll
@@ -83,7 +54,7 @@ pub fn init_logger() {
         .build(
             Root::builder()
                 .appenders(["stdout", "file"])
-                .build(log::LevelFilter::Warn),
+                .build(LevelFilter::Warn),
         )
         .expect("Failed to create logger config");
 

@@ -8,8 +8,9 @@ use crate::{
         session::SessionArc,
     },
     database::entities::players,
-    utils::conv::MEStringParser,
 };
+
+use utils::parse::MEStringParser;
 
 pub fn encode_base(model: &players::Model) -> String {
     format!(

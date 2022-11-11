@@ -1,11 +1,11 @@
 use crate::database::entities::{player_characters, player_classes, players};
 use crate::database::interface::DbResult;
-use crate::utils::generate_token;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait,
     NotSet, QueryFilter,
 };
+use utils::random::generate_token;
 
 type PlayerResult = DbResult<Option<players::Model>>;
 

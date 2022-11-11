@@ -4,12 +4,12 @@ use crate::blaze::session::SessionArc;
 use crate::database::entities::PlayerModel;
 use crate::env;
 use crate::env::VERSION;
-use crate::utils::server_unix_time;
 use blaze_pk::{
     encode_str, tag_group_end, tag_group_start, tag_map_start, tag_str, tag_triple, tag_u64,
     tag_u8, Codec, OpaquePacket, PacketComponents, ValueType,
 };
 use log::debug;
+use utils::time::server_unix_time;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet

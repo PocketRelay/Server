@@ -8,7 +8,7 @@ use sea_orm::{
 use crate::blaze::errors::{BlazeError, BlazeResult};
 use crate::blaze::session::SessionArc;
 use crate::database::entities::{player_classes, players};
-use crate::utils::conv::MEStringParser;
+use utils::parse::MEStringParser;
 
 /// Attempts to find a player class relating to the provided player in the database
 /// using its index and relation to the player. If None could be found a new value

@@ -1,3 +1,7 @@
+//! Utility for looking up DNS hostnames using the google DNS to bypass
+//! the system hosts file for checking domains like gosredirector.ea.com
+//! which require hosts file edits.
+
 use serde::Deserialize;
 
 /// Structure for the lookup responses from the google DNS API

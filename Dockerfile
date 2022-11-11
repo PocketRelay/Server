@@ -14,26 +14,35 @@ WORKDIR /pocket-relay
 COPY ./Cargo.toml .
 COPY ./Cargo.lock .
 
+# Copy utils project files
+COPY ./utils/Cargo.toml ./utils/Cargo.toml
+COPY ./utils/Cargo.lock ./utils/Cargo.lock
+
 # Copy migration project files
 COPY ./migration/Cargo.toml ./migration/Cargo.toml
 COPY ./migration/Cargo.lock ./migration/Cargo.lock
 
 # Create dummy contents for main source & for migration lib
 RUN mkdir ./src && echo 'fn main() { println!("Dummy!"); }' > ./src/main.rs
+RUN mkdir ./utils/src && touch ./utils/src/lib.rs
 RUN mkdir ./migration/src && touch ./migration/src/lib.rs
 
 # Cargo build the dummy project for dependency caching
 RUN cargo build --target x86_64-unknown-linux-musl --release
 
 # Remove dummy src 
-RUN rm -rf ./src && rm -rf ./migration/src
+RUN rm -rf ./src
+RUN rm -rf ./migration/src 
+RUN rm -rf ./utils/src 
 
 # Copy real source code over
 COPY ./src ./src
+COPY ./utils/src ./utils/src
 COPY ./migration/src ./migration/src
 
 # Update the modified time on the project files so they recompile
 RUN touch -a -m ./src/main.rs
+RUN touch -a -m ./utils/src/lib.rs
 RUN touch -a -m ./migration/src/lib.rs
 
 # Cargo build real source code

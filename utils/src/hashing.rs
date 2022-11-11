@@ -1,3 +1,5 @@
+//! Hashing utility for hashing and verifying passwords
+
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher};
 use password_hash::PasswordVerifier;
