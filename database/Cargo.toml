@@ -22,7 +22,7 @@ log = { workspace = true }
 # Date time implementation
 chrono = "0.4"
 
-utils = { path = "../utils" }
+utils = { workspace = true }
 
 
 [dependencies.sea-orm-migration]

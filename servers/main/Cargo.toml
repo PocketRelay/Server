@@ -17,15 +17,11 @@ blaze-pk = { workspace = true }
 serde =  { workspace = true }
 blaze-ssl-async = { workspace = true }
 
-core = { path = "../../core" }
-database = { path = "../../database" }
-utils = { path = "../../utils" }
+core = { workspace = true }
+utils = { workspace = true }
+database = { workspace = true }
 
 # Logging
 log = { workspace = true }
-
-derive_more = "0.99.17"
-
-futures = "0.3.25"
 
 rust-embed={ version = "6.4.1", features = ["debug-embed"]}

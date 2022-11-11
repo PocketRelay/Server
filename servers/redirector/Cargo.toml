@@ -16,8 +16,8 @@ tokio = { workspace = true }
 blaze-pk = { workspace = true }
 blaze-ssl-async = { workspace = true }
 
-core = { path = "../../core" }
-utils = { path = "../../utils" }
+core = { workspace = true }
+utils = { workspace = true }
 
 # Logging
 log = { workspace = true }

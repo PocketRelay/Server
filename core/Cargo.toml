@@ -12,22 +12,15 @@ authors.workspace = true
 # Async runtime
 tokio = { workspace = true }
 
-# HTTP Server
-actix-web = "4"
-
 # Serialization and packets
 blaze-pk = { workspace = true }
-serde =  { workspace = true }
 blaze-ssl-async = { workspace = true }
 
-database = { path = "../database" }
-utils = { path = "../utils" }
+utils = { workspace = true }
+database = { workspace = true }
 
 # Logging
 log = { workspace = true }
-
-# Utilities
-derive_more = "0.99.17"
 
 # Resource / HTTP embedding
 rust-embed={ version = "6.4.1", features = ["debug-embed"]}

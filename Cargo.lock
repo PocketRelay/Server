@@ -709,16 +709,13 @@ dependencies = [
 name = "core"
 version = "0.1.0"
 dependencies = [
- "actix-web",
  "blaze-pk",
  "blaze-ssl-async",
  "database",
- "derive_more",
  "futures",
  "log",
  "mime_guess",
  "rust-embed",
- "serde",
  "tokio",
  "utils",
 ]
@@ -1332,8 +1329,6 @@ dependencies = [
  "actix-web",
  "core",
  "database",
- "derive_more",
- "futures",
  "log",
  "mime_guess",
  "rust-embed",
@@ -1631,8 +1626,6 @@ dependencies = [
  "blaze-ssl-async",
  "core",
  "database",
- "derive_more",
- "futures",
  "log",
  "rust-embed",
  "serde",

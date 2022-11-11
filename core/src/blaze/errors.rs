@@ -1,12 +1,11 @@
 use blaze_pk::CodecError;
 use database::DbErr;
-use derive_more::From;
 use std::io;
 
 pub type HandleResult = Result<(), BlazeError>;
 pub type BlazeResult<T> = Result<T, BlazeError>;
 
-#[derive(Debug, From)]
+#[derive(Debug)]
 pub enum BlazeError {
     CodecError(CodecError),
     IO(io::Error),
@@ -14,6 +13,24 @@ pub enum BlazeError {
     Database(DbErr),
     MissingPlayer,
     Context(String, Box<BlazeError>),
+}
+
+impl From<CodecError> for BlazeError {
+    fn from(err: CodecError) -> Self {
+        BlazeError::CodecError(err)
+    }
+}
+
+impl From<io::Error> for BlazeError {
+    fn from(err: io::Error) -> Self {
+        BlazeError::IO(err)
+    }
+}
+
+impl From<DbErr> for BlazeError {
+    fn from(err: DbErr) -> Self {
+        BlazeError::Database(err)
+    }
 }
 
 impl BlazeError {

@@ -23,6 +23,11 @@ blaze-pk = { version = "0.4.8", features = ["async", "blaze-ssl-async"] }
 blaze-ssl-async = "0.1.1"
 log = "0.4.17"
 
+core = { path = "core" }
+utils = { path = "utils" }
+database = { path = "database" }
+
+
 [package]
 name = "pocket-relay"
 description = "Pocket Relay Server"
@@ -36,8 +41,8 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-core = { path = "core" }
-utils = { path = "utils" }
+core = { workspace = true }
+utils = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }
 
