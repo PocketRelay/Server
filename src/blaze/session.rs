@@ -489,6 +489,20 @@ impl Session {
         .await;
     }
 
+    /// Updates the data stored on the client so that it matches
+    /// the data stored in this session for the provided session
+    pub async fn update_client_other(&self, other: &Session) {
+        let session_data = &*self.data.read().await;
+        other
+            .notify(
+                Components::UserSessions(UserSessions::SetSession),
+                &SetSessionDetails {
+                    session: session_data,
+                },
+            )
+            .await;
+    }
+
     /// Updates the provided session with the session information
     /// for this session.
     ///

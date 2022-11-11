@@ -222,7 +222,7 @@ impl Game {
         self.push_all(&packet).await;
     }
 
-    pub async fn update_mesh_connection(&self, session: &SessionArc) {
+    pub async fn update_mesh_connection(&self, session: &SessionArc, target: u32) {
         if !self.is_player(session).await {
             session.set_state(2).await;
             return;
@@ -231,6 +231,17 @@ impl Game {
         session.set_state(4).await;
 
         debug!("Updating Mesh Connection");
+
+        let pid = {
+            let session_data = session.data.read().await;
+            session_data.id_safe()
+        };
+
+        if let None = self.find_player_by_id(target).await {
+            return;
+        }
+
+        debug!("Mesh player ID: {}", pid);
 
         let host_id = {
             let players = self.players.read().await;
@@ -243,13 +254,6 @@ impl Game {
         };
 
         debug!("Mesh host ID: {}", host_id);
-
-        let pid = {
-            let session_data = session.data.read().await;
-            session_data.id_safe()
-        };
-
-        debug!("Mesh player ID: {}", pid);
 
         let packet_a = Packets::notify(
             Components::GameManager(GameManager::PlayerJoinCompleted),
@@ -322,7 +326,7 @@ impl Game {
         };
 
         if game_slot == 0 {
-            self.migrate_host().await;
+            self.migrate_host(session).await;
         }
     }
 
@@ -425,7 +429,7 @@ impl Game {
     /// Unimplemented host migration functionality
     /// returning the player ID of the new host if
     /// one is available
-    pub async fn migrate_host(&self) {
+    pub async fn migrate_host(&self, old_host: &Session) {
         let players = &*self.players.read().await;
         let Some(new_host) = players.first() else {
             // There is no other players available to become host.
@@ -435,7 +439,7 @@ impl Game {
         self.notify_migration_start(new_host).await;
         self.set_state(0x82).await;
         self.notify_migration_finished().await;
-        self.update_player_slots(players).await;
+        self.update_player_slots(players, old_host).await;
         debug!("Finished host migration");
     }
 
@@ -478,16 +482,21 @@ impl Game {
     /// send client updates to ensure the client is correct
     ///
     /// `players` The players list for the game
-    async fn update_player_slots(&self, players: &Vec<SessionArc>) {
-        for i in 0..players.len() {
-            let player = &players[i];
+    async fn update_player_slots(&self, players: &Vec<SessionArc>, old_host: &Session) {
+        debug!("Updating player slots");
+        for (slot, player) in players.iter().enumerate() {
             let player_data = &mut *player.data.write().await;
-            let Some(game) = &mut player_data.game else {
-                continue;
-            };
-            game.slot = i;
-            player.update_client().await;
+            {
+                let Some(game) = &mut player_data.game else { continue; };
+                game.slot = slot;
+                drop(player_data);
+            }
+            old_host.update_client_other(player).await;
         }
+
+        old_host.update_client().await;
+
+        debug!("Finished updating player")
     }
 
     pub async fn is_joinable(&self) -> bool {

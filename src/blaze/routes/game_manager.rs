@@ -267,6 +267,15 @@ async fn handle_remove_player(session: &SessionArc, packet: &OpaquePacket) -> Ha
 packet! {
     struct UpdateMeshReq {
         GID id: u32,
+        TARG targets: Vec<MeshTarget>,
+    }
+}
+
+
+
+group! {
+    struct MeshTarget {
+        PID id: u32,
     }
 }
 
@@ -292,6 +301,11 @@ async fn handle_update_mesh_connection(
     session.response_empty(packet).await?;
 
     let req = packet.contents::<UpdateMeshReq>()?;
+
+    let Some(target) = req.targets.first() else {
+        return Ok(())
+    };
+
     let Some(game) = session
         .games()
         .find_by_id(req.id)
@@ -303,7 +317,8 @@ async fn handle_update_mesh_connection(
         );
         return session.response_error_empty(packet, ServerError::InvalidInformation).await;
     };
-    game.update_mesh_connection(session).await;
+    
+    game.update_mesh_connection(session, target.id).await;
     Ok(())
 }
 
