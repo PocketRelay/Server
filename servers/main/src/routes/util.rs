@@ -1,7 +1,6 @@
 use blaze_pk::{
-    group, packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list,
-    tag_map_start, tag_str, tag_u16, tag_u32, tag_u8, tag_value, tag_zero, Codec, OpaquePacket,
-    TdfMap, ValueType,
+    packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_map_start,
+    tag_str, tag_u16, tag_u32, tag_u8, tag_value, tag_zero, Codec, OpaquePacket, TdfMap, ValueType,
 };
 use core::blaze::components::Util;
 use core::blaze::errors::{HandleResult, ServerError};
@@ -11,7 +10,6 @@ use core::env::{self, VERSION};
 use database::{PlayerCharactersInterface, PlayerClassesInterface, PlayersInterface};
 use log::{debug, warn};
 use rust_embed::RustEmbed;
-use std::time::SystemTime;
 use tokio::try_join;
 use utils::dmap::load_dmap;
 use utils::time::server_unix_time;
@@ -51,18 +49,6 @@ async fn handle_get_telemetry_server(session: &SessionArc, packet: &OpaquePacket
         session_id: session.id,
     };
     session.response(packet, &res).await
-}
-
-packet! {
-    struct PreAuthReq {
-        CINF client_info: ClientInfo,
-    }
-}
-
-group! {
-    struct ClientInfo {
-        LOC location: u32,
-    }
 }
 
 pub struct PreAuthRes {
@@ -169,14 +155,6 @@ impl Codec for PreAuthRes {
 /// }
 /// ```
 async fn handle_pre_auth(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let pre_auth = packet.contents::<PreAuthReq>()?;
-    let location = pre_auth.client_info.location;
-
-    {
-        let mut session_data = session.data.write().await;
-        (*session_data).location = location;
-    }
-
     let mut config = TdfMap::with_capacity(3);
     config.insert("pingPeriod", PING_PERIOD);
     config.insert("voipHeadsetUpdateRate", VOIP_HEADSET_UPDATE_RATE);
@@ -284,14 +262,7 @@ packet! {
 /// ```
 ///
 async fn handle_ping(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let now = SystemTime::now();
     let server_time = server_unix_time();
-
-    {
-        let mut session_data = session.data.write().await;
-        (*session_data).last_ping = now;
-    }
-
     session.response(packet, &PingRes { server_time }).await
 }
 

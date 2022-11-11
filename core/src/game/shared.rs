@@ -30,7 +30,7 @@ pub fn encode_player_data(session_data: &SessionData, output: &mut Vec<u8>) {
     tag_empty_blob(output, "BLOB");
     tag_u8(output, "EXID", 0);
     tag_u32(output, "GID", game.game.id);
-    tag_u32(output, "LOC", session_data.location);
+    tag_u32(output, "LOC", 0x64654445);
     tag_str(output, "NAME", &player.display_name);
     let player_id = session_data.id_safe();
     tag_u32(output, "PID", player_id);

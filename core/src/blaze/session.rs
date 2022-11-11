@@ -3,7 +3,7 @@
 //! behind Arc's and are cloned into Games and other resources. Sesssion must be
 //! removed from all other structs in the release function.
 
-use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc, time::SystemTime};
+use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
 
 use crate::{
     blaze::errors::BlazeError,
@@ -588,14 +588,6 @@ pub struct SessionData {
     /// player model from the database
     pub player: Option<players::Model>,
 
-    /// Encoded location data. The format or values of this are not
-    /// yet documented.
-    pub location: u32,
-
-    /// The system time that the last client ping was recieved at.
-    /// Currently unused but should in future be used to timeout clients.
-    pub last_ping: SystemTime,
-
     /// Networking information
     pub net: NetData,
 
@@ -616,8 +608,6 @@ impl Default for SessionData {
     fn default() -> Self {
         Self {
             player: None,
-            location: 0x64654445,
-            last_ping: SystemTime::now(),
             net: NetData::default(),
             hardware_flag: 0,
             state: 2,

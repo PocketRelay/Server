@@ -64,7 +64,7 @@ impl Codec for SessionDetails<'_> {
         {
             tag_group_start(output, "USER");
             tag_u32(output, "AID", self.player.id);
-            tag_u32(output, "ALOC", self.session.location);
+            tag_u32(output, "ALOC", 0x64654445);
             tag_empty_blob(output, "EXBB");
             tag_u8(output, "EXID", 0);
             tag_u32(output, "ID", self.player.id);
