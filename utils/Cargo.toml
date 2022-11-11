@@ -1,32 +1,35 @@
 [package]
 name = "utils"
-version = "0.1.0"
-edition = "2021"
 description = "Utility modules and functions for Pocket Relay"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true }
 
 # HTTP Client
 reqwest = { version = "0.11.12", features = ["json"] }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"] }
-blaze-pk = { version = "0.4.7", features = [] }
+serde = { workspace = true }
+blaze-pk = { workspace = true }
 
 # Password hashing
 rand_core = { version = "0.6", features = ["std"] }
-argon2 = "0.4"
-password-hash = "0.4.2"
+argon2 = { version = "0.4" }
+password-hash = { version = "0.4.2" }
 
 # Randomization
-rand = "0.8.5"
+rand = { version = "0.8.5" }
 
 # Logging
-log = "0.4.17"
-log4rs = { version = "1.2.0", features = [ "gzip"] }
+log = { workspace = true }
+log4rs = { version = "1.2.0", features = ["gzip"] }
 
-regex = "1"
+regex = { version = "1" }

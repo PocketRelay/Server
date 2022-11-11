@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use log::LevelFilter;
 use log4rs::{
     append::{
@@ -13,6 +15,14 @@ use log4rs::{
     encode::pattern::PatternEncoder,
     Config,
 };
+
+pub fn logging_level() -> LevelFilter {
+    const ENV_KEY: &str = "PR_LOG_LEVEL";
+    const DEFAULT: LevelFilter = LevelFilter::Info;
+    std::env::var(ENV_KEY).map_or(DEFAULT, |value| {
+        LevelFilter::from_str(&value).unwrap_or(DEFAULT)
+    })
+}
 
 /// Initializes the logger
 pub fn init_logger(logging_level: LevelFilter, logging_path: String) {
@@ -43,7 +53,37 @@ pub fn init_logger(logging_level: LevelFilter, logging_path: String) {
             Logger::builder()
                 .appenders(["stdout", "file"])
                 .additive(false)
-                .build("pocket_relay", logging_level),
+                .build("pocket_relay", LevelFilter::Info),
+        )
+        .logger(
+            Logger::builder()
+                .appenders(["stdout", "file"])
+                .additive(false)
+                .build("core", logging_level),
+        )
+        .logger(
+            Logger::builder()
+                .appenders(["stdout", "file"])
+                .additive(false)
+                .build("database", logging_level),
+        )
+        .logger(
+            Logger::builder()
+                .appenders(["stdout", "file"])
+                .additive(false)
+                .build("http_server", logging_level),
+        )
+        .logger(
+            Logger::builder()
+                .appenders(["stdout", "file"])
+                .additive(false)
+                .build("main_server", logging_level),
+        )
+        .logger(
+            Logger::builder()
+                .appenders(["stdout", "file"])
+                .additive(false)
+                .build("redirector_server", logging_level),
         )
         .logger(
             Logger::builder()

@@ -1,19 +1,23 @@
 [package]
 name = "database"
-version = "0.1.0"
-edition = "2021"
 description = "Module for accessing the app database"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
 
 [dependencies]
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = {  workspace = true }
 async-std = { version = "^1", features = ["attributes", "tokio1"] }
 
 # Database dependencies
 sea-orm = { version = "^0", features = [ "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
 
 # Logging
-log = "0.4.17"
+log = { workspace = true }
 
 # Date time implementation
 chrono = "0.4"
