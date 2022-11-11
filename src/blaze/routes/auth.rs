@@ -260,7 +260,7 @@ async fn handle_create_account(session: &SessionArc, packet: &OpaquePacket) -> H
         email.clone()
     };
 
-    let player = players::create(session.db(), email, display_name, hashed_password, true).await?;
+    let player = players::create(session.db(), email, display_name, hashed_password, false).await?;
 
     complete_auth(session, packet, player, false).await?;
     Ok(())
