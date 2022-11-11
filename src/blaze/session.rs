@@ -84,7 +84,7 @@ impl Session {
     /// `session` The session to process
     /// `flush`   The reciever for the flush messages
     async fn process(session: SessionArc, mut flush: mpsc::Receiver<()>) {
-        let mut shutdown = session.global.shutdown.resubscribe();
+        let mut shutdown = session.global.shutdown.clone();
         loop {
             select! {
                 _ = flush.recv() => { session.flush().await; }
@@ -95,7 +95,7 @@ impl Session {
                         break;
                     }
                 }
-                _ = shutdown.recv() => {
+                _ = shutdown.changed() => {
                     debug!("Shutting down session (SID: {})", session.id);
                     break;
                 }

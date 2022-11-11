@@ -13,7 +13,7 @@ use log::{error, info};
 use retriever::Retriever;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-use tokio::sync::broadcast::{self, Receiver};
+use tokio::sync::watch;
 use tokio::{select, signal};
 
 /// Global state that is shared throughout the application
@@ -22,7 +22,7 @@ pub struct GlobalState {
     pub matchmaking: Matchmaking,
     pub db: DatabaseConnection,
     pub retriever: Option<Retriever>,
-    pub shutdown: Receiver<()>,
+    pub shutdown: watch::Receiver<()>,
 }
 
 pub type GlobalStateArc = Arc<GlobalState>;
@@ -47,7 +47,7 @@ async fn main() {
     let matchmaking = Matchmaking::new();
     let retriever = Retriever::new().await;
 
-    let (shutdown_send, shutdown_recv) = broadcast::channel(16);
+    let (shutdown_send, shutdown_recv) = watch::channel(());
     let global_state = GlobalState {
         db,
         games,

@@ -32,7 +32,7 @@ pub async fn start_server(global: GlobalStateArc) {
     };
 
     let mut session_id = 1;
-    let mut shutdown = global.shutdown.resubscribe();
+    let mut shutdown = global.shutdown.clone();
     loop {
         select! {
             result = listener.accept() => {
@@ -46,7 +46,7 @@ pub async fn start_server(global: GlobalStateArc) {
                     }
                 }
             }
-            _ = shutdown.recv() => {
+            _ = shutdown.changed() => {
                 info!("Stopping main server listener from shutdown trigger.");
                 break;
             }
