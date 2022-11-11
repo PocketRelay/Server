@@ -1,7 +1,6 @@
 use blaze_pk::TdfMap;
 use log::{debug, error};
 use sea_orm::DatabaseConnection;
-use tokio::task::spawn_blocking;
 
 use crate::{
     blaze::{
@@ -38,13 +37,8 @@ impl Retriever {
         if !env::bool_env(env::ORIGIN_FETCH) {
             return None;
         }
-        let mut session = self.session()?;
-        let (value, mut session) =
-            spawn_blocking(move || (session.get_origin_details(token), session))
-                .await
-                .ok()?;
-
-        let details = value?;
+        let mut session = self.session().await?;
+        let details = session.get_origin_details(token).await?;
 
         let player = players_interface::find_by_email(&db, &details.email, true)
             .await
@@ -61,11 +55,7 @@ impl Retriever {
                 .await
                 .ok()?;
                 if env::bool_env(env::ORIGIN_FETCH_DATA) {
-                    let data = spawn_blocking(move || session.get_extra_data())
-                        .await
-                        .ok()?;
-
-                    match data {
+                    match session.get_extra_data().await {
                         Some(values) => {
                             player = player_data::update_all(&db, player, values).await.ok()?;
                         }
@@ -90,8 +80,8 @@ impl RetSession {
     /// Blocking implementation for retrieving the origin details from the official
     /// servers using the provided token will load the player settings if the
     /// PR_ORIGIN_FETCH_DATA env is enabled.
-    fn get_origin_details(&mut self, token: String) -> Option<OriginDetails> {
-        let details = self.auth_origin(token).ok()?;
+    async fn get_origin_details(&mut self, token: String) -> Option<OriginDetails> {
+        let details = self.auth_origin(token).await.ok()?;
         debug!(
             "Retrieved origin details (Name: {}, Email: {})",
             &details.display_name, &details.email
@@ -101,20 +91,23 @@ impl RetSession {
 
     /// Loads all the user data from UserSettingsLoadAll and sets the
     /// data on the origin details provided
-    fn get_extra_data(&mut self) -> Option<TdfMap<String, String>> {
+    async fn get_extra_data(&mut self) -> Option<TdfMap<String, String>> {
         let value = self
             .request_empty::<UserSettingsAll>(Components::Util(Util::UserSettingsLoadAll))
+            .await
             .ok()?;
         Some(value.value)
     }
 
     /// Authenticates with origin by sending the origin token and then
     /// returns the details from it with None as the data field
-    fn auth_origin(&mut self, token: String) -> BlazeResult<OriginDetails> {
-        let value = self.request::<OriginLoginReq, OriginLoginRes>(
-            Components::Authentication(Authentication::OriginLogin),
-            &OriginLoginReq { token },
-        )?;
+    async fn auth_origin(&mut self, token: String) -> BlazeResult<OriginDetails> {
+        let value = self
+            .request::<OriginLoginReq, OriginLoginRes>(
+                Components::Authentication(Authentication::OriginLogin),
+                &OriginLoginReq { token },
+            )
+            .await?;
 
         Ok(OriginDetails {
             email: value.email,

@@ -491,18 +491,19 @@ dependencies = [
 
 [[package]]
 name = "blaze-pk"
-version = "0.4.6"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "273c76a83d39068fe5c992f3ba906f5cf11daf278788afdabda0f871e8210ddb"
+checksum = "0c2c8ffd27337296dd362a5f63a4c21d85b354e0ba80ad5272c31826beb766a2"
 dependencies = [
+ "blaze-ssl-async",
  "tokio",
 ]
 
 [[package]]
-name = "blaze-ssl"
-version = "0.1.3"
+name = "blaze-ssl-async"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc9fb653ccff43ba86b7d71801e8ffd193761abefbee00239205fab0b50acd2c"
+checksum = "b5023c25c237900e314288fba97f86a03a43a43deb8527655957ee66e3570795"
 dependencies = [
  "der",
  "getrandom",
@@ -511,6 +512,7 @@ dependencies = [
  "pkcs1",
  "rsa",
  "rust-crypto",
+ "tokio",
  "x509-cert",
 ]
 
@@ -2021,7 +2023,7 @@ dependencies = [
  "actix-web",
  "argon2",
  "blaze-pk",
- "blaze-ssl",
+ "blaze-ssl-async",
  "chrono",
  "derive_more",
  "dotenvy",
