@@ -479,28 +479,18 @@ impl Session {
     /// Updates the data stored on the client so that it matches
     /// the data stored in this session
     pub async fn update_client(&self) {
+        let packet = self.create_client_update().await;
+        self.write(&packet).await;
+    }
+
+    pub async fn create_client_update(&self) -> OpaquePacket {
         let session_data = &*self.data.read().await;
-        self.notify(
+        Packets::notify(
             Components::UserSessions(UserSessions::SetSession),
             &SetSessionDetails {
                 session: session_data,
             },
         )
-        .await;
-    }
-
-    /// Updates the data stored on the client so that it matches
-    /// the data stored in this session for the provided session
-    pub async fn update_client_other(&self, other: &Session) {
-        let session_data = &*self.data.read().await;
-        other
-            .notify(
-                Components::UserSessions(UserSessions::SetSession),
-                &SetSessionDetails {
-                    session: session_data,
-                },
-            )
-            .await;
     }
 
     /// Updates the provided session with the session information

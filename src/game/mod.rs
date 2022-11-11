@@ -486,16 +486,12 @@ impl Game {
         debug!("Updating player slots");
         for (slot, player) in players.iter().enumerate() {
             let player_data = &mut *player.data.write().await;
-            {
-                let Some(game) = &mut player_data.game else { continue; };
-                game.slot = slot;
-                drop(player_data);
-            }
-            old_host.update_client_other(player).await;
+            let Some(game) = &mut player_data.game else { continue; };
+            game.slot = slot;
         }
 
-        old_host.update_client().await;
-
+        let packet = old_host.create_client_update().await;
+        join!(self.push_all(&packet), old_host.write(&packet));
         debug!("Finished updating player")
     }
 
@@ -567,7 +563,8 @@ impl Game {
         session.write(&setup).await;
         debug!("Finished writing notify packet");
 
-        session.update_client().await;
+        let packet = session.create_client_update().await;
+        game.push_all(&packet).await;
 
         debug!("Finished adding player");
 
