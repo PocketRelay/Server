@@ -85,7 +85,7 @@ ENV PR_DATABASE_FILE=data/app.db
 
 
 # Volume for storing database file data
-VOLUME /data
+VOLUME /app/data
 
 # Expore main and http ports
 EXPOSE $PR_REDIRECTOR_PORT
