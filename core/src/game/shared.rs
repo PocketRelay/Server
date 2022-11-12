@@ -11,6 +11,9 @@ use blaze_pk::{
 pub struct NotifyPlayerJoining<'a> {
     /// ID of the game that the player is joining
     pub id: u32,
+
+    pub slot: usize,
+
     /// The session data of the player that is joining
     pub session: &'a SessionData,
 }
@@ -19,23 +22,27 @@ impl Codec for NotifyPlayerJoining<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_u32(output, "GID", self.id);
         tag_group_start(output, "PDAT");
-        encode_player_data(self.session, output);
+        encode_player_data(self.session, self.id, self.slot, output);
     }
 }
 
-pub fn encode_player_data(session_data: &SessionData, output: &mut Vec<u8>) {
+pub fn encode_player_data(
+    session_data: &SessionData,
+    game_id: u32,
+    slot: usize,
+    output: &mut Vec<u8>,
+) {
     let Some(player) = session_data.player.as_ref() else {return;};
-    let Some(game) = session_data.game.as_ref() else { return; };
 
     tag_empty_blob(output, "BLOB");
     tag_u8(output, "EXID", 0);
-    tag_u32(output, "GID", game.game.id);
+    tag_u32(output, "GID", game_id);
     tag_u32(output, "LOC", 0x64654445);
     tag_str(output, "NAME", &player.display_name);
     let player_id = session_data.id_safe();
     tag_u32(output, "PID", player_id);
     tag_value(output, "PNET", &session_data.net.get_groups());
-    tag_usize(output, "SID", game.slot);
+    tag_usize(output, "SID", slot);
     tag_u8(output, "SLOT", 0);
     tag_u8(output, "STAT", session_data.state);
     tag_u16(output, "TIDX", 0xffff);
@@ -45,9 +52,13 @@ pub fn encode_player_data(session_data: &SessionData, output: &mut Vec<u8>) {
     tag_group_end(output);
 }
 
-pub async fn notify_game_setup(game: &Game, session: &SessionArc) -> BlazeResult<OpaquePacket> {
+pub async fn notify_game_setup(
+    game: &Game,
+    host: bool,
+    session: &SessionArc,
+) -> BlazeResult<OpaquePacket> {
     let mut output = Vec::new();
-    encode_notify_game_setup(game, session, &mut output).await?;
+    encode_notify_game_setup(game, session, host, &mut output).await?;
     Ok(Packets::notify_raw(
         Components::GameManager(GameManager::GameSetup),
         output,
@@ -58,6 +69,7 @@ pub async fn notify_game_setup(game: &Game, session: &SessionArc) -> BlazeResult
 async fn encode_notify_game_setup(
     game: &Game,
     session: &SessionArc,
+    host: bool,
     output: &mut Vec<u8>,
 ) -> BlazeResult<()> {
     let session_data = session.data.read().await;
@@ -67,17 +79,19 @@ async fn encode_notify_game_setup(
     let players = &*game.players.read().await;
     let player_count = players.len();
 
+    let mut slot = 0;
     for player in players {
         let session_data = player.data.read().await;
         player_ids.push(session_data.id_safe());
-        encode_player_data(&session_data, &mut player_data);
+        encode_player_data(&session_data, game.id, slot, &mut player_data);
+        slot += 1;
     }
 
-    let host = players
+    let host_session = players
         .get(0)
         .ok_or_else(|| BlazeError::Other("Missing Host"))?;
 
-    let host_data = host.data.read().await;
+    let host_data = host_session.data.read().await;
     let host_id = host_data.id_safe();
 
     {
@@ -143,13 +157,7 @@ async fn encode_notify_game_setup(
     tag_list_start(output, "PROS", ValueType::Group, player_count);
     output.extend_from_slice(&player_data);
 
-    let game_slot = session_data
-        .game
-        .as_ref()
-        .map(|value| value.slot)
-        .unwrap_or(0);
-
-    if game_slot != 0 {
+    if !host {
         tag_optional_start(output, "REAS", 0x3);
         {
             tag_group_start(output, "VALU");

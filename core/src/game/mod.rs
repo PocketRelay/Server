@@ -5,7 +5,7 @@ mod shared;
 use crate::blaze::components::{Components, GameManager, UserSessions};
 use crate::blaze::errors::BlazeResult;
 use crate::blaze::session::{Session, SessionArc};
-use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete};
+use crate::blaze::shared::{NotifyAdminListChange, NotifyJoinComplete, SessionStateChange};
 use crate::game::shared::{
     notify_game_setup, FetchExtendedData, NotifyAttribsChange, NotifyPlayerJoining,
     NotifyPlayerRemoved, NotifySettingChange, NotifyStateChange,
@@ -66,16 +66,25 @@ impl Games {
     pub async fn release_player(&self, player: &Session) {
         debug!("Releasing player (Session ID: {})", player.id);
 
-        let game = {
+        let game_id = {
             let session_data = &mut *player.data.write().await;
-            let Some(game) = session_data.game.take() else { return; };
-            game.game
+            let Some(game_id) = session_data.game.take() else { return; };
+            game_id
+        };
+
+        let Some(game) = self.find_by_id(game_id).await else {
+            debug!(
+                "Game session was referencing didn't exist (GID: {}, SID: {})", 
+                game_id, player.id
+            );
+            return;
         };
 
         debug!(
             "Releasing player from game (Name: {}, ID: {}, Session ID: {})",
-            &game.name, &game.id, player.id
+            &game.name, game_id, player.id
         );
+
         game.remove_player(player).await;
         debug!("Checking if game can be removed");
         self.remove_if_empty(game).await;
@@ -222,13 +231,31 @@ impl Game {
         self.push_all(&packet).await;
     }
 
+    pub async fn set_player_state(&self, session: &SessionArc, state: u8) {
+        let player_id = {
+            let session_data = &mut *session.data.write().await;
+            session_data.state = state;
+            session_data.id_safe()
+        };
+
+        let packet = Packets::notify(
+            Components::GameManager(GameManager::GamePlayerStateChange),
+            &SessionStateChange {
+                gid: self.id,
+                pid: player_id,
+                state,
+            },
+        );
+        self.push_all(&packet).await;
+    }
+
     pub async fn update_mesh_connection(&self, session: &SessionArc, target: u32) {
         if !self.is_player(session).await {
-            session.set_state(2).await;
+            self.set_player_state(session, 2).await;
             return;
         }
 
-        session.set_state(4).await;
+        self.set_player_state(session, 4).await;
 
         debug!("Updating Mesh Connection");
 
@@ -313,31 +340,31 @@ impl Game {
     ///
     /// `session` The removed player.
     pub async fn remove_player(&self, session: &Session) {
-        let game_slot = session.clear_game().await;
-        self.remove_session(session).await;
+        session.clear_game().await;
+        let Some(slot) = self.remove_session(session).await else {
+            debug!("Player wasn't apart of that game");
+            return;
+        };
         self.notify_player_removed(session).await;
         self.notify_admin_removed(session).await;
         self.notify_fetch_data(session).await;
         debug!("Done removing player");
-
-        let Some(game_slot) = game_slot else {
-            debug!("Player was missing game slot");
-            return;
-        };
-
-        if game_slot == 0 {
+        if slot == 0 {
             self.migrate_host(session).await;
         }
     }
 
     /// Removes the provided session from the players list of this game
-    /// and clears the game state stored on the session
+    /// and clears the game state stored on the session. Returning the slot
+    /// that the player was in if it existed.
     ///
     /// `session` The session to remove.
-    async fn remove_session(&self, session: &Session) {
+    async fn remove_session(&self, session: &Session) -> Option<usize> {
         let mut players = self.players.write().await;
-        players.retain(|value| value.id != session.id);
-        debug!("Removed session from players list (SID: {})", session.id)
+        let index = players.iter().position(|value| value.id == session.id)?;
+        players.remove(index);
+        debug!("Removed session from players list (SID: {})", session.id);
+        Some(index)
     }
 
     /// Notifies all players in the game and the provided session that
@@ -439,7 +466,10 @@ impl Game {
         self.notify_migration_start(new_host).await;
         self.set_state(0x82).await;
         self.notify_migration_finished().await;
-        self.update_player_slots(players, old_host).await;
+
+        let packet = old_host.create_client_update().await;
+        join!(self.push_all(&packet), old_host.write(&packet));
+
         debug!("Finished host migration");
     }
 
@@ -448,11 +478,10 @@ impl Game {
     ///
     /// `new_host` The newly decided host for the game.
     async fn notify_migration_start(&self, new_host: &SessionArc) {
-        let (old_slot, host_id) = {
+        let host_id = {
             let host_data = new_host.data.read().await;
-            let old_slot = host_data.game.as_ref().map(|value| value.slot).unwrap_or(0);
             let host_id = host_data.id_safe();
-            (old_slot, host_id)
+            host_id
         };
 
         let packet = Packets::notify(
@@ -461,7 +490,8 @@ impl Game {
                 id: self.id,
                 host: host_id,
                 pmig: 0x2,
-                slot: old_slot,
+                // Should always be using the player which was in the second slot
+                slot: 0x1,
             },
         );
 
@@ -475,24 +505,6 @@ impl Game {
             &HostMigrateFinished { id: self.id },
         );
         self.push_all(&packet).await;
-    }
-
-    /// Updates all the player slots ensuring they in the same
-    /// slot that matches the one stored on the session. Will
-    /// send client updates to ensure the client is correct
-    ///
-    /// `players` The players list for the game
-    async fn update_player_slots(&self, players: &Vec<SessionArc>, old_host: &Session) {
-        debug!("Updating player slots");
-        for (slot, player) in players.iter().enumerate() {
-            let player_data = &mut *player.data.write().await;
-            let Some(game) = &mut player_data.game else { continue; };
-            game.slot = slot;
-        }
-
-        let packet = old_host.create_client_update().await;
-        join!(self.push_all(&packet), old_host.write(&packet));
-        debug!("Finished updating player")
     }
 
     pub async fn is_joinable(&self) -> bool {
@@ -534,10 +546,12 @@ impl Game {
         };
 
         // Set the player session game data
-        session.set_game(game.clone(), slot).await;
+        session.set_game(game.id).await;
+
+        let is_host = slot == 0;
 
         // Don't send if this is the host joining
-        if slot != 0 {
+        if !is_host {
             // Update session details for other players and send join notifies
             debug!("Creating join notify");
             let packet = {
@@ -546,6 +560,7 @@ impl Game {
                     Components::GameManager(GameManager::PlayerJoining),
                     &NotifyPlayerJoining {
                         id: game.id,
+                        slot,
                         session: &session_data,
                     },
                 )
@@ -557,7 +572,7 @@ impl Game {
         debug!("Updating clients");
         game.update_clients_for(session).await;
 
-        let setup = notify_game_setup(game, &session).await?;
+        let setup = notify_game_setup(game, is_host, &session).await?;
         debug!("Finished generating notify packet");
 
         session.write(&setup).await;

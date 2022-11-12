@@ -7,7 +7,7 @@ use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
 
 use crate::{
     blaze::errors::BlazeError,
-    game::{matchmaking::Matchmaking, GameArc, Games},
+    game::{matchmaking::Matchmaking, Games},
     retriever::Retriever,
     GlobalStateArc,
 };
@@ -26,9 +26,9 @@ use tokio::{
 };
 
 use super::{
-    components::{self, Components, GameManager, UserSessions},
+    components::{self, Components, UserSessions},
     errors::{BlazeResult, HandleResult},
-    shared::{NetData, SessionDetails, SessionStateChange, SetSessionDetails, UpdateExtDataAttr},
+    shared::{NetData, SessionDetails, SetSessionDetails, UpdateExtDataAttr},
 };
 
 /// Structure for storing a client session. This includes the
@@ -401,40 +401,16 @@ impl Session {
     ///
     /// `game` The game the player has joined.
     /// `slot` The slot in the game the player is in.
-    pub async fn set_game(&self, game: GameArc, slot: usize) {
+    pub async fn set_game(&self, game: u32) {
         let session_data = &mut *self.data.write().await;
-        session_data.game = Some(SessionGame::new(game, slot))
+        session_data.game = Some(game)
     }
 
     /// Clears the game details for the current session
     /// returning the game slot if one is present
-    pub async fn clear_game(&self) -> Option<usize> {
+    pub async fn clear_game(&self) {
         let session_data = &mut *self.data.write().await;
-        session_data.game.take().map(|value| value.slot)
-    }
-
-    /// Updates the state for this session. Will send the state
-    /// change to all the players in the current game including
-    /// the client.
-    ///
-    /// `state` The new state for this ession
-    pub async fn set_state(&self, state: u8) {
-        let session_data = &mut *self.data.write().await;
-        session_data.state = state;
-
-        let Some(player) = &session_data.player else {return;};
-        let Some(game) = &session_data.game else {return;};
-        let game = &game.game;
-
-        let packet = Packets::notify(
-            Components::GameManager(GameManager::GamePlayerStateChange),
-            &SessionStateChange {
-                gid: game.id,
-                pid: player.id,
-                state,
-            },
-        );
-        game.push_all(&packet).await;
+        session_data.game = None;
     }
 
     /// Updates the data stored on the client so that it matches
@@ -600,8 +576,8 @@ pub struct SessionData {
     /// Matchmaking state if the player is matchmaking.
     pub matchmaking: bool,
 
-    /// Game details if the player is in a game.
-    pub game: Option<SessionGame>,
+    /// The id of the game if connected to one
+    pub game: Option<u32>,
 }
 
 impl Default for SessionData {
@@ -631,24 +607,5 @@ impl SessionData {
     /// session data or if there is no player attached the value 1.
     pub fn id_safe(&self) -> u32 {
         self.player.as_ref().map(|value| value.id).unwrap_or(1)
-    }
-}
-
-/// Structure for storing information about the game
-/// which a session is connected to.
-pub struct SessionGame {
-    /// Reference to the game that the player is in
-    pub game: GameArc,
-    /// The slot in the game which the player is in
-    pub slot: usize,
-}
-
-impl SessionGame {
-    /// Creates a new session game from the provided game and slot
-    ///
-    /// `game` Reference to the game the player is apart of
-    /// `slot` The slot the player is in
-    pub fn new(game: GameArc, slot: usize) -> Self {
-        SessionGame { game, slot }
     }
 }

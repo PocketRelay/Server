@@ -45,9 +45,9 @@ impl Codec for SessionData {
         }
         tag_value(output, "QDAT", &self.net.ext);
         tag_u8(output, "UATT", 0);
-        if let Some(session_game) = &self.game {
+        if let Some(game_id) = &self.game {
             tag_list_start(output, "ULST", ValueType::Triple, 1);
-            (4, 1, session_game.game.id).encode(output);
+            (4, 1, *game_id).encode(output);
         }
         tag_group_end(output);
     }
