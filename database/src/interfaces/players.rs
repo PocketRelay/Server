@@ -137,7 +137,7 @@ impl PlayersInterface {
     ) -> DbResult<(players::Model, String)> {
         let token = match &player.session_token {
             None => {
-                let token = utils::random::generate_token(Self::TOKEN_LENGTH);
+                let token = utils::random::generate_random_string(Self::TOKEN_LENGTH);
                 let out = Self::set_token(db, player, token).await?;
                 return Ok(out);
             }

@@ -13,7 +13,7 @@ use crate::{
 };
 
 use database::{players, Database, PlayersInterface};
-use utils::random::generate_token;
+use utils::random::generate_random_string;
 
 use blaze_pk::{
     Codec, OpaquePacket, PacketComponents, PacketResult, PacketType, Packets, Reader, Tag,
@@ -386,7 +386,7 @@ impl Session {
             }
         }
 
-        let token = generate_token(128);
+        let token = generate_random_string(128);
         let session_data = &mut *self.data.write().await;
         let player = session_data
             .player

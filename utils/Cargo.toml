@@ -13,9 +13,6 @@ authors.workspace = true
 # Async runtime
 tokio = { workspace = true }
 
-# HTTP Client
-reqwest = { version = "0.11.12", features = ["json"] }
-
 # Serialization
 serde = { workspace = true }
 blaze-pk = { workspace = true }
@@ -25,11 +22,27 @@ rand_core = { version = "0.6", features = ["std"] }
 argon2 = { version = "0.4" }
 password-hash = { version = "0.4.2" }
 
-# Randomization
-rand = { version = "0.8.5" }
-
-# Logging
 log = { workspace = true }
-log4rs = { version = "1.2.0", features = ["gzip"] }
 
-regex = { version = "1" }
+# HTTP Client
+[dependencies.reqwest]
+version = "0.11.12"
+default-features = false
+features = ["json", "rustls-tls"]
+
+[dependencies.regex]
+version = "1"
+default-features = false
+features = ["std"]
+
+[dependencies.log4rs]
+version = "1.2.0"
+default-features = false
+features = [
+    "gzip",
+    "console_appender",
+    "rolling_file_appender",
+    "compound_policy",
+    "fixed_window_roller",
+    "size_trigger",
+]

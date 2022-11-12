@@ -16,8 +16,6 @@ pub async fn public_address() -> Option<String> {
 
 #[cfg(test)]
 mod test {
-    use crate::blaze::shared::NetAddress;
-
     use super::public_address;
 
     /// Test function for ensuring that the public address returned
@@ -28,8 +26,15 @@ mod test {
             .await
             .expect("Failed to retriever public address");
 
-        let address = NetAddress::try_from_ipv4(&value).unwrap();
+        let parts = value.split(".").collect::<Vec<_>>();
 
-        println!("Public address was: {:?}", address);
+        assert_eq!(parts.len(), 4);
+
+        let parts = parts
+            .iter()
+            .filter_map(|value| value.parse::<u8>().ok())
+            .collect::<Vec<_>>();
+
+        assert_eq!(parts.len(), 4);
     }
 }

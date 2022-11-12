@@ -51,7 +51,7 @@ impl<'a> MEStringParser<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::utils::conv::MEStringParser;
+    use crate::parse::MEStringParser;
 
     #[test]
     fn test_a() {

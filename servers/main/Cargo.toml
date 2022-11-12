@@ -14,7 +14,7 @@ tokio = { workspace = true }
 
 # Serialization and packets
 blaze-pk = { workspace = true }
-serde =  { workspace = true }
+serde = { workspace = true }
 blaze-ssl-async = { workspace = true }
 
 core = { workspace = true }
@@ -24,4 +24,4 @@ database = { workspace = true }
 # Logging
 log = { workspace = true }
 
-rust-embed={ version = "6.4.1", features = ["debug-embed"]}
+rust-embed = { workspace = true }

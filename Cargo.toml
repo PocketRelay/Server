@@ -4,7 +4,6 @@ edition = "2021"
 license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [workspace]
 members = [
     ".", 
@@ -17,11 +16,16 @@ members = [
 ]
 
 [workspace.dependencies]
-serde = { version = "1.0", features = ["derive"] }
+futures = "0.3.25"
 tokio = { version = "1", features = ["full"] }
+
+serde = { version = "1.0", features = ["derive"] }
 blaze-pk = { version = "0.4.8", features = ["async", "blaze-ssl-async"] }
 blaze-ssl-async = "0.1.1"
+
 log = "0.4.17"
+
+rust-embed = { version = "6.4.1", features = ["debug-embed"] }
 
 core = { path = "core" }
 utils = { path = "utils" }

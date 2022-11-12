@@ -26,5 +26,5 @@ database = { workspace = true }
 log = { workspace = true }
 
 # Resource / HTTP embedding
-rust-embed = { version = "6.4.1", features = ["debug-embed"] }
+rust-embed = { workspace = true }
 mime_guess = "2.0.4"
