@@ -88,6 +88,7 @@ ENV PR_DATABASE_FILE=data/app.db
 VOLUME /data
 
 # Expore main and http ports
+EXPOSE $PR_REDIRECTOR_PORT
 EXPOSE $PR_MAIN_PORT
 EXPOSE $PR_HTTP_PORT
 
