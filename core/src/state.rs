@@ -3,16 +3,11 @@ use std::sync::Arc;
 use database::Database;
 use tokio::sync::watch;
 
-use crate::{
-    env,
-    game::{matchmaking::Matchmaking, Games},
-    retriever::Retriever,
-};
+use crate::{env, game::Games, retriever::Retriever};
 
 /// Global state that is shared throughout the application
 pub struct GlobalState {
     pub games: Games,
-    pub matchmaking: Matchmaking,
     pub db: Database,
     pub retriever: Option<Retriever>,
     pub shutdown: watch::Receiver<()>,
@@ -36,13 +31,11 @@ impl GlobalState {
         };
 
         let games = Games::new();
-        let matchmaking = Matchmaking::new();
         let retriever = Retriever::new().await;
 
         let global_state = GlobalState {
             db,
             games,
-            matchmaking,
             retriever,
             shutdown,
         };

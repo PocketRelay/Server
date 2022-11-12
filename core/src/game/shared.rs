@@ -1,5 +1,4 @@
 use crate::blaze::components::{Components, GameManager};
-use crate::blaze::errors::{BlazeError, BlazeResult};
 use crate::blaze::session::{SessionArc, SessionData};
 use crate::game::Game;
 use blaze_pk::{
@@ -7,6 +6,7 @@ use blaze_pk::{
     tag_list_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8,
     tag_usize, tag_value, Codec, OpaquePacket, Packets, TdfMap, ValueType,
 };
+use log::debug;
 
 pub struct NotifyPlayerJoining<'a> {
     /// ID of the game that the player is joining
@@ -52,17 +52,10 @@ pub fn encode_player_data(
     tag_group_end(output);
 }
 
-pub async fn notify_game_setup(
-    game: &Game,
-    host: bool,
-    session: &SessionArc,
-) -> BlazeResult<OpaquePacket> {
+pub async fn notify_game_setup(game: &Game, host: bool, session: &SessionArc) -> OpaquePacket {
     let mut output = Vec::new();
-    encode_notify_game_setup(game, session, host, &mut output).await?;
-    Ok(Packets::notify_raw(
-        Components::GameManager(GameManager::GameSetup),
-        output,
-    ))
+    encode_notify_game_setup(game, session, host, &mut output).await;
+    Packets::notify_raw(Components::GameManager(GameManager::GameSetup), output)
 }
 
 //noinspection SpellCheckingInspection
@@ -71,7 +64,7 @@ async fn encode_notify_game_setup(
     session: &SessionArc,
     host: bool,
     output: &mut Vec<u8>,
-) -> BlazeResult<()> {
+) {
     let session_data = session.data.read().await;
     let mut player_data = Vec::new();
     let mut player_ids = Vec::new();
@@ -87,9 +80,10 @@ async fn encode_notify_game_setup(
         slot += 1;
     }
 
-    let host_session = players
-        .get(0)
-        .ok_or_else(|| BlazeError::Other("Missing Host"))?;
+    let Some(host_session) = players  .get(0) else {
+        debug!("Unable to create setup notify when host is missing");
+        return;
+    };
 
     let host_data = host_session.data.read().await;
     let host_id = host_data.id_safe();
@@ -176,7 +170,6 @@ async fn encode_notify_game_setup(
             tag_group_end(output);
         }
     }
-    Ok(())
 }
 
 packet! {

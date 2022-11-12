@@ -1,5 +1,5 @@
 pub mod enums;
-pub mod matchmaking;
+pub mod rules;
 mod shared;
 
 use crate::blaze::components::{Components, GameManager, UserSessions};
@@ -12,16 +12,18 @@ use crate::game::shared::{
 };
 use blaze_pk::{OpaquePacket, Packets, TdfMap};
 use log::{debug, error, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::join;
 use tokio::sync::RwLock;
 
+use self::rules::RuleSet;
 use self::shared::{HostMigrateFinished, HostMigrateStart};
 
 pub struct Games {
-    games: RwLock<HashMap<u32, GameArc>>,
+    games: RwLock<HashMap<u32, Game>>,
+    match_queue: RwLock<VecDeque<(SessionArc, RuleSet)>>,
     next_id: AtomicU32,
 }
 
@@ -29,6 +31,7 @@ impl Games {
     pub fn new() -> Self {
         Self {
             games: RwLock::new(HashMap::new()),
+            match_queue: RwLock::new(VecDeque::new()),
             next_id: AtomicU32::new(1),
         }
     }
@@ -38,24 +41,136 @@ impl Games {
         name: String,
         attributes: TdfMap<String, String>,
         setting: u16,
-    ) -> Arc<Game> {
+    ) -> BlazeResult<u32> {
         let mut games = self.games.write().await;
         let id = self.next_id.fetch_add(1, Ordering::AcqRel);
-        let game = Arc::new(Game::new(id, name, attributes, setting));
-        games.insert(id, game.clone());
-        game
+        let game = Game::new(id, name, attributes, setting);
+        games.insert(id, game);
+        Ok(id)
     }
 
-    pub async fn find_by_id(&self, id: u32) -> Option<Arc<Game>> {
+    pub async fn add_player(&self, game_id: u32, session: &SessionArc) -> BlazeResult<bool> {
         let games = self.games.read().await;
-        games.get(&id).cloned()
+        let Some(game) = games.get(&game_id) else {
+            return Ok(false);
+        };
+        Ok(game.add_player(session).await)
     }
 
-    pub async fn release(&self, game: GameArc) {
+    /// Async handler for when a new game is created in order to update
+    /// the queue checking if any of the other players rule sets match the
+    /// details of the game
+    pub async fn on_game_created(&self, game_id: u32) {
+        let games = self.games.read().await;
+        let Some(game) = games.get(&game_id) else {
+            return;
+        };
+
+        debug!("Matchmaking game created. Checking queue for players...");
+        let mut removed_ids = Vec::new();
         {
-            let mut games = self.games.write().await;
-            games.remove(&game.id);
+            let queue = self.match_queue.read().await;
+            for (session, rules) in queue.iter() {
+                if rules.matches(game).await && game.is_joinable().await {
+                    debug!("Found player from queue. Adding them to the game.");
+                    if game.add_player(session).await {
+                        removed_ids.push(session.id);
+                    } else {
+                        break;
+                    }
+                }
+            }
         }
+
+        if removed_ids.len() > 0 {
+            let queue = &mut *self.match_queue.write().await;
+            queue.retain(|value| !removed_ids.contains(&value.0.id))
+        }
+    }
+
+    /// Attempts to find a game that matches the players provided rule set
+    /// or adds them to the matchmaking queue if one could not be found.
+    pub async fn get_or_queue(&self, session: &SessionArc, rules: RuleSet) -> bool {
+        let games = self.games.read().await;
+        for game in games.values() {
+            if rules.matches(game).await {
+                println!("Found matching game {}", &game.name);
+
+                if game.add_player(session).await {
+                    return true;
+                }
+            }
+        }
+
+        // Update the player matchmaking data.
+        {
+            let session_data = &mut *session.data.write().await;
+            session_data.matchmaking = true;
+        }
+
+        debug!("Updated player matchmaking data");
+
+        // Push the player to the end of the queue
+        let queue = &mut *self.match_queue.write().await;
+        queue.push_back((session.clone(), rules));
+        debug!("Added player to back of queue");
+
+        false
+    }
+
+    /// Removes a player from the queue if it exists
+    pub async fn remove_queue(&self, session: &Session) {
+        let queue = &mut *self.match_queue.write().await;
+        queue.retain(|value| value.0.id != session.id);
+    }
+
+    pub async fn update_mesh_connection(&self, id: u32, session: &SessionArc, target: u32) -> bool {
+        let games = self.games.read().await;
+        let Some(game) = games.get(&id) else { return false; };
+        game.update_mesh_connection(session, target).await;
+        true
+    }
+
+    pub async fn set_game_state(&self, id: u32, state: u16) -> bool {
+        let games = self.games.read().await;
+        let Some(game) = games.get(&id) else { return false; };
+        game.set_state(state).await;
+        true
+    }
+
+    pub async fn set_game_setting(&self, id: u32, setting: u16) -> bool {
+        let games = self.games.read().await;
+        let Some(game) = games.get(&id) else { return false; };
+        game.set_setting(setting).await;
+        true
+    }
+
+    pub async fn set_game_attributes(&self, id: u32, attributes: TdfMap<String, String>) -> bool {
+        let games = self.games.read().await;
+        let Some(game) = games.get(&id) else { return false; };
+        game.set_attributes(attributes).await;
+        true
+    }
+
+    pub async fn remove_player(&self, id: u32, pid: u32) -> bool {
+        let games = self.games.read().await;
+        let Some(game) = games.get(&id) else { return false; };
+        game.remove_by_id(pid).await;
+        if game.is_empty().await {
+            drop(game);
+            drop(games);
+            self.release(id).await;
+        };
+        true
+    }
+
+    pub async fn release(&self, game_id: u32) {
+        let game = {
+            let mut games = self.games.write().await;
+            games.remove(&game_id)
+        };
+
+        let Some(game) = game else {return;};
 
         let players = &mut *game.players.write().await;
         let futures: Vec<_> = players.iter().map(|value| value.clear_game()).collect();
@@ -64,6 +179,12 @@ impl Games {
     }
 
     pub async fn release_player(&self, player: &Session) {
+        // Removes a player from the queue if it exists
+        {
+            let queue = &mut *self.match_queue.write().await;
+            queue.retain(|value| value.0.id != player.id);
+        }
+
         debug!("Releasing player (Session ID: {})", player.id);
 
         let game_id = {
@@ -72,7 +193,8 @@ impl Games {
             game_id
         };
 
-        let Some(game) = self.find_by_id(game_id).await else {
+        let games = self.games.read().await;
+        let Some(game) = games.get(&game_id) else { 
             debug!(
                 "Game session was referencing didn't exist (GID: {}, SID: {})", 
                 game_id, player.id
@@ -87,16 +209,12 @@ impl Games {
 
         game.remove_player(player).await;
         debug!("Checking if game can be removed");
-        self.remove_if_empty(game).await;
-    }
 
-    pub async fn remove_if_empty(&self, game: GameArc) {
-        if game.player_count().await > 0 {
-            debug!("Game not empy. Leaving it.");
-            return;
-        }
-        debug!("Removing empty game (Name: {}, ID: {}", &game.name, game.id);
-        self.release(game).await;
+        if game.is_empty().await {
+            drop(game);
+            drop(games);
+            self.release(game_id).await;
+        };
     }
 }
 
@@ -137,6 +255,10 @@ impl Game {
             }),
             players: RwLock::new(Vec::with_capacity(Self::MAX_PLAYERS)),
         }
+    }
+
+    pub async fn is_empty(&self) -> bool {
+        self.player_count().await == 0
     }
 
     /// Returns the current number of players present in the player list
@@ -526,19 +648,19 @@ impl Game {
         debug!("Done updating session information");
     }
 
-    pub async fn add_player(game: &GameArc, session: &SessionArc) -> BlazeResult<()> {
+    pub async fn add_player(&self, session: &SessionArc) -> bool {
         // Add the player to the players list returning the slot it was added to
         let slot = {
-            let mut players = game.players.write().await;
+            let mut players = self.players.write().await;
             let player_count = players.len();
 
             // Game is full cannot add anymore players
             if player_count >= Self::MAX_PLAYERS {
                 error!(
                     "Tried to add player to full game (SID: {}, GID: {})",
-                    session.id, game.id,
+                    session.id, self.id,
                 );
-                return Ok(());
+                return false;
             }
 
             players.push(session.clone());
@@ -546,7 +668,7 @@ impl Game {
         };
 
         // Set the player session game data
-        session.set_game(game.id).await;
+        session.set_game(self.id).await;
 
         let is_host = slot == 0;
 
@@ -559,30 +681,30 @@ impl Game {
                 Packets::notify(
                     Components::GameManager(GameManager::PlayerJoining),
                     &NotifyPlayerJoining {
-                        id: game.id,
+                        id: self.id,
                         slot,
                         session: &session_data,
                     },
                 )
             };
             debug!("Pushing join notify to players");
-            game.push_all(&packet).await;
+            self.push_all(&packet).await;
         }
 
         debug!("Updating clients");
-        game.update_clients_for(session).await;
+        self.update_clients_for(session).await;
 
-        let setup = notify_game_setup(game, is_host, &session).await?;
+        let setup = notify_game_setup(self, is_host, &session).await;
         debug!("Finished generating notify packet");
 
         session.write(&setup).await;
         debug!("Finished writing notify packet");
 
         let packet = session.create_client_update().await;
-        game.push_all(&packet).await;
+        self.push_all(&packet).await;
 
         debug!("Finished adding player");
 
-        Ok(())
+        true
     }
 }

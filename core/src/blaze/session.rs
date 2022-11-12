@@ -5,12 +5,7 @@
 
 use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
 
-use crate::{
-    blaze::errors::BlazeError,
-    game::{matchmaking::Matchmaking, Games},
-    retriever::Retriever,
-    GlobalStateArc,
-};
+use crate::{blaze::errors::BlazeError, game::Games, retriever::Retriever, GlobalStateArc};
 
 use database::{players, Database, PlayersInterface};
 use utils::random::generate_random_string;
@@ -311,12 +306,6 @@ impl Session {
         &self.global.games
     }
 
-    /// Function for retrieving a reference to the matchmaking
-    /// manager stored on the global state attached to this session
-    pub fn matchmaking(&self) -> &Matchmaking {
-        &self.global.matchmaking
-    }
-
     /// Retrieves the ID of the underlying player returning on failure
     /// will return 1 as a fallback value.
     pub async fn player_id_safe(&self) -> u32 {
@@ -461,7 +450,6 @@ impl Session {
     pub async fn release(&self) {
         debug!("Releasing Session (SID: {})", self.id);
         self.games().release_player(self).await;
-        self.matchmaking().remove(self).await;
         info!("Session was released (SID: {})", self.id);
         self.buffer.flush(self).await;
     }

@@ -1,9 +1,8 @@
+use blaze_pk::{group, packet, OpaquePacket, TdfMap};
 use core::blaze::components::GameManager;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::blaze::session::SessionArc;
-use core::game::matchmaking::{MatchRules, RuleSet};
-use core::game::Game;
-use blaze_pk::{group, packet, OpaquePacket, TdfMap};
+use core::game::rules::{MatchRules, RuleSet};
 use log::{debug, info, warn};
 
 /// Routing function for handling packets with the `GameManager` component and routing them
@@ -100,19 +99,27 @@ packet! {
 async fn handle_create_game(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<CreateGameReq>()?;
 
-    let game = session
-        .games()
+    let games = session.games();
+
+    let game_id = games
         .new_game(req.name, req.attributes, req.setting)
-        .await;
+        .await?;
 
     session
-        .response(packet, &CreateGameRes { id: game.id })
+        .response(packet, &CreateGameRes { id: game_id })
         .await?;
-    Game::add_player(&game, session).await?;
 
-    session.matchmaking().on_game_created(&game).await;
-
-    Ok(())
+    match games.add_player(game_id, session).await {
+        Ok(true) => {
+            games.on_game_created(game_id).await;
+            Ok(())
+        }
+        Ok(false) => {
+            warn!("Failed to add player to game that didn't exist");
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
 }
 
 packet! {
@@ -134,19 +141,18 @@ packet! {
 ///
 async fn handle_advance_game_state(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<GameStateReq>()?;
-    let Some(game) = session
-        .games()
-        .find_by_id(req.id)
-        .await else 
-    {
+    let games = session.games();
+    if games.set_game_state(req.id, req.state).await {
+        session.response_empty(packet).await
+    } else {
         warn!(
             "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
             req.id, session.id
         );
-        return session.response_error_empty(packet, ServerError::InvalidInformation).await;
-    };
-    game.set_state(req.state).await;
-    session.response_empty(packet).await
+        session
+            .response_error_empty(packet, ServerError::InvalidInformation)
+            .await
+    }
 }
 
 packet! {
@@ -168,19 +174,19 @@ packet! {
 ///
 async fn handle_set_game_setting(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<GameSettingReq>()?;
-    let Some(game) = session
-        .games()
-        .find_by_id(req.id)
-        .await else 
-    {
+
+    let games = session.games();
+    if games.set_game_setting(req.id, req.setting).await {
+        session.response_empty(packet).await
+    } else {
         warn!(
-            "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
+            "Client requested to set the game setting of an unknown game (GID: {}, SID: {})",
             req.id, session.id
         );
-        return session.response_error_empty(packet, ServerError::InvalidInformation).await;
-    };
-    game.set_setting(req.setting).await;
-    session.response_empty(packet).await
+        session
+            .response_error_empty(packet, ServerError::InvalidInformation)
+            .await
+    }
 }
 
 packet! {
@@ -212,19 +218,19 @@ packet! {
 ///
 async fn handle_set_game_attribs(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<GameAttribsReq>()?;
-    let Some(game) = session
-        .games()
-        .find_by_id(req.id)
-        .await else 
-    {
+
+    let games = session.games();
+    if games.set_game_attributes(req.id, req.attributes).await {
+        session.response_empty(packet).await
+    } else {
         warn!(
-            "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
+            "Client requested to set the game attributes of an unknown game (GID: {}, SID: {})",
             req.id, session.id
         );
-        return session.response_error_empty(packet, ServerError::InvalidInformation).await;
-    };
-    game.set_attributes(req.attributes).await;
-    session.response_empty(packet).await
+        session
+            .response_error_empty(packet, ServerError::InvalidInformation)
+            .await
+    }
 }
 
 packet! {
@@ -249,19 +255,18 @@ packet! {
 async fn handle_remove_player(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
     let req = packet.contents::<RemovePlayerReq>()?;
     let games = session.games();
-    let Some(game) = games
-        .find_by_id(req.id)
-        .await else 
-    {
+
+    if games.remove_player(req.id, req.pid).await {
+        session.response_empty(packet).await
+    } else {
         warn!(
             "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
             req.id, session.id
         );
-        return session.response_error_empty(packet, ServerError::InvalidInformation).await;
-    };
-    game.remove_by_id(req.pid).await;
-    games.remove_if_empty(game).await;
-    session.response_empty(packet).await
+        session
+            .response_error_empty(packet, ServerError::InvalidInformation)
+            .await
+    }
 }
 
 packet! {
@@ -270,8 +275,6 @@ packet! {
         TARG targets: Vec<MeshTarget>,
     }
 }
-
-
 
 group! {
     struct MeshTarget {
@@ -306,19 +309,18 @@ async fn handle_update_mesh_connection(
         return Ok(())
     };
 
-    let Some(game) = session
-        .games()
-        .find_by_id(req.id)
-        .await else 
+    let games = session.games();
+
+    if !games
+        .update_mesh_connection(req.id, session, target.id)
+        .await
     {
         warn!(
             "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
             req.id, session.id
         );
-        return session.response_error_empty(packet, ServerError::InvalidInformation).await;
-    };
-    
-    game.update_mesh_connection(session, target.id).await;
+    }
+
     Ok(())
 }
 
@@ -496,23 +498,16 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -
 
     let rules = parse_ruleset(req.criteria.rules);
 
-    debug!("Checking for games before adding to queue");
-    let game = session
-        .matchmaking()
-        .get_or_queue(session, rules, session.games())
-        .await;
-    {
-        debug!("Matchmaking ID: {}", session.id);
-        session
-            .response(packet, &MatchmakingRes { id: session.id })
-            .await?;
-    }
+    let games = session.games();
 
-    if let Some(game) = game {
-        debug!("Found matching game");
-        Game::add_player(&game, session).await?;
-    }
+    debug!("Matchmaking ID: {}", session.id);
+    session
+        .response(packet, &MatchmakingRes { id: session.id })
+        .await?;
 
+    if games.get_or_queue(session, rules).await {
+        debug!("Found matching game")
+    }
     Ok(())
 }
 
@@ -537,7 +532,6 @@ async fn handle_cancel_matchmaking(session: &SessionArc, packet: &OpaquePacket) 
 
     session.response_empty(packet).await?;
 
-    session.matchmaking().remove(session).await;
     session.games().release_player(session).await;
 
     Ok(())
