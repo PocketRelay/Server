@@ -8,6 +8,10 @@ authors.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+database-sqlite = ["database/sqlite"]
+database-mysql = ["database/mysql"]
+
 [dependencies]
 # Async runtime
 tokio = { workspace = true }

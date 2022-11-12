@@ -25,8 +25,14 @@ impl GlobalState {
     /// reciever and returns it wrapped in an Arc
     pub async fn init(shutdown: watch::Receiver<()>) -> Arc<Self> {
         let db = {
-            let file = env::str_env(env::DATABASE_FILE);
-            Database::connect(file).await
+            if cfg!(feature = "database-sqlite") {
+                let file = env::str_env(env::DATABASE_FILE);
+                Database::connect_sqlite(file).await
+            } else {
+                let url = std::env::var(env::DATABASE_URL)
+                    .expect("Environment PR_DATABASE_URL is required for non-sqlite versions of Pocket Relay");
+                Database::connect_url(url).await
+            }
         };
 
         let games = Games::new();

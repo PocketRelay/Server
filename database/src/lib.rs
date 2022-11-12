@@ -29,18 +29,25 @@ pub struct Database {
 }
 
 impl Database {
-    /// Connects to the database returning a Database interface
-    /// which allows accessing the database without accessing sea_orm
+    /// Wrapper function for connecting to the database through
+    /// a SQLite file connection.
     ///
     /// `file` The path to the SQLite database file
-    pub async fn connect(file: String) -> Self {
+    pub async fn connect_sqlite(file: String) -> Self {
         let path = Path::new(&file);
         Self::ensure_exists(path)
             .await
             .expect("Unable to create database file / directory");
 
         let url = format!("sqlite:{file}");
+        Self::connect_url(url).await
+    }
 
+    /// Connects to the database returning a Database interface
+    /// which allows accessing the database without accessing sea_orm
+    ///
+    /// `url` The database connection url
+    pub async fn connect_url(url: String) -> Self {
         let connection = SeaDatabase::connect(&url)
             .await
             .expect("Unable to create database connection");

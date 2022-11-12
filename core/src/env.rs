@@ -11,6 +11,7 @@ pub const MENU_MESSAGE: (&str, &str) = (
     "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>",
 );
 pub const DATABASE_FILE: (&str, &str) = ("PR_DATABASE_FILE", "data/app.db");
+pub const DATABASE_URL: &str = "PR_DATABASE_URL";
 pub const GAW_DAILY_DECAY: (&str, f32) = ("PR_GAW_DAILY_DECAY", 0.0);
 pub const GAW_PROMOTIONS: (&str, bool) = ("PR_GAW_PROMOTIONS", true);
 pub const RETRIEVER: (&str, bool) = ("PR_RETRIEVER", true);

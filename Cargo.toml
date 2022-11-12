@@ -6,11 +6,11 @@ authors = ["Jacobtread <jacobtread@gmail.com>"]
 
 [workspace]
 members = [
-    ".", 
+    ".",
     "core",
-    "utils", 
-    "database", 
-    "servers/http", 
+    "utils",
+    "database",
+    "servers/http",
     "servers/main",
     "servers/redirector",
 ]
@@ -31,7 +31,6 @@ core = { path = "core" }
 utils = { path = "utils" }
 database = { path = "database" }
 
-
 [package]
 name = "pocket-relay"
 description = "Pocket Relay Server"
@@ -43,6 +42,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+
+[features]
+default = ["database-sqlite"]
+database-sqlite = ["core/database-sqlite"]
+database-mysql = ["core/database-mysql"]
 
 [dependencies]
 core = { workspace = true }

@@ -7,32 +7,23 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[features]
+sqlite = ["sea-orm/sqlx-sqlite", "sea-orm-migration/sqlx-sqlite"]
+mysql = ["sea-orm/sqlx-mysql", "sea-orm-migration/sqlx-mysql"]
 
 [dependencies]
-# Async runtime
-tokio = {  workspace = true }
+tokio = { workspace = true }
 async-std = { version = "^1", features = ["attributes", "tokio1"] }
 
-# Database dependencies
-sea-orm = { version = "^0", features = [ "sqlx-sqlite", "runtime-tokio-rustls", "macros" ] }
-
-# Logging
 log = { workspace = true }
-
-# Date time implementation
-chrono = "0.4"
-
 utils = { workspace = true }
 
+chrono = "0.4"
+
+[dependencies.sea-orm]
+version = "^0"
+features = ["runtime-tokio-rustls", "macros"]
 
 [dependencies.sea-orm-migration]
-version = "^0.9.0"
-features = [
-    "runtime-tokio-rustls",
-    "sqlx-sqlite"
-  # Enable at least one `ASYNC_RUNTIME` and `DATABASE_DRIVER` feature if you want to run migration via CLI.
-  # View the list of supported features at https://www.sea-ql.org/SeaORM/docs/install-and-config/database-and-async-runtime.
-  # e.g.
-  # "runtime-tokio-rustls",  # `ASYNC_RUNTIME` feature
-  # "sqlx-postgres",         # `DATABASE_DRIVER` feature
-]
+version = "^0"
+features = ["runtime-tokio-rustls"]
