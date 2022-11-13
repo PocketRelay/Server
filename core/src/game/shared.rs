@@ -1,11 +1,9 @@
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::session::{SessionArc, SessionData};
 use crate::game::Game;
-use blaze_pk::{
-    packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list,
-    tag_list_start, tag_optional_start, tag_str, tag_triple, tag_u16, tag_u32, tag_u64, tag_u8,
-    tag_usize, tag_value, Codec, OpaquePacket, Packets, TdfMap, ValueType,
-};
+
+use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*, types::TdfMap};
+
 use log::debug;
 
 pub struct NotifyPlayerJoining<'a> {
@@ -52,10 +50,10 @@ pub fn encode_player_data(
     tag_group_end(output);
 }
 
-pub async fn notify_game_setup(game: &Game, host: bool, session: &SessionArc) -> OpaquePacket {
+pub async fn notify_game_setup(game: &Game, host: bool, session: &SessionArc) -> Packet {
     let mut output = Vec::new();
     encode_notify_game_setup(game, session, host, &mut output).await;
-    Packets::notify_raw(Components::GameManager(GameManager::GameSetup), output)
+    Packet::notify_raw(Components::GameManager(GameManager::GameSetup), output)
 }
 
 //noinspection SpellCheckingInspection

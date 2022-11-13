@@ -10,7 +10,11 @@ use crate::game::shared::{
     notify_game_setup, FetchExtendedData, NotifyAttribsChange, NotifyPlayerJoining,
     NotifyPlayerRemoved, NotifySettingChange, NotifyStateChange,
 };
-use blaze_pk::{OpaquePacket, Packets, TdfMap};
+
+use blaze_pk::{
+    packet::Packet,
+    types::TdfMap
+};
 use log::{debug, error, warn};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -268,7 +272,7 @@ impl Game {
         players.len()
     }
 
-    pub async fn push_all(&self, packet: &OpaquePacket) {
+    pub async fn push_all(&self, packet: &Packet) {
         let players = &*self.players.read().await;
         let futures: Vec<_> = players.iter().map(|value| value.write(packet)).collect();
 
@@ -276,7 +280,7 @@ impl Game {
         let _ = futures::future::join_all(futures).await;
     }
 
-    pub async fn push_all_excl_host(&self, packet: &OpaquePacket) {
+    pub async fn push_all_excl_host(&self, packet: &Packet) {
         let players = &*self.players.read().await;
         let futures: Vec<_> = players
             .iter()
@@ -288,7 +292,7 @@ impl Game {
         let _ = futures::future::join_all(futures).await;
     }
 
-    pub async fn push_all_list(&self, packets: &Vec<OpaquePacket>) {
+    pub async fn push_all_list(&self, packets: &Vec<Packet>) {
         let players = &*self.players.read().await;
         let futures: Vec<_> = players
             .iter()
@@ -297,21 +301,14 @@ impl Game {
         // TODO: Handle errors for each players
         let _ = futures::future::join_all(futures).await;
     }
-
-    pub async fn flush_players(&self) {
-        let players = &*self.players.read().await;
-        let futures: Vec<_> = players.iter().map(|value| value.flush()).collect();
-        // TODO: Handle errors for each players
-        let _ = futures::future::join_all(futures).await;
-    }
-
+    
     pub async fn set_state(&self, state: u16) {
         {
             let data = &mut *self.data.write().await;
             data.state = state;
         }
 
-        let packet = Packets::notify(
+        let packet = Packet::notify(
             Components::GameManager(GameManager::GameStateChange),
             &NotifyStateChange { id: self.id, state },
         );
@@ -324,7 +321,7 @@ impl Game {
             (*data).setting = setting;
         }
 
-        let packet = Packets::notify(
+        let packet = Packet::notify(
             Components::GameManager(GameManager::GameSettingsChange),
             &NotifySettingChange {
                 id: self.id,
@@ -342,7 +339,7 @@ impl Game {
 
         let packet = {
             let data = self.data.read().await;
-            Packets::notify(
+            Packet::notify(
                 Components::GameManager(GameManager::GameAttribChange),
                 &NotifyAttribsChange {
                     id: self.id,
@@ -360,7 +357,7 @@ impl Game {
             session_data.id_safe()
         };
 
-        let packet = Packets::notify(
+        let packet = Packet::notify(
             Components::GameManager(GameManager::GamePlayerStateChange),
             &SessionStateChange {
                 gid: self.id,
@@ -404,12 +401,12 @@ impl Game {
 
         debug!("Mesh host ID: {}", host_id);
 
-        let packet_a = Packets::notify(
+        let packet_a = Packet::notify(
             Components::GameManager(GameManager::PlayerJoinCompleted),
             &NotifyJoinComplete { gid: self.id, pid },
         );
 
-        let packet_b = Packets::notify(
+        let packet_b = Packet::notify(
             Components::GameManager(GameManager::AdminListChange),
             &NotifyAdminListChange {
                 alst: pid,
@@ -499,7 +496,7 @@ impl Game {
             "Removing session from game (SID: {}, PID: {}, GID: {})",
             session.id, player_id, self.id
         );
-        let packet = Packets::notify(
+        let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerRemoved),
             &NotifyPlayerRemoved {
                 id: self.id,
@@ -527,7 +524,7 @@ impl Game {
             }
         };
 
-        let packet = Packets::notify(
+        let packet = Packet::notify(
             Components::GameManager(GameManager::AdminListChange),
             &NotifyAdminListChange {
                 alst: session.player_id_safe().await,
@@ -547,7 +544,7 @@ impl Game {
     /// `session` The session to fetch data
     async fn notify_fetch_data(&self, session: &Session) {
         let session_id = session.player_id_safe().await;
-        let session_packet = Packets::notify(
+        let session_packet = Packet::notify(
             Components::UserSessions(UserSessions::FetchExtendedData),
             &FetchExtendedData { id: session_id },
         );
@@ -563,7 +560,7 @@ impl Game {
 
         let mut player_packets = Vec::with_capacity(player_ids.len());
         for player_id in player_ids {
-            player_packets.push(Packets::notify(
+            player_packets.push(Packet::notify(
                 Components::UserSessions(UserSessions::FetchExtendedData),
                 &FetchExtendedData { id: player_id },
             ));
@@ -606,7 +603,7 @@ impl Game {
             host_id
         };
 
-        let packet = Packets::notify(
+        let packet = Packet::notify(
             Components::GameManager(GameManager::HostMigrationStart),
             &HostMigrateStart {
                 id: self.id,
@@ -622,7 +619,7 @@ impl Game {
 
     /// Notifies all the players that host migration is complete
     async fn notify_migration_finished(&self) {
-        let packet = Packets::notify(
+        let packet = Packet::notify(
             Components::GameManager(GameManager::HostMigrationFinished),
             &HostMigrateFinished { id: self.id },
         );
@@ -678,7 +675,7 @@ impl Game {
             debug!("Creating join notify");
             let packet = {
                 let session_data = session.data.read().await;
-                Packets::notify(
+                Packet::notify(
                     Components::GameManager(GameManager::PlayerJoining),
                     &NotifyPlayerJoining {
                         id: self.id,

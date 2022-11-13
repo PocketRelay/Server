@@ -1,4 +1,5 @@
-use blaze_pk::{packet, tag_value, Codec, OpaquePacket};
+use blaze_pk::{codec::Codec, packet, packet::Packet, tagging::tag_value};
+
 use core::blaze::components::Authentication;
 use core::blaze::errors::{BlazeError, HandleResult, ServerError};
 use core::blaze::session::SessionArc;
@@ -16,7 +17,7 @@ use utils::{
 pub async fn route(
     session: &SessionArc,
     component: Authentication,
-    packet: &OpaquePacket,
+    packet: &Packet,
 ) -> HandleResult {
     match component {
         Authentication::SilentLogin => handle_silent_login(session, packet).await,
@@ -40,7 +41,6 @@ pub async fn route(
         Authentication::OriginLogin => handle_origin_login(session, packet).await,
         component => {
             debug!("Got Authentication({component:?})");
-            packet.debug_decode()?;
             session.response_empty(packet).await
         }
     }
@@ -64,8 +64,8 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_silent_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let silent_login = packet.contents::<SilentLoginReq>()?;
+async fn handle_silent_login(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let silent_login = packet.decode::<SilentLoginReq>()?;
     let id = silent_login.id;
     let token = silent_login.token;
 
@@ -94,7 +94,7 @@ async fn handle_silent_login(session: &SessionArc, packet: &OpaquePacket) -> Han
 /// Model as the authenticated player.
 pub async fn complete_auth(
     session: &SessionArc,
-    packet: &OpaquePacket,
+    packet: &Packet,
     player: players::Model,
     silent: bool,
 ) -> HandleResult {
@@ -132,7 +132,7 @@ pub async fn complete_auth(
 /// ```
 /// packet(Components.AUTHENTICATION, Commands.LOGOUT, 0x0, 0x7) {}
 /// ```
-async fn handle_logout(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_logout(session: &SessionArc, packet: &Packet) -> HandleResult {
     debug!("Logging out for session: (ID: {})", &session.id);
     session.set_player(None).await;
     session.response_empty(packet).await
@@ -158,8 +158,8 @@ packet! {
 ///   number("TYPE", 0x0)
 /// }
 /// ```
-async fn handle_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<AccountReq>()?;
+async fn handle_login(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<AccountReq>()?;
     let email = req.email;
     let password = req.password;
 
@@ -224,8 +224,8 @@ async fn handle_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResu
 /// }
 /// ```
 ///
-async fn handle_create_account(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<AccountReq>()?;
+async fn handle_create_account(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<AccountReq>()?;
     let email = req.email;
     let password = req.password;
 
@@ -276,8 +276,8 @@ packet! {
 ///   number("TYPE", 0x1)
 /// }
 /// ```
-async fn handle_origin_login(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<OriginLoginReq>()?;
+async fn handle_origin_login(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<OriginLoginReq>()?;
     debug!("Origin login request with token: {}", &req.token);
     let Some(retriever) = session.retriever() else {
         debug!("Unable to authenticate Origin user retriever is disabled or unavailable.");
@@ -337,11 +337,8 @@ impl Codec for LUERes<'_> {
 ///   number("TYPE", 0x0)
 /// }
 /// ```
-async fn handle_list_user_entitlements_2(
-    session: &SessionArc,
-    packet: &OpaquePacket,
-) -> HandleResult {
-    let req = packet.contents::<LUEReq>()?;
+async fn handle_list_user_entitlements_2(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<LUEReq>()?;
     let tag = req.tag;
     if !tag.is_empty() {
         return session.response_empty(packet).await;
@@ -580,7 +577,7 @@ async fn handle_list_user_entitlements_2(
 ///   text("PNAM", "Jacobtread")
 /// }
 /// ```
-async fn handle_login_persona(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_login_persona(session: &SessionArc, packet: &Packet) -> HandleResult {
     debug!("Logging into persona");
     let session_token = session.session_token().await?;
     let session_data = session.data.read().await;
@@ -616,8 +613,8 @@ packet! {
 ///   text("MAIL", "EMAIL OMITTED")
 /// }
 /// ```
-async fn handle_forgot_password(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<ForgotPaswdReq>()?;
+async fn handle_forgot_password(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<ForgotPaswdReq>()?;
     if !is_email(&req.email) {
         return session
             .response_error_empty(packet, ServerError::InvalidEmail)
@@ -637,7 +634,7 @@ async fn handle_forgot_password(session: &SessionArc, packet: &OpaquePacket) -> 
 ///   text("PTFM", "pc") // Platform?
 /// }
 /// ```
-async fn handle_get_legal_docs_info(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_get_legal_docs_info(session: &SessionArc, packet: &Packet) -> HandleResult {
     session.response(packet, &LegalDocsInfo).await
 }
 
@@ -657,10 +654,7 @@ const DEFAULT_TERMS_OF_SERVICE: &str = include_str!("../resources/defaults/term_
 /// }
 /// ```
 ///
-async fn handle_terms_of_service_content(
-    session: &SessionArc,
-    packet: &OpaquePacket,
-) -> HandleResult {
+async fn handle_terms_of_service_content(session: &SessionArc, packet: &Packet) -> HandleResult {
     // TODO: Attempt to load local terms of service before reverting to default
     session
         .response(
@@ -690,10 +684,7 @@ const DEFAULT_PRIVACY_POLICY: &str = include_str!("../resources/defaults/privacy
 /// }
 /// ```
 ///
-async fn handle_privacy_policy_content(
-    session: &SessionArc,
-    packet: &OpaquePacket,
-) -> HandleResult {
+async fn handle_privacy_policy_content(session: &SessionArc, packet: &Packet) -> HandleResult {
     // TODO: Attempt to load local privacy policy before reverting to default
     session
         .response(
@@ -719,7 +710,7 @@ packet! {
 ///
 /// # Structure
 /// *To be recorded*.
-async fn handle_get_password_rules(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_get_password_rules(session: &SessionArc, packet: &Packet) -> HandleResult {
     session.response(packet, &PasswordRules {
         max_length: 99,
         min_length: 4,
@@ -740,7 +731,7 @@ packet! {
 /// ```
 /// packet(Components.AUTHENTICATION, Commands.GET_AUTH_TOKEN, 0x23) {}
 /// ```
-async fn handle_get_auth_token(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_get_auth_token(session: &SessionArc, packet: &Packet) -> HandleResult {
     let session_data = session.data.read().await;
     let Some(player) = session_data.player.as_ref() else {
         warn!("Client attempted to get auth token while not authenticated. (SID: {})", session.id);

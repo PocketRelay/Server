@@ -1,6 +1,9 @@
 use blaze_pk::{
-    encode_str, tag_group_end, tag_group_start, tag_map_start, tag_str, tag_triple, tag_u64,
-    tag_u8, Codec, OpaquePacket, PacketComponents, ValueType,
+    codec::Codec,
+    packet::{Packet, PacketComponents},
+    tag::ValueType,
+    tagging::*,
+    types::encode_str,
 };
 use core::blaze::components::{Components, Messaging, UserSessions};
 use core::blaze::errors::HandleResult;
@@ -13,16 +16,11 @@ use utils::time::server_unix_time;
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(
-    session: &SessionArc,
-    component: Messaging,
-    packet: &OpaquePacket,
-) -> HandleResult {
+pub async fn route(session: &SessionArc, component: Messaging, packet: &Packet) -> HandleResult {
     match component {
         Messaging::FetchMessages => handle_fetch_messages(session, packet).await,
         component => {
             debug!("Got Messaging({component:?})");
-            packet.debug_decode()?;
             session.response_empty(packet).await
         }
     }
@@ -93,7 +91,7 @@ impl Codec for MenuMessage<'_> {
 /// }
 /// ```
 ///
-async fn handle_fetch_messages(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_fetch_messages(session: &SessionArc, packet: &Packet) -> HandleResult {
     let session_data = session.data.read().await;
     let player = match session_data.player.as_ref() {
         Some(player) => player,

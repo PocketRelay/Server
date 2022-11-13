@@ -1,7 +1,4 @@
-use blaze_pk::{
-    packet, tag_empty_blob, tag_empty_str, tag_group_end, tag_group_start, tag_list, tag_map_start,
-    tag_str, tag_u16, tag_u32, tag_u8, tag_value, tag_zero, Codec, OpaquePacket, TdfMap, ValueType,
-};
+use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*, types::TdfMap};
 use core::blaze::components::Util;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::blaze::session::SessionArc;
@@ -17,7 +14,7 @@ use utils::time::server_unix_time;
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: Util, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(session: &SessionArc, component: Util, packet: &Packet) -> HandleResult {
     match component {
         Util::PreAuth => handle_pre_auth(session, packet).await,
         Util::PostAuth => handle_post_auth(session, packet).await,
@@ -29,7 +26,6 @@ pub async fn route(session: &SessionArc, component: Util, packet: &OpaquePacket)
         Util::UserSettingsLoadAll => handle_user_settings_load_all(session, packet).await,
         component => {
             debug!("Got Util({component:?})");
-            packet.debug_decode()?;
             session.response_empty(packet).await
         }
     }
@@ -42,7 +38,7 @@ pub async fn route(session: &SessionArc, component: Util, packet: &OpaquePacket)
 /// packet(Components.UTIL, Commands.GET_TELEMETRY_SERVER, 0x0) {}
 /// ```
 ///
-async fn handle_get_telemetry_server(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_get_telemetry_server(session: &SessionArc, packet: &Packet) -> HandleResult {
     let ext_host = env::str_env(env::EXT_HOST);
     let res = TelemetryRes {
         address: ext_host,
@@ -154,7 +150,7 @@ impl Codec for PreAuthRes {
 ///   }
 /// }
 /// ```
-async fn handle_pre_auth(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_pre_auth(session: &SessionArc, packet: &Packet) -> HandleResult {
     let mut config = TdfMap::with_capacity(3);
     config.insert("pingPeriod", PING_PERIOD);
     config.insert("voipHeadsetUpdateRate", VOIP_HEADSET_UPDATE_RATE);
@@ -229,7 +225,7 @@ impl Codec for PostAuthRes {
 /// ```
 /// packet(Components.UTIL, Commands.POST_AUTH, 0x1b) {}
 /// ```
-async fn handle_post_auth(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_post_auth(session: &SessionArc, packet: &Packet) -> HandleResult {
     let ext_host = env::str_env(env::EXT_HOST);
     let res = PostAuthRes {
         session_id: session.id,
@@ -261,7 +257,7 @@ packet! {
 /// packet(Components.UTIL, Commands.PING, 0x0, 0x1) {}
 /// ```
 ///
-async fn handle_ping(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_ping(session: &SessionArc, packet: &Packet) -> HandleResult {
     let server_time = server_unix_time();
     session.response(packet, &PingRes { server_time }).await
 }
@@ -299,8 +295,8 @@ const ME3_DIME: &str = include_str!("../resources/data/dime.xml");
 ///   text("CFID", "ME3_DATA")
 /// }
 /// ```
-async fn handle_fetch_client_config(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let fetch_config = packet.contents::<FetchConfigReq>()?;
+async fn handle_fetch_client_config(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let fetch_config = packet.decode::<FetchConfigReq>()?;
     let config = match fetch_config.id.as_ref() {
         "ME3_DATA" => data_config(),
         "ME3_MSG" => messages().await,
@@ -508,8 +504,8 @@ packet! {
 /// ```
 ///
 ///
-async fn handle_suspend_user_ping(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<SuspendUserPing>()?;
+async fn handle_suspend_user_ping(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<SuspendUserPing>()?;
     match req.value {
         0x1312D00 => session.response_error_empty(packet, 0x12Du16).await,
         0x55D4A80 => session.response_error_empty(packet, 0x12Eu16).await,
@@ -535,8 +531,8 @@ packet! {
 ///   number("UID", 0x0)
 /// }
 /// ```
-async fn handle_user_settings_save(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<UserSettingsSave>()?;
+async fn handle_user_settings_save(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<UserSettingsSave>()?;
     let key = &req.key;
     let value = req.value;
 
@@ -623,10 +619,7 @@ packet! {
 /// ```
 /// packet(Components.UTIL, Commands.USER_SETTINGS_LOAD_ALL, 0x17) {}
 /// ```
-async fn handle_user_settings_load_all(
-    session: &SessionArc,
-    packet: &OpaquePacket,
-) -> HandleResult {
+async fn handle_user_settings_load_all(session: &SessionArc, packet: &Packet) -> HandleResult {
     let mut settings = TdfMap::<String, String>::new();
     {
         let session_data = session.data.read().await;

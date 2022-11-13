@@ -1,4 +1,4 @@
-use blaze_pk::OpaquePacket;
+use blaze_pk::packet::Packet;
 use core::blaze::components::Components;
 use core::blaze::errors::HandleResult;
 use core::blaze::session::SessionArc;
@@ -12,11 +12,7 @@ mod stats;
 mod user_sessions;
 mod util;
 
-pub async fn route(
-    session: &SessionArc,
-    component: Components,
-    packet: &OpaquePacket,
-) -> HandleResult {
+pub async fn route(session: &SessionArc, component: Components, packet: &Packet) -> HandleResult {
     match component {
         Components::Authentication(value) => auth::route(session, value, packet).await,
         Components::GameManager(value) => game_manager::route(session, value, packet).await,
@@ -32,7 +28,6 @@ pub async fn route(
         }
         value => {
             debug!("No handler for component {value:?}");
-            packet.debug_decode()?;
             session.response_empty(packet).await
         }
     }

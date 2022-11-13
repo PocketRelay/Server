@@ -1,6 +1,9 @@
 use blaze_pk::{
-    group, packet, tag_str, tag_u32, tag_u8, tag_value, Codec, CodecError, CodecResult, Reader,
-    Tag, TdfMap, TdfOptional,
+    codec::{Codec, CodecError, CodecResult, Reader},
+    group, packet,
+    tag::Tag,
+    tagging::*,
+    types::{TdfMap, TdfOptional},
 };
 
 /// Packet encoding for Redirector GetServerInstance packets

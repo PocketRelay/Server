@@ -1,4 +1,4 @@
-use blaze_pk::{group, packet, OpaquePacket, TdfMap};
+use blaze_pk::{group, packet, packet::Packet, types::TdfMap};
 use core::blaze::components::GameManager;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::blaze::session::SessionArc;
@@ -8,11 +8,7 @@ use log::{debug, info, warn};
 /// Routing function for handling packets with the `GameManager` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(
-    session: &SessionArc,
-    component: GameManager,
-    packet: &OpaquePacket,
-) -> HandleResult {
+pub async fn route(session: &SessionArc, component: GameManager, packet: &Packet) -> HandleResult {
     match component {
         GameManager::CreateGame => handle_create_game(session, packet).await,
         GameManager::AdvanceGameState => handle_advance_game_state(session, packet).await,
@@ -24,7 +20,6 @@ pub async fn route(
         GameManager::CancelMatchmaking => handle_cancel_matchmaking(session, packet).await,
         component => {
             debug!("Got GameManager({component:?})");
-            packet.debug_decode()?;
             session.response_empty(packet).await
         }
     }
@@ -96,8 +91,8 @@ packet! {
 ///   text("VSTR", "ME3-295976325-179181965240128")
 /// }
 /// ```
-async fn handle_create_game(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<CreateGameReq>()?;
+async fn handle_create_game(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<CreateGameReq>()?;
 
     let games = session.games();
 
@@ -139,8 +134,8 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_advance_game_state(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<GameStateReq>()?;
+async fn handle_advance_game_state(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<GameStateReq>()?;
     let games = session.games();
     if games.set_game_state(req.id, req.state).await {
         session.response_empty(packet).await
@@ -172,8 +167,8 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_set_game_setting(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<GameSettingReq>()?;
+async fn handle_set_game_setting(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<GameSettingReq>()?;
 
     let games = session.games();
     if games.set_game_setting(req.id, req.setting).await {
@@ -216,8 +211,8 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_set_game_attribs(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<GameAttribsReq>()?;
+async fn handle_set_game_attribs(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<GameAttribsReq>()?;
 
     let games = session.games();
     if games.set_game_attributes(req.id, req.attributes).await {
@@ -252,8 +247,8 @@ packet! {
 ///   number("REAS", 0x6)
 /// }
 /// ```
-async fn handle_remove_player(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<RemovePlayerReq>()?;
+async fn handle_remove_player(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<RemovePlayerReq>()?;
     let games = session.games();
 
     if games.remove_player(req.id, req.pid).await {
@@ -297,13 +292,10 @@ group! {
 ///   ))
 /// }
 /// ```
-async fn handle_update_mesh_connection(
-    session: &SessionArc,
-    packet: &OpaquePacket,
-) -> HandleResult {
+async fn handle_update_mesh_connection(session: &SessionArc, packet: &Packet) -> HandleResult {
     session.response_empty(packet).await?;
 
-    let req = packet.contents::<UpdateMeshReq>()?;
+    let req = packet.decode::<UpdateMeshReq>()?;
 
     let Some(target) = req.targets.first() else {
         return Ok(())
@@ -485,8 +477,8 @@ packet! {
 ///   number("VOIP", 0x2)
 /// }
 /// ```
-async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<MatchmakingReq>()?;
+async fn handle_start_matchmaking(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<MatchmakingReq>()?;
     {
         let session_data = session.data.read().await;
         let Some(player) = session_data.player.as_ref() else {
@@ -520,7 +512,7 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &OpaquePacket) -
 ///  number("MSID", 0x10d2d0df)
 /// }
 /// ```
-async fn handle_cancel_matchmaking(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_cancel_matchmaking(session: &SessionArc, packet: &Packet) -> HandleResult {
     {
         let session_data = session.data.read().await;
         let Some(player) = session_data.player.as_ref() else {

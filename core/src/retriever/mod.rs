@@ -1,6 +1,9 @@
 //! Module for retrieving data from the official Mass Effect 3 Servers
 
-use blaze_pk::{Codec, OpaquePacket, PacketType, Packets};
+use blaze_pk::{
+    codec::Codec,
+    packet::{Packet, PacketType},
+};
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
 use log::{debug, error};
 use tokio::net::TcpStream;
@@ -114,10 +117,9 @@ impl RetSession {
     pub async fn handle_notify(
         &mut self,
         component: Components,
-        value: &OpaquePacket,
+        _value: &Packet,
     ) -> BlazeResult<()> {
         debug!("Got notify packet: {component:?}");
-        value.debug_decode()?;
         Ok(())
     }
 
@@ -128,12 +130,12 @@ impl RetSession {
         component: Components,
         contents: &Req,
     ) -> BlazeResult<Res> {
-        let request = Packets::request(self.id, component, contents);
+        let request = Packet::request(self.id, component, contents);
         request.write_blaze(&mut self.stream)?;
         self.stream.flush().await?;
         self.id += 1;
         let response = self.expect_response(&request).await?;
-        let contents = response.contents::<Res>()?;
+        let contents = response.decode::<Res>()?;
         Ok(contents)
     }
 
@@ -143,8 +145,8 @@ impl RetSession {
         &mut self,
         component: Components,
         contents: &Req,
-    ) -> BlazeResult<OpaquePacket> {
-        let request = Packets::request(self.id, component, contents);
+    ) -> BlazeResult<Packet> {
+        let request = Packet::request(self.id, component, contents);
         request.write_blaze(&mut self.stream)?;
         self.stream.flush().await?;
         self.id += 1;
@@ -155,19 +157,19 @@ impl RetSession {
     /// recieved returning the contents of that response packet. The
     /// request will have no content
     pub async fn request_empty<Res: Codec>(&mut self, component: Components) -> BlazeResult<Res> {
-        let request = Packets::request_empty(self.id, component);
+        let request = Packet::request_empty(self.id, component);
         request.write_blaze(&mut self.stream)?;
         self.stream.flush().await?;
         self.id += 1;
         let response = self.expect_response(&request).await?;
-        let contents = response.contents::<Res>()?;
+        let contents = response.decode::<Res>()?;
         Ok(contents)
     }
 
     /// Writes a request packet and waits until the response packet is
     /// recieved returning the raw response packet
-    pub async fn request_empty_raw(&mut self, component: Components) -> BlazeResult<OpaquePacket> {
-        let request = Packets::request_empty(self.id, component);
+    pub async fn request_empty_raw(&mut self, component: Components) -> BlazeResult<Packet> {
+        let request = Packet::request_empty(self.id, component);
         request.write_blaze(&mut self.stream)?;
         self.stream.flush().await?;
         self.id += 1;
@@ -176,18 +178,18 @@ impl RetSession {
 
     /// Waits for a response packet to be recieved any notification packets
     /// that are recieved are handled in the handle_notify function.
-    async fn expect_response(&mut self, request: &OpaquePacket) -> BlazeResult<OpaquePacket> {
+    async fn expect_response(&mut self, request: &Packet) -> BlazeResult<Packet> {
         loop {
-            let (component, response): (Components, OpaquePacket) =
-                match OpaquePacket::read_async_typed_blaze(&mut self.stream).await {
+            let (component, response): (Components, Packet) =
+                match Packet::read_blaze_typed(&mut self.stream).await {
                     Ok(value) => value,
                     Err(_) => return Err(BlazeError::Other("Unable to read / decode packet")),
                 };
-            if response.0.ty == PacketType::Notify {
+            if response.header.ty == PacketType::Notify {
                 self.handle_notify(component, &response).await.ok();
                 continue;
             }
-            if !response.0.path_matches(&request.0) {
+            if !response.header.path_matches(&request.header) {
                 continue;
             }
             return Ok(response);

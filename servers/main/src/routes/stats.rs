@@ -1,7 +1,7 @@
 use blaze_pk::{
-    encode_str, packet, tag_group_end, tag_list_start, tag_map_start, tag_pair, tag_str, tag_u32,
-    tag_u8, Codec, OpaquePacket, ValueType,
+    codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*, types::encode_str,
 };
+
 use core::blaze::components::Stats;
 use core::blaze::errors::HandleResult;
 use core::blaze::session::SessionArc;
@@ -10,7 +10,7 @@ use log::debug;
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: Stats, packet: &OpaquePacket) -> HandleResult {
+pub async fn route(session: &SessionArc, component: Stats, packet: &Packet) -> HandleResult {
     match component {
         Stats::GetLeaderboardEntityCount => handle_leaderboard_entity_count(session, packet).await,
         Stats::GetCenteredLeaderboard => handle_centered_leaderboard(session, packet).await,
@@ -18,7 +18,6 @@ pub async fn route(session: &SessionArc, component: Stats, packet: &OpaquePacket
         Stats::GetLeaderboardGroup => handle_leaderboard_group(session, packet).await,
         component => {
             debug!("Got Stats({component:?})");
-            packet.debug_decode()?;
             session.response_empty(packet).await
         }
     }
@@ -49,10 +48,7 @@ impl Codec for EntityCount {
 ///   number("POFF", 0x0)
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(
-    session: &SessionArc,
-    packet: &OpaquePacket,
-) -> HandleResult {
+async fn handle_leaderboard_entity_count(session: &SessionArc, packet: &Packet) -> HandleResult {
     session.response(packet, &EntityCount { count: 1 }).await
 }
 
@@ -83,7 +79,7 @@ impl Codec for EmptyLeaderboard {
 ///   tripple("USET", 0x0, 0x0, 0x0)
 /// }
 /// ```
-async fn handle_centered_leaderboard(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_centered_leaderboard(session: &SessionArc, packet: &Packet) -> HandleResult {
     session.response(packet, &EmptyLeaderboard).await
 }
 
@@ -105,7 +101,7 @@ async fn handle_centered_leaderboard(session: &SessionArc, packet: &OpaquePacket
 ///   tripple("USET", 0x0, 0x0, 0x0)
 /// }
 /// ```
-async fn handle_filtered_leaderboard(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_filtered_leaderboard(session: &SessionArc, packet: &Packet) -> HandleResult {
     session.response(packet, &EmptyLeaderboard).await
 }
 
@@ -192,8 +188,8 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_leaderboard_group(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<LeaderboardGroupReq>()?;
+async fn handle_leaderboard_group(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<LeaderboardGroupReq>()?;
     let name = req.name;
     let is_n7 = name.starts_with("N7Rating");
     if !is_n7 && !name.starts_with("ChallengePoints") {

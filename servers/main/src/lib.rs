@@ -2,7 +2,7 @@ use core::blaze::components::Components;
 use core::blaze::session::{Session, SessionArc};
 use core::{env, GlobalStateArc};
 
-use blaze_pk::OpaquePacket;
+use blaze_pk::packet::Packet;
 use log::{debug, error, info};
 use tokio::net::TcpListener;
 use tokio::select;
@@ -87,7 +87,7 @@ async fn process(session: SessionArc, mut flush: mpsc::Receiver<()>) {
 /// `session`   The session to process the packet for
 /// `component` The component of the packet for routing
 /// `packet`    The packet itself
-async fn process_packet(session: &SessionArc, component: Components, packet: &OpaquePacket) {
+async fn process_packet(session: &SessionArc, component: Components, packet: &Packet) {
     Session::debug_log_packet(session, "Read", packet).await;
     if let Err(err) = routes::route(session, component, packet).await {
         error!(

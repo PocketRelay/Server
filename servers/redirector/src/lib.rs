@@ -7,7 +7,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use blaze_pk::{OpaquePacket, Packets};
+use blaze_pk::packet::Packet;
+
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
 use log::{debug, error, info};
 use tokio::net::{TcpListener, TcpStream};
@@ -103,7 +104,7 @@ async fn handle_client(
 
     loop {
         let result = select! {
-            result = OpaquePacket::read_async_typed_blaze::<Components, TcpStream>(&mut stream) => result,
+            result = Packet::read_blaze_typed::<Components, TcpStream>(&mut stream) => result,
             _ = shutdown.changed() => {
                 break;
             }
@@ -116,7 +117,7 @@ async fn handle_client(
         };
 
         if component != Components::Redirector(Redirector::GetServerInstance) {
-            let response = Packets::response_empty(&packet);
+            let response = Packet::response_empty(&packet);
             if let Err(_) = response.write_blaze(&mut stream) {
                 break;
             }
@@ -125,7 +126,7 @@ async fn handle_client(
             }
         } else {
             debug!("Redirecting client (Addr: {addr:?})");
-            let response = Packets::response(&packet, &*instance);
+            let response = Packet::response(&packet, &*instance);
             response.write_blaze(&mut stream).ok();
             stream.flush().await.ok();
             break;

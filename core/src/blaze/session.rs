@@ -11,8 +11,11 @@ use database::{players, Database, PlayersInterface};
 use utils::random::generate_random_string;
 
 use blaze_pk::{
-    Codec, OpaquePacket, PacketComponents, PacketResult, PacketType, Packets, Reader, Tag,
+    codec::{Codec, Reader},
+    packet::{Packet, PacketComponents},
+    tag::Tag,
 };
+
 use log::{debug, error, info, log_enabled};
 use tokio::{
     io::AsyncWriteExt,
@@ -84,19 +87,14 @@ impl Session {
     /// `action` The name of the action this packet is undergoing.
     ///          (e.g. Writing or Reading)
     /// `packet` The packet that is being logged
-    pub async fn debug_log_packet(&self, action: &str, packet: &OpaquePacket) {
+    pub async fn debug_log_packet(&self, action: &str, packet: &Packet) {
         // Skip if debug logging is disabled
         if !log_enabled!(log::Level::Debug) {
             return;
         }
 
-        let header = &packet.0;
-        let component = Components::from_values(
-            header.component,
-            header.command,
-            header.ty == PacketType::Notify,
-        );
-
+        let header = &packet.header;
+        let component = Components::from_header(header);
         if Self::is_debug_ignored(&component) {
             return;
         }
@@ -123,7 +121,7 @@ impl Session {
             return;
         }
 
-        let mut reader = Reader::new(&packet.1);
+        let mut reader = Reader::new(&packet.contents);
         let mut out = String::new();
         out.push_str("{\n");
         match Tag::stringify(&mut reader, &mut out, 1) {
@@ -169,14 +167,14 @@ impl Session {
 
     /// Writes the provided packet to the underlying buffer to be
     /// flushed later.
-    pub async fn write(&self, packet: &OpaquePacket) {
+    pub async fn write(&self, packet: &Packet) {
         self.debug_log_packet("Queued Write", packet).await;
         self.buffer.write(packet).await;
     }
 
     /// Writes all the provided packets to the underlying buffer to
     /// be flushed later.
-    pub async fn write_all(&self, packets: &Vec<OpaquePacket>) {
+    pub async fn write_all(&self, packets: &Vec<Packet>) {
         for packet in packets {
             self.debug_log_packet("Queued Write", packet).await;
         }
@@ -187,7 +185,7 @@ impl Session {
     /// rather than pushing to the buffer. Only use when handling
     /// responses will cause long blocks because will wait for all
     /// the data to be written.
-    pub async fn write_immediate(&self, packet: &OpaquePacket) -> io::Result<()> {
+    pub async fn write_immediate(&self, packet: &Packet) -> io::Result<()> {
         let stream = &mut *self.stream.lock().await;
         packet.write_async(stream).await?;
         self.debug_log_packet("Wrote", packet).await;
@@ -198,7 +196,7 @@ impl Session {
     /// rather than pushing to the buffer. Only use when handling
     /// responses will cause long blocks because will wait for all
     /// the data to be written.
-    pub async fn write_all_immediate(&self, packets: &Vec<OpaquePacket>) -> io::Result<()> {
+    pub async fn write_all_immediate(&self, packets: &Vec<Packet>) -> io::Result<()> {
         let stream = &mut *self.stream.lock().await;
         for packet in packets {
             packet.write_async(stream).await?;
@@ -208,9 +206,9 @@ impl Session {
     }
 
     /// Attempts to read a packet from the client stream.
-    pub async fn read(&self) -> PacketResult<(Components, OpaquePacket)> {
+    pub async fn read(&self) -> io::Result<(Components, Packet)> {
         let stream = &mut *self.stream.lock().await;
-        OpaquePacket::read_async_typed(stream).await
+        Packet::read_async_typed(stream).await
     }
 
     /// Shortcut for response packets. These are written directly as they are
@@ -219,8 +217,8 @@ impl Session {
     /// `packet`   The packet to respond to.
     /// `contents` The contents of the response packet.
     ///
-    pub async fn response<T: Codec>(&self, packet: &OpaquePacket, contents: &T) -> HandleResult {
-        let response = Packets::response(packet, contents);
+    pub async fn response<T: Codec>(&self, packet: &Packet, contents: &T) -> HandleResult {
+        let response = Packet::response(packet, contents);
         self.write_immediate(&response).await?;
         Ok(())
     }
@@ -228,8 +226,8 @@ impl Session {
     /// Shortcut for responses that have empty contents.
     ///
     /// `packet` The packet to respond to.
-    pub async fn response_empty(&self, packet: &OpaquePacket) -> HandleResult {
-        let response = Packets::response_empty(packet);
+    pub async fn response_empty(&self, packet: &Packet) -> HandleResult {
+        let response = Packet::response_empty(packet);
         self.write_immediate(&response).await?;
         Ok(())
     }
@@ -242,11 +240,11 @@ impl Session {
     /// `contents` The contents of the response packet.
     pub async fn response_error<T: Codec>(
         &self,
-        packet: &OpaquePacket,
+        packet: &Packet,
         error: impl Into<u16>,
         contents: &T,
     ) -> HandleResult {
-        let response = Packets::error(packet, error, contents);
+        let response = Packet::error(packet, error, contents);
         self.write_immediate(&response).await?;
         Ok(())
     }
@@ -257,10 +255,10 @@ impl Session {
     /// `error`  The error for the packet.
     pub async fn response_error_empty(
         &self,
-        packet: &OpaquePacket,
+        packet: &Packet,
         error: impl Into<u16>,
     ) -> HandleResult {
-        let response = Packets::error_empty(packet, error);
+        let response = Packet::error_empty(packet, error);
         self.write_immediate(&response).await?;
         Ok(())
     }
@@ -270,7 +268,7 @@ impl Session {
     /// `component` The component for the packet.
     /// `contents`  The contents of the packet.
     pub async fn notify<T: Codec>(&self, component: Components, contents: &T) {
-        let packet = Packets::notify(component, contents);
+        let packet = Packet::notify(component, contents);
         self.write(&packet).await;
     }
 
@@ -283,7 +281,7 @@ impl Session {
         component: Components,
         contents: &T,
     ) -> HandleResult {
-        let packet = Packets::notify(component, contents);
+        let packet = Packet::notify(component, contents);
         self.write_immediate(&packet).await?;
         Ok(())
     }
@@ -409,9 +407,9 @@ impl Session {
         self.write(&packet).await;
     }
 
-    pub async fn create_client_update(&self) -> OpaquePacket {
+    pub async fn create_client_update(&self) -> Packet {
         let session_data = &*self.data.read().await;
-        Packets::notify(
+        Packet::notify(
             Components::UserSessions(UserSessions::SetSession),
             &SetSessionDetails {
                 session: session_data,
@@ -427,14 +425,14 @@ impl Session {
         let session_data = &*self.data.read().await;
         let Some(player) = session_data.player.as_ref() else {return;};
         let packets = vec![
-            Packets::notify(
+            Packet::notify(
                 Components::UserSessions(UserSessions::SessionDetails),
                 &SessionDetails {
                     session: session_data,
                     player,
                 },
             ),
-            Packets::notify(
+            Packet::notify(
                 Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
                 &UpdateExtDataAttr {
                     flags: 0x3,
@@ -489,7 +487,7 @@ impl SessionBuffer {
     /// queue and sends a flush state.
     ///
     /// `packet` The packet to write to the buffer queue.
-    async fn write(&self, packet: &OpaquePacket) {
+    async fn write(&self, packet: &Packet) {
         let queue = &mut *self.queue.lock().await;
         let contents = packet.encode_bytes();
         queue.push_back(contents);
@@ -501,7 +499,7 @@ impl SessionBuffer {
     /// without having to aquire the lock again or sending multiple flushes
     ///
     /// `packets` The packets to write to the buffer queue.
-    async fn write_all(&self, packets: &Vec<OpaquePacket>) {
+    async fn write_all(&self, packets: &Vec<Packet>) {
         let queue = &mut *self.queue.lock().await;
         for packet in packets {
             let contents = packet.encode_bytes();

@@ -1,7 +1,13 @@
 use std::net::{IpAddr, SocketAddr};
 
 use crate::routes::auth::complete_auth;
-use blaze_pk::{packet, Codec, CodecResult, OpaquePacket, Reader, Tag, TdfOptional};
+use blaze_pk::{
+    codec::{Codec, CodecResult, Reader},
+    packet,
+    packet::Packet,
+    tag::Tag,
+    types::TdfOptional,
+};
 use core::blaze::components::UserSessions;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::blaze::session::SessionArc;
@@ -13,18 +19,13 @@ use utils::ip::public_address;
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(
-    session: &SessionArc,
-    component: UserSessions,
-    packet: &OpaquePacket,
-) -> HandleResult {
+pub async fn route(session: &SessionArc, component: UserSessions, packet: &Packet) -> HandleResult {
     match component {
         UserSessions::ResumeSession => handle_resume_session(session, packet).await,
         UserSessions::UpdateNetworkInfo => handle_update_network_info(session, packet).await,
         UserSessions::UpdateHardwareFlags => handle_update_hardware_flag(session, packet).await,
         component => {
             debug!("Got UserSessions({component:?})");
-            packet.debug_decode()?;
             session.response_empty(packet).await
         }
     }
@@ -40,8 +41,8 @@ packet! {
 ///
 /// # Structure
 /// *To be recorded*
-async fn handle_resume_session(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<ResumeSession>()?;
+async fn handle_resume_session(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<ResumeSession>()?;
     let Some(player) = PlayersInterface::by_token(session.db(), &req.session_token).await? else {
         return session
             .response_error_empty(packet, ServerError::InvalidSession)
@@ -96,8 +97,8 @@ impl Codec for UpdateNetworkInfo {
 ///   }
 /// }
 /// ```
-async fn handle_update_network_info(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<UpdateNetworkInfo>()?;
+async fn handle_update_network_info(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<UpdateNetworkInfo>()?;
     let groups = match req.address {
         TdfOptional::Some(_, value) => value.1,
         TdfOptional::None => {
@@ -161,8 +162,8 @@ packet! {
 ///   number("HWFG", 0x0)
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
-    let req = packet.contents::<UpdateHWFlagReq>()?;
+async fn handle_update_hardware_flag(session: &SessionArc, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<UpdateHWFlagReq>()?;
     {
         let session_data = &mut *session.data.write().await;
         session_data.hardware_flag = req.hardware_flag;

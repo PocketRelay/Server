@@ -1,4 +1,4 @@
-use blaze_pk::TdfMap;
+use blaze_pk::types::TdfMap;
 use database::{players, Database, PlayersInterface};
 use log::{debug, error};
 

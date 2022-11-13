@@ -1,5 +1,5 @@
 //! Utility for loading dmap files
-use blaze_pk::TdfMap;
+use blaze_pk::types::TdfMap;
 
 /// Loads the dmap format from the provided string.
 ///

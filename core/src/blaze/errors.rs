@@ -1,4 +1,4 @@
-use blaze_pk::CodecError;
+use blaze_pk::codec::CodecError;
 use database::DbErr;
 use std::io;
 

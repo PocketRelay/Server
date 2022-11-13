@@ -1,6 +1,4 @@
-use blaze_pk::{
-    tag_bool, tag_group_end, tag_group_start, tag_optional_start, tag_str, tag_u16, tag_u32, Codec,
-};
+use blaze_pk::{codec::Codec, tagging::*};
 
 use core::blaze::shared::NetAddress;
 

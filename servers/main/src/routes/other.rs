@@ -1,7 +1,4 @@
-use blaze_pk::{
-    tag_group_end, tag_group_start, tag_list_start, tag_str, tag_triple, tag_u8,
-    tag_var_int_list_empty, tag_zero, Codec, OpaquePacket, ValueType,
-};
+use blaze_pk::{codec::Codec, packet::Packet, tag::ValueType, tagging::*};
 use core::blaze::components::{AssociationLists, Components, GameReporting};
 use core::blaze::errors::HandleResult;
 use core::blaze::session::SessionArc;
@@ -13,13 +10,12 @@ use log::debug;
 pub async fn route_game_reporting(
     session: &SessionArc,
     component: GameReporting,
-    packet: &OpaquePacket,
+    packet: &Packet,
 ) -> HandleResult {
     match component {
         GameReporting::SubmitOfflineGameReport => handle_submit_offline(session, packet).await,
         component => {
             debug!("Got GameReporting({component:?})");
-            packet.debug_decode()?;
             session.response_empty(packet).await
         }
     }
@@ -50,7 +46,7 @@ pub async fn route_game_reporting(
 ///   text("GTYP", "massEffectReport")
 /// }
 /// ```
-async fn handle_submit_offline(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_submit_offline(session: &SessionArc, packet: &Packet) -> HandleResult {
     session.response_empty(packet).await?;
     session
         .notify_immediate(
@@ -80,13 +76,12 @@ impl Codec for GameReportResult {
 pub async fn route_association_lists(
     session: &SessionArc,
     component: AssociationLists,
-    packet: &OpaquePacket,
+    packet: &Packet,
 ) -> HandleResult {
     match component {
         AssociationLists::GetLists => handle_get_lists(session, packet).await,
         component => {
             debug!("Got AssociationLists({component:?})");
-            packet.debug_decode()?;
             session.response_empty(packet).await
         }
     }
@@ -142,6 +137,6 @@ impl Codec for DefaultAssocList {
 ///   number("OFRC", 0x0)
 /// }
 /// ```
-async fn handle_get_lists(session: &SessionArc, packet: &OpaquePacket) -> HandleResult {
+async fn handle_get_lists(session: &SessionArc, packet: &Packet) -> HandleResult {
     session.response(packet, &DefaultAssocList).await
 }
