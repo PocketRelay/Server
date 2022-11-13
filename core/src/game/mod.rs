@@ -637,7 +637,12 @@ impl Game {
         let futures: Vec<_> = players
             .iter()
             .filter(|value| value.id != session.id)
-            .map(|value| value.update_for(session))
+            .map(|value| async {
+                join!(
+                    value.update_for(session),
+                    session.update_for(value)
+                );
+            })
             .collect();
 
         let _ = futures::future::join_all(futures).await;
@@ -692,8 +697,6 @@ impl Game {
         self.update_clients_for(session).await;
 
         let setup = notify_game_setup(self, is_host, &session).await;
-        debug!("Finished generating notify packet");
-
         session.write(&setup).await;
         debug!("Finished writing notify packet");
 
