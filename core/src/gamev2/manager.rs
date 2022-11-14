@@ -8,9 +8,10 @@ use blaze_pk::types::TdfMap;
 use log::debug;
 use tokio::sync::{Mutex, RwLock};
 
-use crate::{blaze::session::SessionArc, game::rules::RuleSet};
+use crate::blaze::session::SessionArc;
 
 use super::game::{AttrMap, Game};
+use super::rules::RuleSet;
 
 /// Structure for managing games and the matchmaking queue
 pub struct GameManager {
@@ -38,7 +39,7 @@ impl GameManager {
     pub fn new() -> Self {
         Self {
             games: RwLock::new(HashMap::new()),
-            queue: RwLock::new(VecDeque::new()),
+            queue: Mutex::new(VecDeque::new()),
             id: AtomicU32::new(1),
         }
     }
