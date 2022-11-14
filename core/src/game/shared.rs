@@ -1,6 +1,7 @@
 use crate::blaze::components::{Components, GameManager};
 use crate::blaze::session::{SessionArc, SessionData};
 use crate::game::Game;
+use crate::gamev2::game::Game;
 
 use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*, types::TdfMap};
 
@@ -63,7 +64,6 @@ async fn encode_notify_game_setup(
     host: bool,
     output: &mut Vec<u8>,
 ) {
-    let session_data = session.data.read().await;
     let mut player_data = Vec::new();
     let mut player_ids = Vec::new();
 
@@ -156,6 +156,7 @@ async fn encode_notify_game_setup(
     output.extend_from_slice(&player_data);
 
     if !host {
+        let session_data = session.data.read().await;
         tag_optional_start(output, "REAS", 0x3);
         {
             tag_group_start(output, "VALU");

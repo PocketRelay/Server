@@ -1,5 +1,7 @@
 use log::debug;
 
+use crate::gamev2::game::AttrMap;
+
 use super::{
     enums::{Difficulty, EnemyType, GameMap, MatchRule},
     Game,
@@ -65,10 +67,7 @@ impl RuleSet {
     /// in this rule set. Its okay for the values of rules to be
     /// missing and rules with unknown values are treated as a
     /// failure.
-    pub async fn matches(&self, game: &Game) -> bool {
-        let game_data = game.data.read().await;
-        let attributes = &game_data.attributes;
-
+    pub fn matches(&self, attributes: &AttrMap) -> bool {
         for rule in &self.values {
             let attr = rule.attr();
             if let Some(value) = attributes.get(attr) {
