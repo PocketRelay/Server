@@ -3,7 +3,7 @@ use std::sync::Arc;
 use database::Database;
 use tokio::sync::watch;
 
-use crate::{env, game::Games, retriever::Retriever};
+use crate::{env, game::manager::Games, retriever::Retriever};
 
 /// Global state that is shared throughout the application
 pub struct GlobalState {

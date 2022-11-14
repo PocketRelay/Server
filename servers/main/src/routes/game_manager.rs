@@ -96,23 +96,15 @@ async fn handle_create_game(session: &SessionArc, packet: &Packet) -> HandleResu
 
     let games = session.games();
 
-    let game_id = games.new_game(req.attributes, req.setting).await?;
+    let game_id = games.create_game(req.attributes, req.setting).await;
 
     session
         .response(packet, &CreateGameRes { id: game_id })
         .await?;
 
-    match games.add_player(game_id, session).await {
-        Ok(true) => {
-            games.on_game_created(game_id).await;
-            Ok(())
-        }
-        Ok(false) => {
-            warn!("Failed to add player to game that didn't exist");
-            Ok(())
-        }
-        Err(err) => Err(err),
-    }
+    games.add_host(game_id, session).await;
+
+    Ok(())
 }
 
 packet! {
@@ -249,7 +241,7 @@ async fn handle_remove_player(session: &SessionArc, packet: &Packet) -> HandleRe
     let req = packet.decode::<RemovePlayerReq>()?;
     let games = session.games();
 
-    if games.remove_player(req.id, req.pid).await {
+    if games.remove_player_pid(req.id, req.pid).await {
         session.response_empty(packet).await
     } else {
         warn!(
@@ -495,7 +487,7 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &Packet) -> Hand
         .response(packet, &MatchmakingRes { id: session.id })
         .await?;
 
-    if games.get_or_queue(session, rules).await {
+    if games.add_or_queue(session, rules).await {
         debug!("Found matching game")
     }
     Ok(())
@@ -511,18 +503,15 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &Packet) -> Hand
 /// }
 /// ```
 async fn handle_cancel_matchmaking(session: &SessionArc, packet: &Packet) -> HandleResult {
-    {
-        let session_data = session.data.read().await;
-        let Some(player) = session_data.player.as_ref() else {
+    let session_data = session.data.read().await;
+    let Some(player) = session_data.player.as_ref() else {
             warn!("Client attempted to cancel matchmaking while not authenticated. (SID: {})", session.id);
             return session.response_error_empty(packet, ServerError::FailedNoLoginAction).await;
         };
-        info!("Player {} cancelled matchmaking", player.display_name);
-    }
+    info!("Player {} cancelled matchmaking", player.display_name);
 
     session.response_empty(packet).await?;
 
-    session.games().release_player(session).await;
-
+    session.release_games().await;
     Ok(())
 }

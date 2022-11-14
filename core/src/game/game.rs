@@ -97,21 +97,6 @@ impl Game {
         join!(self.write_all(packet), and.write(packet));
     }
 
-    /// Writes all the provided packets to all connected sessions.
-    /// Does not wait for the write to complete just waits for
-    /// it to be placed into each sessions write buffers.
-    ///
-    /// `packets` The packets to write
-    async fn write_all_list(&self, packets: &Vec<Packet>) {
-        let players = &*self.players.read().await;
-        let futures = players
-            .iter()
-            .map(|value| value.write_all(packets))
-            .collect::<Vec<_>>();
-
-        let _ = futures::future::join_all(futures).await;
-    }
-
     /// Sends a notification packet to all the connected session
     /// with the provided component and contents
     ///
@@ -300,7 +285,7 @@ impl Game {
     async fn notify_game_setup(&self, session: &SessionArc, slot: usize) {
         let is_host = slot == 0;
         let packet = create_game_setup(self, is_host, session).await;
-        session.write(&packet);
+        session.write(&packet).await;
     }
 
     /// Sends the set session packet for the provided session to all
@@ -325,7 +310,7 @@ impl Game {
                 session: &session_data,
             },
         );
-        self.write_all(&packet).await;
+        self.write_all_and(&packet, session).await;
     }
 
     /// Sets the state for the provided session notifying all

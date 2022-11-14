@@ -5,7 +5,9 @@
 
 use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
 
-use crate::{blaze::errors::BlazeError, game::Games, retriever::Retriever, GlobalStateArc};
+use crate::{
+    blaze::errors::BlazeError, game::manager::Games, retriever::Retriever, GlobalStateArc,
+};
 
 use database::{players, Database, PlayersInterface};
 use utils::random::generate_random_string;
@@ -457,9 +459,22 @@ impl Session {
     /// that it is stored so that it can be dropped
     pub async fn release(&self) {
         debug!("Releasing Session (SID: {})", self.id);
-        self.games().release_player(self).await;
+        self.release_games().await;
         info!("Session was released (SID: {})", self.id);
         self.buffer.flush(self).await;
+    }
+
+    /// Releases the player from any games if they are in any
+    /// and removes them from the matchmaking queue if they are
+    /// present
+    pub async fn release_games(&self) {
+        let session_data = self.data.read().await;
+        let games = self.games();
+        if let Some(game) = session_data.game.as_ref() {
+            games.remove_player_sid(*game, self.id).await;
+        } else {
+            games.unqueue_session(self.id).await;
+        }
     }
 }
 

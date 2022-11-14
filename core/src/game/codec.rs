@@ -98,7 +98,7 @@ impl Codec for PlayerJoining<'_> {
 
 pub async fn create_game_setup(game: &Game, host: bool, session: &SessionArc) -> Packet {
     let mut output = Vec::new();
-    encode_game_setup(game, host, session, &mut output);
+    encode_game_setup(game, host, session, &mut output).await;
     Packet::notify_raw(Components::GameManager(GameManager::GameSetup), output)
 }
 
@@ -262,6 +262,13 @@ impl Codec for AdminListOperation {
 pub struct PlayerRemoved {
     pub game_id: u32,
     pub player_id: u32,
+}
+
+pub enum RemoveReason {
+    // 0x6
+    Generic,
+    // 0x8
+    Kick,
 }
 
 impl Codec for PlayerRemoved {

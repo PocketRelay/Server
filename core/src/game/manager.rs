@@ -55,13 +55,13 @@ impl Games {
         id
     }
 
-    /// Attempts to add the host session to the game with the provided game
-    /// ID. If the host is successfully added then the game will be compared
-    /// against any players waiting in the matchmaking queue.
+    /// Adds the host session to the game with the provided game
+    /// ID. The game will be compared against any players waiting
+    /// in the matchmaking queue.
     ///
     /// `game_id` The ID of the game to add the session to
     /// `session` The session to add as the host
-    pub async fn try_add_host(&self, game_id: u32, session: &SessionArc) {
+    pub async fn add_host(&self, game_id: u32, session: &SessionArc) {
         let games = &*self.games.read().await;
         let Some(game) = games.get(&game_id) else { return; };
         game.add_player(session).await;
