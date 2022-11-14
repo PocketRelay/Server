@@ -96,9 +96,7 @@ async fn handle_create_game(session: &SessionArc, packet: &Packet) -> HandleResu
 
     let games = session.games();
 
-    let game_id = games
-        .new_game(req.name, req.attributes, req.setting)
-        .await?;
+    let game_id = games.new_game(req.attributes, req.setting).await?;
 
     session
         .response(packet, &CreateGameRes { id: game_id })

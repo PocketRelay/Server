@@ -86,6 +86,12 @@ async fn encode_notify_game_setup(
     let host_data = host_session.data.read().await;
     let host_id = host_data.id_safe();
 
+    let game_name = host_data
+        .player
+        .as_ref()
+        .map(|value| value.display_name.clone())
+        .unwrap_or_else(|| format!("Game {}", game.id));
+
     {
         let game_data = game.data.read().await;
         tag_group_start(output, "GAME");
@@ -93,10 +99,10 @@ async fn encode_notify_game_setup(
         tag_value(output, "ATTR", &game_data.attributes);
         tag_list(output, "CAP", vec![0x4, 0x0]);
         tag_u32(output, "GID", game.id);
-        tag_str(output, "GNAM", &game.name);
-        tag_u64(output, "GPVH", Game::GPVH);
+        tag_str(output, "GNAM", &game_name);
+        tag_u64(output, "GPVH", 0x5a4f2b378b715c6);
         tag_u16(output, "GSET", game_data.setting);
-        tag_u64(output, "GSID", Game::GSID);
+        tag_u64(output, "GSID", 0x4000000a76b645);
         tag_u16(output, "GSTA", game_data.state);
         drop(game_data);
         tag_empty_str(output, "GTYP");

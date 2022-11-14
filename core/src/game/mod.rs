@@ -42,13 +42,12 @@ impl Games {
 
     pub async fn new_game(
         &self,
-        name: String,
         attributes: TdfMap<String, String>,
         setting: u16,
     ) -> BlazeResult<u32> {
         let mut games = self.games.write().await;
         let id = self.next_id.fetch_add(1, Ordering::AcqRel);
-        let game = Game::new(id, name, attributes, setting);
+        let game = Game::new(id, attributes, setting);
         games.insert(id, game);
         Ok(id)
     }
@@ -98,7 +97,7 @@ impl Games {
         let games = self.games.read().await;
         for game in games.values() {
             if rules.matches(game).await {
-                println!("Found matching game {}", &game.name);
+                debug!("Found matching game (GID: {})", &game.id);
 
                 if game.add_player(session).await {
                     return true;
@@ -207,8 +206,8 @@ impl Games {
         };
 
         debug!(
-            "Releasing player from game (Name: {}, ID: {}, Session ID: {})",
-            &game.name, game_id, player.id
+            "Releasing player from game (ID: {}, Session ID: {})",
+            game_id, player.id
         );
 
         game.remove_player(player).await;
@@ -226,14 +225,13 @@ pub type GameArc = Arc<Game>;
 
 pub struct Game {
     pub id: u32,
-    pub name: String,
     pub data: RwLock<GameData>,
     pub players: RwLock<Vec<SessionArc>>,
 }
 
 impl Drop for Game {
     fn drop(&mut self) {
-        debug!("Game {} {} has been dropped", self.name, self.id)
+        debug!("Game has been dropped (GID: {})", self.id)
     }
 }
 
@@ -244,14 +242,11 @@ pub struct GameData {
 }
 
 impl Game {
-    const GPVH: u64 = 0x5a4f2b378b715c6;
-    const GSID: u64 = 0x4000000a76b645;
     const MAX_PLAYERS: usize = 4;
 
-    pub fn new(id: u32, name: String, attributes: TdfMap<String, String>, setting: u16) -> Self {
+    pub fn new(id: u32, attributes: TdfMap<String, String>, setting: u16) -> Self {
         Self {
             id,
-            name,
             data: RwLock::new(GameData {
                 state: 0x1,
                 setting,
@@ -275,18 +270,6 @@ impl Game {
     pub async fn push_all(&self, packet: &Packet) {
         let players = &*self.players.read().await;
         let futures: Vec<_> = players.iter().map(|value| value.write(packet)).collect();
-
-        // TODO: Handle errors for each players
-        let _ = futures::future::join_all(futures).await;
-    }
-
-    pub async fn push_all_excl_host(&self, packet: &Packet) {
-        let players = &*self.players.read().await;
-        let futures: Vec<_> = players
-            .iter()
-            .skip(1)
-            .map(|value| value.write(packet))
-            .collect();
 
         // TODO: Handle errors for each players
         let _ = futures::future::join_all(futures).await;
@@ -448,8 +431,8 @@ impl Game {
             self.remove_player(&player).await;
         } else {
             warn!(
-                "Unable to find player with (ID: {}) in game (Name: {}, ID: {})",
-                id, self.name, self.id
+                "Unable to find player in game (GID: {}, PID: {})",
+                self.id, id
             );
         }
     }
