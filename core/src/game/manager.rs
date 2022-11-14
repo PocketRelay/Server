@@ -14,7 +14,7 @@ use super::game::{AttrMap, Game};
 use super::rules::RuleSet;
 
 /// Structure for managing games and the matchmaking queue
-pub struct GameManager {
+pub struct Games {
     /// Map of Game IDs to the actual games.
     games: RwLock<HashMap<u32, Game>>,
     /// Queue of players wanting to join games
@@ -34,7 +34,7 @@ struct QueueEntry {
     time: SystemTime,
 }
 
-impl GameManager {
+impl Games {
     /// Creates a new instance of the game manager
     pub fn new() -> Self {
         Self {
