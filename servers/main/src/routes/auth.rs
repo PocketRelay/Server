@@ -118,10 +118,6 @@ pub async fn complete_auth(
     };
 
     debug!("Sending session response");
-    if silent {
-        debug!("Sending session update");
-        session.update_for(session).await;
-    }
     session.response(packet, &response).await
 }
 
@@ -593,7 +589,6 @@ async fn handle_login_persona(session: &SessionArc, packet: &Packet) -> HandleRe
         player,
     };
     debug!("Persona login complete");
-    session.update_for(session).await;
     session.response(packet, &response).await
 }
 

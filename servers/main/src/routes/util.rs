@@ -226,6 +226,9 @@ impl Codec for PostAuthRes {
 /// packet(Components.UTIL, Commands.POST_AUTH, 0x1b) {}
 /// ```
 async fn handle_post_auth(session: &SessionArc, packet: &Packet) -> HandleResult {
+    debug!("Sending session update");
+    session.update_for(session).await;
+
     let ext_host = env::str_env(env::EXT_HOST);
     let res = PostAuthRes {
         session_id: session.id,
