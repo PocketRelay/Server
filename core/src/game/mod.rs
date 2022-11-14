@@ -569,9 +569,11 @@ impl Game {
         self.set_state(0x82).await;
         self.notify_migration_finished().await;
 
-        let packet = old_host.create_client_update().await;
-        join!(self.push_all(&packet), old_host.write(&packet));
-
+        self.update_clients_for(new_host).await;
+        
+        let set_session = old_host.create_set_session().await;
+        join!(self.push_all(&set_session), old_host.write(&set_session));
+    
         debug!("Finished host migration");
     }
 
@@ -622,8 +624,8 @@ impl Game {
             .filter(|value| value.id != session.id)
             .map(|value| async {
                 join!(
-                    value.update_for(session),
-                    session.update_for(value)
+                    value.update_other(session),
+                    session.update_other(value)
                 );
             })
             .collect();
@@ -683,8 +685,9 @@ impl Game {
         session.write(&setup).await;
         debug!("Finished writing notify packet");
 
-        let packet = session.create_client_update().await;
-        self.push_all(&packet).await;
+        let set_session = session.create_set_session().await;
+        self.push_all(&set_session).await;
+        // session.update_client().await;
 
         debug!("Finished adding player");
 

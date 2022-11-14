@@ -19,6 +19,7 @@ use blaze_pk::{
 use log::{debug, error, info, log_enabled};
 use tokio::{
     io::AsyncWriteExt,
+    join,
     net::TcpStream,
     sync::{mpsc, Mutex, RwLock},
 };
@@ -26,7 +27,7 @@ use tokio::{
 use super::{
     components::{self, Components, UserSessions},
     errors::{BlazeResult, HandleResult},
-    shared::{NetData, SessionDetails, SetSessionDetails, UpdateExtDataAttr},
+    shared::{NetData, SessionUpdate, SetSession, UpdateExtDataAttr},
 };
 
 /// Structure for storing a client session. This includes the
@@ -403,33 +404,42 @@ impl Session {
     /// Updates the data stored on the client so that it matches
     /// the data stored in this session
     pub async fn update_client(&self) {
-        let packet = self.create_client_update().await;
+        let packet = self.create_set_session().await;
         self.write(&packet).await;
     }
 
-    pub async fn create_client_update(&self) -> Packet {
+    pub async fn create_set_session(&self) -> Packet {
         let session_data = &*self.data.read().await;
         Packet::notify(
             Components::UserSessions(UserSessions::SetSession),
-            &SetSessionDetails {
-                session: session_data,
+            &SetSession {
+                id: self.id,
+                session_data,
             },
         )
+    }
+
+    /// Exchanges session updates between this session and the
+    /// other session
+    ///
+    /// `other` The session to exchange with
+    pub async fn exchange_update(&self, other: &Session) {
+        join!(self.update_other(other), other.update_other(self));
     }
 
     /// Updates the provided session with the session information
     /// for this session.
     ///
-    /// `other` The session to sent the updated details to
-    pub async fn update_for(&self, other: &SessionArc) {
+    pub async fn update_other(&self, other: &Session) {
         let session_data = &*self.data.read().await;
         let Some(player) = session_data.player.as_ref() else {return;};
         let packets = vec![
             Packet::notify(
                 Components::UserSessions(UserSessions::SessionDetails),
-                &SessionDetails {
-                    session: session_data,
-                    player,
+                &SessionUpdate {
+                    session_data,
+                    id: player.id,
+                    display_name: &player.display_name,
                 },
             ),
             Packet::notify(

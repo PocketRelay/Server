@@ -12,27 +12,8 @@ use blaze_pk::{
 
 use database::players;
 
-pub struct SetSessionDetails<'a> {
-    pub session: &'a SessionData,
-}
-
-//noinspection SpellCheckingInspection
-impl Codec for SetSessionDetails<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        self.session.encode(output);
-        tag_u32(output, "USID", self.session.id_safe());
-    }
-}
-
-pub struct SessionDetails<'a> {
-    pub session: &'a SessionData,
-    pub player: &'a players::Model,
-}
-
-//noinspection SpellCheckingInspection
 impl Codec for SessionData {
     fn encode(&self, output: &mut Vec<u8>) {
-        tag_group_start(output, "DATA");
         tag_value(output, "ADDR", &self.net.get_groups());
         tag_str(output, "BPS", "ea-sjc");
         tag_empty_str(output, "CTY");
@@ -61,20 +42,39 @@ impl Codec for SessionData {
     }
 }
 
-//noinspection SpellCheckingInspection
-impl Codec for SessionDetails<'_> {
+/// Session update for a session other than ourselves
+/// which contains the details for that session
+pub struct SessionUpdate<'a> {
+    pub session_data: &'a SessionData,
+    pub id: u32,
+    pub display_name: &'a str,
+}
+
+impl Codec for SessionUpdate<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
-        self.session.encode(output);
-        {
-            tag_group_start(output, "USER");
-            tag_u32(output, "AID", self.player.id);
-            tag_u32(output, "ALOC", 0x64654445);
-            tag_empty_blob(output, "EXBB");
-            tag_u8(output, "EXID", 0);
-            tag_u32(output, "ID", self.player.id);
-            tag_str(output, "NAME", &self.player.display_name);
-            tag_group_end(output);
-        }
+        tag_value(output, "DATA", self.session_data);
+
+        tag_group_start(output, "USER");
+        tag_u32(output, "AID", self.id);
+        tag_u32(output, "ALOC", 0x64654445);
+        tag_empty_blob(output, "EXBB");
+        tag_u8(output, "EXID", 0);
+        tag_u32(output, "ID", self.id);
+        tag_str(output, "NAME", self.display_name);
+        tag_group_end(output);
+    }
+}
+
+/// Session update for ourselves
+pub struct SetSession<'a> {
+    pub id: u32,
+    pub session_data: &'a SessionData,
+}
+
+impl Codec for SetSession<'_> {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_value(output, "DATA", self.session_data);
+        tag_u32(output, "USID", self.id);
     }
 }
 
