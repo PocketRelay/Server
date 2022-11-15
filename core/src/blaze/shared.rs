@@ -11,6 +11,7 @@ use blaze_pk::{
 };
 
 use database::players;
+use utils::types::PlayerID;
 
 impl Codec for SessionData {
     fn encode(&self, output: &mut Vec<u8>) {
@@ -46,7 +47,7 @@ impl Codec for SessionData {
 /// which contains the details for that session
 pub struct SessionUpdate<'a> {
     pub session_data: &'a SessionData,
-    pub id: u32,
+    pub player_id: PlayerID,
     pub display_name: &'a str,
 }
 
@@ -55,11 +56,11 @@ impl Codec for SessionUpdate<'_> {
         tag_value(output, "DATA", self.session_data);
 
         tag_group_start(output, "USER");
-        tag_u32(output, "AID", self.id);
+        tag_u32(output, "AID", self.player_id);
         tag_u32(output, "ALOC", 0x64654445);
         tag_empty_blob(output, "EXBB");
         tag_u8(output, "EXID", 0);
-        tag_u32(output, "ID", self.id);
+        tag_u32(output, "ID", self.player_id);
         tag_str(output, "NAME", self.display_name);
         tag_group_end(output);
     }
@@ -67,21 +68,21 @@ impl Codec for SessionUpdate<'_> {
 
 /// Session update for ourselves
 pub struct SetSession<'a> {
-    pub id: u32,
+    pub player_id: PlayerID,
     pub session_data: &'a SessionData,
 }
 
 impl Codec for SetSession<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_value(output, "DATA", self.session_data);
-        tag_u32(output, "USID", self.id);
+        tag_u32(output, "USID", self.player_id);
     }
 }
 
 packet! {
     struct UpdateExtDataAttr {
         FLGS flags: u8,
-        ID id: u32
+        ID player_id: PlayerID
     }
 }
 
@@ -439,29 +440,5 @@ impl Codec for TelemetryRes {
         tag_str(output, "SKEY", &self.session_id.to_string());
         tag_u8(output, "SPCT", 75);
         tag_empty_str(output, "STIM");
-    }
-}
-
-packet! {
-    struct SessionStateChange {
-        GID gid: u32,
-        PID pid: u32,
-        STAT state: u8,
-    }
-}
-
-packet! {
-    struct NotifyJoinComplete {
-        GID gid: u32,
-        PID pid: u32,
-    }
-}
-
-packet! {
-    struct NotifyAdminListChange {
-        ALST alst: u32,
-        GID gid: u32,
-        OPER oper: u8,
-        UID uid: u32,
     }
 }

@@ -2,6 +2,7 @@ use blaze_pk::{codec::Codec, packet::Packet, types::TdfMap};
 
 use log::{debug, warn};
 use tokio::{join, sync::RwLock};
+use utils::types::{GameID, GameSlot, PlayerID, SessionID};
 
 use crate::blaze::{
     components::{Components, GameManager, UserSessions},
@@ -16,13 +17,13 @@ use super::codec::{
 
 pub struct Game {
     /// Unique ID for this game
-    pub id: u32,
+    pub id: GameID,
     /// Mutable data for this game
     pub data: RwLock<GameData>,
     /// The list of players in this game
     pub players: RwLock<Vec<SessionArc>>,
     /// The number of the next available slot
-    pub next_slot: RwLock<usize>,
+    pub next_slot: RwLock<GameSlot>,
 }
 
 impl Drop for Game {
@@ -67,7 +68,7 @@ impl Game {
     /// `id`         The unique game ID
     /// `attributes` The initial game attributes
     /// `setting`    The initial game setting
-    pub fn new(id: u32, attributes: AttrMap, setting: u16) -> Self {
+    pub fn new(id: GameID, attributes: AttrMap, setting: u16) -> Self {
         Self {
             id,
             data: RwLock::new(GameData::new(setting, attributes)),
@@ -212,7 +213,7 @@ impl Game {
     /// player ID
     ///
     /// `pid` The player ID
-    async fn is_player_pid(&self, pid: u32) -> bool {
+    async fn is_player_pid(&self, pid: PlayerID) -> bool {
         let players = &*self.players.read().await;
         for player in players {
             let player_data = player.data.read().await;
@@ -230,7 +231,7 @@ impl Game {
     /// value and the value itself
     ///
     /// `sid` The session ID of the player to take
-    async fn take_player_sid(&self, sid: u32) -> Option<(usize, SessionArc)> {
+    async fn take_player_sid(&self, sid: SessionID) -> Option<(usize, SessionArc)> {
         let players = &mut *self.players.write().await;
         let index = players.iter().position(|value| value.id == sid)?;
         Some((index, players.remove(index)))
@@ -241,7 +242,7 @@ impl Game {
     /// and the value itself
     ///
     /// `pid` The player ID of the player to take
-    async fn take_player_pid(&self, pid: u32) -> Option<(usize, SessionArc)> {
+    async fn take_player_pid(&self, pid: PlayerID) -> Option<(usize, SessionArc)> {
         let players = &mut *self.players.write().await;
         let mut target_index = None;
 
@@ -262,7 +263,7 @@ impl Game {
 
     /// Aquires a new slot and increases the next slot value
     /// returning th eslot value
-    async fn aquire_slot(&self) -> usize {
+    async fn aquire_slot(&self) -> GameSlot {
         let next_slot = &mut *self.next_slot.write().await;
         let value = *next_slot;
         *next_slot += 1;
@@ -299,17 +300,19 @@ impl Game {
 
     /// Notifies all the players in the game that a new player has
     /// joined the game.
-    async fn notify_player_joining(&self, session: &SessionArc, slot: usize) {
+    async fn notify_player_joining(&self, session: &SessionArc, slot: GameSlot) {
         if slot == 0 {
             return;
         }
         let session_data = &*session.data.read().await;
+
         let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerJoining),
             &PlayerJoining {
-                id: self.id,
+                game_id: self.id,
                 slot,
-                session: &session_data,
+                session_id: session.id,
+                session_data: &session_data,
             },
         );
         self.write_all_and(&packet, session).await;
@@ -320,7 +323,7 @@ impl Game {
     ///
     /// `session` The session to notify
     /// `slot`    The slot the player is joining into
-    async fn notify_game_setup(&self, session: &SessionArc, slot: usize) {
+    async fn notify_game_setup(&self, session: &SessionArc, slot: GameSlot) {
         let is_host = slot == 0;
         let packet = create_game_setup(self, is_host, session).await;
         session.write(&packet).await;
@@ -362,7 +365,7 @@ impl Game {
     ///
     /// `target`    The player to target for the admin list
     /// `operation` Whether to add or remove the player from the admin list
-    async fn modify_admin_list(&self, target: u32, operation: AdminListOperation) {
+    async fn modify_admin_list(&self, target: PlayerID, operation: AdminListOperation) {
         let host_id = {
             let players = &*self.players.read().await;
             let Some(host) = players.first() else {
@@ -388,7 +391,7 @@ impl Game {
     ///
     /// `session` The session updating its mesh connection
     /// `target`  The pid of the connected target
-    pub async fn update_mesh_connection(&self, session: &SessionArc, target: u32) {
+    pub async fn update_mesh_connection(&self, session: &SessionArc, target: PlayerID) {
         if self.is_player(session).await && self.is_player_pid(target).await {
             self.set_player_state(session, 4).await;
             self.on_join_complete(session).await;
@@ -421,7 +424,7 @@ impl Game {
     /// the packet system.
     ///
     /// `pid` The player id of the player to remove
-    pub async fn remove_by_pid(&self, pid: u32) {
+    pub async fn remove_by_pid(&self, pid: PlayerID) {
         let Some((slot, player)) = self.take_player_pid(pid).await else {
             warn!(
                 "Attempted to remove player that wasn't in game (PID: {}, GID: {})",
@@ -437,7 +440,7 @@ impl Game {
     /// have been released or otherwise no longer exist
     ///
     /// `sid` The session ID of the player to remove
-    pub async fn remove_by_sid(&self, sid: u32) {
+    pub async fn remove_by_sid(&self, sid: SessionID) {
         let Some((slot, player)) = self.take_player_sid(sid).await else {
             warn!(
                 "Attempted to remove session that wasn't in game (SID: {}, GID: {})",
@@ -454,7 +457,7 @@ impl Game {
     ///
     /// `player` The player that was removed
     /// `slot`   The slot the player used to be in
-    async fn on_player_removed(&self, player: SessionArc, slot: usize) {
+    async fn on_player_removed(&self, player: SessionArc, slot: GameSlot) {
         player.clear_game().await;
         let player_id = player.player_id_safe().await;
         self.notify_player_removed(&player, player_id).await;
@@ -478,7 +481,7 @@ impl Game {
     ///
     /// `player`    The player that was removed
     /// `player_id` The player ID of the removed player
-    async fn notify_player_removed(&self, player: &SessionArc, player_id: u32) {
+    async fn notify_player_removed(&self, player: &SessionArc, player_id: PlayerID) {
         let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerRemoved),
             &PlayerRemoved {
@@ -496,7 +499,7 @@ impl Game {
     ///
     /// `session`   The session to update with the other clients
     /// `player_id` The player id of the session to update
-    async fn notify_fetch_data(&self, session: &SessionArc, player_id: u32) {
+    async fn notify_fetch_data(&self, session: &SessionArc, player_id: PlayerID) {
         let player_ids = {
             let players = &*self.players.read().await;
             if players.is_empty() {
@@ -512,7 +515,7 @@ impl Game {
 
         let removed_packet = Packet::notify(
             Components::UserSessions(UserSessions::FetchExtendedData),
-            &FetchExtendedData { id: player_id },
+            &FetchExtendedData { player_id },
         );
 
         let player_packets = player_ids
@@ -520,7 +523,7 @@ impl Game {
             .map(|id| {
                 Packet::notify(
                     Components::UserSessions(UserSessions::FetchExtendedData),
-                    &FetchExtendedData { id },
+                    &FetchExtendedData { player_id: id },
                 )
             })
             .collect::<Vec<_>>();

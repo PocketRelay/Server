@@ -15,7 +15,11 @@ use crate::{
 };
 
 use database::{players, Database, PlayersInterface};
-use utils::{ip::public_address, random::generate_random_string};
+use utils::{
+    ip::public_address,
+    random::generate_random_string,
+    types::{GameID, PlayerID, SessionID},
+};
 
 use blaze_pk::{
     codec::{Codec, Reader},
@@ -48,7 +52,7 @@ pub struct Session {
     pub global: GlobalStateArc,
 
     /// Unique identifier for this session.
-    pub id: u32,
+    pub id: SessionID,
 
     /// Underlying connection stream to client
     pub stream: Mutex<TcpStream>,
@@ -76,7 +80,7 @@ impl Session {
     /// `flush_send` The flush sender for sending flush commands
     pub fn new(
         global: GlobalStateArc,
-        id: u32,
+        id: SessionID,
         values: (TcpStream, SocketAddr),
         flush_send: mpsc::Sender<()>,
     ) -> Arc<Self> {
@@ -316,14 +320,14 @@ impl Session {
 
     /// Retrieves the ID of the underlying player returning on failure
     /// will return 1 as a fallback value.
-    pub async fn player_id_safe(&self) -> u32 {
+    pub async fn player_id_safe(&self) -> PlayerID {
         let session_data = self.data.read().await;
         session_data.id_safe()
     }
 
     /// Attempts to retrieve the ID of the underlying player
     /// will return None if there is no player
-    pub async fn player_id(&self) -> Option<u32> {
+    pub async fn player_id(&self) -> Option<PlayerID> {
         let session_data = self.data.read().await;
         session_data.player.as_ref().map(|player| player.id)
     }
@@ -399,7 +403,7 @@ impl Session {
     ///
     /// `game` The game the player has joined.
     /// `slot` The slot in the game the player is in.
-    pub async fn set_game(&self, game: u32) {
+    pub async fn set_game(&self, game: GameID) {
         {
             let session_data = &mut *self.data.write().await;
             session_data.game = Some(game);
@@ -498,7 +502,7 @@ impl Session {
         Packet::notify(
             Components::UserSessions(UserSessions::SetSession),
             &SetSession {
-                id: session_data.id_safe(),
+                player_id: session_data.id_safe(),
                 session_data,
             },
         )
@@ -523,7 +527,7 @@ impl Session {
                 Components::UserSessions(UserSessions::SessionDetails),
                 &SessionUpdate {
                     session_data,
-                    id: player.id,
+                    player_id: player.id,
                     display_name: &player.display_name,
                 },
             ),
@@ -531,7 +535,7 @@ impl Session {
                 Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
                 &UpdateExtDataAttr {
                     flags: 0x3,
-                    id: player.id,
+                    player_id: player.id,
                 },
             ),
         ];
@@ -671,7 +675,7 @@ pub struct SessionData {
     pub matchmaking: bool,
 
     /// The id of the game if connected to one
-    pub game: Option<u32>,
+    pub game: Option<GameID>,
 }
 
 impl Default for SessionData {
@@ -699,7 +703,7 @@ impl SessionData {
 
     /// Retrieves the `id` of the player attached to this
     /// session data or if there is no player attached the value 1.
-    pub fn id_safe(&self) -> u32 {
+    pub fn id_safe(&self) -> PlayerID {
         self.player.as_ref().map(|value| value.id).unwrap_or(1)
     }
 }

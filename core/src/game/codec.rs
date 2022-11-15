@@ -1,6 +1,7 @@
 use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*};
 use database::players;
 use log::debug;
+use utils::types::{GameID, GameSlot, PlayerID, SessionID};
 
 use crate::blaze::{
     components::{Components, GameManager},
@@ -13,7 +14,7 @@ packet! {
     // Packet for game state changes
     struct StateChange {
         // The id of the game the state has changed for
-        GID id: u32,
+        GID id: GameID,
         // The new state value
         GSTA state: u16
     }
@@ -25,14 +26,14 @@ packet! {
         // The new setting value
         ATTR setting: u16,
         // The id of the game the setting has changed for
-        GID id: u32,
+        GID id: GameID,
     }
 }
 
 /// Packet for game attribute changes
 pub struct AttributesChange<'a> {
     /// The id of the game the attributes have changed for
-    pub id: u32,
+    pub id: GameID,
     /// Borrowed game attributes map
     pub attributes: &'a AttrMap,
 }
@@ -52,6 +53,7 @@ impl Codec for AttributesChange<'_> {
 /// `slot`         The slot in the game the session is in
 /// `output`       The output to encode to
 fn encode_player_data(
+    session_id: SessionID,
     session_data: &SessionData,
     player: &players::Model,
     game_id: u32,
@@ -63,8 +65,7 @@ fn encode_player_data(
     tag_u32(output, "GID", game_id);
     tag_u32(output, "LOC", 0x64654445);
     tag_str(output, "NAME", &player.display_name);
-    let player_id = session_data.id_safe();
-    tag_u32(output, "PID", player_id);
+    tag_u32(output, "PID", player.id);
     tag_value(output, "PNET", &session_data.net.get_groups());
     tag_usize(output, "SID", slot);
     tag_u8(output, "SLOT", 0);
@@ -72,26 +73,35 @@ fn encode_player_data(
     tag_u16(output, "TIDX", 0xffff);
     tag_u8(output, "TIME", 0);
     tag_triple(output, "UGID", &(0, 0, 0));
-    tag_u32(output, "UID", player_id);
+    tag_u32(output, "UID", session_id);
     tag_group_end(output);
 }
 
 pub struct PlayerJoining<'a> {
-    /// The player ID of the joining player
-    pub id: u32,
+    /// The ID of the game the players are joining
+    pub game_id: GameID,
     /// The slot the player is joining into
-    pub slot: usize,
+    pub slot: GameSlot,
+    /// The player session ID
+    pub session_id: SessionID,
     /// The session of the player that is joining
-    pub session: &'a SessionData,
+    pub session_data: &'a SessionData,
 }
 
 impl Codec for PlayerJoining<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "GID", self.id);
+        tag_u32(output, "GID", self.game_id);
 
-        if let Some(player) = self.session.player.as_ref() {
+        if let Some(player) = self.session_data.player.as_ref() {
             tag_group_start(output, "PDAT");
-            encode_player_data(self.session, player, self.id, self.slot, output);
+            encode_player_data(
+                self.session_id,
+                self.session_data,
+                player,
+                self.game_id,
+                self.slot,
+                output,
+            );
         }
     }
 }
@@ -114,7 +124,14 @@ async fn encode_game_setup(game: &Game, host: bool, session: &SessionArc, output
         let session_data = &*session.data.read().await;
         if let Some(player) = session_data.player.as_ref() {
             player_ids.push(player.id);
-            encode_player_data(session_data, player, game.id, slot, &mut player_data);
+            encode_player_data(
+                session.id,
+                session_data,
+                player,
+                game.id,
+                slot,
+                &mut player_data,
+            );
         }
         slot += 1;
     }
@@ -157,7 +174,7 @@ async fn encode_game_setup(game: &Game, host: bool, session: &SessionArc, output
             }
         }
 
-        tag_u32(output, "HSES", host_id);
+        tag_u32(output, "HSES", host_session.id);
         tag_u8(output, "IGNO", 0);
         tag_u8(output, "MCAP", 0x4);
         tag_value(output, "NQOS", &host_data.net.ext);
@@ -198,7 +215,6 @@ async fn encode_game_setup(game: &Game, host: bool, session: &SessionArc, output
     output.extend_from_slice(&player_data);
 
     if !host {
-        let session_data = session.data.read().await;
         tag_optional_start(output, "REAS", 0x3);
         {
             tag_group_start(output, "VALU");
@@ -206,7 +222,7 @@ async fn encode_game_setup(game: &Game, host: bool, session: &SessionArc, output
             tag_u16(output, "MAXF", 0x5460);
             tag_u32(output, "MSID", session.id);
             tag_u8(output, "RSLT", 0x2);
-            tag_u32(output, "USID", session_data.id_safe());
+            tag_u32(output, "USID", session.id);
             tag_group_end(output);
         }
     } else {
@@ -221,25 +237,25 @@ async fn encode_game_setup(game: &Game, host: bool, session: &SessionArc, output
 
 packet! {
     struct PlayerStateChange {
-        GID gid: u32,
-        PID pid: u32,
+        GID gid: GameID,
+        PID pid: PlayerID,
         STAT state: u8,
     }
 }
 
 packet! {
     struct JoinComplete {
-        GID game_id: u32,
-        PID player_id: u32,
+        GID game_id: GameID,
+        PID player_id: PlayerID,
     }
 }
 
 packet! {
     struct AdminListChange {
-        ALST player_id: u32,
-        GID game_id: u32,
+        ALST player_id: PlayerID,
+        GID game_id: GameID,
         OPER operation: AdminListOperation,
-        UID host_id: u32,
+        UID host_id: PlayerID,
     }
 }
 
@@ -260,8 +276,8 @@ impl Codec for AdminListOperation {
 }
 
 pub struct PlayerRemoved {
-    pub game_id: u32,
-    pub player_id: u32,
+    pub game_id: GameID,
+    pub player_id: PlayerID,
 }
 
 pub enum RemoveReason {
@@ -282,13 +298,13 @@ impl Codec for PlayerRemoved {
 
 packet! {
     struct FetchExtendedData {
-        BUID id: u32,
+        BUID player_id: PlayerID,
     }
 }
 
 pub struct HostMigrateStart {
-    pub game_id: u32,
-    pub host_id: u32,
+    pub game_id: GameID,
+    pub host_id: PlayerID,
 }
 
 impl Codec for HostMigrateStart {
@@ -302,6 +318,6 @@ impl Codec for HostMigrateStart {
 
 packet! {
     struct HostMigrateFinished {
-        GID game_id: u32,
+        GID game_id: GameID,
     }
 }

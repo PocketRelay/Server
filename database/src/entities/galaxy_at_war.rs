@@ -2,13 +2,14 @@
 
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
+use utils::types::PlayerID;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "galaxy_at_war")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: u32,
-    pub player_id: u32,
+    pub player_id: PlayerID,
     pub last_modified: NaiveDateTime,
     pub group_a: u16,
     pub group_b: u16,

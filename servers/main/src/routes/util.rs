@@ -10,6 +10,7 @@ use rust_embed::RustEmbed;
 use tokio::try_join;
 use utils::dmap::load_dmap;
 use utils::time::server_unix_time;
+use utils::types::PlayerID;
 
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -199,7 +200,7 @@ impl Codec for TickerDetails {
 struct PostAuthRes {
     pss: PSSDetails,
     ticker: TickerDetails,
-    session_id: u32,
+    player_id: PlayerID,
 }
 
 //noinspection SpellCheckingInspection
@@ -215,7 +216,7 @@ impl Codec for PostAuthRes {
 
         tag_group_start(output, "UROP");
         tag_u8(output, "TMOP", 0x1);
-        tag_u32(output, "UID", self.session_id);
+        tag_u32(output, "UID", self.player_id);
         tag_group_end(output);
     }
 }
@@ -226,12 +227,15 @@ impl Codec for PostAuthRes {
 /// packet(Components.UTIL, Commands.POST_AUTH, 0x1b) {}
 /// ```
 async fn handle_post_auth(session: &SessionArc, packet: &Packet) -> HandleResult {
-    debug!("Sending session update");
+    let Some(player_id) = session.player_id().await else {
+        return session.response_error_empty(packet, ServerError::FailedNoLoginAction).await;
+    };
+
     session.update_other(session).await;
 
     let ext_host = env::str_env(env::EXT_HOST);
     let res = PostAuthRes {
-        session_id: session.id,
+        player_id,
         ticker: TickerDetails {
             host: ext_host,
             port: 9988,
