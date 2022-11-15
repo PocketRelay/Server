@@ -1,5 +1,3 @@
-use std::net::{IpAddr, SocketAddr};
-
 use crate::routes::auth::complete_auth;
 use blaze_pk::{
     codec::{Codec, CodecResult, Reader},
@@ -11,10 +9,9 @@ use blaze_pk::{
 use core::blaze::components::UserSessions;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::blaze::session::SessionArc;
-use core::blaze::shared::{NetAddress, NetExt, NetGroups};
+use core::blaze::shared::{NetExt, NetGroups};
 use database::PlayersInterface;
 use log::{debug, warn};
-use utils::ip::public_address;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -107,45 +104,9 @@ async fn handle_update_network_info(session: &SessionArc, packet: &Packet) -> Ha
         }
     };
 
-    {
-        let session_data = &mut *session.data.write().await;
-        let mut net = &mut session_data.net;
-        net.is_unset = false;
-        net.ext = req.nqos;
-        net.groups = groups;
-        update_missing_external(session, &mut net.groups).await;
-        debug!("Updating networking:\n{:#?}", net)
-    }
-
-    session.update_client().await;
+    session.set_network_info(groups, req.nqos).await;
     debug!("Done update networking");
     session.response_empty(packet).await
-}
-
-pub async fn update_missing_external(session: &SessionArc, groups: &mut NetGroups) {
-    let external = &mut groups.external;
-    if external.0.is_invalid() || external.1 == 0 {
-        // Match port with internal address
-        external.1 = groups.internal.1;
-        external.0 = get_address_from(&session.addr).await;
-    }
-}
-
-pub async fn get_address_from(value: &SocketAddr) -> NetAddress {
-    let ip = value.ip();
-    if let IpAddr::V4(value) = ip {
-        // Value is local or private
-        if value.is_loopback() || value.is_private() {
-            if let Some(public_addr) = public_address().await {
-                return NetAddress::from_ipv4(&public_addr);
-            }
-        }
-        let value = format!("{}", value);
-        NetAddress::from_ipv4(&value)
-    } else {
-        // Don't know how to handle IPv6 addresses
-        return NetAddress(0);
-    }
 }
 
 packet! {

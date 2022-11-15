@@ -3,14 +3,19 @@
 //! behind Arc's and are cloned into Games and other resources. Sesssion must be
 //! removed from all other structs in the release function.
 
-use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
+use std::{
+    collections::VecDeque,
+    io,
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 
 use crate::{
     blaze::errors::BlazeError, game::manager::Games, retriever::Retriever, GlobalStateArc,
 };
 
 use database::{players, Database, PlayersInterface};
-use utils::random::generate_random_string;
+use utils::{ip::public_address, random::generate_random_string};
 
 use blaze_pk::{
     codec::{Codec, Reader},
@@ -29,7 +34,9 @@ use tokio::{
 use super::{
     components::{self, Components, UserSessions},
     errors::{BlazeResult, HandleResult},
-    shared::{NetData, SessionUpdate, SetSession, UpdateExtDataAttr},
+    shared::{
+        NetAddress, NetData, NetExt, NetGroups, SessionUpdate, SetSession, UpdateExtDataAttr,
+    },
 };
 
 /// Structure for storing a client session. This includes the
@@ -387,13 +394,73 @@ impl Session {
         Ok(token)
     }
 
-    /// Sets the game details for the current session
+    /// Sets the game details for the current session and updates
+    /// the client with the new sesion details
     ///
     /// `game` The game the player has joined.
     /// `slot` The slot in the game the player is in.
     pub async fn set_game(&self, game: u32) {
-        let session_data = &mut *self.data.write().await;
-        session_data.game = Some(game)
+        {
+            let session_data = &mut *self.data.write().await;
+            session_data.game = Some(game);
+        }
+        self.update_client().await;
+    }
+
+    /// Updates the networking information for this session making
+    /// it a set and setting the ext and groups. Updating the client
+    /// with the new session details
+    ///
+    /// `groups` The networking groups
+    /// `ext`    The networking ext
+    pub async fn set_network_info(&self, groups: NetGroups, ext: NetExt) {
+        {
+            let session_data = &mut *self.data.write().await;
+            let net = &mut session_data.net;
+
+            net.is_unset = false;
+            net.ext = ext;
+            net.groups = groups;
+
+            self.update_missing_external(&mut net.groups).await;
+        }
+        self.update_client().await;
+    }
+
+    /// Updates the external address field if its invalid or missing
+    /// on the provided network group. Uses the session stored
+    /// address information.
+    ///
+    /// `groups` The groups to modify
+    async fn update_missing_external(&self, groups: &mut NetGroups) {
+        let external = &mut groups.external;
+        if external.0.is_invalid() || external.1 == 0 {
+            // Match port with internal address
+            external.1 = groups.internal.1;
+            external.0 = self.get_network_address().await;
+        }
+    }
+
+    /// Obtains the networking address from the provided SocketAddr
+    /// if the address is a loopback or private address then the
+    /// public IP address of the network is used instead.
+    ///
+    /// `value` The socket address
+    async fn get_network_address(&self) -> NetAddress {
+        let ip = self.addr.ip();
+        if let IpAddr::V4(value) = ip {
+            // Value is local or private
+            if value.is_loopback() || value.is_private() {
+                if let Some(public_addr) = public_address().await {
+                    return NetAddress::from_ipv4(&public_addr);
+                }
+            }
+            let value = format!("{}", value);
+            NetAddress::from_ipv4(&value)
+        } else {
+            // Don't know how to handle IPv6 addresses
+            return NetAddress(0);
+        }
     }
 
     /// Clears the game details for the current session
@@ -415,7 +482,7 @@ impl Session {
         Packet::notify(
             Components::UserSessions(UserSessions::SetSession),
             &SetSession {
-                id: self.id,
+                id: session_data.id_safe(),
                 session_data,
             },
         )
