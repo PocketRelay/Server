@@ -21,6 +21,8 @@ pub struct Game {
     pub data: RwLock<GameData>,
     /// The list of players in this game
     pub players: RwLock<Vec<SessionArc>>,
+    /// The number of the next available slot
+    pub next_slot: RwLock<usize>,
 }
 
 impl Drop for Game {
@@ -70,6 +72,7 @@ impl Game {
             id,
             data: RwLock::new(GameData::new(setting, attributes)),
             players: RwLock::new(Vec::new()),
+            next_slot: RwLock::new(0),
         }
     }
 
@@ -190,9 +193,11 @@ impl Game {
         players.len()
     }
 
-    /// Checks whether the game is full or not
+    /// Checks whether the game is full or not by checking
+    /// the next slot value is less than the maximum players
     pub async fn is_joinable(&self) -> bool {
-        self.player_count().await < Self::MAX_PLAYERS
+        let next_slot = *self.next_slot.read().await;
+        next_slot < Self::MAX_PLAYERS
     }
 
     /// Checks whether the provided session is a player in this game
@@ -255,11 +260,26 @@ impl Game {
         Some((index, player))
     }
 
+    /// Aquires a new slot and increases the next slot value
+    /// returning th eslot value
+    async fn aquire_slot(&self) -> usize {
+        let next_slot = &mut *self.next_slot.write().await;
+        let value = *next_slot;
+        *next_slot += 1;
+        value
+    }
+
+    /// Releases a previously owned slot decreasing the next slot value
+    async fn release_slot(&self) {
+        let next_slot = &mut *self.next_slot.write().await;
+        *next_slot -= 1;
+    }
+
     /// Adds the provided player to this game
     ///
     /// `session` The session to add
     pub async fn add_player(&self, session: &SessionArc) {
-        let slot = self.player_count().await;
+        let slot = self.aquire_slot().await;
 
         self.notify_player_joining(session, slot).await;
         self.update_clients(session).await;
@@ -269,30 +289,12 @@ impl Game {
             players.push(session.clone());
         }
 
-        session.set_game(self.id).await;
-
         self.notify_game_setup(session, slot).await;
+
+        session.set_game(self.id).await;
         self.set_session_all(session).await;
 
         debug!("Adding player complete");
-    }
-
-    /// Notifies the provided player that the game has been setup and
-    /// is ready for them to attempt to join.
-    ///
-    /// `session` The session to notify
-    /// `slot`    The slot the player is joining into
-    async fn notify_game_setup(&self, session: &SessionArc, slot: usize) {
-        let is_host = slot == 0;
-        let packet = create_game_setup(self, is_host, session).await;
-        session.write(&packet).await;
-    }
-
-    /// Sends the set session packet for the provided session to all
-    /// the other sessions in this game
-    async fn set_session_all(&self, session: &SessionArc) {
-        let packet = session.create_set_session().await;
-        join!(self.write_all(&packet), session.write(&packet));
     }
 
     /// Notifies all the players in the game that a new player has
@@ -311,6 +313,24 @@ impl Game {
             },
         );
         self.write_all_and(&packet, session).await;
+    }
+
+    /// Notifies the provided player that the game has been setup and
+    /// is ready for them to attempt to join.
+    ///
+    /// `session` The session to notify
+    /// `slot`    The slot the player is joining into
+    async fn notify_game_setup(&self, session: &SessionArc, slot: usize) {
+        let is_host = slot == 0;
+        let packet = create_game_setup(self, is_host, session).await;
+        session.write(&packet).await;
+    }
+
+    /// Sends the set session packet for the provided session to all
+    /// the other sessions in this game
+    async fn set_session_all(&self, session: &SessionArc) {
+        let packet = session.create_set_session().await;
+        self.write_all(&packet).await;
     }
 
     /// Sets the state for the provided session notifying all
@@ -438,13 +458,14 @@ impl Game {
         player.clear_game().await;
         let player_id = player.player_id_safe().await;
         self.notify_player_removed(&player, player_id).await;
+        self.notify_fetch_data(&player, player_id).await;
         self.modify_admin_list(player_id, AdminListOperation::Remove)
             .await;
-        self.notify_fetch_data(&player, player_id).await;
         debug!(
             "Removed player from game (PID: {}, GID: {})",
             player_id, self.id
         );
+        self.release_slot().await;
 
         // If the player was in the host slot
         if slot == 0 {

@@ -296,10 +296,7 @@ impl Codec for HostMigrateStart {
         tag_u32(output, "GID", self.game_id);
         tag_u32(output, "HOST", self.host_id);
         tag_u8(output, "PMIG", 0x2);
-        // Hardcoded migration slot always migrating from the
-        // next player in the Vec because players are just popped
-        // from the front of the array
-        tag_u8(output, "SLOT", 0x1);
+        tag_u8(output, "SLOT", 0x0);
     }
 }
 
