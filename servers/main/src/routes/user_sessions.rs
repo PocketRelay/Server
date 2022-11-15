@@ -103,9 +103,7 @@ async fn handle_update_network_info(session: &SessionArc, packet: &Packet) -> Ha
             return session.response_empty(packet).await;
         }
     };
-
     session.set_network_info(groups, req.nqos).await;
-    debug!("Done update networking");
     session.response_empty(packet).await
 }
 
@@ -125,11 +123,6 @@ packet! {
 /// ```
 async fn handle_update_hardware_flag(session: &SessionArc, packet: &Packet) -> HandleResult {
     let req = packet.decode::<UpdateHWFlagReq>()?;
-    {
-        let session_data = &mut *session.data.write().await;
-        session_data.hardware_flag = req.hardware_flag;
-    }
-    session.update_client().await;
-    debug!("Done updating hardware flag");
+    session.set_hardware_flag(req.hardware_flag).await;
     session.response_empty(packet).await
 }

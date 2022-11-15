@@ -463,6 +463,18 @@ impl Session {
         }
     }
 
+    /// Updates the hardware flag for this session and
+    /// updates the client with the changes
+    ///
+    /// `value` The new hardware flag value
+    pub async fn set_hardware_flag(&self, value: u16) {
+        {
+            let session_data = &mut *self.data.write().await;
+            session_data.hardware_flag = value;
+        }
+        self.update_client().await;
+    }
+
     /// Clears the game details for the current session
     /// returning the game slot if one is present
     pub async fn clear_game(&self) {
