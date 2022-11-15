@@ -7,6 +7,7 @@ use std::{
 use blaze_pk::types::TdfMap;
 use log::debug;
 use tokio::sync::{Mutex, RwLock};
+use utils::types::{GameID, PlayerID, SessionID};
 
 use crate::blaze::session::SessionArc;
 
@@ -16,7 +17,7 @@ use super::rules::RuleSet;
 /// Structure for managing games and the matchmaking queue
 pub struct Games {
     /// Map of Game IDs to the actual games.
-    games: RwLock<HashMap<u32, Game>>,
+    games: RwLock<HashMap<GameID, Game>>,
     /// Queue of players wanting to join games
     queue: Mutex<VecDeque<QueueEntry>>,
     /// ID for the next game to create
@@ -61,7 +62,7 @@ impl Games {
     ///
     /// `game_id` The ID of the game to add the session to
     /// `session` The session to add as the host
-    pub async fn add_host(&self, game_id: u32, session: &SessionArc) {
+    pub async fn add_host(&self, game_id: GameID, session: &SessionArc) {
         let games = &*self.games.read().await;
         let Some(game) = games.get(&game_id) else { return; };
         game.add_player(session).await;
@@ -140,7 +141,7 @@ impl Games {
     /// matchmaking queue
     ///
     /// `sid` The session ID to remove
-    pub async fn unqueue_session(&self, sid: u32) {
+    pub async fn unqueue_session(&self, sid: SessionID) {
         let queue = &mut self.queue.lock().await;
         queue.retain(|value| value.session.id != sid);
     }
@@ -153,9 +154,9 @@ impl Games {
     /// `target`  The mesh connection update target
     pub async fn update_mesh_connection(
         &self,
-        game_id: u32,
+        game_id: GameID,
         session: &SessionArc,
-        target: u32,
+        target: PlayerID,
     ) -> bool {
         let games = self.games.read().await;
         let Some(game) = games.get(&game_id) else { return false; };
@@ -168,7 +169,7 @@ impl Games {
     ///
     /// `game_id` The ID of the game to update the state of
     /// `state`   The new game state
-    pub async fn set_game_state(&self, game_id: u32, state: u16) -> bool {
+    pub async fn set_game_state(&self, game_id: GameID, state: u16) -> bool {
         let games = self.games.read().await;
         let Some(game) = games.get(&game_id) else { return false; };
         game.set_state(state).await;
@@ -180,7 +181,7 @@ impl Games {
     ///
     /// `game_id` The ID of the game to update the setting of
     /// `setting` The new setting value
-    pub async fn set_game_setting(&self, game_id: u32, setting: u16) -> bool {
+    pub async fn set_game_setting(&self, game_id: GameID, setting: u16) -> bool {
         let games = self.games.read().await;
         let Some(game) = games.get(&game_id) else { return false; };
         game.set_setting(setting).await;
@@ -192,7 +193,7 @@ impl Games {
     ///
     /// `game_id` The ID of the game to update the setting of
     /// `attributes` The new attributes value
-    pub async fn set_game_attributes(&self, game_id: u32, attributes: AttrMap) -> bool {
+    pub async fn set_game_attributes(&self, game_id: GameID, attributes: AttrMap) -> bool {
         let games = self.games.read().await;
         let Some(game) = games.get(&game_id) else { return false; };
         game.set_attributes(attributes).await;
@@ -205,7 +206,7 @@ impl Games {
     ///
     /// `game_id` The game to remove the player from
     /// `pid`     The id of the player to remove
-    pub async fn remove_player_pid(&self, game_id: u32, pid: u32) -> bool {
+    pub async fn remove_player_pid(&self, game_id: GameID, pid: PlayerID) -> bool {
         {
             let games = self.games.read().await;
             let Some(game) = games.get(&game_id) else { return false; };
@@ -226,7 +227,7 @@ impl Games {
     ///
     /// `game_id` The game to remove the player from
     /// `sid`     The session id of the player to remove
-    pub async fn remove_player_sid(&self, game_id: u32, sid: u32) -> bool {
+    pub async fn remove_player_sid(&self, game_id: GameID, sid: SessionID) -> bool {
         {
             let games = self.games.read().await;
             let Some(game) = games.get(&game_id) else { return false; };
@@ -244,7 +245,7 @@ impl Games {
     /// Removes any games with the provided game id
     ///
     /// `game_id` The ID of the game to remove
-    async fn remove_game(&self, game_id: u32) {
+    async fn remove_game(&self, game_id: GameID) {
         let games = &mut *self.games.write().await;
         games.remove(&game_id);
     }

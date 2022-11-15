@@ -403,10 +403,10 @@ impl Session {
     ///
     /// `game` The game the player has joined.
     /// `slot` The slot in the game the player is in.
-    pub async fn set_game(&self, game: GameID) {
+    pub async fn set_game(&self, game: Option<GameID>) {
         {
             let session_data = &mut *self.data.write().await;
-            session_data.game = Some(game);
+            session_data.game = game;
         }
         self.update_client().await;
     }
@@ -475,17 +475,6 @@ impl Session {
         {
             let session_data = &mut *self.data.write().await;
             session_data.hardware_flag = value;
-        }
-        self.update_client().await;
-    }
-
-    /// Clears the game details for the current session
-    /// returning the game slot if one is present
-    /// updates the client with the changes
-    pub async fn clear_game(&self) {
-        {
-            let session_data = &mut *self.data.write().await;
-            session_data.game = None;
         }
         self.update_client().await;
     }

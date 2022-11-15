@@ -162,7 +162,7 @@ impl Game {
         let data = &mut *self.data.write().await;
         data.attributes.extend(attributes);
         self.notify_all(
-            Components::GameManager(GameManager::GameSettingsChange),
+            Components::GameManager(GameManager::GameAttribChange),
             &AttributesChange {
                 id: self.id,
                 attributes: &data.attributes,
@@ -182,6 +182,7 @@ impl Game {
 
         let futures = players
             .iter()
+            .filter(|value| value.id != session.id)
             .map(|value| value.exchange_update(session))
             .collect::<Vec<_>>();
 
@@ -197,8 +198,7 @@ impl Game {
     /// Checks whether the game is full or not by checking
     /// the next slot value is less than the maximum players
     pub async fn is_joinable(&self) -> bool {
-        let next_slot = *self.next_slot.read().await;
-        next_slot < Self::MAX_PLAYERS
+        self.player_count().await < Self::MAX_PLAYERS
     }
 
     /// Checks whether the provided session is a player in this game
@@ -261,39 +261,23 @@ impl Game {
         Some((index, player))
     }
 
-    /// Aquires a new slot and increases the next slot value
-    /// returning th eslot value
-    async fn aquire_slot(&self) -> GameSlot {
-        let next_slot = &mut *self.next_slot.write().await;
-        let value = *next_slot;
-        *next_slot += 1;
-        value
-    }
-
-    /// Releases a previously owned slot decreasing the next slot value
-    async fn release_slot(&self) {
-        let next_slot = &mut *self.next_slot.write().await;
-        *next_slot -= 1;
-    }
-
     /// Adds the provided player to this game
     ///
     /// `session` The session to add
     pub async fn add_player(&self, session: &SessionArc) {
-        let slot = self.aquire_slot().await;
-
+        let slot = {
+            let players = &mut *self.players.write().await;
+            let slot = players.len();
+            players.push(session.clone());
+            slot
+        };
         self.notify_player_joining(session, slot).await;
         self.update_clients(session).await;
-
-        {
-            let players = &mut *self.players.write().await;
-            players.push(session.clone());
-        }
-
         self.notify_game_setup(session, slot).await;
+        session.set_game(Some(self.id)).await;
 
-        session.set_game(self.id).await;
-        self.set_session_all(session).await;
+        let packet = session.create_set_session().await;
+        self.write_all(&packet).await;
 
         debug!("Adding player complete");
     }
@@ -305,7 +289,6 @@ impl Game {
             return;
         }
         let session_data = &*session.data.read().await;
-
         let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerJoining),
             &PlayerJoining {
@@ -315,7 +298,7 @@ impl Game {
                 session_data: &session_data,
             },
         );
-        self.write_all_and(&packet, session).await;
+        self.write_all(&packet).await;
     }
 
     /// Notifies the provided player that the game has been setup and
@@ -327,13 +310,6 @@ impl Game {
         let is_host = slot == 0;
         let packet = create_game_setup(self, is_host, session).await;
         session.write(&packet).await;
-    }
-
-    /// Sends the set session packet for the provided session to all
-    /// the other sessions in this game
-    async fn set_session_all(&self, session: &SessionArc) {
-        let packet = session.create_set_session().await;
-        self.write_all(&packet).await;
     }
 
     /// Sets the state for the provided session notifying all
@@ -392,11 +368,14 @@ impl Game {
     /// `session` The session updating its mesh connection
     /// `target`  The pid of the connected target
     pub async fn update_mesh_connection(&self, session: &SessionArc, target: PlayerID) {
+        debug!("Updating mesh connection");
         if self.is_player(session).await && self.is_player_pid(target).await {
             self.set_player_state(session, 4).await;
             self.on_join_complete(session).await;
+            debug!("Connected player to game")
         } else {
             self.set_player_state(session, 2).await;
+            debug!("Disconnected mesh")
         }
     }
 
@@ -458,7 +437,7 @@ impl Game {
     /// `player` The player that was removed
     /// `slot`   The slot the player used to be in
     async fn on_player_removed(&self, player: SessionArc, slot: GameSlot) {
-        player.clear_game().await;
+        player.set_game(None).await;
         let player_id = player.player_id_safe().await;
         self.notify_player_removed(&player, player_id).await;
         self.notify_fetch_data(&player, player_id).await;
@@ -468,11 +447,9 @@ impl Game {
             "Removed player from game (PID: {}, GID: {})",
             player_id, self.id
         );
-        self.release_slot().await;
-
         // If the player was in the host slot
         if slot == 0 {
-            self.try_migrate_host(&player).await;
+            self.try_migrate_host().await;
         }
     }
 
@@ -536,7 +513,7 @@ impl Game {
 
     /// Attempts to migrate the host of this game if there are still players
     /// left in the game.
-    async fn try_migrate_host(&self, old_host: &SessionArc) {
+    async fn try_migrate_host(&self) {
         let players = &*self.players.read().await;
         let Some(new_host) = players.first() else { return; };
 
@@ -545,7 +522,7 @@ impl Game {
         self.set_state(0x82).await;
         self.notify_migrate_finish().await;
         self.update_clients(new_host).await;
-        self.set_session_all(old_host).await;
+
         debug!("Finished host migration (GID: {})", self.id);
     }
 
@@ -587,7 +564,7 @@ impl Game {
         let players = &mut *self.players.write().await;
         let futures = players
             .iter()
-            .map(|value| value.clear_game())
+            .map(|value| value.set_game(None))
             .collect::<Vec<_>>();
         let _ = futures::future::join_all(futures).await;
         players.clear();

@@ -482,7 +482,6 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &Packet) -> Hand
 
     let games = session.games();
 
-    debug!("Matchmaking ID: {}", session.id);
     session
         .response(packet, &MatchmakingRes { id: session.id })
         .await?;

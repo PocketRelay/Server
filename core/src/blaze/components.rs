@@ -91,7 +91,6 @@ define_components! {
         AddQueuedPlayerToGame(0x26)
         UpdateGameName(0x27)
         EjectHost(0x28)
-        NotifyGameUpdated(0x50)
         GetGameListSnapshot(0x64)
         GetGameListSubscription(0x65)
         DestroyGameList(0x66)
