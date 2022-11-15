@@ -477,9 +477,13 @@ impl Session {
 
     /// Clears the game details for the current session
     /// returning the game slot if one is present
+    /// updates the client with the changes
     pub async fn clear_game(&self) {
-        let session_data = &mut *self.data.write().await;
-        session_data.game = None;
+        {
+            let session_data = &mut *self.data.write().await;
+            session_data.game = None;
+        }
+        self.update_client().await;
     }
 
     /// Updates the data stored on the client so that it matches
