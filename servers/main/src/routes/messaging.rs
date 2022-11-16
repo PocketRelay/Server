@@ -5,18 +5,19 @@ use blaze_pk::{
     tagging::*,
     types::encode_str,
 };
-use core::blaze::components::{Components, Messaging, UserSessions};
 use core::blaze::errors::HandleResult;
-use core::blaze::session::SessionArc;
+
+use crate::session::Session;
+use core::blaze::components::{Components, Messaging, UserSessions};
+
 use core::{env, env::VERSION};
-use database::players;
 use log::debug;
-use utils::time::server_unix_time;
+use utils::{time::server_unix_time, types::PlayerID};
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: Messaging, packet: &Packet) -> HandleResult {
+pub async fn route(session: &mut Session, component: Messaging, packet: &Packet) -> HandleResult {
     match component {
         Messaging::FetchMessages => handle_fetch_messages(session, packet).await,
         component => {
@@ -38,20 +39,20 @@ impl Codec for MessageCount {
 }
 
 #[derive(Debug)]
-struct MenuMessage<'a> {
+struct MenuMessage {
     message: String,
-    player: &'a players::Model,
+    player_id: PlayerID,
     time: u64,
 }
 
-impl Codec for MenuMessage<'_> {
+impl Codec for MenuMessage {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_u8(output, "FLAG", 0x1);
         tag_u8(output, "MGID", 0x1);
         tag_str(output, "NAME", &self.message);
 
         let ref_value = Components::UserSessions(UserSessions::SetSession).values();
-        let player_ref = (ref_value.0, ref_value.1, self.player.id);
+        let player_ref = (ref_value.0, ref_value.1, self.player_id);
 
         {
             tag_group_start(output, "PYLD");
@@ -91,10 +92,9 @@ impl Codec for MenuMessage<'_> {
 /// }
 /// ```
 ///
-async fn handle_fetch_messages(session: &SessionArc, packet: &Packet) -> HandleResult {
-    let session_data = session.data.read().await;
-    let player = match session_data.player.as_ref() {
-        Some(player) => player,
+async fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult {
+    let (player_name, player_id) = match session.player.as_ref() {
+        Some(player) => (player.display_name.clone(), player.id),
         None => {
             // Not authenticated return empty count
             return session.response(packet, &MessageCount { count: 0 }).await;
@@ -102,10 +102,10 @@ async fn handle_fetch_messages(session: &SessionArc, packet: &Packet) -> HandleR
     };
     session.response(packet, &MessageCount { count: 1 }).await?;
     let time = server_unix_time();
-    let menu_message = get_menu_message(session, player);
+    let menu_message = get_menu_message(session, player_name);
     let response = MenuMessage {
         message: menu_message,
-        player,
+        player_id,
         time,
     };
 
@@ -122,13 +122,13 @@ async fn handle_fetch_messages(session: &SessionArc, packet: &Packet) -> HandleR
 /// - {v} = Server Version
 /// - {n} = Player Display Name
 /// - {ip} = Session IP Address
-fn get_menu_message(session: &SessionArc, player: &players::Model) -> String {
+fn get_menu_message(session: &mut Session, player_name: String) -> String {
     let mut message = env::str_env(env::MENU_MESSAGE);
     if message.contains("{v}") {
         message = message.replace("{v}", VERSION);
     }
     if message.contains("{n}") {
-        message = message.replace("{n}", &player.display_name);
+        message = message.replace("{n}", &player_name);
     }
     if message.contains("{ip}") {
         message = message.replace("{ip}", &session.addr.to_string());

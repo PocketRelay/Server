@@ -1,14 +1,13 @@
 use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*};
-use database::players;
-use log::debug;
-use utils::types::{GameID, GameSlot, PlayerID, SessionID};
 
-use crate::blaze::{
-    components::{Components, GameManager},
-    session::{SessionArc, SessionData},
+use utils::types::{GameID, GameSlot, PlayerID};
+
+use crate::blaze::components::{Components, GameManager};
+
+use super::{
+    game::{AttrMap, Game},
+    player::GamePlayer,
 };
-
-use super::game::{AttrMap, Game};
 
 packet! {
     // Packet for game state changes
@@ -45,113 +44,39 @@ impl Codec for AttributesChange<'_> {
     }
 }
 
-/// Encodes the provided players data to the provided output
-///
-/// `session_data` The session data to encode
-/// `player`       The player attached to the session
-/// `game_id`      The game the session is in
-/// `slot`         The slot in the game the session is in
-/// `output`       The output to encode to
-fn encode_player_data(
-    session_id: SessionID,
-    session_data: &SessionData,
-    player: &players::Model,
-    game_id: u32,
-    slot: usize,
-    output: &mut Vec<u8>,
-) {
-    tag_empty_blob(output, "BLOB");
-    tag_u8(output, "EXID", 0);
-    tag_u32(output, "GID", game_id);
-    tag_u32(output, "LOC", 0x64654445);
-    tag_str(output, "NAME", &player.display_name);
-    tag_u32(output, "PID", player.id);
-    tag_value(output, "PNET", &session_data.net.get_groups());
-    tag_usize(output, "SID", slot);
-    tag_u8(output, "SLOT", 0);
-    tag_u8(output, "STAT", session_data.state);
-    tag_u16(output, "TIDX", 0xffff);
-    tag_u8(output, "TIME", 0);
-    tag_triple(output, "UGID", &(0, 0, 0));
-    tag_u32(output, "UID", session_id);
-    tag_group_end(output);
-}
-
 pub struct PlayerJoining<'a> {
-    /// The ID of the game the players are joining
-    pub game_id: GameID,
     /// The slot the player is joining into
     pub slot: GameSlot,
-    /// The player session ID
-    pub session_id: SessionID,
-    /// The session of the player that is joining
-    pub session_data: &'a SessionData,
+    /// The player that is joining
+    pub player: &'a GamePlayer,
 }
 
 impl Codec for PlayerJoining<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "GID", self.game_id);
+        tag_u32(output, "GID", self.player.game_id);
 
-        if let Some(player) = self.session_data.player.as_ref() {
-            tag_group_start(output, "PDAT");
-            encode_player_data(
-                self.session_id,
-                self.session_data,
-                player,
-                self.game_id,
-                self.slot,
-                output,
-            );
-        }
+        tag_group_start(output, "PDAT");
+        self.player.encode(self.slot, output);
     }
 }
 
-pub async fn create_game_setup(game: &Game, host: bool, session: &SessionArc) -> Packet {
+pub async fn create_game_setup(game: &Game, player: &GamePlayer) -> Packet {
     let mut output = Vec::new();
-    encode_game_setup(game, host, session, &mut output).await;
+    encode_game_setup(game, player, &mut output).await;
     Packet::notify_raw(Components::GameManager(GameManager::GameSetup), output)
 }
 
-async fn encode_game_setup(game: &Game, host: bool, session: &SessionArc, output: &mut Vec<u8>) {
+async fn encode_game_setup(game: &Game, player: &GamePlayer, output: &mut Vec<u8>) {
     let players = &*game.players.read().await;
-    let players_count = players.len();
-
-    let mut player_data = Vec::new();
-    let mut player_ids = Vec::with_capacity(players_count);
-
-    let mut slot = 0;
-    for session in players {
-        let session_data = &*session.data.read().await;
-        if let Some(player) = session_data.player.as_ref() {
-            player_ids.push(player.id);
-            encode_player_data(
-                session.id,
-                session_data,
-                player,
-                game.id,
-                slot,
-                &mut player_data,
-            );
-        }
-        slot += 1;
-    }
+    let mut player_ids = players
+        .iter()
+        .map(|value| value.player_id)
+        .collect::<Vec<_>>();
+    player_ids.push(player.player_id);
 
     {
-        let Some(host_session) = players.first() else {
-            debug!("Unable to create setup notify when host is missing");
-            return;
-        };
-
-        let host_data = host_session.data.read().await;
-        let (host_id, game_name) = {
-            if let Some(player) = host_data.player.as_ref() {
-                (player.id, player.display_name.clone())
-            } else {
-                debug!("Unable to create setup notify when host player is missing");
-                return;
-            }
-        };
-
+        let host_player = players.first().unwrap_or(player);
+        let game_name = host_player.display_name.clone();
         let game_data = game.data.read().await;
         tag_group_start(output, "GAME");
         tag_list(output, "ADMN", player_ids);
@@ -170,14 +95,14 @@ async fn encode_game_setup(game: &Game, host: bool, session: &SessionArc, output
             tag_list_start(output, "HNET", ValueType::Group, 1);
             {
                 output.push(2);
-                host_data.net.groups.encode(output);
+                host_player.net.groups.encode(output);
             }
         }
 
-        tag_u32(output, "HSES", host_session.id);
+        tag_u32(output, "HSES", host_player.session_id);
         tag_u8(output, "IGNO", 0);
         tag_u8(output, "MCAP", 0x4);
-        tag_value(output, "NQOS", &host_data.net.ext);
+        tag_value(output, "NQOS", &host_player.net.ext);
         tag_u8(output, "NRES", 0x0);
         tag_u8(output, "NTOP", 0x0);
         tag_empty_str(output, "PGID");
@@ -185,7 +110,7 @@ async fn encode_game_setup(game: &Game, host: bool, session: &SessionArc, output
 
         {
             tag_group_start(output, "PHST");
-            tag_u32(output, "HPID", host_id);
+            tag_u32(output, "HPID", host_player.player_id);
             tag_u8(output, "HSLT", 0x0);
             tag_group_end(output);
         }
@@ -198,7 +123,7 @@ async fn encode_game_setup(game: &Game, host: bool, session: &SessionArc, output
 
         {
             tag_group_start(output, "THST");
-            tag_u32(output, "HPID", host_id);
+            tag_u32(output, "HPID", host_player.player_id);
             tag_u8(output, "HSLT", 0x0);
             tag_group_end(output);
         }
@@ -211,18 +136,23 @@ async fn encode_game_setup(game: &Game, host: bool, session: &SessionArc, output
         tag_group_end(output);
     }
 
-    tag_list_start(output, "PROS", ValueType::Group, players_count);
-    output.extend_from_slice(&player_data);
-
-    if !host {
+    tag_list_start(output, "PROS", ValueType::Group, players.len() + 1);
+    let mut slot = 0;
+    for session in players {
+        session.encode(slot, output);
+        slot += 1;
+    }
+    player.encode(slot, output);
+    // If we are not the first player in the game aka the host
+    if slot != 0 {
         tag_optional_start(output, "REAS", 0x3);
         {
             tag_group_start(output, "VALU");
             tag_u16(output, "FIT", 0x3f7a);
             tag_u16(output, "MAXF", 0x5460);
-            tag_u32(output, "MSID", session.id);
+            tag_u32(output, "MSID", player.session_id);
             tag_u8(output, "RSLT", 0x2);
-            tag_u32(output, "USID", session.id);
+            tag_u32(output, "USID", player.session_id);
             tag_group_end(output);
         }
     } else {

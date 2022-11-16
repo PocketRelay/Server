@@ -2,15 +2,15 @@ use blaze_pk::{
     codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*, types::encode_str,
 };
 
+use crate::session::Session;
 use core::blaze::components::Stats;
 use core::blaze::errors::HandleResult;
-use core::blaze::session::SessionArc;
 use log::debug;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: Stats, packet: &Packet) -> HandleResult {
+pub async fn route(session: &mut Session, component: Stats, packet: &Packet) -> HandleResult {
     match component {
         Stats::GetLeaderboardEntityCount => handle_leaderboard_entity_count(session, packet).await,
         Stats::GetCenteredLeaderboard => handle_centered_leaderboard(session, packet).await,
@@ -48,7 +48,7 @@ impl Codec for EntityCount {
 ///   number("POFF", 0x0)
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_leaderboard_entity_count(session: &mut Session, packet: &Packet) -> HandleResult {
     session.response(packet, &EntityCount { count: 1 }).await
 }
 
@@ -79,7 +79,7 @@ impl Codec for EmptyLeaderboard {
 ///   tripple("USET", 0x0, 0x0, 0x0)
 /// }
 /// ```
-async fn handle_centered_leaderboard(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_centered_leaderboard(session: &mut Session, packet: &Packet) -> HandleResult {
     session.response(packet, &EmptyLeaderboard).await
 }
 
@@ -101,7 +101,7 @@ async fn handle_centered_leaderboard(session: &SessionArc, packet: &Packet) -> H
 ///   tripple("USET", 0x0, 0x0, 0x0)
 /// }
 /// ```
-async fn handle_filtered_leaderboard(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_filtered_leaderboard(session: &mut Session, packet: &Packet) -> HandleResult {
     session.response(packet, &EmptyLeaderboard).await
 }
 
@@ -188,7 +188,7 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_leaderboard_group(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_leaderboard_group(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<LeaderboardGroupReq>()?;
     let name = req.name;
     let is_n7 = name.starts_with("N7Rating");

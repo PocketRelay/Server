@@ -9,10 +9,11 @@ use log::debug;
 use tokio::sync::{Mutex, RwLock};
 use utils::types::{GameID, PlayerID, SessionID};
 
-use crate::blaze::session::SessionArc;
-
-use super::game::{AttrMap, Game};
 use super::rules::RuleSet;
+use super::{
+    game::{AttrMap, Game},
+    player::GamePlayer,
+};
 
 /// Structure for managing games and the matchmaking queue
 pub struct Games {
@@ -27,7 +28,7 @@ pub struct Games {
 /// Structure for a entry in the matchmaking queue
 struct QueueEntry {
     /// The session that is waiting in the queue
-    session: SessionArc,
+    player: GamePlayer,
     /// The rules that games must meet for this
     /// queue entry to join.
     rules: RuleSet,
@@ -62,10 +63,10 @@ impl Games {
     ///
     /// `game_id` The ID of the game to add the session to
     /// `session` The session to add as the host
-    pub async fn add_host(&self, game_id: GameID, session: &SessionArc) {
+    pub async fn add_host(&self, game_id: GameID, player: GamePlayer) {
         let games = &*self.games.read().await;
         let Some(game) = games.get(&game_id) else { return; };
-        game.add_player(session).await;
+        game.add_player(player).await;
         self.update_queue(game).await;
     }
 
@@ -95,7 +96,7 @@ impl Games {
                         "Found player from queue adding them to the game (GID: {})",
                         game.id
                     );
-                    game.add_player(&entry.session).await;
+                    game.add_player(entry.player).await;
                 } else {
                     // TODO: Check started time and timeout
                     // player if they've been waiting too long
@@ -113,7 +114,7 @@ impl Games {
     ///
     /// `session` The session to get the game for
     /// `rules`   The rules the game must match to be valid
-    pub async fn add_or_queue(&self, session: &SessionArc, rules: RuleSet) -> bool {
+    pub async fn add_or_queue(&self, player: GamePlayer, rules: RuleSet) -> bool {
         let games = &*self.games.read().await;
         for game in games.values() {
             if !game.is_joinable().await {
@@ -122,14 +123,14 @@ impl Games {
             let game_data = game.data.read().await;
             if rules.matches(&game_data.attributes) {
                 debug!("Found matching game (GID: {})", game.id);
-                game.add_player(session).await;
+                game.add_player(player).await;
                 return true;
             }
         }
 
         let queue = &mut self.queue.lock().await;
         queue.push_back(QueueEntry {
-            session: session.clone(),
+            player,
             rules,
             time: SystemTime::now(),
         });
@@ -143,7 +144,7 @@ impl Games {
     /// `sid` The session ID to remove
     pub async fn unqueue_session(&self, sid: SessionID) {
         let queue = &mut self.queue.lock().await;
-        queue.retain(|value| value.session.id != sid);
+        queue.retain(|value| value.player.session_id != sid);
     }
 
     /// Updates the mesh connection in the game with the provied game
@@ -155,7 +156,7 @@ impl Games {
     pub async fn update_mesh_connection(
         &self,
         game_id: GameID,
-        session: &SessionArc,
+        session: SessionID,
         target: PlayerID,
     ) -> bool {
         let games = self.games.read().await;

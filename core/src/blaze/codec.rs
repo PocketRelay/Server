@@ -1,7 +1,5 @@
 use std::{fmt::Debug, str::Split};
 
-use crate::blaze::session::SessionData;
-
 use blaze_pk::{
     codec::{Codec, CodecResult, Reader},
     packet,
@@ -12,72 +10,6 @@ use blaze_pk::{
 
 use database::players;
 use utils::types::PlayerID;
-
-impl Codec for SessionData {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_value(output, "ADDR", &self.net.get_groups());
-        tag_str(output, "BPS", "ea-sjc");
-        tag_empty_str(output, "CTY");
-        tag_var_int_list_empty(output, "CVAR");
-        {
-            tag_map_start(output, "DMAP", ValueType::VarInt, ValueType::VarInt, 1);
-            0x70001.encode(output);
-            0x409a.encode(output);
-        }
-        tag_u16(output, "HWFG", self.hardware_flag);
-        {
-            tag_list_start(output, "PSLM", ValueType::VarInt, 1);
-            0xfff0fff.encode(output);
-        }
-        tag_value(output, "QDAT", &self.net.ext);
-        tag_u8(output, "UATT", 0);
-        if let Some(game_id) = &self.game {
-            tag_list_start(output, "ULST", ValueType::Triple, 1);
-            (4, 1, *game_id).encode(output);
-        }
-        tag_group_end(output);
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::Group
-    }
-}
-
-/// Session update for a session other than ourselves
-/// which contains the details for that session
-pub struct SessionUpdate<'a> {
-    pub session_data: &'a SessionData,
-    pub player_id: PlayerID,
-    pub display_name: &'a str,
-}
-
-impl Codec for SessionUpdate<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_value(output, "DATA", self.session_data);
-
-        tag_group_start(output, "USER");
-        tag_u32(output, "AID", self.player_id);
-        tag_u32(output, "ALOC", 0x64654445);
-        tag_empty_blob(output, "EXBB");
-        tag_u8(output, "EXID", 0);
-        tag_u32(output, "ID", self.player_id);
-        tag_str(output, "NAME", self.display_name);
-        tag_group_end(output);
-    }
-}
-
-/// Session update for ourselves
-pub struct SetSession<'a> {
-    pub player_id: PlayerID,
-    pub session_data: &'a SessionData,
-}
-
-impl Codec for SetSession<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_value(output, "DATA", self.session_data);
-        tag_u32(output, "USID", self.player_id);
-    }
-}
 
 packet! {
     struct UpdateExtDataAttr {
@@ -119,11 +51,12 @@ impl Codec for NetExt {
 /// Type alias for ports which are always u16
 pub type Port = u16;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct NetData {
     pub groups: NetGroups,
     pub ext: NetExt,
     pub is_unset: bool,
+    pub hwfg: u16,
 }
 
 #[derive(Debug, Default, Copy, Clone)]

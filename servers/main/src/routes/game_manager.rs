@@ -1,14 +1,14 @@
+use crate::session::Session;
 use blaze_pk::{group, packet, packet::Packet, types::TdfMap};
 use core::blaze::components::GameManager;
 use core::blaze::errors::{HandleResult, ServerError};
-use core::blaze::session::SessionArc;
 use core::game::rules::{MatchRules, RuleSet};
 use log::{debug, info, warn};
 
 /// Routing function for handling packets with the `GameManager` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: GameManager, packet: &Packet) -> HandleResult {
+pub async fn route(session: &mut Session, component: GameManager, packet: &Packet) -> HandleResult {
     match component {
         GameManager::CreateGame => handle_create_game(session, packet).await,
         GameManager::AdvanceGameState => handle_advance_game_state(session, packet).await,
@@ -91,8 +91,13 @@ packet! {
 ///   text("VSTR", "ME3-295976325-179181965240128")
 /// }
 /// ```
-async fn handle_create_game(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<CreateGameReq>()?;
+
+    let Some(player) = session.into_player() else {
+        warn!("Client attempted to matchmake while not authenticated. (SID: {})", session.id);
+        return session.response_error(packet, ServerError::FailedNoLoginAction).await;
+    };
 
     let games = session.games();
 
@@ -102,7 +107,7 @@ async fn handle_create_game(session: &SessionArc, packet: &Packet) -> HandleResu
         .response(packet, &CreateGameRes { id: game_id })
         .await?;
 
-    games.add_host(game_id, session).await;
+    games.add_host(game_id, player).await;
 
     Ok(())
 }
@@ -124,7 +129,7 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_advance_game_state(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_advance_game_state(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<GameStateReq>()?;
     let games = session.games();
     if games.set_game_state(req.id, req.state).await {
@@ -135,7 +140,7 @@ async fn handle_advance_game_state(session: &SessionArc, packet: &Packet) -> Han
             req.id, session.id
         );
         session
-            .response_error_empty(packet, ServerError::InvalidInformation)
+            .response_error(packet, ServerError::InvalidInformation)
             .await
     }
 }
@@ -157,7 +162,7 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_set_game_setting(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_set_game_setting(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<GameSettingReq>()?;
 
     let games = session.games();
@@ -169,7 +174,7 @@ async fn handle_set_game_setting(session: &SessionArc, packet: &Packet) -> Handl
             req.id, session.id
         );
         session
-            .response_error_empty(packet, ServerError::InvalidInformation)
+            .response_error(packet, ServerError::InvalidInformation)
             .await
     }
 }
@@ -201,7 +206,7 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_set_game_attribs(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_set_game_attribs(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<GameAttribsReq>()?;
 
     let games = session.games();
@@ -213,7 +218,7 @@ async fn handle_set_game_attribs(session: &SessionArc, packet: &Packet) -> Handl
             req.id, session.id
         );
         session
-            .response_error_empty(packet, ServerError::InvalidInformation)
+            .response_error(packet, ServerError::InvalidInformation)
             .await
     }
 }
@@ -237,7 +242,7 @@ packet! {
 ///   number("REAS", 0x6)
 /// }
 /// ```
-async fn handle_remove_player(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_remove_player(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<RemovePlayerReq>()?;
     let games = session.games();
 
@@ -249,7 +254,7 @@ async fn handle_remove_player(session: &SessionArc, packet: &Packet) -> HandleRe
             req.id, session.id
         );
         session
-            .response_error_empty(packet, ServerError::InvalidInformation)
+            .response_error(packet, ServerError::InvalidInformation)
             .await
     }
 }
@@ -282,7 +287,7 @@ group! {
 ///   ))
 /// }
 /// ```
-async fn handle_update_mesh_connection(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -> HandleResult {
     session.response_empty(packet).await?;
 
     let req = packet.decode::<UpdateMeshReq>()?;
@@ -294,7 +299,7 @@ async fn handle_update_mesh_connection(session: &SessionArc, packet: &Packet) ->
     let games = session.games();
 
     if !games
-        .update_mesh_connection(req.id, session, target.id)
+        .update_mesh_connection(req.id, session.id, target.id)
         .await
     {
         warn!(
@@ -467,16 +472,15 @@ packet! {
 ///   number("VOIP", 0x2)
 /// }
 /// ```
-async fn handle_start_matchmaking(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<MatchmakingReq>()?;
-    {
-        let session_data = session.data.read().await;
-        let Some(player) = session_data.player.as_ref() else {
-            warn!("Client attempted to matchmake while not authenticated. (SID: {})", session.id);
-            return session.response_error_empty(packet, ServerError::FailedNoLoginAction).await;
-        };
-        info!("Player {} started matchmaking", player.display_name);
-    }
+
+    let Some(player) = session.into_player() else {
+        warn!("Client attempted to matchmake while not authenticated. (SID: {})", session.id);
+        return session.response_error(packet, ServerError::FailedNoLoginAction).await;
+    };
+
+    info!("Player {} started matchmaking", player.display_name);
 
     let rules = parse_ruleset(req.criteria.rules);
 
@@ -486,9 +490,10 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &Packet) -> Hand
         .response(packet, &MatchmakingRes { id: session.id })
         .await?;
 
-    if games.add_or_queue(session, rules).await {
-        debug!("Found matching game")
+    if games.add_or_queue(player, rules).await {
+        debug!("Matchmaking Ended")
     }
+
     Ok(())
 }
 
@@ -501,16 +506,13 @@ async fn handle_start_matchmaking(session: &SessionArc, packet: &Packet) -> Hand
 ///  number("MSID", 0x10d2d0df)
 /// }
 /// ```
-async fn handle_cancel_matchmaking(session: &SessionArc, packet: &Packet) -> HandleResult {
-    let session_data = session.data.read().await;
-    let Some(player) = session_data.player.as_ref() else {
-            warn!("Client attempted to cancel matchmaking while not authenticated. (SID: {})", session.id);
-            return session.response_error_empty(packet, ServerError::FailedNoLoginAction).await;
-        };
+async fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
+    let Some(player) = session.player.as_ref() else {
+        warn!("Client attempted to cancel matchmaking while not authenticated. (SID: {})", session.id);
+        return session.response_error(packet, ServerError::FailedNoLoginAction).await;
+    };
     info!("Player {} cancelled matchmaking", player.display_name);
-
     session.response_empty(packet).await?;
-
     session.release_games().await;
     Ok(())
 }

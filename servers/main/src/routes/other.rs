@@ -1,14 +1,14 @@
+use crate::session::Session;
 use blaze_pk::{codec::Codec, packet::Packet, tag::ValueType, tagging::*};
 use core::blaze::components::{AssociationLists, Components, GameReporting};
 use core::blaze::errors::HandleResult;
-use core::blaze::session::SessionArc;
 use log::debug;
 
 /// Routing function for handling packets with the `GameReporting` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
 pub async fn route_game_reporting(
-    session: &SessionArc,
+    session: &mut Session,
     component: GameReporting,
     packet: &Packet,
 ) -> HandleResult {
@@ -46,7 +46,7 @@ pub async fn route_game_reporting(
 ///   text("GTYP", "massEffectReport")
 /// }
 /// ```
-async fn handle_submit_offline(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_submit_offline(session: &mut Session, packet: &Packet) -> HandleResult {
     session.response_empty(packet).await?;
     session
         .notify_immediate(
@@ -74,7 +74,7 @@ impl Codec for GameReportResult {
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
 pub async fn route_association_lists(
-    session: &SessionArc,
+    session: &mut Session,
     component: AssociationLists,
     packet: &Packet,
 ) -> HandleResult {
@@ -137,6 +137,6 @@ impl Codec for DefaultAssocList {
 ///   number("OFRC", 0x0)
 /// }
 /// ```
-async fn handle_get_lists(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_get_lists(session: &mut Session, packet: &Packet) -> HandleResult {
     session.response(packet, &DefaultAssocList).await
 }

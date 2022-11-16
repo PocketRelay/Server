@@ -1,8 +1,9 @@
 use blaze_pk::packet::Packet;
 use core::blaze::components::Components;
 use core::blaze::errors::HandleResult;
-use core::blaze::session::SessionArc;
 use log::debug;
+
+use crate::session::Session;
 
 mod auth;
 mod game_manager;
@@ -12,7 +13,7 @@ mod stats;
 mod user_sessions;
 mod util;
 
-pub async fn route(session: &SessionArc, component: Components, packet: &Packet) -> HandleResult {
+pub async fn route(session: &mut Session, component: Components, packet: &Packet) -> HandleResult {
     match component {
         Components::Authentication(value) => auth::route(session, value, packet).await,
         Components::GameManager(value) => game_manager::route(session, value, packet).await,

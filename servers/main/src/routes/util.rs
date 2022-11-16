@@ -1,8 +1,8 @@
+use crate::session::Session;
 use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*, types::TdfMap};
+use core::blaze::codec::TelemetryRes;
 use core::blaze::components::Util;
 use core::blaze::errors::{HandleResult, ServerError};
-use core::blaze::session::SessionArc;
-use core::blaze::shared::TelemetryRes;
 use core::env::{self, VERSION};
 use database::{PlayerCharactersInterface, PlayerClassesInterface, PlayersInterface};
 use log::{debug, warn};
@@ -15,7 +15,7 @@ use utils::types::PlayerID;
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: Util, packet: &Packet) -> HandleResult {
+pub async fn route(session: &mut Session, component: Util, packet: &Packet) -> HandleResult {
     match component {
         Util::PreAuth => handle_pre_auth(session, packet).await,
         Util::PostAuth => handle_post_auth(session, packet).await,
@@ -39,7 +39,7 @@ pub async fn route(session: &SessionArc, component: Util, packet: &Packet) -> Ha
 /// packet(Components.UTIL, Commands.GET_TELEMETRY_SERVER, 0x0) {}
 /// ```
 ///
-async fn handle_get_telemetry_server(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_get_telemetry_server(session: &mut Session, packet: &Packet) -> HandleResult {
     let ext_host = env::str_env(env::EXT_HOST);
     let res = TelemetryRes {
         address: ext_host,
@@ -151,7 +151,7 @@ impl Codec for PreAuthRes {
 ///   }
 /// }
 /// ```
-async fn handle_pre_auth(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_pre_auth(session: &mut Session, packet: &Packet) -> HandleResult {
     let mut config = TdfMap::with_capacity(3);
     config.insert("pingPeriod", PING_PERIOD);
     config.insert("voipHeadsetUpdateRate", VOIP_HEADSET_UPDATE_RATE);
@@ -226,12 +226,12 @@ impl Codec for PostAuthRes {
 /// ```
 /// packet(Components.UTIL, Commands.POST_AUTH, 0x1b) {}
 /// ```
-async fn handle_post_auth(session: &SessionArc, packet: &Packet) -> HandleResult {
-    let Some(player_id) = session.player_id().await else {
-        return session.response_error_empty(packet, ServerError::FailedNoLoginAction).await;
+async fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResult {
+    let Some(player_id) = session.player_id() else {
+        return session.response_error(packet, ServerError::FailedNoLoginAction).await;
     };
 
-    session.update_other(session).await;
+    session.update_self();
 
     let ext_host = env::str_env(env::EXT_HOST);
     let res = PostAuthRes {
@@ -264,7 +264,7 @@ packet! {
 /// packet(Components.UTIL, Commands.PING, 0x0, 0x1) {}
 /// ```
 ///
-async fn handle_ping(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_ping(session: &mut Session, packet: &Packet) -> HandleResult {
     let server_time = server_unix_time();
     session.response(packet, &PingRes { server_time }).await
 }
@@ -302,7 +302,7 @@ const ME3_DIME: &str = include_str!("../resources/data/dime.xml");
 ///   text("CFID", "ME3_DATA")
 /// }
 /// ```
-async fn handle_fetch_client_config(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_fetch_client_config(session: &mut Session, packet: &Packet) -> HandleResult {
     let fetch_config = packet.decode::<FetchConfigReq>()?;
     let config = match fetch_config.id.as_ref() {
         "ME3_DATA" => data_config(),
@@ -511,11 +511,11 @@ packet! {
 /// ```
 ///
 ///
-async fn handle_suspend_user_ping(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_suspend_user_ping(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<SuspendUserPing>()?;
     match req.value {
-        0x1312D00 => session.response_error_empty(packet, 0x12Du16).await,
-        0x55D4A80 => session.response_error_empty(packet, 0x12Eu16).await,
+        0x1312D00 => session.response_error(packet, 0x12Du16).await,
+        0x55D4A80 => session.response_error(packet, 0x12Eu16).await,
         _ => session.response_empty(packet).await,
     }
 }
@@ -538,74 +538,76 @@ packet! {
 ///   number("UID", 0x0)
 /// }
 /// ```
-async fn handle_user_settings_save(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<UserSettingsSave>()?;
     let key = &req.key;
     let value = req.value;
 
-    let db = session.db();
     if key.starts_with("class") {
         debug!("Updating player class data: {key}");
-        let session_data = &*session.data.read().await;
-        let player = match session_data.player.as_ref() {
+        let db = session.db();
+        let player = match session.player.as_ref() {
             Some(value) => value,
             None => {
                 return session
-                    .response_error_empty(packet, ServerError::FailedNoLoginAction)
+                    .response_error(packet, ServerError::FailedNoLoginAction)
                     .await;
             }
         };
+
         match PlayerClassesInterface::update(db, player, key, &value).await {
             Ok(_) => {}
             Err(err) => {
                 warn!("Failed to update player class: {err:?}");
                 return session
-                    .response_error_empty(packet, ServerError::ServerUnavailable)
+                    .response_error(packet, ServerError::ServerUnavailable)
                     .await;
             }
         }
         debug!("Updating player character data: {key}");
     } else if key.starts_with("char") {
         debug!("Updating player character data: {key}");
-        let session_data = &*session.data.read().await;
-        let player = match session_data.player.as_ref() {
+        let db = session.db();
+        let player = match session.player.as_ref() {
             Some(value) => value,
             None => {
                 return session
-                    .response_error_empty(packet, ServerError::FailedNoLoginAction)
+                    .response_error(packet, ServerError::FailedNoLoginAction)
                     .await;
             }
         };
+
         match PlayerCharactersInterface::update(db, player, key, &value).await {
             Ok(_) => {}
             Err(err) => {
                 warn!("Failed to update player character: {err:?}");
                 return session
-                    .response_error_empty(packet, ServerError::ServerUnavailable)
+                    .response_error(packet, ServerError::ServerUnavailable)
                     .await;
             }
         }
         debug!("Updated player character data: {key}");
     } else {
         debug!("Updating player base data");
-        let session_data = &mut *session.data.write().await;
-        let player = match session_data.player.take() {
+        let player = match session.player.take() {
             Some(value) => value,
             None => {
                 return session
-                    .response_error_empty(packet, ServerError::FailedNoLoginAction)
+                    .response_error(packet, ServerError::FailedNoLoginAction)
                     .await;
             }
         };
+        let db = session.db();
+
         match PlayersInterface::update(db, player, key, value).await {
             Ok(player) => {
-                session_data.player = Some(player);
+                session.player = Some(player);
                 debug!("Updated player base data");
             }
             Err(err) => {
                 warn!("Failed to update player data: {err:?}");
                 return session
-                    .response_error_empty(packet, ServerError::ServerUnavailable)
+                    .response_error(packet, ServerError::ServerUnavailable)
                     .await;
             }
         };
@@ -626,14 +628,12 @@ packet! {
 /// ```
 /// packet(Components.UTIL, Commands.USER_SETTINGS_LOAD_ALL, 0x17) {}
 /// ```
-async fn handle_user_settings_load_all(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_user_settings_load_all(session: &mut Session, packet: &Packet) -> HandleResult {
     let mut settings = TdfMap::<String, String>::new();
     {
-        let session_data = session.data.read().await;
-
-        let Some(player) = session_data.player.as_ref() else {
+        let Some(player) = session.player.as_ref() else {
             warn!("Client attempted to load settings without being authenticated. (SID: {})", session.id);
-            return session.response_error_empty(packet, ServerError::FailedNoLoginAction).await;
+            return session.response_error(packet, ServerError::FailedNoLoginAction).await;
         };
 
         settings.insert("Base", PlayersInterface::encode_base(player));

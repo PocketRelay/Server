@@ -1,9 +1,9 @@
 use blaze_pk::{codec::Codec, packet, packet::Packet, tagging::tag_value};
 
+use crate::session::Session;
+use core::blaze::codec::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
 use core::blaze::components::Authentication;
 use core::blaze::errors::{BlazeError, HandleResult, ServerError};
-use core::blaze::session::SessionArc;
-use core::blaze::shared::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
 use database::{players, PlayersInterface};
 use log::{debug, error, warn};
 use utils::{
@@ -15,7 +15,7 @@ use utils::{
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
 pub async fn route(
-    session: &SessionArc,
+    session: &mut Session,
     component: Authentication,
     packet: &Packet,
 ) -> HandleResult {
@@ -64,7 +64,7 @@ packet! {
 /// }
 /// ```
 ///
-async fn handle_silent_login(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_silent_login(session: &mut Session, packet: &Packet) -> HandleResult {
     let silent_login = packet.decode::<SilentLoginReq>()?;
     let id = silent_login.id;
     let token = silent_login.token;
@@ -72,12 +72,12 @@ async fn handle_silent_login(session: &SessionArc, packet: &Packet) -> HandleRes
     debug!("Attempted silent authentication: {id} ({token})");
 
     let Some(player) = PlayersInterface::by_id(session.db(), id).await? else {
-        return session.response_error_empty(packet, ServerError::InvalidSession).await;
+        return session.response_error(packet, ServerError::InvalidSession).await;
     };
 
     if player.session_token.ne(&Some(token)) {
         return session
-            .response_error_empty(packet, ServerError::InvalidSession)
+            .response_error(packet, ServerError::InvalidSession)
             .await;
     }
 
@@ -93,7 +93,7 @@ async fn handle_silent_login(session: &SessionArc, packet: &Packet) -> HandleRes
 /// Completes the authentication process for the provided session using the provided Player
 /// Model as the authenticated player.
 pub async fn complete_auth(
-    session: &SessionArc,
+    session: &mut Session,
     packet: &Packet,
     player: players::Model,
     silent: bool,
@@ -103,8 +103,7 @@ pub async fn complete_auth(
     debug!("Set player");
     let session_token = session.session_token().await?;
     debug!("Session token: {}", session_token);
-    let session_data = session.data.read().await;
-    let Some(player) = session_data.player.as_ref() else {
+    let Some(player) = session.player.as_ref() else {
         error!("Failed to complete auth player was somehow missing");
         return session.response_empty(packet).await;
     };
@@ -128,7 +127,7 @@ pub async fn complete_auth(
 /// ```
 /// packet(Components.AUTHENTICATION, Commands.LOGOUT, 0x0, 0x7) {}
 /// ```
-async fn handle_logout(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
     debug!("Logging out for session: (ID: {})", &session.id);
     session.set_player(None).await;
     session.response_empty(packet).await
@@ -154,7 +153,7 @@ packet! {
 ///   number("TYPE", 0x0)
 /// }
 /// ```
-async fn handle_login(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_login(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<AccountReq>()?;
     let email = req.email;
     let password = req.password;
@@ -165,13 +164,13 @@ async fn handle_login(session: &SessionArc, packet: &Packet) -> HandleResult {
             &email
         );
         return session
-            .response_error_empty(packet, ServerError::InvalidEmail)
+            .response_error(packet, ServerError::InvalidEmail)
             .await;
     }
 
     let Some(player) = PlayersInterface::by_email(session.db(), &email, false).await? else {
         return session
-            .response_error_empty(packet, ServerError::EmailNotFound)
+            .response_error(packet, ServerError::EmailNotFound)
             .await;
     };
 
@@ -180,7 +179,7 @@ async fn handle_login(session: &SessionArc, packet: &Packet) -> HandleResult {
     if !verify_password(&password, &player.password) {
         debug!("Client provided password did not match stored hash");
         return session
-            .response_error_empty(packet, ServerError::WrongPassword)
+            .response_error(packet, ServerError::WrongPassword)
             .await;
     }
 
@@ -220,14 +219,14 @@ async fn handle_login(session: &SessionArc, packet: &Packet) -> HandleResult {
 /// }
 /// ```
 ///
-async fn handle_create_account(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_create_account(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<AccountReq>()?;
     let email = req.email;
     let password = req.password;
 
     if !is_email(&email) {
         return session
-            .response_error_empty(packet, ServerError::InvalidEmail)
+            .response_error(packet, ServerError::InvalidEmail)
             .await;
     }
 
@@ -235,7 +234,7 @@ async fn handle_create_account(session: &SessionArc, packet: &Packet) -> HandleR
 
     if email_exists {
         return session
-            .response_error_empty(packet, ServerError::EmailAlreadyInUse)
+            .response_error(packet, ServerError::EmailAlreadyInUse)
             .await;
     }
 
@@ -272,7 +271,7 @@ packet! {
 ///   number("TYPE", 0x1)
 /// }
 /// ```
-async fn handle_origin_login(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_origin_login(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<OriginLoginReq>()?;
     debug!("Origin login request with token: {}", &req.token);
     let Some(retriever) = session.retriever() else {
@@ -333,7 +332,7 @@ impl Codec for LUERes<'_> {
 ///   number("TYPE", 0x0)
 /// }
 /// ```
-async fn handle_list_user_entitlements_2(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_list_user_entitlements_2(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<LUEReq>()?;
     let tag = req.tag;
     if !tag.is_empty() {
@@ -573,15 +572,13 @@ async fn handle_list_user_entitlements_2(session: &SessionArc, packet: &Packet) 
 ///   text("PNAM", "Jacobtread")
 /// }
 /// ```
-async fn handle_login_persona(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleResult {
     debug!("Logging into persona");
     let session_token = session.session_token().await?;
-    let session_data = session.data.read().await;
-
-    let Some(player) = session_data.player.as_ref() else {
+    let Some(player) = session.player.as_ref() else {
         warn!("Client attempted to login to persona without being authenticated");
         return session
-            .response_error_empty(packet, ServerError::FailedNoLoginAction)
+            .response_error(packet, ServerError::FailedNoLoginAction)
             .await;
     };
     let response = Sess {
@@ -608,11 +605,11 @@ packet! {
 ///   text("MAIL", "EMAIL OMITTED")
 /// }
 /// ```
-async fn handle_forgot_password(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_forgot_password(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<ForgotPaswdReq>()?;
     if !is_email(&req.email) {
         return session
-            .response_error_empty(packet, ServerError::InvalidEmail)
+            .response_error(packet, ServerError::InvalidEmail)
             .await;
     }
     debug!("Got request for password rest for email: {}", &req.email);
@@ -629,7 +626,7 @@ async fn handle_forgot_password(session: &SessionArc, packet: &Packet) -> Handle
 ///   text("PTFM", "pc") // Platform?
 /// }
 /// ```
-async fn handle_get_legal_docs_info(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_get_legal_docs_info(session: &mut Session, packet: &Packet) -> HandleResult {
     session.response(packet, &LegalDocsInfo).await
 }
 
@@ -649,7 +646,7 @@ const DEFAULT_TERMS_OF_SERVICE: &str = include_str!("../resources/defaults/term_
 /// }
 /// ```
 ///
-async fn handle_terms_of_service_content(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_terms_of_service_content(session: &mut Session, packet: &Packet) -> HandleResult {
     // TODO: Attempt to load local terms of service before reverting to default
     session
         .response(
@@ -679,7 +676,7 @@ const DEFAULT_PRIVACY_POLICY: &str = include_str!("../resources/defaults/privacy
 /// }
 /// ```
 ///
-async fn handle_privacy_policy_content(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_privacy_policy_content(session: &mut Session, packet: &Packet) -> HandleResult {
     // TODO: Attempt to load local privacy policy before reverting to default
     session
         .response(
@@ -705,7 +702,7 @@ packet! {
 ///
 /// # Structure
 /// *To be recorded*.
-async fn handle_get_password_rules(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_get_password_rules(session: &mut Session, packet: &Packet) -> HandleResult {
     session.response(packet, &PasswordRules {
         max_length: 99,
         min_length: 4,
@@ -726,12 +723,11 @@ packet! {
 /// ```
 /// packet(Components.AUTHENTICATION, Commands.GET_AUTH_TOKEN, 0x23) {}
 /// ```
-async fn handle_get_auth_token(session: &SessionArc, packet: &Packet) -> HandleResult {
-    let session_data = session.data.read().await;
-    let Some(player) = session_data.player.as_ref() else {
+async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> HandleResult {
+    let Some(player) = session.player.as_ref() else {
         warn!("Client attempted to get auth token while not authenticated. (SID: {})", session.id);
         return session
-            .response_error_empty(packet, ServerError::FailedNoLoginAction)
+            .response_error(packet, ServerError::FailedNoLoginAction)
             .await;
     };
     let value = format!("{:X}", player.id);

@@ -1,14 +1,14 @@
-use core::blaze::components::Components;
-use core::blaze::session::{Session, SessionArc};
 use core::{env, GlobalStateArc};
 
-use blaze_pk::packet::Packet;
-use log::{debug, error, info};
+use log::{error, info};
 use tokio::net::TcpListener;
 use tokio::select;
-use tokio::sync::mpsc;
 
+mod codec;
 mod routes;
+mod session;
+
+use session::Session;
 
 /// Starts the Blaze server using the provided global state
 /// which is cloned for the spawned sessions.
@@ -36,10 +36,7 @@ pub async fn start_server(global: GlobalStateArc) {
             result = listener.accept() => {
                 match result {
                     Ok(values) => {
-
-                        let (flush_send, flush_recv) = mpsc::channel(1);
-                        let session = Session::new(global.clone(), session_id, values, flush_send);
-                        tokio::spawn(process(session, flush_recv));
+                        Session::spawn(global.clone(), session_id, values);
                         session_id += 1;
                     }
                     Err(err) => {
@@ -53,47 +50,4 @@ pub async fn start_server(global: GlobalStateArc) {
             }
         }
     }
-}
-
-/// Processes the session by reading packets and flushing outbound content.
-///
-/// `session` The session to process
-/// `flush`   The reciever for the flush messages
-async fn process(session: SessionArc, mut flush: mpsc::Receiver<()>) {
-    let mut shutdown = session.global.shutdown.clone();
-    loop {
-        select! {
-            _ = flush.recv() => { session.flush().await; }
-            result = session.read() => {
-                if let Ok((component, packet)) = result {
-                    process_packet(&session, component, &packet).await;
-                } else {
-                    break;
-                }
-            }
-            _ = shutdown.changed() => {
-                debug!("Shutting down session (SID: {})", session.id);
-                break;
-            }
-        };
-    }
-    session.release().await;
-}
-
-/// Handles processing a recieved packet from the `process` function. This includes a
-/// component for routing and the actual packet itself. The buffer is flushed after
-/// routing is complete.
-///
-/// `session`   The session to process the packet for
-/// `component` The component of the packet for routing
-/// `packet`    The packet itself
-async fn process_packet(session: &SessionArc, component: Components, packet: &Packet) {
-    Session::debug_log_packet(session, "Read", packet).await;
-    if let Err(err) = routes::route(session, component, packet).await {
-        error!(
-            "Error occurred while routing (SID: {}): {:?}",
-            session.id, err
-        );
-    }
-    session.flush().await;
 }

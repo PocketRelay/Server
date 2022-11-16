@@ -1,6 +1,6 @@
 use blaze_pk::{codec::Codec, tagging::*};
 
-use core::blaze::shared::NetAddress;
+use core::blaze::codec::NetAddress;
 
 #[derive(Debug, Clone)]
 pub enum InstanceType {

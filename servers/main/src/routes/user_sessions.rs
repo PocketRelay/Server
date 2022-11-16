@@ -8,15 +8,20 @@ use blaze_pk::{
 };
 use core::blaze::components::UserSessions;
 use core::blaze::errors::{HandleResult, ServerError};
-use core::blaze::session::SessionArc;
-use core::blaze::shared::{NetExt, NetGroups};
+
+use crate::session::Session;
+use core::blaze::codec::{NetExt, NetGroups};
 use database::PlayersInterface;
 use log::{debug, warn};
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
-pub async fn route(session: &SessionArc, component: UserSessions, packet: &Packet) -> HandleResult {
+pub async fn route(
+    session: &mut Session,
+    component: UserSessions,
+    packet: &Packet,
+) -> HandleResult {
     match component {
         UserSessions::ResumeSession => handle_resume_session(session, packet).await,
         UserSessions::UpdateNetworkInfo => handle_update_network_info(session, packet).await,
@@ -38,11 +43,11 @@ packet! {
 ///
 /// # Structure
 /// *To be recorded*
-async fn handle_resume_session(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_resume_session(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<ResumeSession>()?;
     let Some(player) = PlayersInterface::by_token(session.db(), &req.session_token).await? else {
         return session
-            .response_error_empty(packet, ServerError::InvalidSession)
+            .response_error(packet, ServerError::InvalidSession)
             .await;
     };
     complete_auth(session, packet, player, true).await
@@ -94,7 +99,7 @@ impl Codec for UpdateNetworkInfo {
 ///   }
 /// }
 /// ```
-async fn handle_update_network_info(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_update_network_info(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<UpdateNetworkInfo>()?;
     let groups = match req.address {
         TdfOptional::Some(_, value) => value.1,
@@ -121,8 +126,8 @@ packet! {
 ///   number("HWFG", 0x0)
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: &SessionArc, packet: &Packet) -> HandleResult {
+async fn handle_update_hardware_flag(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<UpdateHWFlagReq>()?;
-    session.set_hardware_flag(req.hardware_flag).await;
+    session.set_hardware_flag(req.hardware_flag);
     session.response_empty(packet).await
 }
