@@ -69,6 +69,15 @@ impl Games {
         GamesSnapshot { games }
     }
 
+    /// Takes a snapshot of the game with the provided game ID
+    ///
+    /// `game_id` The ID of the game to take the snapshot of
+    pub async fn snapshot_id(&self, game_id: GameID) -> Option<GameSnapshot> {
+        let games = &*self.games.read().await;
+        let game = games.get(&game_id)?;
+        Some(game.snapshot().await)
+    }
+
     /// Creates a new game from the initial attributes and
     /// settings provided returning the Game ID of the created
     /// game
