@@ -6,10 +6,11 @@ use std::{
 
 use blaze_pk::types::TdfMap;
 use log::debug;
+use serde::Serialize;
 use tokio::sync::{Mutex, RwLock};
 use utils::types::{GameID, PlayerID, SessionID};
 
-use super::rules::RuleSet;
+use super::{game::GameSnapshot, rules::RuleSet};
 use super::{
     game::{AttrMap, Game},
     player::GamePlayer,
@@ -23,6 +24,11 @@ pub struct Games {
     queue: Mutex<VecDeque<QueueEntry>>,
     /// ID for the next game to create
     id: AtomicU32,
+}
+
+#[derive(Serialize)]
+pub struct GamesSnapshot {
+    games: HashMap<GameID, GameSnapshot>,
 }
 
 /// Structure for a entry in the matchmaking queue
@@ -44,6 +50,23 @@ impl Games {
             queue: Mutex::new(VecDeque::new()),
             id: AtomicU32::new(1),
         }
+    }
+
+    /// Takes a snapshot of all the current games for serialization
+    pub async fn snapshot(&self) -> GamesSnapshot {
+        let games = &*self.games.read().await;
+        let snapshots = games
+            .iter()
+            .map(|value| value.1.snapshot())
+            .collect::<Vec<_>>();
+        let snapshots = futures::future::join_all(snapshots).await;
+
+        let mut games = HashMap::with_capacity(snapshots.len());
+        for snapshot in snapshots.into_iter() {
+            games.insert(snapshot.id, snapshot);
+        }
+
+        GamesSnapshot { games }
     }
 
     /// Creates a new game from the initial attributes and

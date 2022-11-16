@@ -8,6 +8,7 @@ use blaze_pk::{
     types::TdfOptional,
 };
 
+use serde::Serialize;
 use utils::types::PlayerID;
 
 packet! {
@@ -18,7 +19,7 @@ packet! {
 }
 
 /// Structure for storing extended network data
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, Serialize)]
 pub struct NetExt {
     pub dbps: u16,
     pub natt: u8,
@@ -50,7 +51,7 @@ impl Codec for NetExt {
 /// Type alias for ports which are always u16
 pub type Port = u16;
 
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Serialize)]
 pub struct NetData {
     pub groups: NetGroups,
     pub ext: NetExt,
@@ -58,7 +59,7 @@ pub struct NetData {
     pub hwfg: u16,
 }
 
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Serialize)]
 pub struct NetGroups {
     pub internal: NetGroup,
     pub external: NetGroup,
@@ -100,7 +101,7 @@ impl NetData {
 
 /// Structure for a networking group which consists of a
 /// networking address and port value
-#[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Serialize)]
 pub struct NetGroup(pub NetAddress, pub Port);
 
 impl Codec for NetGroup {
@@ -123,7 +124,7 @@ impl Codec for NetGroup {
 }
 
 /// Structure for wrapping a Blaze networking address
-#[derive(Copy, Clone, Default, Eq, PartialEq)]
+#[derive(Copy, Clone, Default, Eq, PartialEq, Serialize)]
 pub struct NetAddress(pub u32);
 
 impl Debug for NetAddress {

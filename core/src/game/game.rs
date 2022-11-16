@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use blaze_pk::{codec::Codec, packet::Packet, types::TdfMap};
 
 use log::{debug, warn};
+use serde::Serialize;
 use tokio::{join, sync::RwLock};
 use utils::types::{GameID, GameSlot, PlayerID, SessionID};
 
@@ -12,7 +15,7 @@ use super::{
         FetchExtendedData, HostMigrateFinished, HostMigrateStart, JoinComplete, PlayerJoining,
         PlayerRemoved, PlayerStateChange, SettingChange, StateChange,
     },
-    player::GamePlayer,
+    player::{GamePlayer, GamePlayerSnapshot},
 };
 
 pub struct Game {
@@ -30,6 +33,15 @@ impl Drop for Game {
     fn drop(&mut self) {
         debug!("Game has been dropped (GID: {})", self.id)
     }
+}
+
+#[derive(Serialize)]
+pub struct GameSnapshot {
+    pub id: GameID,
+    pub state: u16,
+    pub setting: u16,
+    pub attributes: HashMap<String, String>,
+    pub players: Vec<GamePlayerSnapshot>,
 }
 
 /// Attributes map type
@@ -74,6 +86,27 @@ impl Game {
             data: RwLock::new(GameData::new(setting, attributes)),
             players: RwLock::new(Vec::new()),
             next_slot: RwLock::new(0),
+        }
+    }
+
+    /// Takes a snapshot of the current game state for serialization
+    pub async fn snapshot(&self) -> GameSnapshot {
+        let data = &*self.data.read().await;
+        let old_attributes = &data.attributes;
+        let mut attributes = HashMap::with_capacity(old_attributes.len());
+        for (key, value) in old_attributes {
+            attributes.insert(key.to_owned(), value.to_owned());
+        }
+
+        let players = &*self.players.read().await;
+        let players = players.iter().map(|value| value.snapshot()).collect();
+
+        GameSnapshot {
+            id: self.id,
+            state: data.state,
+            setting: data.setting,
+            attributes,
+            players,
         }
     }
 

@@ -720,6 +720,7 @@ dependencies = [
  "database",
  "futures",
  "log",
+ "serde",
  "tokio",
  "utils",
 ]

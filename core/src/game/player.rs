@@ -1,4 +1,5 @@
 use blaze_pk::{codec::Codec, packet::Packet, tag::ValueType, tagging::*};
+use serde::Serialize;
 use tokio::{join, sync::mpsc};
 use utils::types::{GameID, PlayerID, SessionID};
 
@@ -26,6 +27,14 @@ pub struct GamePlayer {
     pub message_sender: mpsc::Sender<SessionMessage>,
 }
 
+#[derive(Serialize)]
+pub struct GamePlayerSnapshot {
+    pub session_id: SessionID,
+    pub player_id: PlayerID,
+    pub display_name: String,
+    pub net: NetData,
+}
+
 impl GamePlayer {
     const DEFAULT_STATE: u8 = 2;
 
@@ -44,6 +53,17 @@ impl GamePlayer {
             game_id: 1,
             state: Self::DEFAULT_STATE,
             message_sender,
+        }
+    }
+
+    /// Takes a snapshot of the current player state
+    /// for serialization
+    pub fn snapshot(&self) -> GamePlayerSnapshot {
+        GamePlayerSnapshot {
+            session_id: self.session_id,
+            player_id: self.player_id,
+            display_name: self.display_name.clone(),
+            net: self.net,
         }
     }
 
