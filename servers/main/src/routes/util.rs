@@ -1,6 +1,5 @@
 use crate::session::Session;
 use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*, types::TdfMap};
-use core::blaze::codec::TelemetryRes;
 use core::blaze::components::Util;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::env::{self, VERSION};
@@ -29,6 +28,29 @@ pub async fn route(session: &mut Session, component: Util, packet: &Packet) -> H
             debug!("Got Util({component:?})");
             session.response_empty(packet).await
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct TelemetryRes {
+    pub address: String,
+    pub session_id: u32,
+}
+
+impl Codec for TelemetryRes {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_str(output, "ADRS", &self.address);
+        tag_zero(output, "ANON");
+        tag_str(output, "DISA", "AD,AF,AG,AI,AL,AM,AN,AO,AQ,AR,AS,AW,AX,AZ,BA,BB,BD,BF,BH,BI,BJ,BM,BN,BO,BR,BS,BT,BV,BW,BY,BZ,CC,CD,CF,CG,CI,CK,CL,CM,CN,CO,CR,CU,CV,CX,DJ,DM,DO,DZ,EC,EG,EH,ER,ET,FJ,FK,FM,FO,GA,GD,GE,GF,GG,GH,GI,GL,GM,GN,GP,GQ,GS,GT,GU,GW,GY,HM,HN,HT,ID,IL,IM,IN,IO,IQ,IR,IS,JE,JM,JO,KE,KG,KH,KI,KM,KN,KP,KR,KW,KY,KZ,LA,LB,LC,LI,LK,LR,LS,LY,MA,MC,MD,ME,MG,MH,ML,MM,MN,MO,MP,MQ,MR,MS,MU,MV,MW,MY,MZ,NA,NC,NE,NF,NG,NI,NP,NR,NU,OM,PA,PE,PF,PG,PH,PK,PM,PN,PS,PW,PY,QA,RE,RS,RW,SA,SB,SC,SD,SG,SH,SJ,SL,SM,SN,SO,SR,ST,SV,SY,SZ,TC,TD,TF,TG,TH,TJ,TK,TL,TM,TN,TO,TT,TV,TZ,UA,UG,UM,UY,UZ,VA,VC,VE,VG,VN,VU,WF,WS,YE,YT,ZM,ZW,ZZ");
+        tag_str(output, "FILT", "-UION/****");
+        tag_u32(output, "LOC", 0x656e5553);
+        tag_str(output, "NOOK", "US,CA,MX");
+        tag_u16(output, "PORT", 9988);
+        tag_u16(output, "SDLY", 15000);
+        tag_str(output, "SESS", "Evi8itOCVpD");
+        tag_str(output, "SKEY", &self.session_id.to_string());
+        tag_u8(output, "SPCT", 75);
+        tag_empty_str(output, "STIM");
     }
 }
 

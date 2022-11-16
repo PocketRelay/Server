@@ -1,7 +1,6 @@
-use blaze_pk::{codec::Codec, packet, packet::Packet, tagging::tag_value};
+use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*};
 
 use crate::session::Session;
-use core::blaze::codec::{AuthRes, Entitlement, LegalDocsInfo, Sess, TermsContent};
 use core::blaze::components::Authentication;
 use core::blaze::errors::{BlazeError, HandleResult, ServerError};
 use database::{players, PlayersInterface};
@@ -88,6 +87,75 @@ async fn handle_silent_login(session: &mut Session, packet: &Packet) -> HandleRe
 
     complete_auth(session, packet, player, true).await?;
     Ok(())
+}
+
+fn encode_persona(player: &players::Model, output: &mut Vec<u8>) {
+    tag_str(output, "DSNM", &player.display_name);
+    tag_zero(output, "LAST");
+    tag_u32(output, "PID", player.id);
+    tag_zero(output, "STAS");
+    tag_zero(output, "XREF");
+    tag_zero(output, "XTYP");
+    tag_group_end(output);
+}
+
+#[derive(Debug)]
+pub struct Sess<'a> {
+    pub player: &'a players::Model,
+    pub session_token: String,
+}
+
+impl Codec for Sess<'_> {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_u32(output, "BUID", self.player.id);
+        tag_zero(output, "FRST");
+        tag_str(output, "KEY", &self.session_token);
+        tag_zero(output, "LLOG");
+        tag_str(output, "MAIL", &self.player.email);
+        tag_group_start(output, "PDTL");
+        encode_persona(&self.player, output);
+        tag_u32(output, "UID", self.player.id);
+    }
+}
+
+/// Complex authentication result structure is manually encoded because it
+/// has complex nesting and output can vary based on inputs provided
+#[derive(Debug)]
+pub struct AuthRes<'a> {
+    pub sess: Sess<'a>,
+    pub silent: bool,
+}
+
+impl Codec for AuthRes<'_> {
+    fn encode(&self, output: &mut Vec<u8>) {
+        let silent = self.silent;
+        if silent {
+            tag_zero(output, "AGUP");
+        }
+
+        tag_empty_str(output, "LDHT");
+        tag_zero(output, "NTOS");
+        tag_str(output, "PCTK", &self.sess.session_token);
+
+        if silent {
+            tag_empty_str(output, "PRIV");
+            tag_group_start(output, "SESS");
+            self.sess.encode(output);
+            tag_group_end(output);
+        } else {
+            tag_list_start(output, "PLST", ValueType::Group, 1);
+            encode_persona(&self.sess.player, output);
+            tag_empty_str(output, "PRIV");
+            tag_str(output, "SKEY", &self.sess.session_token);
+        }
+        tag_zero(output, "SPAM");
+        tag_empty_str(output, "THST");
+        tag_empty_str(output, "TSUI");
+        tag_empty_str(output, "TURI");
+        if !silent {
+            tag_u32(output, "UID", self.sess.player.id);
+        }
+    }
 }
 
 /// Completes the authentication process for the provided session using the provided Player
@@ -308,6 +376,74 @@ struct LUERes<'a> {
 impl Codec for LUERes<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_value(output, "NLST", &self.list);
+    }
+}
+
+//noinspection SpellCheckingInspection
+#[derive(Debug)]
+pub struct Entitlement<'a> {
+    name: &'a str,
+    id: u64,
+    pjid: &'a str,
+    prca: u8,
+    prid: &'a str,
+    tag: &'a str,
+    ty: u8,
+}
+
+impl<'a> Entitlement<'a> {
+    const PC_TAG: &'a str = "ME3PCOffers";
+    const GEN_TAG: &'a str = "ME3GenOffers";
+
+    pub fn new_pc(id: u64, pjid: &'a str, prca: u8, prid: &'a str, tag: &'a str, ty: u8) -> Self {
+        Self {
+            name: Self::PC_TAG,
+            id,
+            pjid,
+            prca,
+            prid,
+            tag,
+            ty,
+        }
+    }
+
+    pub fn new_gen(id: u64, pjid: &'a str, prca: u8, prid: &'a str, tag: &'a str, ty: u8) -> Self {
+        Self {
+            name: Self::GEN_TAG,
+            id,
+            pjid,
+            prca,
+            prid,
+            tag,
+            ty,
+        }
+    }
+}
+
+impl Codec for Entitlement<'_> {
+    //noinspection SpellCheckingInspection
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_empty_str(output, "DEVI");
+        tag_str(output, "GDAY", "2012-12-15T16:15Z");
+        tag_str(output, "GNAM", self.name);
+        tag_u64(output, "ID", self.id);
+        tag_u8(output, "ISCO", 0);
+        tag_u8(output, "PID", 0);
+        tag_str(output, "PJID", self.pjid);
+        tag_u8(output, "PRCA", self.prca);
+        tag_str(output, "PRID", self.prid);
+        tag_u8(output, "STAT", 1);
+        tag_u8(output, "STRC", 0);
+        tag_str(output, "TAG", self.tag);
+        tag_empty_str(output, "TDAY");
+        tag_u8(output, "TTYPE", self.ty);
+        tag_u8(output, "UCNT", 0);
+        tag_u8(output, "VER", 0);
+        tag_group_end(output);
+    }
+
+    fn value_type() -> ValueType {
+        ValueType::Group
     }
 }
 
@@ -616,6 +752,20 @@ async fn handle_forgot_password(session: &mut Session, packet: &Packet) -> Handl
     session.response_empty(packet).await
 }
 
+#[derive(Debug)]
+pub struct LegalDocsInfo;
+
+impl Codec for LegalDocsInfo {
+    //noinspection SpellCheckingInspection
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_zero(output, "EAMC");
+        tag_empty_str(output, "LHST");
+        tag_zero(output, "PMC");
+        tag_empty_str(output, "PPUI");
+        tag_empty_str(output, "TSUI");
+    }
+}
+
 /// Expected to be getting information about the legal docs however the exact meaning
 /// of the response content is not yet known and further research is required
 ///
@@ -632,6 +782,22 @@ async fn handle_get_legal_docs_info(session: &mut Session, packet: &Packet) -> H
 
 /// The default terms of service document
 const DEFAULT_TERMS_OF_SERVICE: &str = include_str!("../resources/defaults/term_of_service.html");
+
+#[derive(Debug)]
+pub struct TermsContent<'a, 'b> {
+    pub path: &'a str,
+    pub col: u16,
+    pub content: &'b str,
+}
+
+impl Codec for TermsContent<'_, '_> {
+    //noinspection SpellCheckingInspection
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_str(output, "LDVC", self.path);
+        tag_u16(output, "TCOL", self.col);
+        tag_str(output, "TCOT", self.content);
+    }
+}
 
 /// Handles serving the contents of the terms of service. This is an HTML document which is
 /// rendered inside the game when you click the button for viewing terms of service.
