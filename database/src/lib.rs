@@ -5,6 +5,8 @@ mod migration;
 mod entities;
 mod interfaces;
 
+pub mod snapshots;
+
 pub use interfaces::{
     galaxy_at_war::GalaxyAtWarInterface, player_characters::PlayerCharactersInterface,
     player_classes::PlayerClassesInterface, players::PlayersInterface,

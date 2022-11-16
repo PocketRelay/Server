@@ -2,13 +2,16 @@
 
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
+use serde::Serialize;
 use utils::types::PlayerID;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
 #[sea_orm(table_name = "galaxy_at_war")]
 pub struct Model {
     #[sea_orm(primary_key)]
+    #[serde(skip)]
     pub id: u32,
+    #[serde(skip)]
     pub player_id: PlayerID,
     pub last_modified: NaiveDateTime,
     pub group_a: u16,

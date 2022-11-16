@@ -866,6 +866,7 @@ dependencies = [
  "log",
  "sea-orm",
  "sea-orm-migration",
+ "serde",
  "tokio",
  "utils",
 ]
