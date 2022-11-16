@@ -230,7 +230,7 @@ impl Games {
     /// `sid`     The session id of the player to remove
     pub async fn remove_player_sid(&self, game_id: GameID, sid: SessionID) -> bool {
         {
-            let games = self.games.read().await;
+            let games = &*self.games.read().await;
             let Some(game) = games.get(&game_id) else { return false; };
             game.remove_by_sid(sid).await;
             if game.is_empty().await {

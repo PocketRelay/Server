@@ -138,7 +138,6 @@ impl Session {
                 _ = shutdown.changed() => {break;}
             };
         }
-        self.release().await;
     }
 
     /// Handles processing a recieved packet from the `process` function. This includes a
@@ -537,31 +536,24 @@ impl Session {
         ];
         self.push_all(packets);
     }
-
-    /// Releases the session removing its references from everywhere
-    /// that it is stored so that it can be dropped
-    pub async fn release(mut self) {
-        debug!("Releasing Session (SID: {})", self.id);
-        self.release_games().await;
-        info!("Session was released (SID: {})", self.id);
-        self.flush().await;
-    }
-
-    /// Releases the player from any games if they are in any
-    /// and removes them from the matchmaking queue if they are
-    /// present
-    pub async fn release_games(&self) {
-        let games = self.games();
-        if let Some(game) = self.game.as_ref() {
-            games.remove_player_sid(*game, self.id).await;
-        } else {
-            games.unqueue_session(self.id).await;
-        }
-    }
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
         debug!("Session dropped (SID: {})", self.id);
+        let global = self.global.clone();
+        let game = self.game.take();
+        let session_id = self.id;
+
+        tokio::spawn(async move {
+            debug!("Cleaning up dropped session (SID: {})", session_id);
+            let games = &global.games;
+            if let Some(game) = game {
+                games.remove_player_sid(game, session_id).await;
+            } else {
+                games.unqueue_session(session_id).await;
+            }
+            debug!("Finished cleaning up dropped session (SID: {})", session_id)
+        });
     }
 }

@@ -513,6 +513,13 @@ async fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> Ha
     };
     info!("Player {} cancelled matchmaking", player.display_name);
     session.response_empty(packet).await?;
-    session.release_games().await;
+
+    let games = session.games();
+    if let Some(game) = session.game.as_ref() {
+        games.remove_player_sid(*game, session.id).await;
+    } else {
+        games.unqueue_session(session.id).await;
+    }
+
     Ok(())
 }
