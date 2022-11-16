@@ -25,9 +25,6 @@ features present in the [Kotlin Server (https://github.com/PocketRelay/ServerKot
 - Matchmaking 
 - Origin fetching and authentication
   
-### Planned / In progress
-- Proper client application 
-
 # Structure
 - core *Core application structures and shared state*
 - database *All application database logic and structures*
@@ -36,3 +33,8 @@ features present in the [Kotlin Server (https://github.com/PocketRelay/ServerKot
   - main *Main app server*
   - redirector *Redirector server*
 - utils *Utilities used throughout the servers and core*
+
+
+## EA / BioWare Notice
+All code in this repository is authored by Jacobtread and none is taken from BioWare. This code has been 
+produced from studying the protocol of the official servers and emulating its functionality. This program is in no way or form supported, endorsed, or provided by BioWare or Electronic Arts.
