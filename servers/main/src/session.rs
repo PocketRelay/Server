@@ -32,7 +32,7 @@ use blaze_pk::{
     tag::Tag,
 };
 
-use log::{debug, error, info, log_enabled};
+use log::{debug, error, log_enabled};
 use tokio::{
     net::TcpStream,
     select,

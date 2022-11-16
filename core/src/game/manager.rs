@@ -96,6 +96,11 @@ impl Games {
                         "Found player from queue adding them to the game (GID: {})",
                         game.id
                     );
+                    let time = SystemTime::now();
+                    let elapsed = time.duration_since(entry.time);
+                    if let Ok(elapsed) = elapsed {
+                        debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
+                    }
                     game.add_player(entry.player).await;
                 } else {
                     // TODO: Check started time and timeout
