@@ -43,10 +43,15 @@ pub enum GameSetting {}
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 pub enum GameState {
+    /// Initial game state
     Init,
+    /// In Lobby
     InGame,
+    /// Game starting / Active
     InGameStarting,
+    /// Game is finished
     GameFinished,
+    /// Host is migrating
     HostMigration,
     Unknown(u8),
 }
