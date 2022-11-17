@@ -4,13 +4,13 @@ use blaze_pk::{
     packet,
     packet::Packet,
     tag::Tag,
-    types::TdfOptional,
+    types::Union,
 };
 use core::blaze::components::UserSessions;
 use core::blaze::errors::{HandleResult, ServerError};
 
 use crate::session::Session;
-use core::blaze::codec::{NetExt, NetGroups};
+use core::blaze::codec::{NetGroups, QosNetworkData};
 use database::PlayersInterface;
 use log::{debug, warn};
 
@@ -55,8 +55,8 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
 
 #[derive(Debug)]
 struct UpdateNetworkInfo {
-    address: TdfOptional<NetGroups>,
-    nqos: NetExt,
+    address: Union<NetGroups>,
+    nqos: QosNetworkData,
 }
 
 impl Codec for UpdateNetworkInfo {
@@ -102,8 +102,8 @@ impl Codec for UpdateNetworkInfo {
 async fn handle_update_network_info(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<UpdateNetworkInfo>()?;
     let groups = match req.address {
-        TdfOptional::Some(_, value) => value.1,
-        TdfOptional::None => {
+        Union::Set { value, .. } => value,
+        Union::Unset => {
             warn!("Client didn't provide the expected networking information");
             return session.response_empty(packet).await;
         }

@@ -1,14 +1,16 @@
-use std::{fmt::Debug, str::Split};
+use std::{
+    fmt::{Debug, Display},
+    str::Split,
+};
 
 use blaze_pk::{
     codec::{Codec, CodecResult, Reader},
     packet,
     tag::{Tag, ValueType},
     tagging::*,
-    types::TdfOptional,
 };
 
-use serde::Serialize;
+use serde::{ser::SerializeStruct, Serialize};
 use utils::types::PlayerID;
 
 packet! {
@@ -18,19 +20,116 @@ packet! {
     }
 }
 
+#[derive(Debug, Copy, Clone, Serialize)]
+pub enum NetworkAddressType {
+    Server,
+    Client,
+    Pair,
+    IpAddress,
+    HostnameAddress,
+    Unknown(u8),
+}
+
+impl NetworkAddressType {
+    pub fn value(&self) -> u8 {
+        match self {
+            Self::Server => 0x0,
+            Self::Client => 0x1,
+            Self::Pair => 0x2,
+            Self::IpAddress => 0x3,
+            Self::HostnameAddress => 0x4,
+            Self::Unknown(value) => *value,
+        }
+    }
+
+    pub fn from_value(value: u8) -> Self {
+        match value {
+            0x0 => Self::Server,
+            0x1 => Self::Client,
+            0x2 => Self::Pair,
+            0x3 => Self::IpAddress,
+            0x4 => Self::HostnameAddress,
+            value => Self::Unknown(value),
+        }
+    }
+}
+
+impl Into<u8> for NetworkAddressType {
+    fn into(self) -> u8 {
+        self.value()
+    }
+}
+
 /// Structure for storing extended network data
 #[derive(Debug, Copy, Clone, Default, Serialize)]
-pub struct NetExt {
+pub struct QosNetworkData {
+    /// Downstream bits per second
     pub dbps: u16,
-    pub natt: u8,
+    /// Natt type
+    pub natt: NatType,
+    /// Upstream bits per second
     pub ubps: u16,
 }
 
+//
+#[derive(Debug, Copy, Clone, Serialize)]
+pub enum NatType {
+    Open,
+    Moderate,
+    Sequential,
+    Strict,
+    Unknown(u8),
+}
+
+impl NatType {
+    pub fn value(&self) -> u8 {
+        match self {
+            Self::Open => 0x1,
+            Self::Moderate => 0x2,
+            Self::Sequential => 0x3,
+            Self::Strict => 0x4,
+            Self::Unknown(value) => *value,
+        }
+    }
+
+    pub fn from_value(value: u8) -> Self {
+        match value {
+            0x1 => Self::Open,
+            0x2 => Self::Moderate,
+            0x3 => Self::Sequential,
+            0x4 => Self::Strict,
+            value => Self::Unknown(value),
+        }
+    }
+}
+
+impl Default for NatType {
+    fn default() -> Self {
+        Self::Strict
+    }
+}
+
+impl Codec for NatType {
+    fn encode(&self, output: &mut Vec<u8>) {
+        let value = self.value();
+        value.encode(output);
+    }
+
+    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+        let value = u8::decode(reader)?;
+        Ok(Self::from_value(value))
+    }
+
+    fn value_type() -> ValueType {
+        ValueType::VarInt
+    }
+}
+
 //noinspection SpellCheckingInspection
-impl Codec for NetExt {
+impl Codec for QosNetworkData {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_u16(output, "DBPS", self.dbps);
-        tag_u8(output, "NATT", self.natt);
+        tag_value(output, "NATT", &self.natt);
         tag_u16(output, "UBPS", self.ubps);
         output.push(0)
     }
@@ -54,9 +153,9 @@ pub type Port = u16;
 #[derive(Debug, Default, Copy, Clone, Serialize)]
 pub struct NetData {
     pub groups: NetGroups,
-    pub ext: NetExt,
+    pub qos: QosNetworkData,
+    pub hardware_flags: u16,
     pub is_unset: bool,
-    pub hwfg: u16,
 }
 
 #[derive(Debug, Default, Copy, Clone, Serialize)]
@@ -90,18 +189,25 @@ impl Codec for NetGroups {
 }
 
 impl NetData {
-    pub fn get_groups(&self) -> TdfOptional<NetGroups> {
+    pub fn tag_groups(&self, tag: &str, output: &mut Vec<u8>) {
         if self.is_unset {
-            TdfOptional::None
-        } else {
-            TdfOptional::Some(0x2, (String::from("VALU"), self.groups))
+            tag_union_unset(output, tag);
+            return;
         }
+
+        tag_union_value(
+            output,
+            tag,
+            NetworkAddressType::Pair.into(),
+            "VALU",
+            self.groups,
+        );
     }
 }
 
 /// Structure for a networking group which consists of a
 /// networking address and port value
-#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Serialize)]
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
 pub struct NetGroup(pub NetAddress, pub Port);
 
 impl Codec for NetGroup {
@@ -123,8 +229,20 @@ impl Codec for NetGroup {
     }
 }
 
+impl Serialize for NetGroup {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = serializer.serialize_struct("NetGroup", 2)?;
+        s.serialize_field("address", &self.0)?;
+        s.serialize_field("port", &self.1)?;
+        s.end()
+    }
+}
+
 /// Structure for wrapping a Blaze networking address
-#[derive(Copy, Clone, Default, Eq, PartialEq, Serialize)]
+#[derive(Copy, Clone, Default, Eq, PartialEq)]
 pub struct NetAddress(pub u32);
 
 impl Debug for NetAddress {
@@ -134,6 +252,31 @@ impl Debug for NetAddress {
         } else {
             let value = self.to_ipv4();
             f.write_str(&value)
+        }
+    }
+}
+
+impl Display for NetAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_invalid() {
+            f.write_str("INVALID_ADDR")
+        } else {
+            let value = self.to_ipv4();
+            f.write_str(&value)
+        }
+    }
+}
+
+impl Serialize for NetAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if self.is_invalid() {
+            serializer.serialize_str("INVALID_ADDR")
+        } else {
+            let value = self.to_ipv4();
+            serializer.serialize_str(&value)
         }
     }
 }

@@ -2,8 +2,10 @@ use crate::session::Session;
 use blaze_pk::{group, packet, packet::Packet, types::TdfMap};
 use core::blaze::components::GameManager;
 use core::blaze::errors::{HandleResult, ServerError};
+use core::game::codec::GameState;
 use core::game::rules::{MatchRules, RuleSet};
 use log::{debug, info, warn};
+use utils::types::{GameID, PlayerID};
 
 /// Routing function for handling packets with the `GameManager` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -114,8 +116,8 @@ async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleRes
 
 packet! {
     struct GameStateReq {
-        GID id: u32,
-        GSTA state: u16,
+        GID id: GameID,
+        GSTA state: GameState,
     }
 }
 
@@ -182,7 +184,7 @@ async fn handle_set_game_setting(session: &mut Session, packet: &Packet) -> Hand
 packet! {
     struct GameAttribsReq {
         ATTR attributes: TdfMap<String, String>,
-        GID id: u32,
+        GID id: GameID,
     }
 }
 
@@ -225,8 +227,8 @@ async fn handle_set_game_attribs(session: &mut Session, packet: &Packet) -> Hand
 
 packet! {
     struct RemovePlayerReq {
-        GID id: u32,
-        PID pid: u32,
+        GID id: GameID,
+        PID pid: PlayerID,
     }
 }
 
@@ -261,14 +263,14 @@ async fn handle_remove_player(session: &mut Session, packet: &Packet) -> HandleR
 
 packet! {
     struct UpdateMeshReq {
-        GID id: u32,
+        GID id: GameID,
         TARG targets: Vec<MeshTarget>,
     }
 }
 
 group! {
     struct MeshTarget {
-        PID id: u32,
+        PID id: PlayerID,
     }
 }
 

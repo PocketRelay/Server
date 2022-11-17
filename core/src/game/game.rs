@@ -12,8 +12,8 @@ use crate::blaze::components::{Components, GameManager, UserSessions};
 use super::{
     codec::{
         create_game_setup, AdminListChange, AdminListOperation, AttributesChange,
-        FetchExtendedData, HostMigrateFinished, HostMigrateStart, JoinComplete, PlayerJoining,
-        PlayerRemoved, PlayerStateChange, SettingChange, StateChange,
+        FetchExtendedData, GameState, HostMigrateFinished, HostMigrateStart, JoinComplete,
+        PlayerJoining, PlayerRemoved, PlayerState, PlayerStateChange, SettingChange, StateChange,
     },
     player::{GamePlayer, GamePlayerSnapshot},
 };
@@ -38,7 +38,7 @@ impl Drop for Game {
 #[derive(Serialize)]
 pub struct GameSnapshot {
     pub id: GameID,
-    pub state: u16,
+    pub state: GameState,
     pub setting: u16,
     pub attributes: HashMap<String, String>,
     pub players: Vec<GamePlayerSnapshot>,
@@ -51,7 +51,7 @@ pub type AttrMap = TdfMap<String, String>;
 /// the game data
 pub struct GameData {
     /// The current game state
-    pub state: u16,
+    pub state: GameState,
     /// The current game setting
     pub setting: u16,
     /// The game attributes
@@ -59,11 +59,9 @@ pub struct GameData {
 }
 
 impl GameData {
-    const DEFAULT_STATE: u16 = 0x1;
-
     fn new(setting: u16, attributes: AttrMap) -> Self {
         Self {
-            state: Self::DEFAULT_STATE,
+            state: GameState::Init,
             setting,
             attributes,
         }
@@ -140,8 +138,8 @@ impl Game {
     /// notifying them of the changed state
     ///
     /// `state` The new state value
-    pub async fn set_state(&self, state: u16) {
-        debug!("Updating game state (Value: {state})");
+    pub async fn set_state(&self, state: GameState) {
+        debug!("Updating game state (Value: {state:?})");
         {
             let data = &mut *self.data.write().await;
             data.state = state;
@@ -330,7 +328,7 @@ impl Game {
     ///
     /// `session` The session to change the state of
     /// `state`   The new state value
-    async fn set_player_state(&self, session: SessionID, state: u8) {
+    async fn set_player_state(&self, session: SessionID, state: PlayerState) {
         let player_id = {
             let players = &mut *self.players.write().await;
             let Some(player) = players.iter_mut().find(|value| value.session_id == session) else {
@@ -386,11 +384,12 @@ impl Game {
     pub async fn update_mesh_connection(&self, session: SessionID, target: PlayerID) {
         debug!("Updating mesh connection");
         if self.is_player_sid(session).await && self.is_player_pid(target).await {
-            self.set_player_state(session, 4).await;
+            self.set_player_state(session, PlayerState::Connected).await;
             self.on_join_complete(session).await;
             debug!("Connected player to game")
         } else {
-            self.set_player_state(session, 2).await;
+            self.set_player_state(session, PlayerState::Connecting)
+                .await;
             debug!("Disconnected mesh")
         }
     }
@@ -529,9 +528,10 @@ impl Game {
         let players = &*self.players.read().await;
         let Some(new_host) = players.first() else { return; };
 
+        self.set_state(GameState::HostMigration).await;
         debug!("Starting host migration (GID: {})", self.id);
         self.notify_migrate_start(new_host).await;
-        self.set_state(0x82).await;
+        self.set_state(GameState::InGame).await;
         self.notify_migrate_finish().await;
         self.update_clients(new_host).await;
 

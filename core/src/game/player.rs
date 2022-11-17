@@ -8,6 +8,8 @@ use crate::blaze::{
     components::{Components, UserSessions},
 };
 
+use super::codec::PlayerState;
+
 pub struct GamePlayer {
     pub game_id: GameID,
     /// The ID of the session for the player
@@ -21,7 +23,7 @@ pub struct GamePlayer {
     pub net: NetData,
 
     /// State of the game player
-    pub state: u8,
+    pub state: PlayerState,
 
     /// Sender for sending messages to the session
     pub message_sender: mpsc::Sender<SessionMessage>,
@@ -36,8 +38,6 @@ pub struct GamePlayerSnapshot {
 }
 
 impl GamePlayer {
-    const DEFAULT_STATE: u8 = 2;
-
     pub fn new(
         session_id: SessionID,
         player_id: PlayerID,
@@ -51,7 +51,7 @@ impl GamePlayer {
             display_name,
             net,
             game_id: 1,
-            state: Self::DEFAULT_STATE,
+            state: PlayerState::Connecting,
             message_sender,
         }
     }
@@ -123,10 +123,10 @@ impl GamePlayer {
         tag_u32(output, "LOC", 0x64654445);
         tag_str(output, "NAME", &self.display_name);
         tag_u32(output, "PID", self.player_id);
-        tag_value(output, "PNET", &self.net.get_groups());
+        self.net.tag_groups("PNET", output);
         tag_usize(output, "SID", slot);
         tag_u8(output, "SLOT", 0);
-        tag_u8(output, "STAT", self.state);
+        tag_value(output, "STAT", &self.state);
         tag_u16(output, "TIDX", 0xffff);
         tag_u8(output, "TIME", 0);
         tag_triple(output, "UGID", &(0, 0, 0));
@@ -135,7 +135,7 @@ impl GamePlayer {
     }
 
     pub fn encode_data(&self, output: &mut Vec<u8>) {
-        tag_value(output, "ADDR", &self.net.get_groups());
+        self.net.tag_groups("ADDR", output);
         tag_str(output, "BPS", "ea-sjc");
         tag_empty_str(output, "CTY");
         tag_var_int_list_empty(output, "CVAR");
@@ -144,12 +144,12 @@ impl GamePlayer {
             0x70001.encode(output);
             0x409a.encode(output);
         }
-        tag_u16(output, "HWFG", self.net.hwfg);
+        tag_u16(output, "HWFG", self.net.hardware_flags);
         {
             tag_list_start(output, "PSLM", ValueType::VarInt, 1);
             0xfff0fff.encode(output);
         }
-        tag_value(output, "QDAT", &self.net.ext);
+        tag_value(output, "QDAT", &self.net.qos);
         tag_u8(output, "UATT", 0);
         tag_list_start(output, "ULST", ValueType::Triple, 1);
         (4, 1, self.game_id).encode(output);

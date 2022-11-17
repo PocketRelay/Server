@@ -4,7 +4,7 @@ use utils::types::PlayerID;
 use crate::session::Session;
 
 fn encode_session(session: &Session, output: &mut Vec<u8>) {
-    tag_value(output, "ADDR", &session.net.get_groups());
+    session.net.tag_groups("ADDR", output);
     tag_str(output, "BPS", "ea-sjc");
     tag_empty_str(output, "CTY");
     tag_var_int_list_empty(output, "CVAR");
@@ -13,12 +13,12 @@ fn encode_session(session: &Session, output: &mut Vec<u8>) {
         0x70001.encode(output);
         0x409a.encode(output);
     }
-    tag_u16(output, "HWFG", session.net.hwfg);
+    tag_u16(output, "HWFG", session.net.hardware_flags);
     {
         tag_list_start(output, "PSLM", ValueType::VarInt, 1);
         0xfff0fff.encode(output);
     }
-    tag_value(output, "QDAT", &session.net.ext);
+    tag_value(output, "QDAT", &session.net.qos);
     tag_u8(output, "UATT", 0);
     if let Some(game_id) = &session.game {
         tag_list_start(output, "ULST", ValueType::Triple, 1);

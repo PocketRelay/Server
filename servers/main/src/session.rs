@@ -40,7 +40,7 @@ use tokio::{
 };
 
 use core::blaze::{
-    codec::{NetAddress, NetData, NetExt, NetGroups, UpdateExtDataAttr},
+    codec::{NetAddress, NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
     components::{self, Components, UserSessions},
     errors::{BlazeResult, HandleResult},
 };
@@ -447,10 +447,10 @@ impl Session {
     ///
     /// `groups` The networking groups
     /// `ext`    The networking ext
-    pub async fn set_network_info(&mut self, groups: NetGroups, ext: NetExt) {
+    pub async fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
         let net = &mut &mut self.net;
         net.is_unset = false;
-        net.ext = ext;
+        net.qos = ext;
         net.groups = groups;
         self.update_missing_external().await;
         self.update_client();
@@ -498,7 +498,7 @@ impl Session {
     ///
     /// `value` The new hardware flag value
     pub fn set_hardware_flag(&mut self, value: u16) {
-        self.net.hwfg = value;
+        self.net.hardware_flags = value;
         self.update_client();
     }
 

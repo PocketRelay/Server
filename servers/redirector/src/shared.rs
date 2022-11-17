@@ -1,6 +1,6 @@
 use blaze_pk::{codec::Codec, tagging::*};
 
-use core::blaze::codec::NetAddress;
+use core::blaze::codec::{NetAddress, NetworkAddressType};
 
 #[derive(Debug, Clone)]
 pub enum InstanceType {
@@ -32,7 +32,7 @@ impl RedirectorInstance {
 
 impl Codec for RedirectorInstance {
     fn encode(&self, output: &mut Vec<u8>) {
-        tag_optional_start(output, "ADDR", 0x0);
+        tag_union_start(output, "ADDR", NetworkAddressType::Server.into());
         {
             tag_group_start(output, "VALU");
             match &self.value {

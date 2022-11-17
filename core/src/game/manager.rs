@@ -10,7 +10,7 @@ use serde::Serialize;
 use tokio::sync::{Mutex, RwLock};
 use utils::types::{GameID, PlayerID, SessionID};
 
-use super::{game::GameSnapshot, rules::RuleSet};
+use super::{codec::GameState, game::GameSnapshot, rules::RuleSet};
 use super::{
     game::{AttrMap, Game},
     player::GamePlayer,
@@ -207,7 +207,7 @@ impl Games {
     ///
     /// `game_id` The ID of the game to update the state of
     /// `state`   The new game state
-    pub async fn set_game_state(&self, game_id: GameID, state: u16) -> bool {
+    pub async fn set_game_state(&self, game_id: GameID, state: GameState) -> bool {
         let games = self.games.read().await;
         let Some(game) = games.get(&game_id) else { return false; };
         game.set_state(state).await;

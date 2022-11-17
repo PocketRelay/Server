@@ -1,5 +1,12 @@
-use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*};
+use blaze_pk::{
+    codec::{Codec, CodecResult, Reader},
+    packet,
+    packet::Packet,
+    tag::ValueType,
+    tagging::*,
+};
 
+use serde::Serialize;
 use utils::types::{GameID, GameSlot, PlayerID};
 
 use crate::blaze::components::{Components, GameManager};
@@ -9,13 +16,116 @@ use super::{
     player::GamePlayer,
 };
 
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+pub enum GameSetupType {
+    Created,
+    Joined,
+}
+
+impl GameSetupType {
+    pub fn value(&self) -> u8 {
+        match self {
+            Self::Created => 0x0,
+            Self::Joined => 0x3,
+        }
+    }
+}
+
+impl Into<u8> for GameSetupType {
+    fn into(self) -> u8 {
+        self.value()
+    }
+}
+
+/// Values: 285 (0x11d), 287 (0x11f), 1311 (0x51f)
+#[allow(unused)]
+pub enum GameSetting {}
+
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+pub enum GameState {
+    Init,
+    InGame,
+    InGameStarting,
+    GameFinished,
+    HostMigration,
+    Unknown(u8),
+}
+
+impl GameState {
+    pub fn value(&self) -> u8 {
+        match self {
+            Self::Init => 0x1,
+            Self::InGame => 0x82,
+            Self::InGameStarting => 0x83,
+            Self::GameFinished => 0x4,
+            Self::HostMigration => 0x5,
+            Self::Unknown(value) => *value,
+        }
+    }
+
+    pub fn from_value(value: u8) -> Self {
+        match value {
+            0x1 => Self::Init,
+            0x82 => Self::InGame,
+            0x83 => Self::InGameStarting,
+            0x4 => Self::GameFinished,
+            0x5 => Self::HostMigration,
+            value => Self::Unknown(value),
+        }
+    }
+}
+
+impl Codec for GameState {
+    fn encode(&self, output: &mut Vec<u8>) {
+        let value = self.value();
+        value.encode(output);
+    }
+
+    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+        let value = u8::decode(reader)?;
+        Ok(Self::from_value(value))
+    }
+
+    fn value_type() -> ValueType {
+        ValueType::VarInt
+    }
+}
+
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+pub enum PlayerState {
+    Disconnected,
+    Connecting,
+    Connected,
+}
+
+impl PlayerState {
+    pub fn value(&self) -> u8 {
+        match self {
+            Self::Disconnected => 0x0,
+            Self::Connecting => 0x2,
+            Self::Connected => 0x4,
+        }
+    }
+}
+
+impl Codec for PlayerState {
+    fn encode(&self, output: &mut Vec<u8>) {
+        let value = self.value();
+        value.encode(output);
+    }
+
+    fn value_type() -> ValueType {
+        ValueType::VarInt
+    }
+}
+
 packet! {
     // Packet for game state changes
     struct StateChange {
         // The id of the game the state has changed for
         GID id: GameID,
         // The new state value
-        GSTA state: u16
+        GSTA state: GameState
     }
 }
 
@@ -87,7 +197,7 @@ async fn encode_game_setup(game: &Game, player: &GamePlayer, output: &mut Vec<u8
         tag_u64(output, "GPVH", 0x5a4f2b378b715c6);
         tag_u16(output, "GSET", game_data.setting);
         tag_u64(output, "GSID", 0x4000000a76b645);
-        tag_u16(output, "GSTA", game_data.state);
+        tag_value(output, "GSTA", &game_data.state);
         drop(game_data);
 
         tag_empty_str(output, "GTYP");
@@ -102,7 +212,7 @@ async fn encode_game_setup(game: &Game, player: &GamePlayer, output: &mut Vec<u8
         tag_u32(output, "HSES", host_player.session_id);
         tag_u8(output, "IGNO", 0);
         tag_u8(output, "MCAP", 0x4);
-        tag_value(output, "NQOS", &host_player.net.ext);
+        tag_value(output, "NQOS", &host_player.net.qos);
         tag_u8(output, "NRES", 0x0);
         tag_u8(output, "NTOP", 0x0);
         tag_empty_str(output, "PGID");
@@ -145,7 +255,7 @@ async fn encode_game_setup(game: &Game, player: &GamePlayer, output: &mut Vec<u8
     player.encode(slot, output);
     // If we are not the first player in the game aka the host
     if slot != 0 {
-        tag_optional_start(output, "REAS", 0x3);
+        tag_union_start(output, "REAS", GameSetupType::Joined.into());
         {
             tag_group_start(output, "VALU");
             tag_u16(output, "FIT", 0x3f7a);
@@ -156,7 +266,7 @@ async fn encode_game_setup(game: &Game, player: &GamePlayer, output: &mut Vec<u8
             tag_group_end(output);
         }
     } else {
-        tag_optional_start(output, "REAS", 0x0);
+        tag_union_start(output, "REAS", GameSetupType::Created.into());
         {
             tag_group_start(output, "VALU");
             tag_u8(output, "DCTX", 0x0);
@@ -169,7 +279,7 @@ packet! {
     struct PlayerStateChange {
         GID gid: GameID,
         PID pid: PlayerID,
-        STAT state: u8,
+        STAT state: PlayerState,
     }
 }
 
@@ -211,6 +321,10 @@ pub struct PlayerRemoved {
 }
 
 pub enum RemoveReason {
+    // 0x0
+    JoinTimeout,
+    /// 0x1
+    ConnectionLost,
     // 0x6
     Generic,
     // 0x8

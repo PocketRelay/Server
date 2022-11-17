@@ -3,7 +3,7 @@ use blaze_pk::{
     group, packet,
     tag::Tag,
     tagging::*,
-    types::{TdfMap, TdfOptional},
+    types::{TdfMap, Union},
 };
 
 /// Packet encoding for Redirector GetServerInstance packets
@@ -19,7 +19,7 @@ impl Codec for InstanceRequest {
         tag_str(output, "CVER", "05427.124");
         tag_str(output, "DSDK", "8.14.7.1");
         tag_str(output, "ENV", "prod");
-        tag_value(output, "FPID", &TdfOptional::<String>::None);
+        tag_union_unset(output, "FPID");
         tag_u32(output, "LOC", 0x656e4e5a);
         tag_str(output, "NAME", "masseffect-3-pc");
         tag_str(output, "PLAT", "Windows");
@@ -42,9 +42,9 @@ group! {
 
 impl Codec for InstanceResponse {
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let (host, port) = match Tag::expect::<TdfOptional<AddrValue>>(reader, "ADDR")? {
-            TdfOptional::Some(_, (_, value)) => (value.host, value.port),
-            TdfOptional::None => {
+        let (host, port) = match Tag::expect::<Union<AddrValue>>(reader, "ADDR")? {
+            Union::Set { value, .. } => (value.host, value.port),
+            Union::Unset => {
                 return Err(CodecError::Other(
                     "Expected address value to have its contents",
                 ))
