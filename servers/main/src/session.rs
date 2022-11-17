@@ -36,7 +36,7 @@ use log::{debug, error, log_enabled};
 use tokio::{
     net::TcpStream,
     select,
-    sync::{mpsc, Mutex},
+    sync::{mpsc, Mutex, Notify},
 };
 
 use core::blaze::{
@@ -79,7 +79,7 @@ pub struct Session {
     /// The queue of packets that need to be written
     queue: VecDeque<Packet>,
     /// Sender for flushing packets
-    flush_sender: mpsc::Sender<()>,
+    flush: Notify,
     /// Sender for session messages
     message_sender: mpsc::Sender<SessionMessage>,
 }
@@ -97,7 +97,6 @@ impl Session {
     }
 
     pub fn spawn(global: GlobalStateArc, id: SessionID, values: (TcpStream, SocketAddr)) {
-        let (flush_sender, flush_recv) = mpsc::channel(1);
         let (message_sender, message_recv) = mpsc::channel(20);
         let session = Self {
             global,
@@ -105,20 +104,16 @@ impl Session {
             stream: Mutex::new(values.0),
             addr: values.1,
             queue: VecDeque::new(),
-            flush_sender,
+            flush: Notify::new(),
             message_sender,
             player: None,
             net: NetData::default(),
             game: None,
         };
-        tokio::spawn(session.process(flush_recv, message_recv));
+        tokio::spawn(session.process(message_recv));
     }
 
-    async fn process(
-        mut self,
-        mut flush: mpsc::Receiver<()>,
-        mut message: mpsc::Receiver<SessionMessage>,
-    ) {
+    async fn process(mut self, mut message: mpsc::Receiver<SessionMessage>) {
         let mut shutdown = self.global.shutdown.clone();
         loop {
             select! {
@@ -127,7 +122,7 @@ impl Session {
                         self.handle_message(message).await;
                     }
                 }
-                _ = flush.recv() => { self.flush().await; }
+                _ = self.flush.notified() => { self.flush().await; }
                 result = self.read() => {
                     if let Ok((component, packet)) = result {
                         self.handle_packet(component, &packet).await;
@@ -169,7 +164,7 @@ impl Session {
     /// `packet` The packet to push to the buffer
     pub fn push(&mut self, packet: Packet) {
         self.queue.push_back(packet);
-        self.flush_sender.try_send(()).ok();
+        self.flush.notify_one();
     }
 
     /// Pushes all the provided packets to the packet buffer
@@ -182,7 +177,7 @@ impl Session {
         for packet in packets {
             self.queue.push_back(packet);
         }
-        self.flush_sender.try_send(()).ok();
+        self.flush.notify_one();
     }
 
     /// Logs the contents of the provided packet to the debug output along with
