@@ -52,6 +52,25 @@ async fn handle_leaderboard_entity_count(session: &mut Session, packet: &Packet)
     session.response(packet, &EntityCount { count: 1 }).await
 }
 
+///
+/// # Example
+///
+/// ```
+/// Content: {
+///  "LDLS": List<Group> [
+///    {
+///      "ENAM": "Jacobtread",
+///      "ENID": 978651371, PLAYER ID
+///      "RANK": 45, Leaderboard rank value
+///      "RSTA": "91920",
+///      "RWFG": 0,
+///      "RWST": Optional(Empty),
+///      "STAT": List<String> ["91920"],
+///      "UATT": 0,
+///    }
+///  ],
+///}
+/// ```
 struct EmptyLeaderboard;
 
 impl Codec for EmptyLeaderboard {
