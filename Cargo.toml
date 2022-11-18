@@ -13,6 +13,7 @@ members = [
     "servers/http",
     "servers/main",
     "servers/redirector",
+    "tools"
 ]
 
 [workspace.dependencies]
