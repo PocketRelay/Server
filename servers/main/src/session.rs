@@ -10,7 +10,6 @@ use std::{
 };
 
 use core::{
-    blaze::errors::BlazeError,
     game::{
         manager::Games,
         player::{GamePlayer, SessionMessage},
@@ -19,10 +18,9 @@ use core::{
     GlobalStateArc,
 };
 
-use database::{players, Database, PlayersInterface};
+use database::{players, Database};
 use utils::{
     ip::public_address,
-    random::generate_random_string,
     types::{GameID, PlayerID, SessionID},
 };
 
@@ -42,7 +40,7 @@ use tokio::{
 use core::blaze::{
     codec::{NetAddress, NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
     components::{self, Components, UserSessions},
-    errors::{BlazeResult, HandleResult},
+    errors::HandleResult,
 };
 
 use crate::{
@@ -391,7 +389,7 @@ impl Session {
     /// about the previous player if there was one
     ///
     /// `player` The player to set the state to or None to clear the player
-    pub async fn set_player(&mut self, player: Option<players::Model>) {
+    pub fn set_player(&mut self, player: Option<players::Model>) {
         let existing = match player {
             Some(player) => self.player.replace(player),
             None => self.player.take(),
@@ -403,27 +401,6 @@ impl Session {
                 existing.id, existing.display_name, existing.email,
             );
         }
-    }
-
-    /// Attempts to get the session token stored on the database
-    /// player object attached to this session but if there is not
-    /// one it will create a new session token and update the player
-    pub async fn session_token(&mut self) -> BlazeResult<String> {
-        {
-            let Some(player) = self.player.as_ref() else {
-                debug!("Attempted to load session token while not authenticated (SID: {})", self.id);
-                return Err(BlazeError::MissingPlayer)
-            };
-            if let Some(token) = player.session_token.as_ref() {
-                return Ok(token.clone());
-            }
-        }
-
-        let token = generate_random_string(128);
-        let player = self.player.take().ok_or(BlazeError::MissingPlayer)?;
-        let (player, token) = PlayersInterface::set_token(self.db(), player, token).await?;
-        let _ = self.player.insert(player);
-        Ok(token)
     }
 
     /// Sets the game details for the current session and updates

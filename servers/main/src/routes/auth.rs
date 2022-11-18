@@ -4,7 +4,7 @@ use crate::session::Session;
 use core::blaze::components::Authentication;
 use core::blaze::errors::{BlazeError, HandleResult, ServerError};
 use database::{players, PlayersInterface};
-use log::{debug, error, warn};
+use log::{debug, warn};
 use utils::{
     hashing::{hash_password, verify_password},
     validate::is_email,
@@ -99,17 +99,16 @@ fn encode_persona(player: &players::Model, output: &mut Vec<u8>) {
     tag_group_end(output);
 }
 
-#[derive(Debug)]
-pub struct Sess<'a> {
+pub struct PersonaDetails<'a> {
     pub player: &'a players::Model,
-    pub session_token: String,
+    pub session_token: &'a str,
 }
 
-impl Codec for Sess<'_> {
+impl Codec for PersonaDetails<'_> {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_u32(output, "BUID", self.player.id);
         tag_zero(output, "FRST");
-        tag_str(output, "KEY", &self.session_token);
+        tag_str(output, "KEY", self.session_token);
         tag_zero(output, "LLOG");
         tag_str(output, "MAIL", &self.player.email);
         tag_group_start(output, "PDTL");
@@ -122,7 +121,8 @@ impl Codec for Sess<'_> {
 /// has complex nesting and output can vary based on inputs provided
 #[derive(Debug)]
 pub struct AuthRes<'a> {
-    pub sess: Sess<'a>,
+    pub player: &'a players::Model,
+    pub session_token: &'a str,
     pub silent: bool,
 }
 
@@ -135,25 +135,36 @@ impl Codec for AuthRes<'_> {
 
         tag_empty_str(output, "LDHT");
         tag_zero(output, "NTOS");
-        tag_str(output, "PCTK", &self.sess.session_token);
+        tag_str(output, "PCTK", self.session_token);
 
         if silent {
             tag_empty_str(output, "PRIV");
-            tag_group_start(output, "SESS");
-            self.sess.encode(output);
-            tag_group_end(output);
+            {
+                tag_group_start(output, "SESS");
+                tag_u32(output, "BUID", self.player.id);
+                tag_zero(output, "FRST");
+                tag_str(output, "KEY", self.session_token);
+                tag_zero(output, "LLOG");
+                tag_str(output, "MAIL", &self.player.email);
+                {
+                    tag_group_start(output, "PDTL");
+                    encode_persona(&self.player, output);
+                }
+                tag_u32(output, "UID", self.player.id);
+                tag_group_end(output);
+            }
         } else {
             tag_list_start(output, "PLST", ValueType::Group, 1);
-            encode_persona(&self.sess.player, output);
+            encode_persona(&self.player, output);
             tag_empty_str(output, "PRIV");
-            tag_str(output, "SKEY", &self.sess.session_token);
+            tag_str(output, "SKEY", self.session_token);
         }
         tag_zero(output, "SPAM");
         tag_empty_str(output, "THST");
         tag_empty_str(output, "TSUI");
         tag_empty_str(output, "TURI");
         if !silent {
-            tag_u32(output, "UID", self.sess.player.id);
+            tag_u32(output, "UID", self.player.id);
         }
     }
 }
@@ -166,26 +177,19 @@ pub async fn complete_auth(
     player: players::Model,
     silent: bool,
 ) -> HandleResult {
-    debug!("Completing authentication");
-    session.set_player(Some(player)).await;
-    debug!("Set player");
-    let session_token = session.session_token().await?;
-    debug!("Session token: {}", session_token);
-    let Some(player) = session.player.as_ref() else {
-        error!("Failed to complete auth player was somehow missing");
-        return session.response_empty(packet).await;
-    };
-
-    let response = AuthRes {
-        sess: Sess {
-            session_token,
-            player,
-        },
-        silent,
-    };
-
-    debug!("Sending session response");
-    session.response(packet, &response).await
+    let (player, session_token) = PlayersInterface::get_token(session.db(), player).await?;
+    session
+        .response(
+            packet,
+            &AuthRes {
+                session_token: &&session_token,
+                player: &player,
+                silent,
+            },
+        )
+        .await?;
+    session.set_player(Some(player));
+    Ok(())
 }
 
 /// Handles logging out by the client this removes any current player data from the
@@ -193,11 +197,11 @@ pub async fn complete_auth(
 ///
 /// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.LOGOUT, 0x0, 0x7) {}
+/// packet(Components.AUTHENTICATION, Commands.LOGOUT, 0x7) {}
 /// ```
 async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
     debug!("Logging out for session: (ID: {})", &session.id);
-    session.set_player(None).await;
+    session.set_player(None);
     session.response_empty(packet).await
 }
 
@@ -709,20 +713,24 @@ async fn handle_list_user_entitlements_2(session: &mut Session, packet: &Packet)
 /// }
 /// ```
 async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleResult {
-    debug!("Logging into persona");
-    let session_token = session.session_token().await?;
-    let Some(player) = session.player.as_ref() else {
+    let Some(player) = session.player.take() else {
         warn!("Client attempted to login to persona without being authenticated");
         return session
             .response_error(packet, ServerError::FailedNoLoginAction)
             .await;
     };
-    let response = Sess {
-        session_token,
-        player,
-    };
-    debug!("Persona login complete");
-    session.response(packet, &response).await
+    let (player, session_token) = PlayersInterface::get_token(session.db(), player).await?;
+    session
+        .response(
+            packet,
+            &PersonaDetails {
+                session_token: &session_token,
+                player: &player,
+            },
+        )
+        .await?;
+    session.set_player(Some(player));
+    Ok(())
 }
 
 packet! {
