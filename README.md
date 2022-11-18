@@ -118,14 +118,15 @@ taken to a login screen where you can create a new account with Pocket Relay.
 > whenever switching servers in order to clear the token.
   
 # 📂 Structure
-- 📁 core *Core application structures and shared state*
-- 📁 database *All application database logic and structures*
-- 📁 servers *Individual server applications*
-  - 📁 http *HTTP Server*
-  - 📁 main *Main app server*
-  - 📁 redirector *Redirector server*
-- 📁 utils *Utilities used throughout the servers and core*
-- 📁 tools *Tools seperate to the server used for compiling things like talk files ahead of time*
+- 📁 **core** *Core application structures and shared state*
+- 📁 **database** *All application database logic and structures*
+- 📁 **servers** *Individual server applications*
+  - 📁 **http** *HTTP server for Galaxy At War and API logic*
+  - 📁 **main** *Main application server handles all game logic and sessions*
+  - 📁 **redirector** *Redirector server. This instructions clients on what address and port the main server is*
+  - 📁 **mitm** *MITM server acts in place of main and proxies traffic to official servers*
+- 📁 **utils** *Utilities used throughout the servers and core*
+- 📁 **tools** *Tools seperate to the server used for compiling things like talk files ahead of time*
 
 
 # 📌 EA / BioWare Notice
