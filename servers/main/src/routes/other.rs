@@ -50,7 +50,7 @@ async fn handle_submit_offline(session: &mut Session, packet: &Packet) -> Handle
     session.response_empty(packet).await?;
     session
         .notify_immediate(
-            Components::GameReporting(GameReporting::NotifyGameReportSubmitted),
+            Components::GameReporting(GameReporting::GameReportSubmitted),
             &GameReportResult,
         )
         .await?;

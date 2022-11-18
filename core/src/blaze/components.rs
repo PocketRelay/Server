@@ -235,10 +235,11 @@ define_components! {
         GetGameReportColumnInfo(0xC)
         GetGameReortColummnValues(0xD)
         SubmitTrustedMidGameReport (0x64)
-        SubmitTrustedEndGameReport (0x65)
+        SubmitTrustedEndGameReport (0x65);
 
-        // Notify
-        NotifyGameReportSubmitted(0x72)
+        notify {
+            GameReportSubmitted(0x72)
+        }
     }
 
     UserSessions (0x7802) {
