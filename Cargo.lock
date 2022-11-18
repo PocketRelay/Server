@@ -1690,6 +1690,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mitm-server"
+version = "0.1.0"
+dependencies = [
+ "blaze-pk",
+ "blaze-ssl-async",
+ "core",
+ "log",
+ "tokio",
+ "utils",
+]
+
+[[package]]
 name = "nom"
 version = "7.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2023,6 +2035,7 @@ dependencies = [
  "http-server",
  "log",
  "main-server",
+ "mitm-server",
  "redirector-server",
  "tokio",
  "utils",

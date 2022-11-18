@@ -64,6 +64,7 @@ log = { workspace = true }
 http-server = { path = "servers/http" }
 main-server = { path = "servers/main" }
 redirector-server = { path = "servers/redirector" }
+mitm-server = { path = "servers/mitm" }
 
 dotenvy = "0.15.5"
 

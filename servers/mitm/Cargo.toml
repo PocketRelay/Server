@@ -1,0 +1,23 @@
+[package]
+name = "mitm-server"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true }
+
+# Serialization and packets
+blaze-pk = { workspace = true }
+blaze-ssl-async = { workspace = true }
+
+core = { workspace = true }
+utils = { workspace = true }
+
+# Logging
+log = { workspace = true }

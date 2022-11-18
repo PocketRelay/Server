@@ -87,6 +87,12 @@ pub fn init_logger(logging_level: LevelFilter, logging_path: String, compress: b
             Logger::builder()
                 .appenders(["stdout", "file"])
                 .additive(false)
+                .build("mitm_server", logging_level),
+        )
+        .logger(
+            Logger::builder()
+                .appenders(["stdout", "file"])
+                .additive(false)
                 .build("redirector_server", logging_level),
         )
         .logger(

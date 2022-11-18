@@ -62,7 +62,8 @@ impl Retriever {
     /// host and returns the instance response.
     async fn get_main_host(host: String) -> Option<(String, u16)> {
         debug!("Connecting to official redirector");
-        let mut session = RetSession::new(&host, Self::REDIRECT_PORT).await?;
+        let stream = Self::stream_to(&host, Self::REDIRECT_PORT).await?;
+        let mut session = RetSession::new(stream)?;
         debug!("Connected to official redirector");
         debug!("Requesting details from official server");
         let instance = session.get_main_instance().await.ok()?;
@@ -71,7 +72,38 @@ impl Retriever {
 
     /// Returns a new session to the main server
     pub async fn session(&self) -> Option<RetSession> {
-        RetSession::new(&self.host, self.port).await
+        let stream = self.stream().await?;
+        RetSession::new(stream)
+    }
+
+    /// Returns a new stream to the mian server
+    pub async fn stream_to(host: &String, port: u16) -> Option<Stream> {
+        let addr = (host.clone(), port);
+        let stream = TcpStream::connect(addr)
+            .await
+            .map_err(|err| {
+                error!(
+                    "Failed to connect to server at {}:{}; Cause: {err:?}",
+                    host, port
+                );
+                err
+            })
+            .ok()?;
+        BlazeStream::new(stream, StreamMode::Client)
+            .await
+            .map_err(|err| {
+                error!(
+                    "Failed to connect to server at {}:{}; Cause: {err:?}",
+                    host, port
+                );
+                err
+            })
+            .ok()
+    }
+
+    /// Returns a new stream to the main server
+    pub async fn stream(&self) -> Option<Stream> {
+        Self::stream_to(&self.host, self.port).await
     }
 }
 
@@ -87,28 +119,7 @@ impl RetSession {
     /// Creates a new retriever session for the provided host and
     /// port. This will create the underlying connection aswell.
     /// If creating the connection fails then None is returned instead.
-    pub async fn new(host: &str, port: u16) -> Option<Self> {
-        let addr = (host.clone(), port);
-        let stream = TcpStream::connect(addr)
-            .await
-            .map_err(|err| {
-                error!(
-                    "Failed to connect to server at {}:{}; Cause: {err:?}",
-                    host, port
-                );
-                err
-            })
-            .ok()?;
-        let stream = BlazeStream::new(stream, StreamMode::Client)
-            .await
-            .map_err(|err| {
-                error!(
-                    "Failed to connect to server at {}:{}; Cause: {err:?}",
-                    host, port
-                );
-                err
-            })
-            .ok()?;
+    pub fn new(stream: Stream) -> Option<Self> {
         Some(Self { id: 0, stream })
     }
 
