@@ -389,18 +389,19 @@ impl Session {
     /// about the previous player if there was one
     ///
     /// `player` The player to set the state to or None to clear the player
-    pub fn set_player(&mut self, player: Option<players::Model>) {
-        let existing = match player {
-            Some(player) => self.player.replace(player),
-            None => self.player.take(),
-        };
-
+    pub fn set_player(&mut self, player: players::Model) {
+        let existing = self.player.replace(player);
         if let Some(existing) = existing {
             debug!(
                 "Swapped authentication from:\nPrevious (ID: {}, Username: {}, Email: {})",
                 existing.id, existing.display_name, existing.email,
             );
         }
+    }
+
+    /// Clears the current player value
+    pub fn clear_player(&mut self) {
+        self.player = None;
     }
 
     /// Sets the game details for the current session and updates

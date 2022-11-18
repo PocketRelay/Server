@@ -188,7 +188,7 @@ pub async fn complete_auth(
             },
         )
         .await?;
-    session.set_player(Some(player));
+    session.set_player(player);
     Ok(())
 }
 
@@ -201,7 +201,7 @@ pub async fn complete_auth(
 /// ```
 async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
     debug!("Logging out for session: (ID: {})", &session.id);
-    session.set_player(None);
+    session.clear_player();
     session.response_empty(packet).await
 }
 
@@ -729,7 +729,7 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
             },
         )
         .await?;
-    session.set_player(Some(player));
+    session.set_player(player);
     Ok(())
 }
 
