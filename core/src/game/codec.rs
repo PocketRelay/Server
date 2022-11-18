@@ -1,7 +1,6 @@
 use blaze_pk::{
     codec::{Codec, CodecResult, Reader},
     packet,
-    packet::Packet,
     tag::ValueType,
     tagging::*,
 };
@@ -9,31 +8,25 @@ use blaze_pk::{
 use serde::Serialize;
 use utils::types::{GameID, GameSlot, PlayerID};
 
-use crate::blaze::components::{Components, GameManager};
-
 use super::{
-    game::{AttrMap, Game},
+    game::{AttrMap, GameData},
     player::GamePlayer,
 };
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
-pub enum GameSetupType {
+pub enum GameDetailsType {
+    /// The player created the game the details are for
     Created,
+    /// The player joined the game
     Joined,
 }
 
-impl GameSetupType {
+impl GameDetailsType {
     pub fn value(&self) -> u8 {
         match self {
             Self::Created => 0x0,
             Self::Joined => 0x3,
         }
-    }
-}
-
-impl Into<u8> for GameSetupType {
-    fn into(self) -> u8 {
-        self.value()
     }
 }
 
@@ -44,6 +37,7 @@ pub enum GameSetting {}
 // TODO: Game privacy
 
 /// States that can be matched from the ME3gameState attribute
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum GameStateAttr {
     /// Game has no state attribute
     None,
@@ -57,6 +51,34 @@ pub enum GameStateAttr {
     InGameMidgame,
     /// IN_GAME_FINISHING: Game has finished and players returning to lobby
     InGameFinishing,
+    /// MATCH_MAKING: Unknown how this state could be achieved but its present
+    /// as a matchable value in async matchmaking status values
+    ///
+    /// Notice: Posibly joining two players together who are both searching for
+    /// the same matchmaking game details
+    MatchMaking,
+    /// Unknown state not mentioned above
+    Unknown(String),
+}
+
+impl GameStateAttr {
+    const ATTR_KEY: &str = "ME3gameState";
+
+    pub fn from_attrs(attrs: &AttrMap) -> Self {
+        if let Some(value) = attrs.get(Self::ATTR_KEY) {
+            match value as &str {
+                "IN_LOBBY" => Self::InLobby,
+                "IN_LOBBY_LONGTIME" => Self::InLobbyLongtime,
+                "IN_GAME_STARTING" => Self::InGameStarting,
+                "IN_GAME_MIDGAME" => Self::InGameMidgame,
+                "IN_GAME_FINISHING" => Self::InGameFinishing,
+                "MATCH_MAKING" => Self::MatchMaking,
+                value => Self::Unknown(value.to_string()),
+            }
+        } else {
+            Self::None
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
@@ -193,108 +215,119 @@ impl Codec for PlayerJoining<'_> {
     }
 }
 
-pub async fn create_game_setup(game: &Game, player: &GamePlayer) -> Packet {
-    let mut output = Vec::new();
-    encode_game_setup(game, player, &mut output).await;
-    Packet::notify_raw(Components::GameManager(GameManager::GameSetup), output)
-}
-
-async fn encode_game_setup(game: &Game, player: &GamePlayer, output: &mut Vec<u8>) {
-    let players = &*game.players.read().await;
+pub fn encode_game_data(
+    output: &mut Vec<u8>,
+    id: GameID,
+    players: &Vec<GamePlayer>,
+    player: &GamePlayer,
+    game_data: &GameData,
+) {
     let mut player_ids = players
         .iter()
         .map(|value| value.player_id)
         .collect::<Vec<_>>();
     player_ids.push(player.player_id);
+    let host_player = players.first().unwrap_or(player);
+
+    tag_group_start(output, "GAME");
+    let game_name = &host_player.display_name;
+    tag_value(output, "ADMN", &player_ids);
+    tag_value(output, "ATTR", &game_data.attributes);
+    {
+        tag_list_start(output, "CAP", ValueType::VarInt, 2);
+        output.push(4);
+        output.push(0);
+    }
+    tag_u32(output, "GID", id);
+    tag_str(output, "GNAM", game_name);
+    tag_u64(output, "GPVH", 0x5a4f2b378b715c6);
+    tag_u16(output, "GSET", game_data.setting);
+    tag_u64(output, "GSID", 0x4000000a76b645);
+    tag_value(output, "GSTA", &game_data.state);
+
+    tag_empty_str(output, "GTYP");
+    {
+        tag_list_start(output, "HNET", ValueType::Group, 1);
+        output.push(2);
+        host_player.net.groups.encode(output);
+    }
+
+    tag_u32(output, "HSES", host_player.session_id);
+    tag_zero(output, "IGNO");
+    tag_u8(output, "MCAP", 4);
+    tag_value(output, "NQOS", &host_player.net.qos);
+    tag_zero(output, "NRES");
+    tag_zero(output, "NTOP");
+    tag_empty_str(output, "PGID");
+    tag_empty_blob(output, "PGSR");
 
     {
-        let host_player = players.first().unwrap_or(player);
-        let game_name = host_player.display_name.clone();
-        let game_data = game.data.read().await;
-        tag_group_start(output, "GAME");
-        tag_list(output, "ADMN", player_ids);
-        tag_value(output, "ATTR", &game_data.attributes);
-        tag_list(output, "CAP", vec![0x4, 0x0]);
-        tag_u32(output, "GID", game.id);
-        tag_str(output, "GNAM", &game_name);
-        tag_u64(output, "GPVH", 0x5a4f2b378b715c6);
-        tag_u16(output, "GSET", game_data.setting);
-        tag_u64(output, "GSID", 0x4000000a76b645);
-        tag_value(output, "GSTA", &game_data.state);
-        drop(game_data);
-
-        tag_empty_str(output, "GTYP");
-        {
-            tag_list_start(output, "HNET", ValueType::Group, 1);
-            {
-                output.push(2);
-                host_player.net.groups.encode(output);
-            }
-        }
-
-        tag_u32(output, "HSES", host_player.session_id);
-        tag_u8(output, "IGNO", 0);
-        tag_u8(output, "MCAP", 0x4);
-        tag_value(output, "NQOS", &host_player.net.qos);
-        tag_u8(output, "NRES", 0x0);
-        tag_u8(output, "NTOP", 0x0);
-        tag_empty_str(output, "PGID");
-        tag_empty_blob(output, "PGSR");
-
-        {
-            tag_group_start(output, "PHST");
-            tag_u32(output, "HPID", host_player.player_id);
-            tag_u8(output, "HSLT", 0x0);
-            tag_group_end(output);
-        }
-
-        tag_u8(output, "PRES", 0x1);
-        tag_empty_str(output, "PSAS");
-        tag_u8(output, "QCAP", 0x0);
-        tag_u32(output, "SEED", 0x4cbc8585);
-        tag_u8(output, "TCAP", 0x0);
-
-        {
-            tag_group_start(output, "THST");
-            tag_u32(output, "HPID", host_player.player_id);
-            tag_u8(output, "HSLT", 0x0);
-            tag_group_end(output);
-        }
-
-        tag_str(output, "UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
-        tag_u8(output, "VOIP", 0x2);
-        tag_str(output, "VSTR", "ME3-295976325-179181965240128");
-        tag_empty_blob(output, "XNNC");
-        tag_empty_blob(output, "XSES");
+        tag_group_start(output, "PHST");
+        tag_u32(output, "HPID", host_player.player_id);
+        tag_zero(output, "HSLT");
         tag_group_end(output);
     }
 
+    tag_u8(output, "PRES", 0x1);
+    tag_empty_str(output, "PSAS");
+    tag_u8(output, "QCAP", 0x0);
+    tag_u32(output, "SEED", 0x4cbc8585);
+    tag_u8(output, "TCAP", 0x0);
+
+    {
+        tag_group_start(output, "THST");
+        tag_u32(output, "HPID", host_player.player_id);
+        tag_u8(output, "HSLT", 0x0);
+        tag_group_end(output);
+    }
+
+    tag_str(output, "UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
+    tag_u8(output, "VOIP", 0x2);
+    tag_str(output, "VSTR", "ME3-295976325-179181965240128");
+    tag_empty_blob(output, "XNNC");
+    tag_empty_blob(output, "XSES");
+    tag_group_end(output);
+}
+
+pub fn encode_players_list(output: &mut Vec<u8>, players: &Vec<GamePlayer>, player: &GamePlayer) {
     tag_list_start(output, "PROS", ValueType::Group, players.len() + 1);
     let mut slot = 0;
-    for session in players {
-        session.encode(slot, output);
+    for player in players {
+        player.encode(slot, output);
         slot += 1;
     }
     player.encode(slot, output);
-    // If we are not the first player in the game aka the host
-    if slot != 0 {
-        tag_union_start(output, "REAS", GameSetupType::Joined.into());
-        {
-            tag_group_start(output, "VALU");
-            tag_u16(output, "FIT", 0x3f7a);
-            tag_u16(output, "MAXF", 0x5460);
-            tag_u32(output, "MSID", player.session_id);
-            tag_u8(output, "RSLT", 0x2);
-            tag_u32(output, "USID", player.session_id);
-            tag_group_end(output);
+}
+
+pub struct GameDetails<'a> {
+    pub id: GameID,
+    pub players: &'a Vec<GamePlayer>,
+    pub game_data: &'a GameData,
+    pub player: &'a GamePlayer,
+    pub ty: GameDetailsType,
+}
+
+impl Codec for GameDetails<'_> {
+    fn encode(&self, output: &mut Vec<u8>) {
+        encode_game_data(output, self.id, self.players, self.player, self.game_data);
+        encode_players_list(output, self.players, self.player);
+        let union_value = self.ty.value();
+        tag_union_start(output, "REAS", union_value);
+        tag_group_start(output, "VALU");
+        match self.ty {
+            GameDetailsType::Created => {
+                tag_u8(output, "DCTX", 0x0);
+            }
+            GameDetailsType::Joined => {
+                let session_id = self.player.session_id;
+                tag_u16(output, "FIT", 0x3f7a);
+                tag_u16(output, "MAXF", 0x5460);
+                tag_u32(output, "MSID", session_id);
+                tag_u8(output, "RSLT", 0x2);
+                tag_u32(output, "USID", session_id);
+            }
         }
-    } else {
-        tag_union_start(output, "REAS", GameSetupType::Created.into());
-        {
-            tag_group_start(output, "VALU");
-            tag_u8(output, "DCTX", 0x0);
-            tag_group_end(output);
-        }
+        tag_group_end(output);
     }
 }
 

@@ -11,9 +11,10 @@ use crate::blaze::components::{Components, GameManager, UserSessions};
 
 use super::{
     codec::{
-        create_game_setup, AdminListChange, AdminListOperation, AttributesChange,
-        FetchExtendedData, GameState, HostMigrateFinished, HostMigrateStart, JoinComplete,
-        PlayerJoining, PlayerRemoved, PlayerState, PlayerStateChange, SettingChange, StateChange,
+        AdminListChange, AdminListOperation, AttributesChange, FetchExtendedData, GameDetails,
+        GameDetailsType, GameState, GameStateAttr, HostMigrateFinished, HostMigrateStart,
+        JoinComplete, PlayerJoining, PlayerRemoved, PlayerState, PlayerStateChange, SettingChange,
+        StateChange,
     },
     player::{GamePlayer, GamePlayerSnapshot},
 };
@@ -284,7 +285,7 @@ impl Game {
 
         self.notify_player_joining(&player, slot).await;
         self.update_clients(&player).await;
-        self.notify_game_setup(&player).await;
+        self.notify_game_setup(&player, slot).await;
 
         player.set_game(Some(self.id)).await;
 
@@ -318,8 +319,26 @@ impl Game {
     ///
     /// `session` The session to notify
     /// `slot`    The slot the player is joining into
-    async fn notify_game_setup(&self, player: &GamePlayer) {
-        let packet = create_game_setup(self, player).await;
+    async fn notify_game_setup(&self, player: &GamePlayer, slot: GameSlot) {
+        let players = &*self.players.read().await;
+        let game_data = &*self.data.read().await;
+
+        let ty = match slot {
+            0 => GameDetailsType::Created,
+            _ => GameDetailsType::Joined,
+        };
+
+        let packet = Packet::notify(
+            Components::GameManager(GameManager::GameSetup),
+            &GameDetails {
+                id: self.id,
+                players,
+                game_data,
+                player,
+                ty,
+            },
+        );
+
         player.push(packet).await;
     }
 
