@@ -43,6 +43,7 @@ pub enum GameSetting {}
 
 // TODO: Game privacy
 
+/// States that can be matched from the ME3gameState attribute
 pub enum GameStateAttr {
     /// Game has no state attribute
     None,
@@ -387,3 +388,102 @@ packet! {
         GID game_id: GameID,
     }
 }
+
+///
+/// # Example
+/// ```
+/// Content: {
+///  "ASIL": List<Group> [
+///    {
+///      "CGS": {
+///        "EVST": 6,
+///        "MMSN": 1,
+///        "NOMP": 0,
+///      },
+///      "CUST": {
+///      },
+///      "DNFS": {
+///        "MDNF": 0,
+///        "XDNF": 0,
+///      },
+///      "FGS": {
+///        "GNUM": 0,
+///      },
+///      "GEOS": {
+///        "DIST": 0,
+///      },
+///      "GRDA": Map<String, Group> {
+///        "ME3_gameDifficultyRule": {
+///          "NAME": "ME3_gameDifficultyRule",
+///          "VALU": List<String> ["difficulty0"],
+///        }
+///        "ME3_gameEnemyTypeRule": {
+///          "NAME": "ME3_gameEnemyTypeRule",
+///          "VALU": List<String> ["enemy0", "enemy1", "enemy2", "enemy3", "enemy4", "enemy5", "enemy6", "enemy7", "enemy8", "enemy9", "random", "abstain"],
+///        }
+///        "ME3_gameMapMatchRule": {
+///          "NAME": "ME3_gameMapMatchRule",
+///          "VALU": List<String> ["map0", "map1", "map2", "map3", "map4", "map5", "map6", "map7", "map8", "map9", "map10", "map11", "map12", "map13", "map14", "map15", "map16", "map17", "map18", "map19", "map20", "map21", "map22", "map23", "map24", "map25", "map26", "map27", "map28", "map29", "random", "abstain"],
+///        }
+///        "ME3_gameStateMatchRule": {
+///          "NAME": "ME3_gameStateMatchRule",
+///          "VALU": List<String> ["IN_LOBBY", "IN_LOBBY_LONGTIME", "IN_GAME_STARTING", "abstain"],
+///        }
+///        "ME3_rule_dlc2300": {
+///          "NAME": "ME3_rule_dlc2300",
+///          "VALU": List<String> ["required", "preferred"],
+///        }
+///        "ME3_rule_dlc2500": {
+///          "NAME": "ME3_rule_dlc2500",
+///          "VALU": List<String> ["required", "preferred"],
+///        }
+///        "ME3_rule_dlc2700": {
+///          "NAME": "ME3_rule_dlc2700",
+///          "VALU": List<String> ["required", "preferred"],
+///        }
+///        "ME3_rule_dlc3050": {
+///          "NAME": "ME3_rule_dlc3050",
+///          "VALU": List<String> ["required", "preferred"],
+///        }
+///        "ME3_rule_dlc3225": {
+///          "NAME": "ME3_rule_dlc3225",
+///          "VALU": List<String> ["required", "preferred"],
+///        }
+///      },
+///      "GSRD": {
+///        "PMAX": 4,
+///        "PMIN": 2,
+///      },
+///      "HBRD": {
+///        "BVAL": 1,
+///      },
+///      "HVRD": {
+///        "VVAL": 0,
+///      },
+///      "PSRS": {
+///      },
+///      "RRDA": {
+///        "RVAL": 0,
+///      },
+///      "TSRS": {
+///        "TMAX": 0,
+///        "TMIN": 0,
+///      },
+///      "UEDS": Map<String, Group> {
+///        "ME3_characterSkill_Rule": {
+///          "AMAX": 500,
+///          "AMIN": 0,
+///          "MUED": 500,
+///          "NAME": "ME3_characterSkill_Rule",
+///        }
+///      },
+///      "VGRS": {
+///        "VVAL": 0,
+///      },
+///    }
+///  ],
+///  "MSID": 0x1,
+///  "USID": 0x1,
+///}
+/// ```
+pub struct AsyncMatchmakingStatus;
