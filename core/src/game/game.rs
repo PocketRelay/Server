@@ -181,16 +181,16 @@ impl Game {
     /// `attributes` The new attributes
     pub async fn set_attributes(&self, attributes: AttrMap) {
         debug!("Updating game attributes");
-        let data = &mut *self.data.write().await;
-        data.attributes.extend(attributes);
-        self.notify_all(
+        let packet = Packet::notify(
             Components::GameManager(GameManager::GameAttribChange),
             &AttributesChange {
                 id: self.id,
-                attributes: &data.attributes,
+                attributes: &attributes,
             },
-        )
-        .await;
+        );
+        let data = &mut *self.data.write().await;
+        data.attributes.extend(attributes);
+        self.push_all(&packet).await;
     }
 
     /// Updates all the client details for the provided session.
