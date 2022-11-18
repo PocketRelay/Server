@@ -125,6 +125,7 @@ taken to a login screen where you can create a new account with Pocket Relay.
   - 📁 main *Main app server*
   - 📁 redirector *Redirector server*
 - 📁 utils *Utilities used throughout the servers and core*
+- 📁 tools *Tools seperate to the server used for compiling things like talk files ahead of time*
 
 
 # 📌 EA / BioWare Notice
