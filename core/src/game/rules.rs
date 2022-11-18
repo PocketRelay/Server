@@ -62,6 +62,9 @@ pub struct RuleSet {
 }
 
 impl RuleSet {
+    /// Key for the privacy attribute on games
+    const PRIVACY_KEY: &str = "ME3privacy";
+
     /// Creates a new rule set from the provided vec of match rules.
     pub fn new(values: Vec<MatchRules>) -> Self {
         Self { values }
@@ -72,6 +75,13 @@ impl RuleSet {
     /// missing and rules with unknown values are treated as a
     /// failure.
     pub fn matches(&self, attributes: &AttrMap) -> bool {
+        // Private games will always fail to match
+        if let Some(privacy) = attributes.get(Self::PRIVACY_KEY) {
+            if privacy != "PUBLIC" {
+                return false;
+            }
+        }
+
         for rule in &self.values {
             let attr = rule.attr();
             if let Some(value) = attributes.get(attr) {
