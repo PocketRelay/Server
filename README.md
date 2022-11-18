@@ -68,9 +68,6 @@ you can use the following command
 cargo build --release --features database-mysql --no-default-features
 ```
 
-The `--no-default-features` flag disables the default SQLite database features if you would
-like the executable to support both MySQL and SQLite you can omit this field however including both database types will greatly increase the binary size.
-
 # ⚙️ Features
 
 **Origin Authentication** This server supports origin authentication through the official servers. This is enabled by default but can be changed using the PR_ORIGIN_FETCH environment variable.
