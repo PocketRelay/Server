@@ -200,59 +200,84 @@ async fn handle_pre_auth(session: &mut Session, packet: &Packet) -> HandleResult
     session.response(packet, &PreAuthRes { host, port }).await
 }
 
-struct PSSDetails {
-    address: String,
-    port: u16,
-}
-
-//noinspection SpellCheckingInspection
-impl Codec for PSSDetails {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_str(output, "ADRS", &self.address);
-        tag_empty_blob(output, "CSIG");
-        tag_str(output, "PJID", SRC_VERSION);
-        tag_u16(output, "PORT", self.port);
-        tag_u8(output, "RPRT", 0xF);
-        tag_u8(output, "TIID", 0);
-    }
-}
-
-struct TickerDetails {
-    host: String,
-    port: u16,
-    key: &'static str,
-}
-
-//noinspection SpellCheckingInspection
-impl Codec for TickerDetails {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_str(output, "ADRS", &self.host);
-        tag_u16(output, "PORT", self.port);
-        tag_str(output, "SKEY", self.key);
-    }
-}
-
 struct PostAuthRes {
-    pss: PSSDetails,
-    ticker: TickerDetails,
+    ext_host: String,
+
+    ticker_port: u16,
+    telemtry_port: u16,
+
     player_id: PlayerID,
 }
+
+pub const TELEMTRY_DISA: &str = "AD,AF,AG,AI,AL,AM,AN,AO,AQ,AR,AS,AW,AX,AZ,BA,BB,BD,BF,BH,BI,BJ,BM,BN,BO,BR,BS,BT,BV,BW,BY,BZ,CC,CD,CF,CG,CI,CK,CL,CM,CN,CO,CR,CU,CV,CX,DJ,DM,DO,DZ,EC,EG,EH,ER,ET,FJ,FK,FM,FO,GA,GD,GE,GF,GG,GH,GI,GL,GM,GN,GP,GQ,GS,GT,GU,GW,GY,HM,HN,HT,ID,IL,IM,IN,IO,IQ,IR,IS,JE,JM,JO,KE,KG,KH,KI,KM,KN,KP,KR,KW,KY,KZ,LA,LB,LC,LI,LK,LR,LS,LY,MA,MC,MD,ME,MG,MH,ML,MM,MN,MO,MP,MQ,MR,MS,MU,MV,MW,MY,MZ,NA,NC,NE,NF,NG,NI,NP,NR,NU,OM,PA,PE,PF,PG,PH,PK,PM,PN,PS,PW,PY,QA,RE,RS,RW,SA,SB,SC,SD,SG,SH,SJ,SL,SM,SN,SO,SR,ST,SV,SY,SZ,TC,TD,TF,TG,TH,TJ,TK,TL,TM,TN,TO,TT,TV,TZ,UA,UG,UM,UY,UZ,VA,VC,VE,VG,VN,VU,WF,WS,YE,YT,ZM,ZW,ZZ";
+pub const TELEMETRY_KEY: &[u8] = &[
+    0x5E, 0x8A, 0xCB, 0xDD, 0xF8, 0xEC, 0xC1, 0x95, 0x98, 0x99, 0xF9, 0x94, 0xC0, 0xAD, 0xEE, 0xFC,
+    0xCE, 0xA4, 0x87, 0xDE, 0x8A, 0xA6, 0xCE, 0xDC, 0xB0, 0xEE, 0xE8, 0xE5, 0xB3, 0xF5, 0xAD, 0x9A,
+    0xB2, 0xE5, 0xE4, 0xB1, 0x99, 0x86, 0xC7, 0x8E, 0x9B, 0xB0, 0xF4, 0xC0, 0x81, 0xA3, 0xA7, 0x8D,
+    0x9C, 0xBA, 0xC2, 0x89, 0xD3, 0xC3, 0xAC, 0x98, 0x96, 0xA4, 0xE0, 0xC0, 0x81, 0x83, 0x86, 0x8C,
+    0x98, 0xB0, 0xE0, 0xCC, 0x89, 0x93, 0xC6, 0xCC, 0x9A, 0xE4, 0xC8, 0x99, 0xE3, 0x82, 0xEE, 0xD8,
+    0x97, 0xED, 0xC2, 0xCD, 0x9B, 0xD7, 0xCC, 0x99, 0xB3, 0xE5, 0xC6, 0xD1, 0xEB, 0xB2, 0xA6, 0x8B,
+    0xB8, 0xE3, 0xD8, 0xC4, 0xA1, 0x83, 0xC6, 0x8C, 0x9C, 0xB6, 0xF0, 0xD0, 0xC1, 0x93, 0x87, 0xCB,
+    0xB2, 0xEE, 0x88, 0x95, 0xD2, 0x80, 0x80,
+];
+
+/// PLAYER_ID,TICKER_IP:TICKER_PORT,GAME_NAME,....Other values unknown
+pub const TICKER_KEY: &str = "1,10.23.15.2:8999,masseffect-3-pc,10,50,50,50,50,0,12";
 
 //noinspection SpellCheckingInspection
 impl Codec for PostAuthRes {
     fn encode(&self, output: &mut Vec<u8>) {
-        tag_group_start(output, "PSS");
-        self.pss.encode(output);
-        tag_group_end(output);
+        // Player Sync Service server details
+        {
+            tag_group_start(output, "PSS");
+            tag_str(output, "ADRS", "playersyncservice.ea.com");
+            tag_empty_blob(output, "CSIG");
+            tag_str(output, "PJID", SRC_VERSION);
+            tag_u16(output, "PORT", 443);
+            tag_u8(output, "RPRT", 0xF);
+            tag_u8(output, "TIID", 0);
+            tag_group_end(output);
+        }
 
-        tag_group_start(output, "TICK");
-        self.ticker.encode(output);
-        tag_group_end(output);
+        // Telemetry server details
+        {
+            tag_group_start(output, "TELE");
+            // Last known telemetry address: 159.153.235.32
+            tag_str(output, "ADRS", &self.ext_host);
+            tag_zero(output, "ANON");
+            tag_str(output, "DISA", TELEMTRY_DISA);
+            tag_str(output, "FILT", "-UION/****");
+            tag_u32(output, "LOC", 1701727834);
+            tag_str(output, "NOOK", "US,CA,MX");
+            // Last known telemetry port: 9988
+            tag_u16(output, "PORT", self.telemtry_port);
+            tag_u16(output, "SDLY", 15000);
+            tag_str(output, "SESS", "pcwdjtOCVpD");
+            let key = String::from_utf8_lossy(TELEMETRY_KEY);
+            tag_str(output, "SKEY", &key);
+            tag_u8(output, "SPCT", 75);
+            tag_empty_str(output, "STIM");
+            tag_group_end(output);
+        }
 
-        tag_group_start(output, "UROP");
-        tag_u8(output, "TMOP", 0x1);
-        tag_u32(output, "UID", self.player_id);
-        tag_group_end(output);
+        // Ticker server details
+        {
+            tag_group_start(output, "TICK");
+            // Last known ticker address: 10.23.15.2
+            tag_str(output, "ADRS", &self.ext_host);
+            // Last known ticker port: 8999
+            tag_u16(output, "PORT", self.ticker_port);
+            tag_str(output, "SKEY", TICKER_KEY);
+            tag_group_end(output);
+        }
+
+        // Player details
+        {
+            tag_group_start(output, "UROP");
+            tag_u8(output, "TMOP", 1);
+            tag_u32(output, "UID", self.player_id);
+            tag_group_end(output);
+        }
     }
 }
 
@@ -271,15 +296,9 @@ async fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResul
     let ext_host = env::str_env(env::EXT_HOST);
     let res = PostAuthRes {
         player_id,
-        ticker: TickerDetails {
-            host: ext_host,
-            port: 9988,
-            key: "823287263,10.23.15.2:8999,masseffect-3-pc,10,50,50,50,50,0,12",
-        },
-        pss: PSSDetails {
-            address: "playersyncservice.ea.com".to_string(),
-            port: 443,
-        },
+        ext_host,
+        ticker_port: 8999,
+        telemtry_port: 9988,
     };
     session.response(packet, &res).await
 }
