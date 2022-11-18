@@ -41,6 +41,23 @@ impl Into<u8> for GameSetupType {
 #[allow(unused)]
 pub enum GameSetting {}
 
+// TODO: Game privacy
+
+pub enum GameStateAttr {
+    /// Game has no state attribute
+    None,
+    /// IN_LOBBY: Players are waiting in lobby
+    InLobby,
+    /// IN_LOBBY_LONGTIME: Players have been waiting in lobby a long time
+    InLobbyLongtime,
+    /// IN_GAME_STARTING: Players in lobby all ready game almost started
+    InGameStarting,
+    /// IN_GAME_MIDGAME: The game is started and the players are playing
+    InGameMidgame,
+    /// IN_GAME_FINISHING: Game has finished and players returning to lobby
+    InGameFinishing,
+}
+
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 pub enum GameState {
     /// Initial game state
