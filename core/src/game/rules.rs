@@ -4,6 +4,13 @@ use super::game::AttrMap;
 
 use super::enums::{Difficulty, EnemyType, GameMap, MatchRule};
 
+// DLC Requirement attributes
+// ME3_dlc2300 = required
+// ME3_dlc2500
+// ME3_dlc2700
+// ME3_dlc3050
+// ME3_dlc3225
+
 /// Structure for known rule types that can be compared
 /// correctly. Unknown rules are simply ignored.
 #[derive(Debug, PartialEq, Eq)]
