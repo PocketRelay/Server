@@ -12,9 +12,8 @@ use crate::blaze::components::{Components, GameManager, UserSessions};
 use super::{
     codec::{
         AdminListChange, AdminListOperation, AttributesChange, FetchExtendedData, GameDetails,
-        GameDetailsType, GameState, GameStateAttr, HostMigrateFinished, HostMigrateStart,
-        JoinComplete, PlayerJoining, PlayerRemoved, PlayerState, PlayerStateChange, SettingChange,
-        StateChange,
+        GameDetailsType, GameState, HostMigrateFinished, HostMigrateStart, JoinComplete,
+        PlayerJoining, PlayerRemoved, PlayerState, PlayerStateChange, SettingChange, StateChange,
     },
     player::{GamePlayer, GamePlayerSnapshot},
 };

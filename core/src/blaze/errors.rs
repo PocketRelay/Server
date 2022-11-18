@@ -12,7 +12,6 @@ pub enum BlazeError {
     Other(&'static str),
     Database(DbErr),
     MissingPlayer,
-    Context(String, Box<BlazeError>),
 }
 
 impl From<CodecError> for BlazeError {
@@ -30,18 +29,6 @@ impl From<io::Error> for BlazeError {
 impl From<DbErr> for BlazeError {
     fn from(err: DbErr) -> Self {
         BlazeError::Database(err)
-    }
-}
-
-impl BlazeError {
-    /// Provides additional context to the error
-    pub fn context(self, context: &str) -> BlazeError {
-        BlazeError::Context(context.to_string(), Box::new(self))
-    }
-
-    /// Provides additional context to the error
-    pub fn context_owned(self, context: String) -> BlazeError {
-        BlazeError::Context(context, Box::new(self))
     }
 }
 
