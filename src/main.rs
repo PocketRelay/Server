@@ -16,7 +16,8 @@ async fn main() {
     {
         let logging_level = utils::logging::logging_level();
         let logging_path = env::str_env(env::LOGGING_DIR);
-        utils::logging::init_logger(logging_level, logging_path);
+        let compress = env::bool_env(env::LOG_COMPRESSION);
+        utils::logging::init_logger(logging_level, logging_path, compress);
     }
 
     let (shutdown_send, shutdown_recv) = watch::channel(());

@@ -71,7 +71,7 @@ pub async fn start_server(global: GlobalStateArc) {
                 }
             }
             _ = shutdown.changed() => {
-                info!("Stopping main server listener from shutdown trigger.");
+                info!("Stopping redirector server listener from shutdown trigger.");
                 break;
             }
         }

@@ -25,14 +25,18 @@ pub fn logging_level() -> LevelFilter {
 }
 
 /// Initializes the logger
-pub fn init_logger(logging_level: LevelFilter, logging_path: String) {
+pub fn init_logger(logging_level: LevelFilter, logging_path: String, compress: bool) {
     let pattern = Box::new(PatternEncoder::new("[{d} {h({l})} {M}] {m}{n}"));
     let stdout = ConsoleAppender::builder().encoder(pattern.clone()).build();
     let size_limit = 1024 * 1024; // 1mb max file size before roll
     let size_trigger = SizeTrigger::new(size_limit);
     let window_size = 5;
 
-    let file_pattern = format!("{}/log-{{}}.log.gz", &logging_path);
+    let file_pattern = if compress {
+        format!("{}/log-{{}}.log.gz", &logging_path)
+    } else {
+        format!("{}/log-{{}}.log", &logging_path)
+    };
     let latest_path = format!("{}/log.log", &logging_path);
 
     let fixed_window_roller = FixedWindowRoller::builder()
