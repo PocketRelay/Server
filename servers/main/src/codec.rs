@@ -15,6 +15,7 @@ fn encode_session(session: &Session, output: &mut Vec<u8>) {
     }
     tag_u16(output, "HWFG", session.net.hardware_flags);
     {
+        // Ping latency to the Quality of service servers
         tag_list_start(output, "PSLM", ValueType::VarInt, 1);
         0xfff0fff.encode(output);
     }
