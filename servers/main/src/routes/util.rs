@@ -73,24 +73,20 @@ async fn handle_get_telemetry_server(session: &mut Session, packet: &Packet) -> 
 pub struct PreAuthRes {
     host: String,
     port: u16,
-    config: TdfMap<String, String>,
 }
 
-/// Key identifying the QOSS server used.
-pub const QOSS_KEY: &str = "ea-sjc";
 /// Server SRC version
 pub const SRC_VERSION: &str = "303107";
 pub const BLAZE_VERSION: &str = "Blaze 3.15.08.0 (CL# 1629389)";
 pub const PING_PERIOD: &str = "15s";
-pub const VOIP_HEADSET_UPDATE_RATE: &str = "1000";
-/// XLSP (Xbox Live Server Platform)
-pub const XLSP_CONNECTION_IDLE_TIMEOUT: &str = "300";
 
 //noinspection SpellCheckingInspection
 impl Codec for PreAuthRes {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_zero(output, "ANON");
         tag_str(output, "ASRC", SRC_VERSION);
+        // This list appears to contain the IDs of the components that the game
+        // uses throughout its lifecycle
         tag_list(
             output,
             "CIDS",
@@ -100,9 +96,23 @@ impl Codec for PreAuthRes {
             ],
         );
         tag_empty_str(output, "CNGN");
+        // Double nested map containing configuration options for
+        // ping intervals and VOIP headset update rates
         {
             tag_group_start(output, "CONF");
-            tag_value(output, "CONF", &self.config);
+            {
+                tag_map_start(output, "CONF", ValueType::String, ValueType::String, 3);
+
+                "pingPeriod".encode(output);
+                PING_PERIOD.encode(output);
+
+                "voipHeadsetUpdateRate".encode(output);
+                "1000".encode(output);
+
+                // XLSP (Xbox Live Server Platform)
+                "xlspConnectionIdleTimeout".encode(output);
+                "300".encode(output);
+            }
             tag_group_end(output);
         }
         tag_str(output, "INST", "masseffect-3-pc");
@@ -112,33 +122,43 @@ impl Codec for PreAuthRes {
         tag_str(output, "PLAT", "pc");
         tag_empty_str(output, "PTAG");
 
-        #[inline]
-        fn encode_qoss_group(output: &mut Vec<u8>, host: &str, port: u16) {
-            tag_str(output, "PSA", host);
-            tag_u16(output, "PSP", port);
-            tag_str(output, "SNA", "prod-sjc");
-            tag_group_end(output);
+        // Quality of service group pre encoded due to it being appended
+        // in two locations
+        let qoss_group = &mut Vec::new();
+        {
+            tag_str(qoss_group, "PSA", &self.host);
+            tag_u16(qoss_group, "PSP", self.port);
+            tag_str(qoss_group, "SNA", "prod-sjc");
+            tag_group_end(qoss_group);
         }
 
         {
+            // Quality Of Service Server details
             tag_group_start(output, "QOSS");
             {
+                // Bioware Primary Server
                 tag_group_start(output, "BWPS");
-                encode_qoss_group(output, &self.host, self.port);
+                output.extend_from_slice(&qoss_group);
             }
-            tag_u8(output, "LNP", 0xA);
 
+            tag_u8(output, "LNP", 10);
+
+            // List of other Quality Of Service servers? Values present in this
+            // list are later included in a ping list
             {
                 tag_map_start(output, "LTPS", ValueType::String, ValueType::Group, 1);
-                QOSS_KEY.encode(output);
-                encode_qoss_group(output, &self.host, self.port);
+                "ea-sjc".encode(output);
+                output.extend_from_slice(&qoss_group);
             }
 
+            // Possibly server version ID (1161889797)
             tag_u32(output, "SVID", 0x45410805);
             tag_group_end(output)
         }
 
+        // Server src version
         tag_str(output, "RSRC", SRC_VERSION);
+        // Server blaze version
         tag_str(output, "SVER", BLAZE_VERSION)
     }
 }
@@ -174,17 +194,10 @@ impl Codec for PreAuthRes {
 /// }
 /// ```
 async fn handle_pre_auth(session: &mut Session, packet: &Packet) -> HandleResult {
-    let mut config = TdfMap::with_capacity(3);
-    config.insert("pingPeriod", PING_PERIOD);
-    config.insert("voipHeadsetUpdateRate", VOIP_HEADSET_UPDATE_RATE);
-    config.insert("xlspConnectionIdleTimeout", XLSP_CONNECTION_IDLE_TIMEOUT);
-
     let host = env::str_env(env::EXT_HOST);
     let port = env::u16_env(env::HTTP_PORT);
 
-    session
-        .response(packet, &PreAuthRes { host, port, config })
-        .await
+    session.response(packet, &PreAuthRes { host, port }).await
 }
 
 struct PSSDetails {
@@ -490,6 +503,14 @@ impl Message {
 /// server (GAW_SERVER_BASE_URL) and shop image contents (IMG_MNGR_BASE_URL)
 /// these urls are set to (gosredirector.ea.com) because the client will
 /// redirect this host and handling proxying itself
+///
+///
+/// Last known original server values:
+///
+/// Galaxy At War: https://wal.tools.gos.ea.com/wal/masseffect-gaw-pc
+/// Image Server: http://eaassets-a.akamaihd.net/gameplayservices/prod/MassEffect/3/
+/// Telemetry Server: 159.153.235.32:9988
+///
 fn data_config() -> TdfMap<String, String> {
     let ext_host = env::str_env(env::EXT_HOST);
     let http_port = env::u16_env(env::HTTP_PORT);
