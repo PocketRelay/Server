@@ -4,6 +4,7 @@ mod games;
 mod gaw;
 mod players;
 mod public;
+mod qos;
 mod server;
 
 pub fn configure(cfg: &mut ServiceConfig) {
@@ -12,4 +13,5 @@ pub fn configure(cfg: &mut ServiceConfig) {
     gaw::configure(cfg);
     games::configure(cfg);
     players::configure(cfg);
+    qos::configure(cfg);
 }
