@@ -50,7 +50,17 @@ pub fn init_logger(logging_level: LevelFilter, logging_path: String, compress: b
         .build(&latest_path, Box::new(compound_policy))
         .expect("Unable to create file appender");
 
-    let config = Config::builder()
+    let loggers = [
+        "core",
+        "database",
+        "http_server",
+        "main_server",
+        "mitm_server",
+        "redirector_server",
+        "actix_web",
+    ];
+
+    let mut builder = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
         .appender(Appender::builder().build("file", Box::new(file)))
         .logger(
@@ -58,49 +68,18 @@ pub fn init_logger(logging_level: LevelFilter, logging_path: String, compress: b
                 .appenders(["stdout", "file"])
                 .additive(false)
                 .build("pocket_relay", LevelFilter::Info),
-        )
-        .logger(
+        );
+
+    for logger in loggers {
+        builder = builder.logger(
             Logger::builder()
                 .appenders(["stdout", "file"])
                 .additive(false)
-                .build("core", logging_level),
+                .build(logger, logging_level),
         )
-        .logger(
-            Logger::builder()
-                .appenders(["stdout", "file"])
-                .additive(false)
-                .build("database", logging_level),
-        )
-        .logger(
-            Logger::builder()
-                .appenders(["stdout", "file"])
-                .additive(false)
-                .build("http_server", logging_level),
-        )
-        .logger(
-            Logger::builder()
-                .appenders(["stdout", "file"])
-                .additive(false)
-                .build("main_server", logging_level),
-        )
-        .logger(
-            Logger::builder()
-                .appenders(["stdout", "file"])
-                .additive(false)
-                .build("mitm_server", logging_level),
-        )
-        .logger(
-            Logger::builder()
-                .appenders(["stdout", "file"])
-                .additive(false)
-                .build("redirector_server", logging_level),
-        )
-        .logger(
-            Logger::builder()
-                .appenders(["stdout", "file"])
-                .additive(false)
-                .build("actix_web", logging_level),
-        )
+    }
+
+    let config = builder
         .build(
             Root::builder()
                 .appenders(["stdout", "file"])
