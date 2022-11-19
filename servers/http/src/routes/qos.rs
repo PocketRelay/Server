@@ -1,4 +1,4 @@
-use core::env;
+use core::{blaze::codec::NetAddress, env};
 
 use actix_web::{
     get,
@@ -23,8 +23,8 @@ pub struct QosQuery {
 async fn qos(query: Query<QosQuery>) -> impl Responder {
     debug!("Recieved QOS query: (Port: {})", query.port);
 
-    let ext_host = env::str_env(env::EXT_HOST);
-    let port: u16 = 17499;
+    let ip = NetAddress::from_ipv4("127.0.0.1");
+    let port: u16 = env::u16_env(env::MAIN_PORT);
 
     let response = format!(
         r"<qos>
@@ -35,7 +35,7 @@ async fn qos(query: Query<QosQuery>) -> impl Responder {
     <requestid>1</requestid>
     <reqsecret>0</reqsecret>
 </qos>",
-        port, ext_host
+        port, ip.0
     );
 
     HttpResponse::Ok()
