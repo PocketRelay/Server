@@ -155,7 +155,7 @@ pub struct NetData {
     pub groups: NetGroups,
     pub qos: QosNetworkData,
     pub hardware_flags: u16,
-    pub is_unset: bool,
+    pub is_set: bool,
 }
 
 #[derive(Debug, Default, Copy, Clone, Serialize)]
@@ -190,7 +190,7 @@ impl Codec for NetGroups {
 
 impl NetData {
     pub fn tag_groups(&self, tag: &str, output: &mut Vec<u8>) {
-        if self.is_unset {
+        if !self.is_set {
             tag_union_unset(output, tag);
             return;
         }
