@@ -3,9 +3,11 @@ use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*}
 use crate::session::Session;
 use core::blaze::components::Authentication;
 use core::blaze::errors::{BlazeError, HandleResult, ServerError};
+use core::env;
+use core::retriever::origin::{OriginDetails, OriginFlow};
 use core::state::GlobalState;
-use database::{players, DatabaseConnection, PlayersInterface};
-use log::{debug, warn};
+use database::{players, DatabaseConnection, DbResult, PlayersInterface};
+use log::{debug, error, warn};
 use utils::{
     hashing::{hash_password, verify_password},
     validate::is_email,
@@ -353,25 +355,88 @@ packet! {
 async fn handle_origin_login(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<OriginLoginReq>()?;
     debug!("Origin login request with token: {}", &req.token);
+
+    // Only continue if Origin Fetch is actually enabled
+    if !env::from_env(env::ORIGIN_FETCH) {
+        return session
+            .response_error(packet, ServerError::ServerUnavailable)
+            .await;
+    }
+
+    // Ensure the retriever is enabled
     let Some(retriever) = GlobalState::retriever() else {
-        debug!("Unable to authenticate Origin user retriever is disabled or unavailable.");
-        return session.response_empty(packet).await
+        debug!("Unable to authenticate Origin: Retriever is disabled or unavailable");
+        return session.response_error(packet, ServerError::ServerUnavailable).await
     };
+
+    // Create an origin authentication flow
+    let Some(mut flow) = retriever.create_origin_flow().await else {
+        error!("Unable to authenticate Origin: Unable to connect to official servers");
+        return session.response_error(packet, ServerError::ServerUnavailable).await
+    };
+
+    // Authenticate with the official servers
+    let Some(details) = flow.authenticate(req.token).await else {
+        error!("Unable to authenticate Origin: Failed to retrieve details from official server");
+        return session.response_error(packet, ServerError::ServerUnavailable).await
+    };
+
     let db = GlobalState::database();
+    // Lookup the player details to see if the player exists
+    let player = PlayersInterface::by_email(&db, &details.email, true).await?;
 
-    let player = retriever.get_origin_player(db, req.token).await;
-    let Some(player) = player else {
-        debug!("Unable to authenticate Origin failed to retrieve user");
-        return session.response_empty(packet).await
+    let player = match player {
+        Some(player) => player,
+        None => create_origin_from_flow(db, &mut flow, details).await?,
     };
-
-    debug!("Origin authentication success");
-    debug!("ID = {}", &player.id);
-    debug!("Username = {}", &player.display_name);
-    debug!("Email = {}", &player.email);
 
     complete_auth(db, session, packet, player, true).await?;
     Ok(())
+}
+
+/// Completes the origin flow for a new account. Creates a new player from
+/// the origin details and uses the origin flow  to load the settings for the
+/// account and then applies the changes in the database
+///
+/// `db` The database connection
+/// `flow` The origin flow
+/// `details` The origin account details
+async fn create_origin_from_flow(
+    db: &'static DatabaseConnection,
+    flow: &mut OriginFlow,
+    details: OriginDetails,
+) -> DbResult<players::Model> {
+    let mut player = PlayersInterface::create(
+        &db,
+        details.email,
+        details.display_name,
+        String::new(),
+        true,
+    )
+    .await?;
+    if !env::from_env(env::ORIGIN_FETCH_DATA) {
+        return Ok(player);
+    }
+
+    let Some(settings) = flow.get_settings().await else {
+        warn!(
+            "Unable to load origin player settings from official servers (Name: {}, Email: {})",
+            &player.display_name, &player.email
+        );
+        return Ok(player);
+    };
+
+    if let Some(settings) = flow.get_settings().await {
+        player = PlayersInterface::update_all(&db, player, settings).await?;
+    } else {
+        warn!(
+            "Unable to load origin player settings from official servers (Name: {}, Email: {})",
+            &player.display_name, &player.email
+        );
+    }
+
+    // Update the player settings with those retrieved from origin
+    PlayersInterface::update_all(&db, player, settings).await
 }
 
 packet! {

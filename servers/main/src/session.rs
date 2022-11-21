@@ -139,6 +139,7 @@ impl Session {
 
             self.write_immediate(&Packet::error_empty(packet, ServerError::ServerUnavailable))
                 .await
+                .ok();
         }
         self.flush().await;
     }

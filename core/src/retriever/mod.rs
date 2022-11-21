@@ -14,13 +14,13 @@ use crate::{
         errors::{BlazeError, BlazeResult},
     },
     env,
-    retriever::shared::{InstanceRequest, InstanceResponse},
+    retriever::codec::{InstanceRequest, InstanceResponse},
 };
 
 use utils::net::lookup_host;
 
+mod codec;
 pub mod origin;
-mod shared;
 
 #[cfg(test)]
 mod test;
