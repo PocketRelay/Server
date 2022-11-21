@@ -119,13 +119,10 @@ async fn lookup_tokio(value: &str) -> Option<String> {
 pub async fn listener(name: &str, port: u16) -> TcpListener {
     match TcpListener::bind(("0.0.0.0", port)).await {
         Ok(value) => {
-            info!("Started {} server (Port: {})", name, port);
+            info!(target: "pocket_relay", "Started {} server (Port: {})", name, port);
             value
         }
-        Err(err) => {
-            error!("Failed to bind {} server (Port: {}): {:?}", name, port, err);
-            panic!();
-        }
+        Err(err) => panic!("Failed to bind {} server (Port: {}): {:?}", name, port, err),
     }
 }
 
