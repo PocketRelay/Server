@@ -10,10 +10,11 @@ mod routes;
 /// which is cloned for use as app data on the server.
 ///
 /// `global` The global state
-pub async fn start_server(global: GlobalStateArc) {
+pub async fn start_server(global: &GlobalStateArc) {
     let port = env::from_env(env::HTTP_PORT);
     info!("Starting HTTP Server on (Port: {port})");
 
+    let global = global.clone();
     let result = HttpServer::new(move || {
         App::new()
             .app_data(Data::from(global.clone()))
