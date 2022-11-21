@@ -18,8 +18,7 @@ pub enum GlobalState {
     },
 }
 
-/// Static option for storing the Global state after it has been
-/// initialized. The state should always be initialized be accessing
+/// Static global state value
 static mut GLOBAL_STATE: GlobalState = GlobalState::Unset;
 
 impl GlobalState {
