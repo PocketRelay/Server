@@ -1,5 +1,5 @@
 use log::info;
-use tokio::{join, signal, sync::watch};
+use tokio::join;
 
 use core::{env, GlobalState};
 
@@ -22,20 +22,10 @@ async fn main() {
 
     info!("Starting Pocket Relay v{}", env::VERSION);
 
-    // Channel for safely shutdown
-    let (shutdown_send, shutdown_recv) = watch::channel(());
-
     // Initialize global state
-    let global_state = &GlobalState::init(shutdown_recv).await;
+    let global_state = &GlobalState::init().await;
 
-    // Spawn a handler for safe shutdown
-    tokio::spawn(async move {
-        signal::ctrl_c().await.ok();
-        shutdown_send.send(()).ok();
-    });
-
-    let mitm_enabled = env::from_env(env::MITM_ENABLED);
-    if mitm_enabled {
+    if env::from_env(env::MITM_ENABLED) {
         // MITM Mode only requires the Redirector & MITM servers
         join!(
             redirector_server::start_server(global_state),
