@@ -4,7 +4,7 @@ use crate::session::Session;
 use core::blaze::components::Authentication;
 use core::blaze::errors::{BlazeError, HandleResult, ServerError};
 use core::GlobalState;
-use database::{players, Database, PlayersInterface};
+use database::{players, DatabaseConnection, PlayersInterface};
 use log::{debug, warn};
 use utils::{
     hashing::{hash_password, verify_password},
@@ -175,7 +175,7 @@ impl Codec for AuthRes<'_> {
 /// Completes the authentication process for the provided session using the provided Player
 /// Model as the authenticated player.
 pub async fn complete_auth(
-    db: &Database,
+    db: &DatabaseConnection,
     session: &mut Session,
     packet: &Packet,
     player: players::Model,

@@ -8,7 +8,7 @@ use utils::parse::MEStringParser;
 
 use crate::{
     entities::{player_classes, players},
-    Database, DbResult,
+    DbResult,
 };
 
 pub struct PlayerClassesInterface;
@@ -19,13 +19,10 @@ impl PlayerClassesInterface {
     /// `db`     The database instance
     /// `player` The player to find the classes for
     pub async fn find_all(
-        db: &Database,
+        db: &DatabaseConnection,
         player: &players::Model,
     ) -> DbResult<Vec<player_classes::Model>> {
-        player
-            .find_related(player_classes::Entity)
-            .all(&db.connection)
-            .await
+        player.find_related(player_classes::Entity).all(db).await
     }
 
     /// Attempts to find a player class relating to the provided player in the database
@@ -102,17 +99,17 @@ impl PlayerClassesInterface {
     /// `key`    The key to determine which class to update
     /// `value`  The value to use for updating the class
     pub async fn update(
-        db: &Database,
+        db: &DatabaseConnection,
         player: &players::Model,
         key: &str,
         value: &str,
     ) -> Result<(), PlayerClassesError> {
         let index = Self::parse_index(key)?;
-        let mut model = Self::find(&db.connection, player, index).await?;
+        let mut model = Self::find(db, player, index).await?;
         if let None = Self::parse(&mut model, value) {
             warn!("Failed to fully parse player class: {key} = {value}");
         }
-        model.save(&db.connection).await?;
+        model.save(db).await?;
         Ok(())
     }
 

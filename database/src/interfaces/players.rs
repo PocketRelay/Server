@@ -2,11 +2,11 @@ use log::warn;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
+    ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
 };
 use utils::parse::MEStringParser;
 
-use crate::{entities::players, Database, DbResult};
+use crate::{entities::players, DbResult};
 
 use super::{player_characters::PlayerCharactersInterface, player_classes::PlayerClassesInterface};
 use std::iter::Iterator;
@@ -26,7 +26,7 @@ impl PlayersInterface {
     /// `password`     The hashed player password
     /// `origin`       Whether the account is an origin account
     pub async fn create(
-        db: &Database,
+        db: &DatabaseConnection,
         email: String,
         display_name: String,
         password: String,
@@ -54,7 +54,7 @@ impl PlayersInterface {
             cs_timestamps2: NotSet,
             cs_timestamps3: NotSet,
         };
-        active_model.insert(&db.connection).await
+        active_model.insert(db).await
     }
 
     /// Attempts to find a player with the provided ID will return none
@@ -62,14 +62,14 @@ impl PlayersInterface {
     ///
     /// `db` The database instance
     /// `id` The ID of the player to find
-    pub async fn by_id(db: &Database, id: u32) -> DbResult<Option<players::Model>> {
-        players::Entity::find_by_id(id).one(&db.connection).await
+    pub async fn by_id(db: &DatabaseConnection, id: u32) -> DbResult<Option<players::Model>> {
+        players::Entity::find_by_id(id).one(db).await
     }
 
     /// Attempts to find a player with the provided email. Conditional
     /// check for whether to allow origin accounts in the search.
     pub async fn by_email(
-        db: &Database,
+        db: &DatabaseConnection,
         email: &str,
         origin: bool,
     ) -> DbResult<Option<players::Model>> {
@@ -79,7 +79,7 @@ impl PlayersInterface {
                     .eq(email)
                     .and(players::Column::Origin.eq(origin)),
             )
-            .one(&db.connection)
+            .one(db)
             .await
     }
 
@@ -89,10 +89,10 @@ impl PlayersInterface {
     /// `db`    The datbase instance
     /// `email` The email to check for
     ///
-    pub async fn is_email_taken(db: &Database, email: &str) -> DbResult<bool> {
+    pub async fn is_email_taken(db: &DatabaseConnection, email: &str) -> DbResult<bool> {
         players::Entity::find()
             .filter(players::Column::Email.eq(email))
-            .one(&db.connection)
+            .one(db)
             .await
             .map(|value| value.is_some())
     }
@@ -101,10 +101,13 @@ impl PlayersInterface {
     ///
     /// `db`    The database instance
     /// `token` The session token to search for
-    pub async fn by_token(db: &Database, token: &str) -> DbResult<Option<players::Model>> {
+    pub async fn by_token(
+        db: &DatabaseConnection,
+        token: &str,
+    ) -> DbResult<Option<players::Model>> {
         players::Entity::find()
             .filter(players::Column::SessionToken.eq(token))
-            .one(&db.connection)
+            .one(db)
             .await
     }
 
@@ -115,13 +118,13 @@ impl PlayersInterface {
     /// `player` The player to set the token for
     /// `token`  The token to set
     pub async fn set_token(
-        db: &Database,
+        db: &DatabaseConnection,
         player: players::Model,
         token: String,
     ) -> DbResult<(players::Model, String)> {
         let mut player = player.into_active_model();
         player.session_token = Set(Some(token.clone()));
-        let player = player.update(&db.connection).await?;
+        let player = player.update(db).await?;
         Ok((player, token))
     }
 
@@ -132,7 +135,7 @@ impl PlayersInterface {
     /// `db`     The database instance
     /// `player` The player to get the token for
     pub async fn get_token(
-        db: &Database,
+        db: &DatabaseConnection,
         player: players::Model,
     ) -> DbResult<(players::Model, String)> {
         let token = match &player.session_token {
@@ -203,19 +206,19 @@ impl PlayersInterface {
     }
 
     pub async fn update(
-        db: &Database,
+        db: &DatabaseConnection,
         player: players::Model,
         key: &str,
         value: String,
     ) -> DbResult<players::Model> {
         let mut model = player.into_active_model();
         Self::modify(&mut model, key, value);
-        let player = model.update(&db.connection).await?;
+        let player = model.update(db).await?;
         Ok(player)
     }
 
     pub async fn update_all(
-        db: &Database,
+        db: &DatabaseConnection,
         player: players::Model,
         values: impl Iterator<Item = (String, String)>,
     ) -> DbResult<players::Model> {
@@ -238,7 +241,7 @@ impl PlayersInterface {
             for (key, value) in others {
                 Self::modify(&mut model, &key, value);
             }
-            let model = model.update(&db.connection).await?;
+            let model = model.update(db).await?;
             Ok(model)
         } else {
             Ok(player)

@@ -1,5 +1,5 @@
 use blaze_pk::types::TdfMap;
-use database::{players, Database, PlayersInterface};
+use database::{players, DatabaseConnection, PlayersInterface};
 use log::{debug, error};
 
 use crate::{
@@ -25,7 +25,11 @@ pub struct OriginDetails {
 impl Retriever {
     /// Async wrapper and enabled checker for fetching origin details from the
     /// official server using the provided origin auth token.
-    pub async fn get_origin_player(&self, db: &Database, token: String) -> Option<players::Model> {
+    pub async fn get_origin_player(
+        &self,
+        db: &DatabaseConnection,
+        token: String,
+    ) -> Option<players::Model> {
         if !env::from_env(env::ORIGIN_FETCH) {
             return None;
         }

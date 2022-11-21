@@ -1,6 +1,6 @@
 use crate::{
     entities::{player_characters, players},
-    Database, DbResult,
+    DbResult,
 };
 use log::warn;
 use sea_orm::{
@@ -18,13 +18,10 @@ impl PlayerCharactersInterface {
     /// `db`     The database instance
     /// `player` The player to find the characters for
     pub async fn find_all(
-        db: &Database,
+        db: &DatabaseConnection,
         player: &players::Model,
     ) -> DbResult<Vec<player_characters::Model>> {
-        player
-            .find_related(player_characters::Entity)
-            .all(&db.connection)
-            .await
+        player.find_related(player_characters::Entity).all(db).await
     }
 
     /// Attempts to find a player character relating to the provided player in the database
@@ -125,17 +122,17 @@ impl PlayerCharactersInterface {
     /// `key`    The key to determine which character to update
     /// `value`  The value to use for updating the character
     pub async fn update(
-        db: &Database,
+        db: &DatabaseConnection,
         player: &players::Model,
         key: &str,
         value: &str,
     ) -> Result<(), PlayerCharactersError> {
         let index = Self::parse_index(key)?;
-        let mut model = Self::find(&db.connection, player, index).await?;
+        let mut model = Self::find(db, player, index).await?;
         if let None = Self::parse(&mut model, value) {
             warn!("Failed to fully parse player character: {key} = {value}");
         }
-        model.save(&db.connection).await?;
+        model.save(db).await?;
         Ok(())
     }
 

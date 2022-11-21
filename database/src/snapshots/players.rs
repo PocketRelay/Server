@@ -1,9 +1,10 @@
+use sea_orm::DatabaseConnection;
 use serde::Serialize;
 use utils::types::PlayerID;
 
 use crate::{
-    galaxy_at_war, player_characters, player_classes, players, Database, DbResult,
-    GalaxyAtWarInterface, PlayerCharactersInterface, PlayerClassesInterface,
+    galaxy_at_war, player_characters, player_classes, players, DbResult, GalaxyAtWarInterface,
+    PlayerCharactersInterface, PlayerClassesInterface,
 };
 
 #[derive(Serialize)]
@@ -63,7 +64,7 @@ pub struct PlayerDeepSnapshot {
 }
 
 impl PlayerDeepSnapshot {
-    pub async fn take_snapshot(db: &Database, player: players::Model) -> DbResult<Self> {
+    pub async fn take_snapshot(db: &DatabaseConnection, player: players::Model) -> DbResult<Self> {
         let classes = PlayerClassesInterface::find_all(db, &player).await?;
         let characters = PlayerCharactersInterface::find_all(db, &player).await?;
         let galaxy_at_war = GalaxyAtWarInterface::find_or_create(db, &player, 0.0).await?;

@@ -13,73 +13,62 @@ pub use interfaces::{
 };
 use log::{debug, info};
 use migration::{Migrator, MigratorTrait};
-use sea_orm::{Database as SeaDatabase, DatabaseConnection};
-use tokio::{
-    fs::{create_dir_all, File},
-    io,
-};
+use sea_orm::Database as SeaDatabase;
+use tokio::fs::{create_dir_all, File};
 
 pub use entities::*;
 
+pub use sea_orm::DatabaseConnection;
 pub use sea_orm::DbErr;
+
 pub type DbResult<T> = Result<T, DbErr>;
 
-/// Structure wrapping the database connection and providing functionality
-/// for accessing the database without exposing any normal database access
-pub struct Database {
-    connection: DatabaseConnection,
+pub enum DatabaseType {
+    Sqlite(String),
+    MySQL(String),
 }
 
-impl Database {
-    /// Wrapper function for connecting to the database through
-    /// a SQLite file connection.
-    ///
-    /// `file` The path to the SQLite database file
-    pub async fn connect_sqlite(file: String) -> Self {
-        let path = Path::new(&file);
-        Self::ensure_exists(path)
-            .await
-            .expect("Unable to create database file / directory");
+/// Connects to the database returning a Database connection
+/// which allows accessing the database without accessing sea_orm
+///
+/// `ty` The type of database to connect to
+pub async fn connect(ty: DatabaseType) -> DatabaseConnection {
+    let url = match ty {
+        DatabaseType::Sqlite(file) => init_sqlite(file).await,
+        DatabaseType::MySQL(url) => url,
+    };
+    let connection = SeaDatabase::connect(&url)
+        .await
+        .expect("Unable to create database connection");
 
-        let url = format!("sqlite:{file}");
-        Self::connect_url(url).await
-    }
+    info!("Connected to database: {url}");
+    debug!("Running migrations...");
 
-    /// Connects to the database returning a Database interface
-    /// which allows accessing the database without accessing sea_orm
-    ///
-    /// `url` The database connection url
-    pub async fn connect_url(url: String) -> Self {
-        let connection = SeaDatabase::connect(&url)
-            .await
-            .expect("Unable to create database connection");
+    Migrator::up(&connection, None)
+        .await
+        .expect("Unable to run database migrations");
+    debug!("Migrations complete");
 
-        info!("Connected to database: {url}");
-        debug!("Running migrations...");
+    connection
+}
 
-        Migrator::up(&connection, None)
-            .await
-            .expect("Unable to run database migrations");
-        debug!("Migrations complete");
-
-        Self { connection }
-    }
-
-    /// Ensures the provided path exists and will attempt to
-    /// create it and the parent directories if they are missing.
-    ///
-    /// `path` The path to ensure exists
-    async fn ensure_exists(path: &Path) -> io::Result<()> {
-        if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                create_dir_all(parent).await?;
-            }
+/// Initializes the SQLite database file at the provided
+/// file path ensuring that the parent directories and the
+/// database file itself exist. Appends the sqlite: prefix
+/// to the file to create the sqlite URL
+async fn init_sqlite(file: String) -> String {
+    let path = Path::new(&file);
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            create_dir_all(parent)
+                .await
+                .expect("Unable to create parent directory for sqlite database");
         }
-
-        if !path.exists() {
-            File::create(path).await?;
-        }
-
-        Ok(())
     }
+    if !path.exists() {
+        File::create(path)
+            .await
+            .expect("Unable to create sqlite database file");
+    }
+    format!("sqlite:{file}")
 }

@@ -4,7 +4,8 @@ use actix_web::web::{scope, Path, Query, ServiceConfig};
 use actix_web::{get, HttpResponse, Responder, ResponseError};
 use core::{env, GlobalState};
 use database::{
-    galaxy_at_war, players, Database, DbErr, DbResult, GalaxyAtWarInterface, PlayersInterface,
+    galaxy_at_war, players, DatabaseConnection, DbErr, DbResult, GalaxyAtWarInterface,
+    PlayersInterface,
 };
 use serde::Deserialize;
 use std::fmt::Display;
@@ -61,7 +62,7 @@ impl ResponseError for GAWError {
 type GAWResult<T> = Result<T, GAWError>;
 
 /// Attempts to find a player from the provided GAW ID
-async fn gaw_player(db: &Database, id: &str) -> GAWResult<players::Model> {
+async fn gaw_player(db: &DatabaseConnection, id: &str) -> GAWResult<players::Model> {
     let id = u32::from_str_radix(id, 16)?;
     match PlayersInterface::by_id(db, id).await? {
         Some(value) => Ok(value),
@@ -181,7 +182,11 @@ async fn get_ratings(id: Path<String>) -> GAWResult<impl Responder> {
     Ok(ratings_response(promotions, gaw_data))
 }
 
-async fn get_promotions(db: &Database, player: &players::Model, enabled: bool) -> DbResult<u32> {
+async fn get_promotions(
+    db: &DatabaseConnection,
+    player: &players::Model,
+    enabled: bool,
+) -> DbResult<u32> {
     if !enabled {
         return Ok(0);
     }

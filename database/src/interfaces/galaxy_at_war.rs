@@ -1,6 +1,6 @@
 use crate::{
     entities::{galaxy_at_war, player_classes, players},
-    Database, DbResult,
+    DbResult,
 };
 use chrono::Local;
 use sea_orm::{
@@ -24,10 +24,10 @@ impl GalaxyAtWarInterface {
     ///
     /// `db`     The database instance
     /// `player` The player to get promotions for
-    pub async fn find_promotions(db: &Database, player: &players::Model) -> u32 {
+    pub async fn find_promotions(db: &DatabaseConnection, player: &players::Model) -> u32 {
         let Ok(classes) = player
             .find_related(player_classes::Entity)
-            .all(&db.connection)
+            .all(db)
             .await else {
 
             return 0;
@@ -44,16 +44,13 @@ impl GalaxyAtWarInterface {
     /// `player` The player to search for galaxy at war models for
     /// `decay`  The decay value
     pub async fn find_or_create(
-        db: &Database,
+        db: &DatabaseConnection,
         player: &players::Model,
         decay: f32,
     ) -> DbResult<galaxy_at_war::Model> {
-        let existing = player
-            .find_related(galaxy_at_war::Entity)
-            .one(&db.connection)
-            .await?;
+        let existing = player.find_related(galaxy_at_war::Entity).one(db).await?;
         if let Some(value) = existing {
-            return Self::apply_decay(&db.connection, value, decay).await;
+            return Self::apply_decay(db, value, decay).await;
         }
 
         let current_time = Local::now().naive_local();
@@ -68,7 +65,7 @@ impl GalaxyAtWarInterface {
             group_e: Set(Self::MIN_VALUE),
         };
 
-        model.insert(&db.connection).await
+        model.insert(db).await
     }
 
     /// Increases the group values stored on the provided
@@ -78,7 +75,7 @@ impl GalaxyAtWarInterface {
     /// `value`  The galaxy at war model to increase
     /// `values` The values to increase each group by
     pub async fn increase(
-        db: &Database,
+        db: &DatabaseConnection,
         value: galaxy_at_war::Model,
         values: (u16, u16, u16, u16, u16),
     ) -> DbResult<galaxy_at_war::Model> {
@@ -88,7 +85,7 @@ impl GalaxyAtWarInterface {
         gaw_data.group_c = Set(cmp::min(values.2, Self::MAX_VALUE));
         gaw_data.group_d = Set(cmp::min(values.3, Self::MAX_VALUE));
         gaw_data.group_e = Set(cmp::min(values.4, Self::MAX_VALUE));
-        gaw_data.update(&db.connection).await
+        gaw_data.update(db).await
     }
 
     /// Applies the provided galaxy at war decay value to the provided
