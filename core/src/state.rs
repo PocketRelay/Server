@@ -5,17 +5,22 @@ use tokio::{signal, sync::watch};
 
 use crate::{env, game::manager::Games, retriever::Retriever};
 
-/// Global state that is shared throughout the application
-pub struct GlobalState {
-    pub games: Games,
-    pub db: DatabaseConnection,
-    pub retriever: Option<Retriever>,
-    pub shutdown: watch::Receiver<()>,
+/// Global state that is shared throughout the application this
+/// will be unset until the value is initialized then it will be
+/// set
+pub enum GlobalState {
+    Unset,
+    Set {
+        games: Games,
+        db: DatabaseConnection,
+        retriever: Option<Retriever>,
+        shutdown: watch::Receiver<()>,
+    },
 }
 
 /// Static option for storing the Global state after it has been
 /// initialized. The state should always be initialized be accessing
-static mut GLOBAL_STATE: Option<GlobalState> = None;
+static mut GLOBAL_STATE: GlobalState = GlobalState::Unset;
 
 impl GlobalState {
     /// Initializes the global state storing it in
@@ -27,15 +32,13 @@ impl GlobalState {
         let shutdown = Self::hook_shutdown();
         let games = Games::new();
 
-        let global_state = GlobalState {
-            db,
-            games,
-            retriever,
-            shutdown,
-        };
-
         unsafe {
-            GLOBAL_STATE = Some(global_state);
+            GLOBAL_STATE = GlobalState::Set {
+                db,
+                games,
+                retriever,
+                shutdown,
+            };
         }
     }
 
@@ -68,32 +71,46 @@ impl GlobalState {
         database::connect(ty).await
     }
 
-    /// Obtains a static reference to the global state panicing if
-    /// the global state is not yet initialized.
-    pub fn get() -> &'static Self {
-        unsafe { GLOBAL_STATE.as_ref().expect("Global state was missing") }
-    }
-
     /// Obtains a static reference to the database connection
     /// stored on the global state.
     pub fn database() -> &'static DatabaseConnection {
-        &Self::get().db
+        unsafe {
+            match &GLOBAL_STATE {
+                GlobalState::Set { db, .. } => db,
+                GlobalState::Unset => panic!("Global state not initialized"),
+            }
+        }
     }
 
     /// Obtains a static reference to the games manager stored
     /// on the global state
     pub fn games() -> &'static Games {
-        &Self::get().games
+        unsafe {
+            match &GLOBAL_STATE {
+                GlobalState::Set { games, .. } => games,
+                GlobalState::Unset => panic!("Global state not initialized"),
+            }
+        }
     }
 
     /// Obtains a option to the static reference of the retriever
     /// stored on the global state if one exists
     pub fn retriever() -> Option<&'static Retriever> {
-        Self::get().retriever.as_ref()
+        unsafe {
+            match &GLOBAL_STATE {
+                GlobalState::Set { retriever, .. } => retriever.as_ref(),
+                GlobalState::Unset => panic!("Global state not initialized"),
+            }
+        }
     }
 
     /// Obtains a clone of the shutdown receiever from the global state
     pub fn shutdown() -> watch::Receiver<()> {
-        Self::get().shutdown.clone()
+        unsafe {
+            match &GLOBAL_STATE {
+                GlobalState::Set { shutdown, .. } => shutdown.clone(),
+                GlobalState::Unset => panic!("Global state not initialized"),
+            }
+        }
     }
 }

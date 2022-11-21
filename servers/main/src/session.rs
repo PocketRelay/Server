@@ -103,7 +103,7 @@ impl Session {
     }
 
     async fn process(mut self, mut message: mpsc::Receiver<SessionMessage>) {
-        let mut shutdown = GlobalState::get().shutdown.clone();
+        let mut shutdown = GlobalState::shutdown();
         loop {
             select! {
                 message = message.recv() => {
@@ -492,7 +492,7 @@ impl Drop for Session {
 
         tokio::spawn(async move {
             debug!("Cleaning up dropped session (SID: {})", session_id);
-            let games = &GlobalState::get().games;
+            let games = GlobalState::games();
             if let Some(game) = game {
                 games.remove_player_sid(game, session_id).await;
             } else {
