@@ -23,20 +23,20 @@ async fn main() {
     info!("Starting Pocket Relay v{}", env::VERSION);
 
     // Initialize global state
-    let global_state = &GlobalState::init().await;
+    GlobalState::init().await;
 
     if env::from_env(env::MITM_ENABLED) {
         // MITM Mode only requires the Redirector & MITM servers
         join!(
-            redirector_server::start_server(global_state),
-            mitm_server::start_server(global_state)
+            redirector_server::start_server(),
+            mitm_server::start_server()
         );
     } else {
         // Normal mode requires the Redirector, HTTP, and Main servers
         join!(
-            redirector_server::start_server(global_state),
-            http_server::start_server(global_state),
-            main_server::start_server(global_state)
+            redirector_server::start_server(),
+            http_server::start_server(),
+            main_server::start_server()
         );
     }
 }

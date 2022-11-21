@@ -3,6 +3,7 @@ use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*,
 use core::blaze::components::Util;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::env::{self, VERSION};
+use core::GlobalState;
 use database::{PlayerCharactersInterface, PlayerClassesInterface, PlayersInterface};
 use log::{debug, warn};
 use rust_embed::RustEmbed;
@@ -607,7 +608,7 @@ async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> Ha
 
     if key.starts_with("class") {
         debug!("Updating player class data: {key}");
-        let db = session.db();
+        let db = GlobalState::database();
         let player = match session.player.as_ref() {
             Some(value) => value,
             None => {
@@ -629,7 +630,7 @@ async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> Ha
         debug!("Updating player character data: {key}");
     } else if key.starts_with("char") {
         debug!("Updating player character data: {key}");
-        let db = session.db();
+        let db = GlobalState::database();
         let player = match session.player.as_ref() {
             Some(value) => value,
             None => {
@@ -659,7 +660,7 @@ async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> Ha
                     .await;
             }
         };
-        let db = session.db();
+        let db = GlobalState::database();
 
         match PlayersInterface::update(db, player, key, value).await {
             Ok(player) => {
@@ -700,7 +701,7 @@ async fn handle_user_settings_load_all(session: &mut Session, packet: &Packet) -
 
         settings.insert("Base", PlayersInterface::encode_base(player));
 
-        let db = session.db();
+        let db = GlobalState::database();
 
         let classes = PlayerClassesInterface::find_all(db, player);
         let characters = PlayerCharactersInterface::find_all(db, player);

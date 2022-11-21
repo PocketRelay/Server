@@ -2,7 +2,8 @@
 //! to the correct address for the main server.
 
 use core::blaze::components::Components;
-use core::{env, GlobalStateArc};
+use core::retriever::Retriever;
+use core::{env, GlobalState};
 use std::net::SocketAddr;
 
 use blaze_pk::codec::Reader;
@@ -14,18 +15,17 @@ use tokio::net::TcpStream;
 use tokio::select;
 use utils::net::{accept_stream, listener};
 
-/// Starts the Redirector server using the provided global state
-///
-/// `global` The global state
-pub async fn start_server(global: &GlobalStateArc) {
-    if global.retriever.is_none() {
+/// Starts the MITM server
+pub async fn start_server() {
+    let Some(retriever) = GlobalState::retriever() else {
         error!("Server is in MITM mode but was unable to connect to the official servers. Stopping server.");
         panic!();
-    }
+    };
+
     let listener = listener("MITM", env::from_env(env::MAIN_PORT)).await;
-    let mut shutdown = global.shutdown.clone();
+    let mut shutdown = GlobalState::shutdown();
     while let Some((stream, addr)) = accept_stream(&listener, &mut shutdown).await {
-        tokio::spawn(handle_client(stream, addr, global.clone()));
+        tokio::spawn(handle_client(stream, addr, retriever));
     }
 }
 
@@ -35,18 +35,12 @@ pub async fn start_server(global: &GlobalStateArc) {
 /// `addr`     The client address
 /// `instance` The server instance information
 /// `shutdown` Async safely shutdown reciever
-async fn handle_client(mut client: TcpStream, _addr: SocketAddr, global: GlobalStateArc) {
-    let mut shutdown = global.shutdown.clone();
-
-    let Some(retriever) = global.retriever.as_ref() else {
-        error!("Server is in MITM mode but was unable to connect to the official servers. Denying connection from client");
-        return;
-    };
-
+async fn handle_client(mut client: TcpStream, addr: SocketAddr, retriever: &'static Retriever) {
     let Some(mut server) = retriever.stream().await else {
-        error!("Unable to connection to official server for MITM connection");
+        error!("Unable to connection to official server for MITM connection: (Addr: {addr})");
         return;
     };
+    let mut shutdown = GlobalState::shutdown();
 
     loop {
         select! {

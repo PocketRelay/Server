@@ -10,15 +10,11 @@ use std::{
 };
 
 use core::{
-    game::{
-        manager::Games,
-        player::{GamePlayer, SessionMessage},
-    },
-    retriever::Retriever,
-    GlobalStateArc,
+    game::player::{GamePlayer, SessionMessage},
+    GlobalState,
 };
 
-use database::{players, Database};
+use database::players;
 use utils::{
     net::public_address,
     types::{GameID, PlayerID, SessionID},
@@ -52,10 +48,6 @@ use crate::{
 /// network stream for the client along with global state and
 /// other session state.
 pub struct Session {
-    /// Reference to the global state. In order to access
-    /// the database and other shared functionality
-    pub global: GlobalStateArc,
-
     /// Unique identifier for this session.
     pub id: SessionID,
 
@@ -94,10 +86,9 @@ impl Session {
         ))
     }
 
-    pub fn spawn(global: GlobalStateArc, id: SessionID, values: (TcpStream, SocketAddr)) {
+    pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr)) {
         let (message_sender, message_recv) = mpsc::channel(20);
         let session = Self {
-            global,
             id,
             stream: Mutex::new(values.0),
             addr: values.1,
@@ -112,7 +103,7 @@ impl Session {
     }
 
     async fn process(mut self, mut message: mpsc::Receiver<SessionMessage>) {
-        let mut shutdown = self.global.shutdown.clone();
+        let mut shutdown = GlobalState::get().shutdown.clone();
         loop {
             select! {
                 message = message.recv() => {
@@ -356,24 +347,6 @@ impl Session {
         Ok(())
     }
 
-    /// Function for retrieving a reference to the database
-    /// stored on the global state attached to this session
-    pub fn db(&self) -> &Database {
-        &self.global.db
-    }
-
-    /// Function for retrieving a reference to the retriever
-    /// stored on the global state if one is present
-    pub fn retriever(&self) -> Option<&Retriever> {
-        self.global.retriever.as_ref()
-    }
-
-    /// Function for retrieving a reference to the games
-    /// manager stored on the global state attached to this session
-    pub fn games(&self) -> &Games {
-        &self.global.games
-    }
-
     /// Retrieves the ID of the underlying player returning on failure
     /// will return 1 as a fallback value.
     pub fn player_id_safe(&self) -> PlayerID {
@@ -514,13 +487,12 @@ impl Session {
 impl Drop for Session {
     fn drop(&mut self) {
         debug!("Session dropped (SID: {})", self.id);
-        let global = self.global.clone();
         let game = self.game.take();
         let session_id = self.id;
 
         tokio::spawn(async move {
             debug!("Cleaning up dropped session (SID: {})", session_id);
-            let games = &global.games;
+            let games = &GlobalState::get().games;
             if let Some(game) = game {
                 games.remove_player_sid(game, session_id).await;
             } else {

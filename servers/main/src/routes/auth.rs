@@ -3,7 +3,8 @@ use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*}
 use crate::session::Session;
 use core::blaze::components::Authentication;
 use core::blaze::errors::{BlazeError, HandleResult, ServerError};
-use database::{players, PlayersInterface};
+use core::GlobalState;
+use database::{players, Database, PlayersInterface};
 use log::{debug, warn};
 use utils::{
     hashing::{hash_password, verify_password},
@@ -70,7 +71,9 @@ async fn handle_silent_login(session: &mut Session, packet: &Packet) -> HandleRe
 
     debug!("Attempted silent authentication: {id} ({token})");
 
-    let Some(player) = PlayersInterface::by_id(session.db(), id).await? else {
+    let db = GlobalState::database();
+
+    let Some(player) = PlayersInterface::by_id(db, id).await? else {
         return session.response_error(packet, ServerError::InvalidSession).await;
     };
 
@@ -85,7 +88,7 @@ async fn handle_silent_login(session: &mut Session, packet: &Packet) -> HandleRe
     debug!("Username = {}", &player.display_name);
     debug!("Email = {}", &player.email);
 
-    complete_auth(session, packet, player, true).await?;
+    complete_auth(db, session, packet, player, true).await?;
     Ok(())
 }
 
@@ -172,12 +175,13 @@ impl Codec for AuthRes<'_> {
 /// Completes the authentication process for the provided session using the provided Player
 /// Model as the authenticated player.
 pub async fn complete_auth(
+    db: &Database,
     session: &mut Session,
     packet: &Packet,
     player: players::Model,
     silent: bool,
 ) -> HandleResult {
-    let (player, session_token) = PlayersInterface::get_token(session.db(), player).await?;
+    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
     session
         .response(
             packet,
@@ -240,7 +244,9 @@ async fn handle_login(session: &mut Session, packet: &Packet) -> HandleResult {
             .await;
     }
 
-    let Some(player) = PlayersInterface::by_email(session.db(), &email, false).await? else {
+    let db = GlobalState::database();
+
+    let Some(player) = PlayersInterface::by_email(db, &email, false).await? else {
         return session
             .response_error(packet, ServerError::EmailNotFound)
             .await;
@@ -255,7 +261,7 @@ async fn handle_login(session: &mut Session, packet: &Packet) -> HandleResult {
             .await;
     }
 
-    complete_auth(session, packet, player, false).await?;
+    complete_auth(db, session, packet, player, false).await?;
     Ok(())
 }
 
@@ -302,7 +308,9 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
             .await;
     }
 
-    let email_exists = PlayersInterface::is_email_taken(session.db(), &email).await?;
+    let db = GlobalState::database();
+
+    let email_exists = PlayersInterface::is_email_taken(db, &email).await?;
 
     if email_exists {
         return session
@@ -319,10 +327,9 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
         email.clone()
     };
 
-    let player =
-        PlayersInterface::create(session.db(), email, display_name, hashed_password, false).await?;
+    let player = PlayersInterface::create(db, email, display_name, hashed_password, false).await?;
 
-    complete_auth(session, packet, player, false).await?;
+    complete_auth(db, session, packet, player, false).await?;
     Ok(())
 }
 
@@ -346,12 +353,13 @@ packet! {
 async fn handle_origin_login(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<OriginLoginReq>()?;
     debug!("Origin login request with token: {}", &req.token);
-    let Some(retriever) = session.retriever() else {
+    let Some(retriever) = GlobalState::retriever() else {
         debug!("Unable to authenticate Origin user retriever is disabled or unavailable.");
         return session.response_empty(packet).await
     };
+    let db = GlobalState::database();
 
-    let player = retriever.get_origin_player(session.db(), req.token).await;
+    let player = retriever.get_origin_player(db, req.token).await;
     let Some(player) = player else {
         debug!("Unable to authenticate Origin failed to retrieve user");
         return session.response_empty(packet).await
@@ -362,7 +370,7 @@ async fn handle_origin_login(session: &mut Session, packet: &Packet) -> HandleRe
     debug!("Username = {}", &player.display_name);
     debug!("Email = {}", &player.email);
 
-    complete_auth(session, packet, player, true).await?;
+    complete_auth(db, session, packet, player, true).await?;
     Ok(())
 }
 
@@ -719,7 +727,8 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
             .response_error(packet, ServerError::FailedNoLoginAction)
             .await;
     };
-    let (player, session_token) = PlayersInterface::get_token(session.db(), player).await?;
+    let (player, session_token) =
+        PlayersInterface::get_token(GlobalState::database(), player).await?;
     session
         .response(
             packet,

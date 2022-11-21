@@ -4,6 +4,7 @@ use core::blaze::components::GameManager;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::game::codec::GameState;
 use core::game::rules::{MatchRules, RuleSet};
+use core::GlobalState;
 use log::{debug, info, warn};
 use utils::types::{GameID, PlayerID};
 
@@ -101,8 +102,7 @@ async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleRes
         return session.response_error(packet, ServerError::FailedNoLoginAction).await;
     };
 
-    let games = session.games();
-
+    let games = GlobalState::games();
     let game_id = games.create_game(req.attributes, req.setting).await;
 
     session
@@ -133,7 +133,7 @@ packet! {
 ///
 async fn handle_advance_game_state(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<GameStateReq>()?;
-    let games = session.games();
+    let games = GlobalState::games();
     if games.set_game_state(req.id, req.state).await {
         session.response_empty(packet).await
     } else {
@@ -167,7 +167,7 @@ packet! {
 async fn handle_set_game_setting(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<GameSettingReq>()?;
 
-    let games = session.games();
+    let games = GlobalState::games();
     if games.set_game_setting(req.id, req.setting).await {
         session.response_empty(packet).await
     } else {
@@ -211,7 +211,7 @@ packet! {
 async fn handle_set_game_attribs(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<GameAttribsReq>()?;
 
-    let games = session.games();
+    let games = GlobalState::games();
     if games.set_game_attributes(req.id, req.attributes).await {
         session.response_empty(packet).await
     } else {
@@ -246,7 +246,7 @@ packet! {
 /// ```
 async fn handle_remove_player(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<RemovePlayerReq>()?;
-    let games = session.games();
+    let games = GlobalState::games();
 
     if games.remove_player_pid(req.id, req.pid).await {
         session.response_empty(packet).await
@@ -298,8 +298,7 @@ async fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -
         return Ok(())
     };
 
-    let games = session.games();
-
+    let games = GlobalState::games();
     if !games
         .update_mesh_connection(req.id, session.id, target.id)
         .await
@@ -485,8 +484,7 @@ async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> Han
     info!("Player {} started matchmaking", player.display_name);
 
     let rules = parse_ruleset(req.criteria.rules);
-
-    let games = session.games();
+    let games = GlobalState::games();
 
     session
         .response(packet, &MatchmakingRes { id: session.id })
@@ -516,7 +514,7 @@ async fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> Ha
     info!("Player {} cancelled matchmaking", player.display_name);
     session.response_empty(packet).await?;
 
-    let games = session.games();
+    let games = GlobalState::games();
     if let Some(game) = session.game.as_ref() {
         games.remove_player_sid(*game, session.id).await;
     } else {

@@ -51,28 +51,24 @@ async fn players_list(_global: Data<GlobalState>) -> Json<()> {
 }
 
 #[get("/api/players/{id}/deep")]
-async fn player_deep(
-    path: Path<PlayerID>,
-    global: Data<GlobalState>,
-) -> Result<Json<PlayerDeepSnapshot>, PlayersError> {
+async fn player_deep(path: Path<PlayerID>) -> Result<Json<PlayerDeepSnapshot>, PlayersError> {
+    let db = GlobalState::database();
     let player_id = path.into_inner();
-    let player = PlayersInterface::by_id(&global.db, player_id)
+    let player = PlayersInterface::by_id(db, player_id)
         .await
         .map_err(|_| PlayersError::UnknownError)?
         .ok_or(PlayersError::PlayerNotFound)?;
-    let snapshot = PlayerDeepSnapshot::take_snapshot(&global.db, player)
+    let snapshot = PlayerDeepSnapshot::take_snapshot(db, player)
         .await
         .map_err(|_| PlayersError::UnknownError)?;
     Ok(Json(snapshot))
 }
 
 #[get("/api/players/{id}")]
-async fn player_basic(
-    path: Path<PlayerID>,
-    global: Data<GlobalState>,
-) -> Result<Json<PlayerBasicSnapshot>, PlayersError> {
+async fn player_basic(path: Path<PlayerID>) -> Result<Json<PlayerBasicSnapshot>, PlayersError> {
+    let db = GlobalState::database();
     let player_id = path.into_inner();
-    let player = PlayersInterface::by_id(&global.db, player_id)
+    let player = PlayersInterface::by_id(db, player_id)
         .await
         .map_err(|_| PlayersError::UnknownError)?
         .ok_or(PlayersError::PlayerNotFound)?;

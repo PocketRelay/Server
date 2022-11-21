@@ -1,6 +1,5 @@
-use std::sync::Arc;
-
 use database::Database;
+
 use tokio::{signal, sync::watch};
 
 use crate::{env, game::manager::Games, retriever::Retriever};
@@ -13,12 +12,12 @@ pub struct GlobalState {
     pub shutdown: watch::Receiver<()>,
 }
 
-pub type GlobalStateArc = Arc<GlobalState>;
+static mut GLOBAL_STATE: Option<GlobalState> = None;
 
 impl GlobalState {
     /// Initializes the global state with the provided shutdown
     /// reciever and returns it wrapped in an Arc and the reciever
-    pub async fn init() -> Arc<Self> {
+    pub async fn init() {
         let db = {
             if cfg!(feature = "database-sqlite") {
                 let file = env::env(env::DATABASE_FILE);
@@ -49,6 +48,28 @@ impl GlobalState {
             shutdown: shutdown_recv,
         };
 
-        Arc::new(global_state)
+        unsafe {
+            GLOBAL_STATE = Some(global_state);
+        }
+    }
+
+    pub fn get() -> &'static Self {
+        unsafe { GLOBAL_STATE.as_ref().expect("Global state was missing") }
+    }
+
+    pub fn database() -> &'static Database {
+        &Self::get().db
+    }
+
+    pub fn games() -> &'static Games {
+        &Self::get().games
+    }
+
+    pub fn retriever() -> Option<&'static Retriever> {
+        Self::get().retriever.as_ref()
+    }
+
+    pub fn shutdown() -> watch::Receiver<()> {
+        Self::get().shutdown.clone()
     }
 }

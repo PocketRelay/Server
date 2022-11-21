@@ -6,8 +6,8 @@ use blaze_pk::{
     tag::Tag,
     types::Union,
 };
-use core::blaze::components::UserSessions;
 use core::blaze::errors::{HandleResult, ServerError};
+use core::{blaze::components::UserSessions, GlobalState};
 
 use crate::session::Session;
 use core::blaze::codec::{NetGroups, QosNetworkData};
@@ -45,12 +45,13 @@ packet! {
 /// *To be recorded*
 async fn handle_resume_session(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<ResumeSession>()?;
-    let Some(player) = PlayersInterface::by_token(session.db(), &req.session_token).await? else {
+    let db = GlobalState::database();
+    let Some(player) = PlayersInterface::by_token(db, &req.session_token).await? else {
         return session
             .response_error(packet, ServerError::InvalidSession)
             .await;
     };
-    complete_auth(session, packet, player, true).await
+    complete_auth(db, session, packet, player, true).await
 }
 
 #[derive(Debug)]

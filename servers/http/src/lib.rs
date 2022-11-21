@@ -1,24 +1,19 @@
 use actix_web::middleware::Logger;
-use actix_web::web::Data;
+
 use actix_web::{App, HttpServer};
-use core::{env, GlobalStateArc};
+use core::env;
 use log::{error, info};
 
 mod routes;
 
 /// Starts the HTTP server using the provided global state
 /// which is cloned for use as app data on the server.
-///
-/// `global` The global state
-pub async fn start_server(global: &GlobalStateArc) {
+pub async fn start_server() {
     let port = env::from_env(env::HTTP_PORT);
     info!("Starting HTTP Server on (Port: {port})");
 
-    let global_data = Data::from(global.clone());
-
     let result = HttpServer::new(move || {
         App::new()
-            .app_data(global_data.clone())
             .wrap(Logger::default())
             .configure(routes::configure)
     })

@@ -2,7 +2,7 @@
 //! to the correct address for the main server.
 
 use core::blaze::components::{Components, Redirector};
-use core::{env, GlobalStateArc};
+use core::{env, GlobalState};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,7 +13,6 @@ use blaze_ssl_async::stream::{BlazeStream, StreamMode};
 use log::{debug, error};
 use tokio::net::TcpStream;
 use tokio::select;
-use tokio::sync::watch;
 use tokio::time::sleep;
 use utils::net::{accept_stream, listener};
 
@@ -21,10 +20,8 @@ pub mod codec;
 
 use self::codec::{InstanceType, RedirectorInstance};
 
-/// Starts the Redirector server using the provided global state
-///
-/// `global` The global state
-pub async fn start_server(global: &GlobalStateArc) {
+/// Starts the Redirector server
+pub async fn start_server() {
     // The server details of the instance clients should
     // connect to. In this case its the main server details
     let instance = {
@@ -35,14 +32,9 @@ pub async fn start_server(global: &GlobalStateArc) {
     };
     let instance = Arc::new(instance);
     let listener = listener("Redirector", env::from_env(env::REDIRECTOR_PORT)).await;
-    let mut shutdown = global.shutdown.clone();
+    let mut shutdown = GlobalState::shutdown();
     while let Some((stream, addr)) = accept_stream(&listener, &mut shutdown).await {
-        tokio::spawn(handle_client(
-            stream,
-            addr,
-            instance.clone(),
-            shutdown.clone(),
-        ));
+        tokio::spawn(handle_client(stream, addr, instance.clone()));
     }
 }
 
@@ -55,13 +47,8 @@ static DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 /// `stream`   The stream to the client
 /// `addr`     The client address
 /// `instance` The server instance information
-/// `shutdown` Async safely shutdown reciever
-async fn handle_client(
-    stream: TcpStream,
-    addr: SocketAddr,
-    instance: Arc<RedirectorInstance>,
-    mut shutdown: watch::Receiver<()>,
-) {
+async fn handle_client(stream: TcpStream, addr: SocketAddr, instance: Arc<RedirectorInstance>) {
+    let mut shutdown = GlobalState::shutdown();
     let mut stream = match BlazeStream::new(stream, StreamMode::Server).await {
         Ok(stream) => stream,
         Err(err) => {

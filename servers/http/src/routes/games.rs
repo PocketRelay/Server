@@ -7,7 +7,7 @@ use std::fmt::Display;
 use actix_web::{
     get,
     http::StatusCode,
-    web::{Data, Json, Path, ServiceConfig},
+    web::{Json, Path, ServiceConfig},
     ResponseError,
 };
 use serde::Serialize;
@@ -40,19 +40,15 @@ impl ResponseError for GamesError {
 }
 
 #[get("/api/games")]
-async fn games_list(global: Data<GlobalState>) -> Json<GamesSnapshot> {
-    let games = global.games.snapshot().await;
+async fn games_list() -> Json<GamesSnapshot> {
+    let games = GlobalState::games().snapshot().await;
     Json(games)
 }
 
 #[get("/api/games/{id}")]
-async fn game(
-    path: Path<GameID>,
-    global: Data<GlobalState>,
-) -> Result<Json<GameSnapshot>, GamesError> {
+async fn game(path: Path<GameID>) -> Result<Json<GameSnapshot>, GamesError> {
     let game_id = path.into_inner();
-    let games = global
-        .games
+    let games = GlobalState::games()
         .snapshot_id(game_id)
         .await
         .ok_or(GamesError::GameNotFound)?;

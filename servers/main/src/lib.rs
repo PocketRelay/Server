@@ -1,4 +1,4 @@
-use core::{env, GlobalStateArc};
+use core::{env, GlobalState};
 
 mod codec;
 mod routes;
@@ -9,14 +9,12 @@ use utils::net::{accept_stream, listener};
 
 /// Starts the Blaze server using the provided global state
 /// which is cloned for the spawned sessions.
-///
-/// `global` The global state
-pub async fn start_server(global: &GlobalStateArc) {
+pub async fn start_server() {
     let listener = listener("Main", env::from_env(env::MAIN_PORT)).await;
-    let mut shutdown = global.shutdown.clone();
+    let mut shutdown = GlobalState::shutdown();
     let mut session_id = 1;
     while let Some(values) = accept_stream(&listener, &mut shutdown).await {
-        Session::spawn(global.clone(), session_id, values);
+        Session::spawn(session_id, values);
         session_id += 1;
     }
 }
