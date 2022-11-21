@@ -10,6 +10,7 @@ use std::{
 };
 
 use core::{
+    blaze::errors::ServerError,
     game::player::{GamePlayer, SessionMessage},
     state::GlobalState,
 };
@@ -135,6 +136,9 @@ impl Session {
         Session::debug_log_packet(self, "Read", packet);
         if let Err(err) = routes::route(self, component, packet).await {
             error!("Error occurred while routing (SID: {}): {:?}", self.id, err);
+
+            self.write_immediate(&Packet::error_empty(packet, ServerError::ServerUnavailable))
+                .await
         }
         self.flush().await;
     }
