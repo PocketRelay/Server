@@ -31,6 +31,11 @@ pub async fn start_server(global: &GlobalStateArc) {
         }
     };
 
+    if global.retriever.is_none() {
+        error!("Server is in MITM mode but was unable to connect to the official servers. Stopping server.");
+        panic!();
+    }
+
     let mut shutdown = global.shutdown.clone();
     loop {
         select! {
