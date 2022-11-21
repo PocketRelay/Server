@@ -20,7 +20,7 @@ use core::{
 
 use database::{players, Database};
 use utils::{
-    ip::public_address,
+    net::public_address,
     types::{GameID, PlayerID, SessionID},
 };
 

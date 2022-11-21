@@ -3,10 +3,9 @@
 //! core project.
 
 pub mod dmap;
-pub mod dns;
 pub mod hashing;
-pub mod ip;
 pub mod logging;
+pub mod net;
 pub mod parse;
 pub mod random;
 pub mod time;

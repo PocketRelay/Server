@@ -17,7 +17,7 @@ use crate::{
     retriever::shared::{InstanceRequest, InstanceResponse},
 };
 
-use utils::dns::lookup_host;
+use utils::net::lookup_host;
 
 pub mod origin;
 mod shared;
