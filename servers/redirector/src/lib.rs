@@ -17,9 +17,9 @@ use tokio::sync::watch;
 use tokio::time::sleep;
 use utils::net::{accept_stream, listener};
 
-pub mod shared;
+pub mod codec;
 
-use self::shared::{InstanceType, RedirectorInstance};
+use self::codec::{InstanceType, RedirectorInstance};
 
 /// Starts the Redirector server using the provided global state
 ///
