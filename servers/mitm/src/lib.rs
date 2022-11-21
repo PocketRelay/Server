@@ -9,55 +9,23 @@ use blaze_pk::codec::Reader;
 use blaze_pk::packet::{Packet, PacketType};
 
 use blaze_pk::tag::Tag;
-use log::{debug, error, info, log_enabled};
-use tokio::net::{TcpListener, TcpStream};
+use log::{debug, error, log_enabled};
+use tokio::net::TcpStream;
 use tokio::select;
+use utils::net::{accept_stream, listener};
 
 /// Starts the Redirector server using the provided global state
 ///
 /// `global` The global state
 pub async fn start_server(global: &GlobalStateArc) {
-    let listener = {
-        let port = env::from_env(env::MAIN_PORT);
-        match TcpListener::bind(("0.0.0.0", port)).await {
-            Ok(value) => {
-                info!("Started MITM Server on (Port: {port})");
-                value
-            }
-            Err(err) => {
-                error!("Failed to bind MITM server (Port: {}): {:?}", port, err);
-                panic!();
-            }
-        }
-    };
-
     if global.retriever.is_none() {
         error!("Server is in MITM mode but was unable to connect to the official servers. Stopping server.");
         panic!();
     }
-
+    let listener = listener("MITM", env::from_env(env::MAIN_PORT)).await;
     let mut shutdown = global.shutdown.clone();
-    loop {
-        select! {
-            result = listener.accept() => {
-                match result {
-                    Ok((stream, addr)) => {
-                        tokio::spawn(handle_client(
-                            stream,
-                            addr,
-                            global.clone(),
-                        ));
-                    },
-                    Err(err) => {
-                        error!("Error occurred while accepting connections: {:?}", err);
-                    }
-                }
-            }
-            _ = shutdown.changed() => {
-                info!("Stopping MITM server listener from shutdown trigger.");
-                break;
-            }
-        }
+    while let Some((stream, addr)) = accept_stream(&listener, &mut shutdown).await {
+        tokio::spawn(handle_client(stream, addr, global.clone()));
     }
 }
 

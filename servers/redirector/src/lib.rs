@@ -10,11 +10,12 @@ use std::time::Duration;
 use blaze_pk::packet::Packet;
 
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
-use log::{debug, error, info};
-use tokio::net::{TcpListener, TcpStream};
+use log::{debug, error};
+use tokio::net::TcpStream;
 use tokio::select;
 use tokio::sync::watch;
 use tokio::time::sleep;
+use utils::net::{accept_stream, listener};
 
 pub mod shared;
 
@@ -24,57 +25,24 @@ use self::shared::{InstanceType, RedirectorInstance};
 ///
 /// `global` The global state
 pub async fn start_server(global: &GlobalStateArc) {
-    let listener = {
-        let port = env::from_env(env::REDIRECTOR_PORT);
-        match TcpListener::bind(("0.0.0.0", port)).await {
-            Ok(value) => {
-                info!("Started Redirector Server on (Port: {port})");
-                value
-            }
-            Err(err) => {
-                error!(
-                    "Failed to bind redirector server (Port: {}): {:?}",
-                    port, err
-                );
-                panic!();
-            }
-        }
-    };
-
+    // The server details of the instance clients should
+    // connect to. In this case its the main server details
     let instance = {
         let host = env::env(env::EXT_HOST);
         let port = env::from_env(env::MAIN_PORT);
-
         let ty = InstanceType::from_host(host);
-
         RedirectorInstance::new(ty, port)
     };
-
     let instance = Arc::new(instance);
-
+    let listener = listener("Redirector", env::from_env(env::REDIRECTOR_PORT)).await;
     let mut shutdown = global.shutdown.clone();
-    loop {
-        select! {
-            result = listener.accept() => {
-                match result {
-                    Ok((stream, addr)) => {
-                        tokio::spawn(handle_client(
-                            stream,
-                            addr,
-                            instance.clone(),
-                            shutdown.clone()
-                        ));
-                    },
-                    Err(err) => {
-                        error!("Error occurred while accepting connections: {:?}", err);
-                    }
-                }
-            }
-            _ = shutdown.changed() => {
-                info!("Stopping redirector server listener from shutdown trigger.");
-                break;
-            }
-        }
+    while let Some((stream, addr)) = accept_stream(&listener, &mut shutdown).await {
+        tokio::spawn(handle_client(
+            stream,
+            addr,
+            instance.clone(),
+            shutdown.clone(),
+        ));
     }
 }
 

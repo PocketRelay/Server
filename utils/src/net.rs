@@ -1,5 +1,13 @@
+use std::net::SocketAddr;
+
+use log::{error, info};
 use reqwest;
 use serde::Deserialize;
+use tokio::{
+    net::{TcpListener, TcpStream},
+    select,
+    sync::watch,
+};
 
 /// Retrieves the public IPv4 address of this machine using the ip4.seeip.org
 /// API trimming the response to remove new lines.
@@ -100,6 +108,53 @@ async fn lookup_tokio(value: &str) -> Option<String> {
     }
 
     Some(format!("{}", ip))
+}
+
+/// Creates a new TCP listener with the provided name for the
+/// provided port panicing on error and logginf the name of
+/// the server on startup and error.
+///
+/// `name` The name of the listener used in logging
+/// `port` The port to listen on
+pub async fn listener(name: &str, port: u16) -> TcpListener {
+    match TcpListener::bind(("0.0.0.0", port)).await {
+        Ok(value) => {
+            info!("Started {} server (Port: {})", name, port);
+            value
+        }
+        Err(err) => {
+            error!("Failed to bind {} server (Port: {}): {:?}", name, port, err);
+            panic!();
+        }
+    }
+}
+
+/// Tries to accept a stream from the provided listener or stopping
+/// early if the provided shutdown watcher changes. Returns Some
+/// if a connection was accepted or None if an error occurred or
+/// if the shutdown watcher changed.
+///
+/// `listener` The TCP listener to accept from
+/// `shutdown` The shutdown watch receiver
+pub async fn accept_stream(
+    listener: &TcpListener,
+    shutdown: &mut watch::Receiver<()>,
+) -> Option<(TcpStream, SocketAddr)> {
+    select! {
+        result = listener.accept() => {
+            match result {
+                Ok(value) => Some(value),
+                Err(err) => {
+                    error!("Error occurred while accepting connections: {:?}", err);
+                    return None;
+                }
+            }
+        }
+        _ = shutdown.changed() => {
+            info!("Stopping server listener from shutdown trigger.");
+            return None;
+        }
+    }
 }
 
 #[cfg(test)]
