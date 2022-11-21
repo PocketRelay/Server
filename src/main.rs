@@ -10,16 +10,13 @@ use redirector_server;
 
 use dotenvy::dotenv;
 
+mod logging;
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
 
-    {
-        let logging_level = utils::logging::logging_level();
-        let logging_path = env::str_env(env::LOGGING_DIR);
-        let compress = env::from_env(env::LOG_COMPRESSION);
-        utils::logging::init_logger(logging_level, logging_path, compress);
-    }
+    logging::setup();
 
     let (shutdown_send, shutdown_recv) = watch::channel(());
     let global_state = GlobalState::init(shutdown_recv).await;

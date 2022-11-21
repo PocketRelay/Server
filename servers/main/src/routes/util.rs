@@ -62,7 +62,7 @@ impl Codec for TelemetryRes {
 /// ```
 ///
 async fn handle_get_telemetry_server(session: &mut Session, packet: &Packet) -> HandleResult {
-    let ext_host = env::str_env(env::EXT_HOST);
+    let ext_host = env::env(env::EXT_HOST);
     let res = TelemetryRes {
         address: ext_host,
         session_id: session.id,
@@ -194,7 +194,7 @@ impl Codec for PreAuthRes {
 /// }
 /// ```
 async fn handle_pre_auth(session: &mut Session, packet: &Packet) -> HandleResult {
-    let host = env::str_env(env::EXT_HOST);
+    let host = env::env(env::EXT_HOST);
     let port = env::from_env(env::HTTP_PORT);
 
     session.response(packet, &PreAuthRes { host, port }).await
@@ -293,7 +293,7 @@ async fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResul
 
     session.update_self();
 
-    let ext_host = env::str_env(env::EXT_HOST);
+    let ext_host = env::env(env::EXT_HOST);
     let res = PostAuthRes {
         player_id,
         ext_host,
@@ -531,7 +531,7 @@ impl Message {
 /// Telemetry Server: 159.153.235.32:9988
 ///
 fn data_config() -> TdfMap<String, String> {
-    let ext_host = env::str_env(env::EXT_HOST);
+    let ext_host = env::env(env::EXT_HOST);
     let http_port = env::from_env(env::HTTP_PORT);
 
     let prefix = format!("http://{ext_host}:{http_port}");

@@ -21,7 +21,7 @@ impl GlobalState {
     pub async fn init(shutdown: watch::Receiver<()>) -> Arc<Self> {
         let db = {
             if cfg!(feature = "database-sqlite") {
-                let file = env::str_env(env::DATABASE_FILE);
+                let file = env::env(env::DATABASE_FILE);
                 Database::connect_sqlite(file).await
             } else {
                 let url = std::env::var(env::DATABASE_URL)

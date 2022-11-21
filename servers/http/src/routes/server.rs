@@ -41,7 +41,7 @@ enum ServiceType {
 
 #[get("/api/server")]
 async fn server_details() -> Json<ServerDetails> {
-    let ext_host = env::str_env(env::EXT_HOST);
+    let ext_host = env::env(env::EXT_HOST);
     let main_port = env::from_env(env::MAIN_PORT);
     let http_port = env::from_env(env::HTTP_PORT);
     Json(ServerDetails {

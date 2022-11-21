@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use log::LevelFilter;
+
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The external host environment variable
@@ -19,12 +21,14 @@ pub const GAW_PROMOTIONS: (&str, bool) = ("PR_GAW_PROMOTIONS", true);
 pub const RETRIEVER: (&str, bool) = ("PR_RETRIEVER", true);
 pub const ORIGIN_FETCH: (&str, bool) = ("PR_ORIGIN_FETCH", true);
 pub const ORIGIN_FETCH_DATA: (&str, bool) = ("PR_ORIGIN_FETCH_DATA", true);
-pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
-pub const LOG_COMPRESSION: (&str, bool) = ("PR_LOG_COMPRESSION", true);
 pub const MITM_ENABLED: (&str, bool) = ("PR_MITM_ENABLED", false);
 
+pub const LOGGING_LEVEL: (&str, LevelFilter) = ("PR_LOG_LEVEL", LevelFilter::Info);
+pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
+pub const LOG_COMPRESSION: (&str, bool) = ("PR_LOG_COMPRESSION", true);
+
 #[inline]
-pub fn str_env(pair: (&str, &str)) -> String {
+pub fn env(pair: (&str, &str)) -> String {
     std::env::var(pair.0).unwrap_or_else(|_| pair.1.to_string())
 }
 

@@ -4,7 +4,6 @@
 
 pub mod dmap;
 pub mod hashing;
-pub mod logging;
 pub mod net;
 pub mod parse;
 pub mod random;

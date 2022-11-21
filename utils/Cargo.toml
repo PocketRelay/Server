@@ -34,15 +34,3 @@ features = ["json", "rustls-tls"]
 version = "1"
 default-features = false
 features = ["std"]
-
-[dependencies.log4rs]
-version = "1.2.0"
-default-features = false
-features = [
-    "gzip",
-    "console_appender",
-    "rolling_file_appender",
-    "compound_policy",
-    "fixed_window_roller",
-    "size_trigger",
-]

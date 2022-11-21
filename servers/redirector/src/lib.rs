@@ -42,7 +42,7 @@ pub async fn start_server(global: GlobalStateArc) {
     };
 
     let instance = {
-        let host = env::str_env(env::EXT_HOST);
+        let host = env::env(env::EXT_HOST);
         let port = env::from_env(env::MAIN_PORT);
 
         let ty = InstanceType::from_host(host);
