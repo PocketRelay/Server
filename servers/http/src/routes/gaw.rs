@@ -2,7 +2,7 @@ use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
 use actix_web::web::{scope, Path, Query, ServiceConfig};
 use actix_web::{get, HttpResponse, Responder, ResponseError};
-use core::{env, GlobalState};
+use core::{env, state::GlobalState};
 use database::{
     galaxy_at_war, players, DatabaseConnection, DbErr, DbResult, GalaxyAtWarInterface,
     PlayersInterface,

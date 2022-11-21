@@ -1,4 +1,4 @@
-use core::GlobalState;
+use core::state::GlobalState;
 use std::fmt::Display;
 
 use actix_web::{

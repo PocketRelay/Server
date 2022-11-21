@@ -2,7 +2,7 @@
 //! to the correct address for the main server.
 
 use core::blaze::components::{Components, Redirector};
-use core::{env, GlobalState};
+use core::{env, state::GlobalState};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;

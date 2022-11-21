@@ -7,7 +7,7 @@ use blaze_pk::{
     types::Union,
 };
 use core::blaze::errors::{HandleResult, ServerError};
-use core::{blaze::components::UserSessions, GlobalState};
+use core::{blaze::components::UserSessions, state::GlobalState};
 
 use crate::session::Session;
 use core::blaze::codec::{NetGroups, QosNetworkData};

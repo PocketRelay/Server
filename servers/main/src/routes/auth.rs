@@ -3,7 +3,7 @@ use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*}
 use crate::session::Session;
 use core::blaze::components::Authentication;
 use core::blaze::errors::{BlazeError, HandleResult, ServerError};
-use core::GlobalState;
+use core::state::GlobalState;
 use database::{players, DatabaseConnection, PlayersInterface};
 use log::{debug, warn};
 use utils::{

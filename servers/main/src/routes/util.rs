@@ -3,7 +3,7 @@ use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*,
 use core::blaze::components::Util;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::env::{self, VERSION};
-use core::GlobalState;
+use core::state::GlobalState;
 use database::{PlayerCharactersInterface, PlayerClassesInterface, PlayersInterface};
 use log::{debug, warn};
 use rust_embed::RustEmbed;

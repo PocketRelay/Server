@@ -3,7 +3,7 @@
 
 use core::blaze::components::Components;
 use core::retriever::Retriever;
-use core::{env, GlobalState};
+use core::{env, state::GlobalState};
 use std::net::SocketAddr;
 
 use blaze_pk::codec::Reader;

@@ -1,7 +1,7 @@
 use log::info;
 use tokio::join;
 
-use core::{env, GlobalState};
+use core::{env, state::GlobalState};
 
 use http_server;
 use main_server;

@@ -11,7 +11,7 @@ use std::{
 
 use core::{
     game::player::{GamePlayer, SessionMessage},
-    GlobalState,
+    state::GlobalState,
 };
 
 use database::players;

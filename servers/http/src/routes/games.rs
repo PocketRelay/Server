@@ -1,6 +1,6 @@
 use core::{
     game::{game::GameSnapshot, manager::GamesSnapshot},
-    GlobalState,
+    state::GlobalState,
 };
 use std::fmt::Display;
 

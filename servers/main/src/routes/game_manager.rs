@@ -4,7 +4,7 @@ use core::blaze::components::GameManager;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::game::codec::GameState;
 use core::game::rules::{MatchRules, RuleSet};
-use core::GlobalState;
+use core::state::GlobalState;
 use log::{debug, info, warn};
 use utils::types::{GameID, PlayerID};
 

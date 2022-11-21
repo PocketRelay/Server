@@ -1,4 +1,4 @@
-use core::{env, GlobalState};
+use core::{env, state::GlobalState};
 
 mod codec;
 mod routes;
