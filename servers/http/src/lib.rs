@@ -11,7 +11,7 @@ mod routes;
 ///
 /// `global` The global state
 pub async fn start_server(global: GlobalStateArc) {
-    let port = env::u16_env(env::HTTP_PORT);
+    let port = env::from_env(env::HTTP_PORT);
     info!("Starting HTTP Server on (Port: {port})");
 
     let result = HttpServer::new(move || {

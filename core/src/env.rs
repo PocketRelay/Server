@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The external host environment variable
@@ -17,10 +19,8 @@ pub const GAW_PROMOTIONS: (&str, bool) = ("PR_GAW_PROMOTIONS", true);
 pub const RETRIEVER: (&str, bool) = ("PR_RETRIEVER", true);
 pub const ORIGIN_FETCH: (&str, bool) = ("PR_ORIGIN_FETCH", true);
 pub const ORIGIN_FETCH_DATA: (&str, bool) = ("PR_ORIGIN_FETCH_DATA", true);
-
 pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
 pub const LOG_COMPRESSION: (&str, bool) = ("PR_LOG_COMPRESSION", true);
-
 pub const MITM_ENABLED: (&str, bool) = ("PR_MITM_ENABLED", false);
 
 #[inline]
@@ -29,18 +29,34 @@ pub fn str_env(pair: (&str, &str)) -> String {
 }
 
 #[inline]
-pub fn u16_env(pair: (&str, u16)) -> u16 {
-    std::env::var(pair.0).map_or(pair.1, |value| value.parse::<u16>().unwrap_or(pair.1))
+pub fn from_env<F: FromStr>(pair: (&str, F)) -> F {
+    if let Ok(value) = std::env::var(pair.0) {
+        if let Ok(value) = F::from_str(&value) {
+            return value;
+        }
+    }
+    pair.1
 }
 
-#[inline]
-pub fn f32_env(pair: (&str, f32)) -> f32 {
-    std::env::var(pair.0).map_or(pair.1, |value| value.parse::<f32>().unwrap_or(pair.1))
-}
+#[cfg(test)]
+mod test {
+    use crate::env::from_env;
 
-#[inline]
-pub fn bool_env(pair: (&str, bool)) -> bool {
-    std::env::var(pair.0).map_or(pair.1, |value| {
-        value.to_lowercase().parse::<bool>().unwrap_or(pair.1)
-    })
+    #[test]
+    fn test_bool() {
+        std::env::set_var("TEST", "false");
+        assert_eq!(from_env(("TEST", true)), false);
+
+        std::env::set_var("TEST", "False");
+        assert_eq!(from_env(("TEST", true)), true);
+
+        std::env::set_var("TEST", "true");
+        assert_eq!(from_env(("TEST", false)), true);
+
+        std::env::set_var("TEST", "True");
+        assert_eq!(from_env(("TEST", false)), false);
+
+        std::env::set_var("TEST", "12");
+        assert_eq!(from_env(("TEST", 0)), 12);
+    }
 }

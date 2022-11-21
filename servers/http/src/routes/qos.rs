@@ -24,7 +24,7 @@ async fn qos(query: Query<QosQuery>) -> impl Responder {
     debug!("Recieved QOS query: (Port: {})", query.port);
 
     let ip = NetAddress::from_ipv4("127.0.0.1");
-    let port: u16 = env::u16_env(env::MAIN_PORT);
+    let port: u16 = env::from_env(env::MAIN_PORT);
 
     let response = format!(
         r"<qos>

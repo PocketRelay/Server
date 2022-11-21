@@ -25,7 +25,7 @@ use self::shared::{InstanceType, RedirectorInstance};
 /// `global` The global state
 pub async fn start_server(global: GlobalStateArc) {
     let listener = {
-        let port = env::u16_env(env::REDIRECTOR_PORT);
+        let port = env::from_env(env::REDIRECTOR_PORT);
         match TcpListener::bind(("0.0.0.0", port)).await {
             Ok(value) => {
                 info!("Started Redirector Server on (Port: {port})");
@@ -43,7 +43,7 @@ pub async fn start_server(global: GlobalStateArc) {
 
     let instance = {
         let host = env::str_env(env::EXT_HOST);
-        let port = env::u16_env(env::MAIN_PORT);
+        let port = env::from_env(env::MAIN_PORT);
 
         let ty = InstanceType::from_host(host);
 

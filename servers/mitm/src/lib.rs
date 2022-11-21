@@ -18,7 +18,7 @@ use tokio::select;
 /// `global` The global state
 pub async fn start_server(global: GlobalStateArc) {
     let listener = {
-        let port = env::u16_env(env::MAIN_PORT);
+        let port = env::from_env(env::MAIN_PORT);
         match TcpListener::bind(("0.0.0.0", port)).await {
             Ok(value) => {
                 info!("Started MITM Server on (Port: {port})");

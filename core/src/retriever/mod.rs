@@ -48,7 +48,7 @@ impl Retriever {
     /// connection to the redirector server and obtains the IP and Port
     /// of the Official server.
     pub async fn new() -> Option<Retriever> {
-        if !env::bool_env(env::RETRIEVER) {
+        if !env::from_env(env::RETRIEVER) {
             return None;
         }
 

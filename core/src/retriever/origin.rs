@@ -26,7 +26,7 @@ impl Retriever {
     /// Async wrapper and enabled checker for fetching origin details from the
     /// official server using the provided origin auth token.
     pub async fn get_origin_player(&self, db: &Database, token: String) -> Option<players::Model> {
-        if !env::bool_env(env::ORIGIN_FETCH) {
+        if !env::from_env(env::ORIGIN_FETCH) {
             return None;
         }
         let mut session = self.session().await?;
@@ -46,7 +46,7 @@ impl Retriever {
                 )
                 .await
                 .ok()?;
-                if env::bool_env(env::ORIGIN_FETCH_DATA) {
+                if env::from_env(env::ORIGIN_FETCH_DATA) {
                     match session.get_extra_data().await {
                         Some(values) => {
                             player = PlayersInterface::update_all(&db, player, values)

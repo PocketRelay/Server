@@ -17,7 +17,7 @@ async fn main() {
     {
         let logging_level = utils::logging::logging_level();
         let logging_path = env::str_env(env::LOGGING_DIR);
-        let compress = env::bool_env(env::LOG_COMPRESSION);
+        let compress = env::from_env(env::LOG_COMPRESSION);
         utils::logging::init_logger(logging_level, logging_path, compress);
     }
 
@@ -43,7 +43,7 @@ async fn main() {
 ///
 /// `global_state` The global app state
 async fn start_main_server(global_state: GlobalStateArc) {
-    let mitm_enabled = env::bool_env(env::MITM_ENABLED);
+    let mitm_enabled = env::from_env(env::MITM_ENABLED);
     if mitm_enabled {
         mitm_server::start_server(global_state).await;
     } else {

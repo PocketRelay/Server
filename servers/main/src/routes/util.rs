@@ -195,7 +195,7 @@ impl Codec for PreAuthRes {
 /// ```
 async fn handle_pre_auth(session: &mut Session, packet: &Packet) -> HandleResult {
     let host = env::str_env(env::EXT_HOST);
-    let port = env::u16_env(env::HTTP_PORT);
+    let port = env::from_env(env::HTTP_PORT);
 
     session.response(packet, &PreAuthRes { host, port }).await
 }
@@ -532,7 +532,7 @@ impl Message {
 ///
 fn data_config() -> TdfMap<String, String> {
     let ext_host = env::str_env(env::EXT_HOST);
-    let http_port = env::u16_env(env::HTTP_PORT);
+    let http_port = env::from_env(env::HTTP_PORT);
 
     let prefix = format!("http://{ext_host}:{http_port}");
 

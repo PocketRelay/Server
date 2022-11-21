@@ -149,9 +149,9 @@ async fn increase_ratings(
         GalaxyAtWarInterface::find_or_create(
             &global.db,
             &player,
-            env::f32_env(env::GAW_DAILY_DECAY)
+            env::from_env(env::GAW_DAILY_DECAY)
         ),
-        get_promotions(&global.db, &player, env::bool_env(env::GAW_PROMOTIONS))
+        get_promotions(&global.db, &player, env::from_env(env::GAW_PROMOTIONS))
     )?;
 
     let a = get_inc_value(gaw_data.group_a, &query.a);
@@ -182,9 +182,9 @@ async fn get_ratings(id: Path<String>, global: Data<GlobalState>) -> GAWResult<i
         GalaxyAtWarInterface::find_or_create(
             &global.db,
             &player,
-            env::f32_env(env::GAW_DAILY_DECAY)
+            env::from_env(env::GAW_DAILY_DECAY)
         ),
-        get_promotions(&global.db, &player, env::bool_env(env::GAW_PROMOTIONS))
+        get_promotions(&global.db, &player, env::from_env(env::GAW_PROMOTIONS))
     )?;
 
     Ok(ratings_response(promotions, gaw_data))
