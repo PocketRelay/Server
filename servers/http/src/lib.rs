@@ -14,10 +14,11 @@ pub async fn start_server(global: &GlobalStateArc) {
     let port = env::from_env(env::HTTP_PORT);
     info!("Starting HTTP Server on (Port: {port})");
 
-    let global = global.clone();
+    let global_data = Data::from(global.clone());
+
     let result = HttpServer::new(move || {
         App::new()
-            .app_data(Data::from(global.clone()))
+            .app_data(global_data.clone())
             .wrap(Logger::default())
             .configure(routes::configure)
     })
