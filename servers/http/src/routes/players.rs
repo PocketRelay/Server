@@ -8,8 +8,8 @@ use actix_web::{
     ResponseError,
 };
 use database::{
-    players,
     snapshots::players::{PlayerBasicSnapshot, PlayerDeepSnapshot},
+    Player,
 };
 use serde::Serialize;
 use utils::types::PlayerID;
@@ -54,7 +54,7 @@ async fn players_list(_global: Data<GlobalState>) -> Json<()> {
 async fn player_deep(path: Path<PlayerID>) -> Result<Json<PlayerDeepSnapshot>, PlayersError> {
     let db = GlobalState::database();
     let player_id = path.into_inner();
-    let player = players::Model::by_id(db, player_id)
+    let player = Player::by_id(db, player_id)
         .await
         .map_err(|_| PlayersError::UnknownError)?
         .ok_or(PlayersError::PlayerNotFound)?;
@@ -68,7 +68,7 @@ async fn player_deep(path: Path<PlayerID>) -> Result<Json<PlayerDeepSnapshot>, P
 async fn player_basic(path: Path<PlayerID>) -> Result<Json<PlayerBasicSnapshot>, PlayersError> {
     let db = GlobalState::database();
     let player_id = path.into_inner();
-    let player = players::Model::by_id(db, player_id)
+    let player = Player::by_id(db, player_id)
         .await
         .map_err(|_| PlayersError::UnknownError)?
         .ok_or(PlayersError::PlayerNotFound)?;

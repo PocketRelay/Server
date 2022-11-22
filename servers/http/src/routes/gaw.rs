@@ -3,7 +3,7 @@ use actix_web::http::StatusCode;
 use actix_web::web::{scope, Path, Query, ServiceConfig};
 use actix_web::{get, HttpResponse, Responder, ResponseError};
 use core::{env, state::GlobalState};
-use database::{players, DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player};
+use database::{DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player};
 use serde::Deserialize;
 use std::fmt::Display;
 use std::num::ParseIntError;
@@ -179,11 +179,7 @@ async fn get_ratings(id: Path<String>) -> GAWResult<impl Responder> {
     Ok(ratings_response(promotions, gaw_data))
 }
 
-async fn get_promotions(
-    db: &DatabaseConnection,
-    player: &players::Model,
-    enabled: bool,
-) -> DbResult<u32> {
+async fn get_promotions(db: &DatabaseConnection, player: &Player, enabled: bool) -> DbResult<u32> {
     if !enabled {
         return Ok(0);
     }

@@ -2,10 +2,7 @@ use sea_orm::DatabaseConnection;
 use serde::Serialize;
 use utils::types::PlayerID;
 
-use crate::{
-    galaxy_at_war, player_characters, player_classes, players, DbResult, GalaxyAtWar,
-    PlayerCharacter, PlayerClass,
-};
+use crate::{DbResult, GalaxyAtWar, Player, PlayerCharacter, PlayerClass};
 
 #[derive(Serialize)]
 pub struct PlayerBasicSnapshot {
@@ -22,7 +19,7 @@ pub struct PlayerBasicSnapshot {
 }
 
 impl PlayerBasicSnapshot {
-    pub fn take_snapshot(player: players::Model) -> Self {
+    pub fn take_snapshot(player: Player) -> Self {
         Self {
             id: player.id,
             email: player.email,
@@ -58,13 +55,13 @@ pub struct PlayerDeepSnapshot {
     pub cs_timestamps1: Option<String>,
     pub cs_timestamps2: Option<String>,
     pub cs_timestamps3: Option<String>,
-    pub classes: Vec<player_classes::Model>,
-    pub characters: Vec<player_characters::Model>,
-    pub galaxy_at_war: galaxy_at_war::Model,
+    pub classes: Vec<PlayerClass>,
+    pub characters: Vec<PlayerCharacter>,
+    pub galaxy_at_war: GalaxyAtWar,
 }
 
 impl PlayerDeepSnapshot {
-    pub async fn take_snapshot(db: &DatabaseConnection, player: players::Model) -> DbResult<Self> {
+    pub async fn take_snapshot(db: &DatabaseConnection, player: Player) -> DbResult<Self> {
         let classes = PlayerClass::find_all(db, &player).await?;
         let characters = PlayerCharacter::find_all(db, &player).await?;
         let galaxy_at_war = GalaxyAtWar::find_or_create(db, &player, 0.0).await?;

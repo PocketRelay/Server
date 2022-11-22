@@ -15,7 +15,7 @@ use core::{
     state::GlobalState,
 };
 
-use database::players;
+use database::Player;
 use utils::{
     net::public_address,
     types::{GameID, PlayerID, SessionID},
@@ -59,7 +59,7 @@ pub struct Session {
 
     /// If the session is authenticated it will have a linked
     /// player model from the database
-    pub player: Option<players::Model>,
+    pub player: Option<Player>,
 
     /// Networking information
     pub net: NetData,
@@ -367,7 +367,7 @@ impl Session {
     /// about the previous player if there was one
     ///
     /// `player` The player to set the state to or None to clear the player
-    pub fn set_player(&mut self, player: players::Model) {
+    pub fn set_player(&mut self, player: Player) {
         let existing = self.player.replace(player);
         if let Some(existing) = existing {
             debug!(

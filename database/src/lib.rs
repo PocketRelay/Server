@@ -12,7 +12,7 @@ use migration::{Migrator, MigratorTrait};
 use sea_orm::Database as SeaDatabase;
 use tokio::fs::{create_dir_all, File};
 
-pub use entities::*;
+pub use entities::{GalaxyAtWar, Player, PlayerCharacter, PlayerClass};
 
 pub use sea_orm::DatabaseConnection;
 pub use sea_orm::DbErr;
