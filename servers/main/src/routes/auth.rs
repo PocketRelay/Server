@@ -90,7 +90,10 @@ async fn handle_silent_login(session: &mut Session, packet: &Packet) -> HandleRe
     debug!("Username = {}", &player.display_name);
     debug!("Email = {}", &player.email);
 
-    complete_auth(db, session, packet, player, true).await?;
+    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
+    let response = SilentAuthResponse::create(packet, &player, session_token);
+    session.write_immediate(&response).await?;
+    session.set_player(player);
     Ok(())
 }
 
@@ -122,80 +125,91 @@ impl Codec for PersonaDetails<'_> {
     }
 }
 
-/// Complex authentication result structure is manually encoded because it
-/// has complex nesting and output can vary based on inputs provided
-#[derive(Debug)]
-pub struct AuthRes<'a> {
-    pub player: &'a players::Model,
-    pub session_token: &'a str,
-    pub silent: bool,
+/// Structure for a authentication response where the authentication
+/// was done silently behind the scenes. This is the response for
+/// Origin Authentication and Token Authentication.
+pub struct SilentAuthResponse<'a> {
+    player: &'a players::Model,
+    session_token: String,
 }
 
-impl Codec for AuthRes<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        let silent = self.silent;
-        if silent {
-            tag_zero(output, "AGUP");
-        }
+impl<'a> SilentAuthResponse<'a> {
+    pub fn create(packet: &Packet, player: &'a players::Model, session_token: String) -> Packet {
+        Packet::response(
+            packet,
+            &Self {
+                player,
+                session_token,
+            },
+        )
+    }
+}
 
+impl Codec for SilentAuthResponse<'_> {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_zero(output, "AGUP");
         tag_empty_str(output, "LDHT");
         tag_zero(output, "NTOS");
-        tag_str(output, "PCTK", self.session_token);
-
-        if silent {
-            tag_empty_str(output, "PRIV");
+        tag_str(output, "PCTK", &self.session_token); // PC Authentication Token
+        tag_empty_str(output, "PRIV");
+        {
+            tag_group_start(output, "SESS");
+            tag_u32(output, "BUID", self.player.id);
+            tag_zero(output, "FRST");
+            tag_str(output, "KEY", &self.session_token); // Session Token
+            tag_zero(output, "LLOG");
+            tag_str(output, "MAIL", &self.player.email); // Player Email
             {
-                tag_group_start(output, "SESS");
-                tag_u32(output, "BUID", self.player.id);
-                tag_zero(output, "FRST");
-                tag_str(output, "KEY", self.session_token);
-                tag_zero(output, "LLOG");
-                tag_str(output, "MAIL", &self.player.email);
-                {
-                    tag_group_start(output, "PDTL");
-                    encode_persona(&self.player, output);
-                }
-                tag_u32(output, "UID", self.player.id);
-                tag_group_end(output);
+                tag_group_start(output, "PDTL");
+                encode_persona(&self.player, output); // Persona Details
             }
-        } else {
-            tag_list_start(output, "PLST", ValueType::Group, 1);
-            encode_persona(&self.player, output);
-            tag_empty_str(output, "PRIV");
-            tag_str(output, "SKEY", self.session_token);
+            tag_u32(output, "UID", self.player.id);
+            tag_group_end(output);
         }
         tag_zero(output, "SPAM");
         tag_empty_str(output, "THST");
         tag_empty_str(output, "TSUI");
         tag_empty_str(output, "TURI");
-        if !silent {
-            tag_u32(output, "UID", self.player.id);
-        }
     }
 }
 
-/// Completes the authentication process for the provided session using the provided Player
-/// Model as the authenticated player.
-pub async fn complete_auth(
-    db: &DatabaseConnection,
-    session: &mut Session,
-    packet: &Packet,
-    player: players::Model,
-    silent: bool,
-) -> HandleResult {
-    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
-    session
-        .response(
+/// Structure for a authentication response where the authentication
+/// was done visibly to the user. This is the response for Creating
+/// accounts and using the Login screen.
+struct AuthResponse<'a> {
+    player: &'a players::Model,
+    session_token: String,
+}
+
+impl<'a> AuthResponse<'a> {
+    fn create(packet: &Packet, player: &'a players::Model, session_token: String) -> Packet {
+        Packet::response(
             packet,
-            &AuthRes {
-                session_token: &&session_token,
-                player: &player,
-                silent,
+            &Self {
+                player,
+                session_token,
             },
         )
-        .await?;
-    session.set_player(player);
-    Ok(())
+    }
+}
+
+impl Codec for AuthResponse<'_> {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_empty_str(output, "LDHT");
+        tag_zero(output, "NTOS");
+        tag_str(output, "PCTK", &self.session_token);
+        {
+            tag_list_start(output, "PLST", ValueType::Group, 1);
+            encode_persona(&self.player, output);
+        }
+        tag_empty_str(output, "PRIV");
+        tag_str(output, "SKEY", &self.session_token);
+        tag_zero(output, "SPAM");
+        tag_empty_str(output, "THST");
+        tag_empty_str(output, "TSUI");
+        tag_empty_str(output, "TURI");
+        tag_u32(output, "UID", self.player.id);
+    }
 }
 
 /// Handles logging out by the client this removes any current player data from the
@@ -263,7 +277,11 @@ async fn handle_login(session: &mut Session, packet: &Packet) -> HandleResult {
             .await;
     }
 
-    complete_auth(db, session, packet, player, false).await?;
+    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
+    let response = AuthResponse::create(packet, &player, session_token);
+    session.write_immediate(&response).await?;
+    session.set_player(player);
+
     Ok(())
 }
 
@@ -330,8 +348,10 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
     };
 
     let player = PlayersInterface::create(db, email, display_name, hashed_password, false).await?;
-
-    complete_auth(db, session, packet, player, false).await?;
+    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
+    let response = AuthResponse::create(packet, &player, session_token);
+    session.write_immediate(&response).await?;
+    session.set_player(player);
     Ok(())
 }
 
@@ -390,7 +410,10 @@ async fn handle_origin_login(session: &mut Session, packet: &Packet) -> HandleRe
         None => create_origin_from_flow(db, &mut flow, details).await?,
     };
 
-    complete_auth(db, session, packet, player, true).await?;
+    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
+    let response = SilentAuthResponse::create(packet, &player, session_token);
+    session.write_immediate(&response).await?;
+    session.set_player(player);
     Ok(())
 }
 

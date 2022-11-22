@@ -1,4 +1,3 @@
-use crate::routes::auth::complete_auth;
 use blaze_pk::{
     codec::{Codec, CodecResult, Reader},
     packet,
@@ -13,6 +12,8 @@ use crate::session::Session;
 use core::blaze::codec::{NetGroups, QosNetworkData};
 use database::PlayersInterface;
 use log::{debug, warn};
+
+use super::auth::SilentAuthResponse;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -51,7 +52,12 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
             .response_error(packet, ServerError::InvalidSession)
             .await;
     };
-    complete_auth(db, session, packet, player, true).await
+
+    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
+    let response = SilentAuthResponse::create(packet, &player, session_token);
+    session.write_immediate(&response).await?;
+    session.set_player(player);
+    Ok(())
 }
 
 #[derive(Debug)]
