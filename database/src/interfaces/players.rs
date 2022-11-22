@@ -66,6 +66,22 @@ impl PlayersInterface {
         players::Entity::find_by_id(id).one(db).await
     }
 
+    /// Attempts to find a player with the provided ID and matching session
+    /// token will return none if there was no players with that ID
+    ///
+    /// `db` The database instance
+    /// `id` The ID of the player to find
+    pub async fn by_id_with_token(
+        db: &DatabaseConnection,
+        id: u32,
+        token: String,
+    ) -> DbResult<Option<players::Model>> {
+        players::Entity::find_by_id(id)
+            .filter(players::Column::SessionToken.eq(token))
+            .one(db)
+            .await
+    }
+
     /// Attempts to find a player with the provided email. Conditional
     /// check for whether to allow origin accounts in the search.
     pub async fn by_email(

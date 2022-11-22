@@ -74,16 +74,9 @@ async fn handle_silent_login(session: &mut Session, packet: &Packet) -> HandleRe
     debug!("Attempted silent authentication: {id} ({token})");
 
     let db = GlobalState::database();
-
-    let Some(player) = PlayersInterface::by_id(db, id).await? else {
+    let Some(player) = PlayersInterface::by_id_with_token(db, id, token).await? else {
         return session.response_error(packet, ServerError::InvalidSession).await;
     };
-
-    if player.session_token.ne(&Some(token)) {
-        return session
-            .response_error(packet, ServerError::InvalidSession)
-            .await;
-    }
 
     debug!("Silent authentication success");
     debug!("ID = {}", &player.id);
