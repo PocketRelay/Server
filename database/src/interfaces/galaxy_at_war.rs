@@ -10,10 +10,7 @@ use sea_orm::{
 };
 use std::cmp;
 
-/// Interface for accessing Galaxy At War related functionality
-pub struct GalaxyAtWarInterface;
-
-impl GalaxyAtWarInterface {
+impl galaxy_at_war::Model {
     /// The minimum value for galaxy at war entries
     const MIN_VALUE: u16 = 5000;
     /// The maximum value for galaxy at war entries
@@ -47,10 +44,10 @@ impl GalaxyAtWarInterface {
         db: &DatabaseConnection,
         player: &players::Model,
         decay: f32,
-    ) -> DbResult<galaxy_at_war::Model> {
+    ) -> DbResult<Self> {
         let existing = player.find_related(galaxy_at_war::Entity).one(db).await?;
         if let Some(value) = existing {
-            return Self::apply_decay(db, value, decay).await;
+            return value.apply_decay(db, decay).await;
         }
 
         let current_time = Local::now().naive_local();
@@ -75,11 +72,11 @@ impl GalaxyAtWarInterface {
     /// `value`  The galaxy at war model to increase
     /// `values` The values to increase each group by
     pub async fn increase(
+        self,
         db: &DatabaseConnection,
-        value: galaxy_at_war::Model,
         values: (u16, u16, u16, u16, u16),
     ) -> DbResult<galaxy_at_war::Model> {
-        let mut gaw_data = value.into_active_model();
+        let mut gaw_data = self.into_active_model();
         gaw_data.group_a = Set(cmp::min(values.0, Self::MAX_VALUE));
         gaw_data.group_b = Set(cmp::min(values.1, Self::MAX_VALUE));
         gaw_data.group_c = Set(cmp::min(values.2, Self::MAX_VALUE));
@@ -95,29 +92,25 @@ impl GalaxyAtWarInterface {
     /// `db`    The database connection
     /// `value` The galaxy at war model to decay
     /// `decay` The decay value
-    async fn apply_decay(
-        db: &DatabaseConnection,
-        value: galaxy_at_war::Model,
-        decay: f32,
-    ) -> DbResult<galaxy_at_war::Model> {
+    async fn apply_decay(self, db: &DatabaseConnection, decay: f32) -> DbResult<Self> {
         // Skip decaying if decay is non existent
         if decay <= 0.0 {
-            return Ok(value);
+            return Ok(self);
         }
 
         let current_time = Local::now().naive_local();
-        let days_passed = (current_time - value.last_modified).num_days() as f32;
+        let days_passed = (current_time - self.last_modified).num_days() as f32;
         let decay_value = (decay * days_passed * 100.0) as u16;
 
         // Apply decay while keeping minimum
-        let a = cmp::max(value.group_a - decay_value, Self::MIN_VALUE);
-        let b = cmp::max(value.group_b - decay_value, Self::MIN_VALUE);
-        let c = cmp::max(value.group_c - decay_value, Self::MIN_VALUE);
-        let d = cmp::max(value.group_d - decay_value, Self::MIN_VALUE);
-        let e = cmp::max(value.group_e - decay_value, Self::MIN_VALUE);
+        let a = cmp::max(self.group_a - decay_value, Self::MIN_VALUE);
+        let b = cmp::max(self.group_b - decay_value, Self::MIN_VALUE);
+        let c = cmp::max(self.group_c - decay_value, Self::MIN_VALUE);
+        let d = cmp::max(self.group_d - decay_value, Self::MIN_VALUE);
+        let e = cmp::max(self.group_e - decay_value, Self::MIN_VALUE);
 
         // Update stored copy
-        let mut value = value.into_active_model();
+        let mut value = self.into_active_model();
         value.group_a = Set(a);
         value.group_b = Set(b);
         value.group_c = Set(c);

@@ -3,3 +3,8 @@ pub mod galaxy_at_war;
 pub mod player_characters;
 pub mod player_classes;
 pub mod players;
+
+pub use galaxy_at_war::Model as GalaxyAtWar;
+pub use player_characters::Model as PlayerCharacter;
+pub use player_classes::Model as PlayerClass;
+pub use players::Model as Player;

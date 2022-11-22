@@ -10,10 +10,12 @@ use core::{blaze::components::UserSessions, state::GlobalState};
 
 use crate::session::Session;
 use core::blaze::codec::{NetGroups, QosNetworkData};
-use database::PlayersInterface;
+
 use log::{debug, warn};
 
 use super::auth::SilentAuthResponse;
+
+use database::Player;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -47,13 +49,13 @@ packet! {
 async fn handle_resume_session(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<ResumeSession>()?;
     let db = GlobalState::database();
-    let Some(player) = PlayersInterface::by_token(db, &req.session_token).await? else {
+    let Some(player) = Player::by_token(db, &req.session_token).await? else {
         return session
             .response_error(packet, ServerError::InvalidSession)
             .await;
     };
 
-    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
+    let (player, session_token) = player.with_token(db).await?;
     let response = SilentAuthResponse::create(packet, &player, session_token);
     session.write_immediate(&response).await?;
     session.set_player(player);

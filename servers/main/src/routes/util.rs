@@ -4,7 +4,7 @@ use core::blaze::components::Util;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::env::{self, VERSION};
 use core::state::GlobalState;
-use database::{PlayerCharactersInterface, PlayerClassesInterface, PlayersInterface};
+use database::{PlayerCharacter, PlayerClass};
 use log::{debug, warn};
 use rust_embed::RustEmbed;
 use tokio::try_join;
@@ -618,7 +618,7 @@ async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> Ha
             }
         };
 
-        match PlayerClassesInterface::update(db, player, key, &value).await {
+        match PlayerClass::update(db, player, key, &value).await {
             Ok(_) => {}
             Err(err) => {
                 warn!("Failed to update player class: {err:?}");
@@ -640,7 +640,7 @@ async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> Ha
             }
         };
 
-        match PlayerCharactersInterface::update(db, player, key, &value).await {
+        match PlayerCharacter::update(db, player, key, &value).await {
             Ok(_) => {}
             Err(err) => {
                 warn!("Failed to update player character: {err:?}");
@@ -662,7 +662,7 @@ async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> Ha
         };
         let db = GlobalState::database();
 
-        match PlayersInterface::update(db, player, key, value).await {
+        match player.update(db, key, value).await {
             Ok(player) => {
                 session.player = Some(player);
                 debug!("Updated player base data");
@@ -699,30 +699,24 @@ async fn handle_user_settings_load_all(session: &mut Session, packet: &Packet) -
             return session.response_error(packet, ServerError::FailedNoLoginAction).await;
         };
 
-        settings.insert("Base", PlayersInterface::encode_base(player));
+        settings.insert("Base", player.encode_base());
 
         let db = GlobalState::database();
 
-        let classes = PlayerClassesInterface::find_all(db, player);
-        let characters = PlayerCharactersInterface::find_all(db, player);
+        let classes = PlayerClass::find_all(db, player);
+        let characters = PlayerCharacter::find_all(db, player);
 
         let (classes, characters) = try_join!(classes, characters)?;
 
         let mut index = 0;
         for char in characters {
-            settings.insert(
-                format!("char{}", index),
-                PlayerCharactersInterface::encode(&char),
-            );
+            settings.insert(format!("char{}", index), char.encode());
             index += 1;
         }
 
         index = 0;
         for class in classes {
-            settings.insert(
-                format!("class{}", index),
-                PlayerClassesInterface::encode(&class),
-            );
+            settings.insert(format!("class{}", index), class.encode());
             index += 1;
         }
 

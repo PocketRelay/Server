@@ -11,17 +11,12 @@ use crate::{
     DbResult,
 };
 
-pub struct PlayerClassesInterface;
-
-impl PlayerClassesInterface {
+impl player_classes::Model {
     /// Finds all the player classes for the provided player model
     ///
     /// `db`     The database instance
     /// `player` The player to find the classes for
-    pub async fn find_all(
-        db: &DatabaseConnection,
-        player: &players::Model,
-    ) -> DbResult<Vec<player_classes::Model>> {
+    pub async fn find_all(db: &DatabaseConnection, player: &players::Model) -> DbResult<Vec<Self>> {
         player.find_related(player_classes::Entity).all(db).await
     }
 
@@ -115,10 +110,10 @@ impl PlayerClassesInterface {
 
     /// Encodes the provided player character model into the ME string
     /// encoded value to send as apart of the settings map
-    pub fn encode(model: &player_classes::Model) -> String {
+    pub fn encode(&self) -> String {
         format!(
             "20;4;{};{};{};{}",
-            model.name, model.level, model.exp, model.promotions
+            &self.name, self.level, self.exp, self.promotions
         )
     }
 }

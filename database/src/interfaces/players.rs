@@ -6,14 +6,11 @@ use sea_orm::{
 };
 use utils::parse::MEStringParser;
 
-use crate::{entities::players, DbResult};
+use crate::{entities::players, DbResult, PlayerCharacter, PlayerClass};
 
-use super::{player_characters::PlayerCharactersInterface, player_classes::PlayerClassesInterface};
 use std::iter::Iterator;
 
-pub struct PlayersInterface;
-
-impl PlayersInterface {
+impl players::Model {
     /// The length of player session tokens
     const TOKEN_LENGTH: usize = 128;
 
@@ -31,7 +28,7 @@ impl PlayersInterface {
         display_name: String,
         password: String,
         origin: bool,
-    ) -> DbResult<players::Model> {
+    ) -> DbResult<Self> {
         let active_model = players::ActiveModel {
             id: NotSet,
             email: Set(email.to_string()),
@@ -62,7 +59,7 @@ impl PlayersInterface {
     ///
     /// `db` The database instance
     /// `id` The ID of the player to find
-    pub async fn by_id(db: &DatabaseConnection, id: u32) -> DbResult<Option<players::Model>> {
+    pub async fn by_id(db: &DatabaseConnection, id: u32) -> DbResult<Option<Self>> {
         players::Entity::find_by_id(id).one(db).await
     }
 
@@ -75,7 +72,7 @@ impl PlayersInterface {
         db: &DatabaseConnection,
         id: u32,
         token: String,
-    ) -> DbResult<Option<players::Model>> {
+    ) -> DbResult<Option<Self>> {
         players::Entity::find_by_id(id)
             .filter(players::Column::SessionToken.eq(token))
             .one(db)
@@ -84,11 +81,14 @@ impl PlayersInterface {
 
     /// Attempts to find a player with the provided email. Conditional
     /// check for whether to allow origin accounts in the search.
+    ///
+    /// `email`  The email address to search for
+    /// `origin` Whether to check for origin accounts or normal accounts
     pub async fn by_email(
         db: &DatabaseConnection,
         email: &str,
         origin: bool,
-    ) -> DbResult<Option<players::Model>> {
+    ) -> DbResult<Option<Self>> {
         players::Entity::find()
             .filter(
                 players::Column::Email
@@ -104,7 +104,6 @@ impl PlayersInterface {
     ///
     /// `db`    The datbase instance
     /// `email` The email to check for
-    ///
     pub async fn is_email_taken(db: &DatabaseConnection, email: &str) -> DbResult<bool> {
         players::Entity::find()
             .filter(players::Column::Email.eq(email))
@@ -117,10 +116,7 @@ impl PlayersInterface {
     ///
     /// `db`    The database instance
     /// `token` The session token to search for
-    pub async fn by_token(
-        db: &DatabaseConnection,
-        token: &str,
-    ) -> DbResult<Option<players::Model>> {
+    pub async fn by_token(db: &DatabaseConnection, token: &str) -> DbResult<Option<Self>> {
         players::Entity::find()
             .filter(players::Column::SessionToken.eq(token))
             .one(db)
@@ -133,12 +129,8 @@ impl PlayersInterface {
     /// `db`     The database instance
     /// `player` The player to set the token for
     /// `token`  The token to set
-    pub async fn set_token(
-        db: &DatabaseConnection,
-        player: players::Model,
-        token: String,
-    ) -> DbResult<(players::Model, String)> {
-        let mut player = player.into_active_model();
+    async fn set_token(self, db: &DatabaseConnection, token: String) -> DbResult<(Self, String)> {
+        let mut player = self.into_active_model();
         player.session_token = Set(Some(token.clone()));
         let player = player.update(db).await?;
         Ok((player, token))
@@ -150,29 +142,26 @@ impl PlayersInterface {
     ///
     /// `db`     The database instance
     /// `player` The player to get the token for
-    pub async fn get_token(
-        db: &DatabaseConnection,
-        player: players::Model,
-    ) -> DbResult<(players::Model, String)> {
-        let token = match &player.session_token {
+    pub async fn with_token(self, db: &DatabaseConnection) -> DbResult<(Self, String)> {
+        let token = match &self.session_token {
             None => {
                 let token = utils::random::generate_random_string(Self::TOKEN_LENGTH);
-                let out = Self::set_token(db, player, token).await?;
+                let out = self.set_token(db, token).await?;
                 return Ok(out);
             }
             Some(value) => value.clone(),
         };
-        Ok((player, token))
+        Ok((self, token))
     }
 
-    pub fn encode_base(model: &players::Model) -> String {
+    pub fn encode_base(&self) -> String {
         format!(
             "20;4;{};-1;0;{};0;{};{};0;{}",
-            model.credits,
-            model.credits_spent,
-            model.games_played,
-            model.seconds_played,
-            model.inventory
+            self.credits,
+            self.credits_spent,
+            self.games_played,
+            self.seconds_played,
+            &self.inventory
         )
     }
 
@@ -221,46 +210,37 @@ impl PlayersInterface {
         }
     }
 
-    pub async fn update(
-        db: &DatabaseConnection,
-        player: players::Model,
-        key: &str,
-        value: String,
-    ) -> DbResult<players::Model> {
-        let mut model = player.into_active_model();
+    pub async fn update(self, db: &DatabaseConnection, key: &str, value: String) -> DbResult<Self> {
+        let mut model = self.into_active_model();
         Self::modify(&mut model, key, value);
         let player = model.update(db).await?;
         Ok(player)
     }
 
     pub async fn update_all(
+        self,
         db: &DatabaseConnection,
-        player: players::Model,
         values: impl Iterator<Item = (String, String)>,
     ) -> DbResult<players::Model> {
         let mut others = Vec::new();
         for (key, value) in values {
             if key.starts_with("class") {
-                PlayerClassesInterface::update(db, &player, &key, &value)
-                    .await
-                    .ok();
+                PlayerClass::update(db, &self, &key, &value).await.ok();
             } else if key.starts_with("char") {
-                PlayerCharactersInterface::update(db, &player, &key, &value)
-                    .await
-                    .ok();
+                PlayerCharacter::update(db, &self, &key, &value).await.ok();
             } else {
                 others.push((key, value));
             }
         }
         if others.len() > 0 {
-            let mut model = player.into_active_model();
+            let mut model = self.into_active_model();
             for (key, value) in others {
                 Self::modify(&mut model, &key, value);
             }
             let model = model.update(db).await?;
             Ok(model)
         } else {
-            Ok(player)
+            Ok(self)
         }
     }
 }

@@ -6,7 +6,7 @@ use core::blaze::errors::{BlazeError, HandleResult, ServerError};
 use core::env;
 use core::retriever::origin::{OriginDetails, OriginFlow};
 use core::state::GlobalState;
-use database::{players, DatabaseConnection, DbResult, PlayersInterface};
+use database::{DatabaseConnection, DbResult, Player};
 use log::{debug, error, warn};
 use utils::{
     hashing::{hash_password, verify_password},
@@ -74,7 +74,7 @@ async fn handle_silent_login(session: &mut Session, packet: &Packet) -> HandleRe
     debug!("Attempted silent authentication: {id} ({token})");
 
     let db = GlobalState::database();
-    let Some(player) = PlayersInterface::by_id_with_token(db, id, token).await? else {
+    let Some(player) = Player::by_id_with_token(db, id, token).await? else {
         return session.response_error(packet, ServerError::InvalidSession).await;
     };
 
@@ -83,14 +83,14 @@ async fn handle_silent_login(session: &mut Session, packet: &Packet) -> HandleRe
     debug!("Username = {}", &player.display_name);
     debug!("Email = {}", &player.email);
 
-    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
+    let (player, session_token) = player.with_token(db).await?;
     let response = SilentAuthResponse::create(packet, &player, session_token);
     session.write_immediate(&response).await?;
     session.set_player(player);
     Ok(())
 }
 
-fn encode_persona(player: &players::Model, output: &mut Vec<u8>) {
+fn encode_persona(player: &Player, output: &mut Vec<u8>) {
     tag_str(output, "DSNM", &player.display_name);
     tag_zero(output, "LAST");
     tag_u32(output, "PID", player.id);
@@ -101,7 +101,7 @@ fn encode_persona(player: &players::Model, output: &mut Vec<u8>) {
 }
 
 pub struct PersonaDetails<'a> {
-    pub player: &'a players::Model,
+    pub player: &'a Player,
     pub session_token: &'a str,
 }
 
@@ -122,12 +122,12 @@ impl Codec for PersonaDetails<'_> {
 /// was done silently behind the scenes. This is the response for
 /// Origin Authentication and Token Authentication.
 pub struct SilentAuthResponse<'a> {
-    player: &'a players::Model,
+    player: &'a Player,
     session_token: String,
 }
 
 impl<'a> SilentAuthResponse<'a> {
-    pub fn create(packet: &Packet, player: &'a players::Model, session_token: String) -> Packet {
+    pub fn create(packet: &Packet, player: &'a Player, session_token: String) -> Packet {
         Packet::response(
             packet,
             &Self {
@@ -170,12 +170,12 @@ impl Codec for SilentAuthResponse<'_> {
 /// was done visibly to the user. This is the response for Creating
 /// accounts and using the Login screen.
 struct AuthResponse<'a> {
-    player: &'a players::Model,
+    player: &'a Player,
     session_token: String,
 }
 
 impl<'a> AuthResponse<'a> {
-    fn create(packet: &Packet, player: &'a players::Model, session_token: String) -> Packet {
+    fn create(packet: &Packet, player: &'a Player, session_token: String) -> Packet {
         Packet::response(
             packet,
             &Self {
@@ -255,7 +255,7 @@ async fn handle_login(session: &mut Session, packet: &Packet) -> HandleResult {
 
     let db = GlobalState::database();
 
-    let Some(player) = PlayersInterface::by_email(db, &email, false).await? else {
+    let Some(player) = Player::by_email(db, &email, false).await? else {
         return session
             .response_error(packet, ServerError::EmailNotFound)
             .await;
@@ -270,7 +270,7 @@ async fn handle_login(session: &mut Session, packet: &Packet) -> HandleResult {
             .await;
     }
 
-    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
+    let (player, session_token) = player.with_token(db).await?;
     let response = AuthResponse::create(packet, &player, session_token);
     session.write_immediate(&response).await?;
     session.set_player(player);
@@ -323,7 +323,7 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
 
     let db = GlobalState::database();
 
-    let email_exists = PlayersInterface::is_email_taken(db, &email).await?;
+    let email_exists = Player::is_email_taken(db, &email).await?;
 
     if email_exists {
         return session
@@ -340,8 +340,8 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
         email.clone()
     };
 
-    let player = PlayersInterface::create(db, email, display_name, hashed_password, false).await?;
-    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
+    let player = Player::create(db, email, display_name, hashed_password, false).await?;
+    let (player, session_token) = player.with_token(db).await?;
     let response = AuthResponse::create(packet, &player, session_token);
     session.write_immediate(&response).await?;
     session.set_player(player);
@@ -396,14 +396,14 @@ async fn handle_origin_login(session: &mut Session, packet: &Packet) -> HandleRe
 
     let db = GlobalState::database();
     // Lookup the player details to see if the player exists
-    let player = PlayersInterface::by_email(&db, &details.email, true).await?;
+    let player = Player::by_email(&db, &details.email, true).await?;
 
     let player = match player {
         Some(player) => player,
         None => create_origin_from_flow(db, &mut flow, details).await?,
     };
 
-    let (player, session_token) = PlayersInterface::get_token(db, player).await?;
+    let (player, session_token) = player.with_token(db).await?;
     let response = SilentAuthResponse::create(packet, &player, session_token);
     session.write_immediate(&response).await?;
     session.set_player(player);
@@ -421,8 +421,8 @@ async fn create_origin_from_flow(
     db: &'static DatabaseConnection,
     flow: &mut OriginFlow,
     details: OriginDetails,
-) -> DbResult<players::Model> {
-    let mut player = PlayersInterface::create(
+) -> DbResult<Player> {
+    let player = Player::create(
         &db,
         details.email,
         details.display_name,
@@ -442,17 +442,8 @@ async fn create_origin_from_flow(
         return Ok(player);
     };
 
-    if let Some(settings) = flow.get_settings().await {
-        player = PlayersInterface::update_all(&db, player, settings).await?;
-    } else {
-        warn!(
-            "Unable to load origin player settings from official servers (Name: {}, Email: {})",
-            &player.display_name, &player.email
-        );
-    }
-
     // Update the player settings with those retrieved from origin
-    PlayersInterface::update_all(&db, player, settings).await
+    player.update_all(&db, settings).await
 }
 
 packet! {
@@ -808,8 +799,7 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
             .response_error(packet, ServerError::FailedNoLoginAction)
             .await;
     };
-    let (player, session_token) =
-        PlayersInterface::get_token(GlobalState::database(), player).await?;
+    let (player, session_token) = player.with_token(GlobalState::database()).await?;
     session
         .response(
             packet,

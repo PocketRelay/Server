@@ -3,8 +3,8 @@ use serde::Serialize;
 use utils::types::PlayerID;
 
 use crate::{
-    galaxy_at_war, player_characters, player_classes, players, DbResult, GalaxyAtWarInterface,
-    PlayerCharactersInterface, PlayerClassesInterface,
+    galaxy_at_war, player_characters, player_classes, players, DbResult, GalaxyAtWar,
+    PlayerCharacter, PlayerClass,
 };
 
 #[derive(Serialize)]
@@ -65,9 +65,9 @@ pub struct PlayerDeepSnapshot {
 
 impl PlayerDeepSnapshot {
     pub async fn take_snapshot(db: &DatabaseConnection, player: players::Model) -> DbResult<Self> {
-        let classes = PlayerClassesInterface::find_all(db, &player).await?;
-        let characters = PlayerCharactersInterface::find_all(db, &player).await?;
-        let galaxy_at_war = GalaxyAtWarInterface::find_or_create(db, &player, 0.0).await?;
+        let classes = PlayerClass::find_all(db, &player).await?;
+        let characters = PlayerCharacter::find_all(db, &player).await?;
+        let galaxy_at_war = GalaxyAtWar::find_or_create(db, &player, 0.0).await?;
         Ok(Self {
             id: player.id,
             email: player.email,

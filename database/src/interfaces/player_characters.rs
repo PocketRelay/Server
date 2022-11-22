@@ -10,17 +10,12 @@ use sea_orm::{
 };
 use utils::parse::MEStringParser;
 
-pub struct PlayerCharactersInterface;
-
-impl PlayerCharactersInterface {
+impl player_characters::Model {
     /// Finds all the player characters for the provided player model
     ///
     /// `db`     The database instance
     /// `player` The player to find the characters for
-    pub async fn find_all(
-        db: &DatabaseConnection,
-        player: &players::Model,
-    ) -> DbResult<Vec<player_characters::Model>> {
+    pub async fn find_all(db: &DatabaseConnection, player: &players::Model) -> DbResult<Vec<Self>> {
         player.find_related(player_characters::Entity).all(db).await
     }
 
@@ -138,29 +133,29 @@ impl PlayerCharactersInterface {
 
     /// Encodes the provided player character model into the ME string
     /// encoded value to send as apart of the settings map
-    pub fn encode(model: &player_characters::Model) -> String {
+    pub fn encode(&self) -> String {
         format!(
             "20;4;{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{}",
-            model.kit_name,
-            model.name,
-            model.tint1,
-            model.tint2,
-            model.pattern,
-            model.pattern_color,
-            model.phong,
-            model.emissive,
-            model.skin_tone,
-            model.seconds_played,
-            model.timestamp_year,
-            model.timestamp_month,
-            model.timestamp_day,
-            model.timestamp_seconds,
-            model.powers,
-            model.hotkeys,
-            model.weapons,
-            model.weapon_mods,
-            if model.deployed { "True" } else { "False" },
-            if model.leveled_up { "True" } else { "False" },
+            &self.kit_name,
+            &self.name,
+            self.tint1,
+            self.tint2,
+            self.pattern,
+            self.pattern_color,
+            self.phong,
+            self.emissive,
+            self.skin_tone,
+            self.seconds_played,
+            self.timestamp_year,
+            self.timestamp_month,
+            self.timestamp_day,
+            self.timestamp_seconds,
+            self.powers,
+            self.hotkeys,
+            self.weapons,
+            self.weapon_mods,
+            if self.deployed { "True" } else { "False" },
+            if self.leveled_up { "True" } else { "False" },
         )
     }
 }
