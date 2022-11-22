@@ -1,10 +1,8 @@
 use std::path::Path;
 
-mod migration;
-
 mod entities;
 mod interfaces;
-
+mod migration;
 pub mod snapshots;
 
 use log::{debug, info};
@@ -12,8 +10,10 @@ use migration::{Migrator, MigratorTrait};
 use sea_orm::Database as SeaDatabase;
 use tokio::fs::{create_dir_all, File};
 
+// Re-exports of named entities
 pub use entities::{GalaxyAtWar, Player, PlayerCharacter, PlayerClass};
 
+// Re-exports of database types
 pub use sea_orm::DatabaseConnection;
 pub use sea_orm::DbErr;
 
@@ -51,7 +51,9 @@ pub async fn connect(ty: DatabaseType) -> DatabaseConnection {
 /// Initializes the SQLite database file at the provided
 /// file path ensuring that the parent directories and the
 /// database file itself exist. Appends the sqlite: prefix
-/// to the file to create the sqlite URL
+/// to the file to create the sqlite URL.
+///
+/// `file` The file to initialize
 async fn init_sqlite(file: String) -> String {
     let path = Path::new(&file);
     if let Some(parent) = path.parent() {
