@@ -1326,6 +1326,7 @@ dependencies = [
  "actix-web",
  "core",
  "database",
+ "futures-util",
  "log",
  "mime_guess",
  "rust-embed",

@@ -11,6 +11,7 @@ authors.workspace = true
 [dependencies]
 # Async runtime
 tokio = { workspace = true }
+futures-util = { version = "0.3.25" }
 
 # HTTP Server
 actix-web = "4"

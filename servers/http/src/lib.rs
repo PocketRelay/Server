@@ -3,7 +3,11 @@ use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 use core::env;
 use log::{error, info};
+use std::sync::Arc;
 
+use crate::stores::token::TokenStore;
+
+mod middleware;
 mod routes;
 mod stores;
 
@@ -13,10 +17,12 @@ pub async fn start_server() {
     let port = env::from_env(env::HTTP_PORT);
     info!("Starting HTTP Server on (Port: {port})");
 
+    let token_store = Arc::new(TokenStore::new());
+
     let result = HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .configure(routes::configure)
+            .configure(|cfg| routes::configure(cfg, token_store.clone()))
     })
     .bind(("0.0.0.0", port));
     match result {

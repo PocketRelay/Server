@@ -33,6 +33,10 @@ pub const LOGGING_LEVEL: (&str, LevelFilter) = ("PR_LOG_LEVEL", LevelFilter::Inf
 pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
 pub const LOG_COMPRESSION: (&str, bool) = ("PR_LOG_COMPRESSION", true);
 
+pub const API: (&str, bool) = ("PR_API", false);
+pub const API_USERNAME: (&str, &str) = ("PR_API_USERNAME", "admin");
+pub const API_PASSWORD: (&str, &str) = ("PR_API_PASSWORD", "admin");
+
 #[inline]
 pub fn env(pair: (&str, &str)) -> String {
     std::env::var(pair.0).unwrap_or_else(|_| pair.1.to_string())

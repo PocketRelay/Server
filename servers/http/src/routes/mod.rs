@@ -1,5 +1,14 @@
-use actix_web::web::ServiceConfig;
+use core::env;
+use std::sync::Arc;
 
+use actix_web::{
+    web::{Data, ServiceConfig},
+    Scope,
+};
+
+use crate::{middleware::TokenAuth, stores::token::TokenStore};
+
+mod auth;
 mod games;
 mod gaw;
 mod players;
@@ -7,11 +16,22 @@ mod public;
 mod qos;
 mod server;
 
-pub fn configure(cfg: &mut ServiceConfig) {
+pub fn configure(cfg: &mut ServiceConfig, token_store: Arc<TokenStore>) {
     server::configure(cfg);
     public::configure(cfg);
     gaw::configure(cfg);
-    games::configure(cfg);
-    players::configure(cfg);
     qos::configure(cfg);
+
+    if env::from_env(env::API) {
+        cfg.app_data(Data::from(token_store.clone()));
+        auth::configure(cfg);
+
+        let middleware = TokenAuth::new(token_store);
+        cfg.service(
+            Scope::new("")
+                .wrap(middleware)
+                .configure(games::configure)
+                .configure(players::configure),
+        );
+    }
 }
