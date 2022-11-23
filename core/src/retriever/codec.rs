@@ -1,9 +1,9 @@
 use blaze_pk::{
-    codec::{Codec, CodecError, CodecResult, Reader},
+    codec::{Codec, CodecResult, Reader},
     group, packet,
     tag::Tag,
     tagging::*,
-    types::{TdfMap, Union},
+    types::TdfMap,
 };
 
 /// Packet encoding for Redirector GetServerInstance packets
@@ -24,33 +24,6 @@ impl Codec for InstanceRequest {
         tag_str(output, "NAME", "masseffect-3-pc");
         tag_str(output, "PLAT", "Windows");
         tag_str(output, "PROF", "standardSecure_v3");
-    }
-}
-
-#[derive(Debug)]
-pub struct InstanceResponse {
-    pub host: String,
-    pub port: u16,
-}
-
-group! {
-    struct AddrValue {
-        HOST host: String,
-        PORT port: u16,
-    }
-}
-
-impl Codec for InstanceResponse {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let (host, port) = match Tag::expect::<Union<AddrValue>>(reader, "ADDR")? {
-            Union::Set { value, .. } => (value.host, value.port),
-            Union::Unset => {
-                return Err(CodecError::Other(
-                    "Expected address value to have its contents",
-                ))
-            }
-        };
-        Ok(InstanceResponse { host, port })
     }
 }
 

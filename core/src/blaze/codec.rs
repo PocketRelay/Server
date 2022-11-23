@@ -4,14 +4,133 @@ use std::{
 };
 
 use blaze_pk::{
-    codec::{Codec, CodecResult, Reader},
+    codec::{Codec, CodecError, CodecResult, Reader},
     packet,
     tag::{Tag, ValueType},
     tagging::*,
+    types::Union,
 };
 
 use serde::{ser::SerializeStruct, Serialize};
 use utils::types::PlayerID;
+
+/// Networking information for an instance. Contains the
+/// host address and the port
+pub struct InstanceNet {
+    pub host: InstanceHost,
+    pub port: Port,
+}
+
+impl From<(String, Port)> for InstanceNet {
+    fn from((host, port): (String, Port)) -> Self {
+        let host = InstanceHost::from(host);
+        Self { host, port }
+    }
+}
+
+impl Codec for InstanceNet {
+    fn encode(&self, output: &mut Vec<u8>) {
+        self.host.encode(output);
+        tag_u16(output, "PORT", self.port);
+        tag_group_end(output);
+    }
+
+    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+        let host = InstanceHost::decode(reader)?;
+        let port = Tag::expect::<u16>(reader, "PORT")?;
+        reader.take_one()?;
+        Ok(Self { host, port })
+    }
+
+    fn value_type() -> ValueType {
+        ValueType::Group
+    }
+}
+
+/// Type of instance details provided either hostname
+/// encoded as string or IP address encoded as NetAddress
+pub enum InstanceHost {
+    Host(String),
+    Address(NetAddress),
+}
+
+/// Attempts to convert the provided value into a instance type. If
+/// the provided value is an IPv4 value then Address is used otherwise
+/// Host is used.
+impl From<String> for InstanceHost {
+    fn from(value: String) -> Self {
+        if let Some(address) = NetAddress::try_from_ipv4(&value) {
+            Self::Address(address)
+        } else {
+            Self::Host(value)
+        }
+    }
+}
+
+/// Function for converting an instance type into its address
+/// string value for use in connections
+impl Into<String> for InstanceHost {
+    fn into(self) -> String {
+        match self {
+            Self::Address(value) => value.to_ipv4(),
+            Self::Host(value) => value,
+        }
+    }
+}
+
+impl Codec for InstanceHost {
+    fn encode(&self, output: &mut Vec<u8>) {
+        match self {
+            InstanceHost::Host(value) => tag_str(output, "HOST", value),
+            InstanceHost::Address(value) => tag_u32(output, "IP", value.0),
+        }
+    }
+
+    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+        let host = Tag::try_expect::<String>(reader, "HOST")?;
+        let ip = Tag::try_expect::<NetAddress>(reader, "IP")?;
+        if let Some(host) = host {
+            Ok(Self::Host(host))
+        } else if let Some(ip) = ip {
+            Ok(Self::Address(ip))
+        } else {
+            Err(CodecError::Other("Instance host was missing HOST and IP"))
+        }
+    }
+}
+
+/// Details about an instance. This is used for the redirector system
+/// to both encode for redirections and decode for the retriever system
+pub struct InstanceDetails {
+    /// The networking information for the instance
+    pub net: InstanceNet,
+    /// Whether the host requires a secure connection (SSLv3)
+    pub secure: bool,
+}
+
+impl Codec for InstanceDetails {
+    fn encode(&self, output: &mut Vec<u8>) {
+        // Starting the union value for the instance address details
+        tag_union_start(output, "ADDR", NetworkAddressType::Server.into());
+        tag_value(output, "VALU", &self.net);
+
+        tag_bool(output, "SECU", self.secure);
+        tag_bool(output, "XDNS", false)
+    }
+
+    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+        let net = match Tag::expect::<Union<InstanceNet>>(reader, "ADDR")? {
+            Union::Set { value, .. } => value,
+            Union::Unset => {
+                return Err(CodecError::Other(
+                    "Instance details did not contain address value",
+                ))
+            }
+        };
+        let secure = Tag::expect(reader, "SECU")?;
+        Ok(InstanceDetails { net, secure })
+    }
+}
 
 packet! {
     struct UpdateExtDataAttr {
@@ -131,7 +250,7 @@ impl Codec for QosNetworkData {
         tag_u16(output, "DBPS", self.dbps);
         tag_value(output, "NATT", &self.natt);
         tag_u16(output, "UBPS", self.ubps);
-        output.push(0)
+        tag_group_end(output);
     }
 
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
@@ -221,7 +340,7 @@ impl Codec for NetGroup {
         let ip = Tag::expect(reader, "IP")?;
         let port = Tag::expect(reader, "PORT")?;
         reader.take_one()?;
-        Ok(Self(NetAddress(ip), port))
+        Ok(Self(ip, port))
     }
 
     fn value_type() -> ValueType {
@@ -245,43 +364,55 @@ impl Serialize for NetGroup {
 #[derive(Copy, Clone, Default, Eq, PartialEq)]
 pub struct NetAddress(pub u32);
 
+/// NetAddress can be encoded and decoded directly as u32 VarInt values
+impl Codec for NetAddress {
+    fn encode(&self, output: &mut Vec<u8>) {
+        self.0.encode(output);
+    }
+
+    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+        let value = u32::decode(reader)?;
+        Ok(Self(value))
+    }
+
+    fn value_type() -> ValueType {
+        ValueType::VarInt
+    }
+}
+
+/// Debug trait implementation sample implementation as the Display
+/// implementation so that is just called instead
 impl Debug for NetAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.is_invalid() {
-            f.write_str("INVALID_ADDR")
-        } else {
-            let value = self.to_ipv4();
-            f.write_str(&value)
-        }
+        Display::fmt(self, f)
     }
 }
 
+/// Display trait implementation for NetAddress. If the value is valid
+/// the value is translated into the IPv4 representation
 impl Display for NetAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.is_invalid() {
-            f.write_str("INVALID_ADDR")
-        } else {
-            let value = self.to_ipv4();
-            f.write_str(&value)
-        }
+        let value = self.to_ipv4();
+        f.write_str(&value)
     }
 }
 
+/// Serialization implementation for NetAddress which uses the IPv4
+/// representation implemented in Display
 impl Serialize for NetAddress {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        if self.is_invalid() {
-            serializer.serialize_str("INVALID_ADDR")
-        } else {
-            let value = self.to_ipv4();
-            serializer.serialize_str(&value)
-        }
+        let value = self.to_string();
+        serializer.serialize_str(&value)
     }
 }
 
 impl NetAddress {
+    /// Addresses where the value is zero are considered to be
+    /// invalid addresses that could not be parsed. Parsing these
+    /// addresses would result in the address 0.0.0.0
     pub fn is_invalid(&self) -> bool {
         self.0 == 0
     }
@@ -313,9 +444,9 @@ impl NetAddress {
     /// split iterator
     fn next_ip_chunk(iter: &mut Split<&str>) -> Option<u32> {
         iter.next()?
-            .parse::<u8>()
-            .map(|value| Some(value as u32))
-            .ok()?
+            .parse::<u32>()
+            .ok()
+            .filter(|value| 255.ge(value))
     }
 
     /// Converts the value stored in this NetAddress to an IPv4 string

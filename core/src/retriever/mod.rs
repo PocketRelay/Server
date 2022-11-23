@@ -10,11 +10,12 @@ use tokio::net::TcpStream;
 
 use crate::{
     blaze::{
+        codec::{InstanceDetails, Port},
         components::{Components, Redirector},
         errors::{BlazeError, BlazeResult},
     },
     env,
-    retriever::codec::{InstanceRequest, InstanceResponse},
+    retriever::codec::InstanceRequest,
 };
 
 use utils::net::lookup_host;
@@ -41,7 +42,7 @@ impl Retriever {
     /// The hostname for the redirector server
     const REDIRECTOR_HOST: &str = "gosredirector.ea.com";
     /// The port for the redirector server.
-    const REDIRECT_PORT: u16 = 42127;
+    const REDIRECT_PORT: Port = 42127;
 
     /// Attempts to create a new retriever by first retrieving the coorect
     /// ip address of the gosredirector.ea.com host and then creates a
@@ -60,14 +61,15 @@ impl Retriever {
 
     /// Makes a instance request to the redirect server at the provided
     /// host and returns the instance response.
-    async fn get_main_host(host: String) -> Option<(String, u16)> {
+    async fn get_main_host(host: String) -> Option<(String, Port)> {
         debug!("Connecting to official redirector");
         let stream = Self::stream_to(&host, Self::REDIRECT_PORT).await?;
         let mut session = RetSession::new(stream)?;
         debug!("Connected to official redirector");
         debug!("Requesting details from official server");
         let instance = session.get_main_instance().await.ok()?;
-        Some((instance.host, instance.port))
+        let net = instance.net;
+        Some((net.host.into(), net.port))
     }
 
     /// Returns a new session to the main server
@@ -77,7 +79,7 @@ impl Retriever {
     }
 
     /// Returns a new stream to the mian server
-    pub async fn stream_to(host: &String, port: u16) -> Option<Stream> {
+    pub async fn stream_to(host: &String, port: Port) -> Option<Stream> {
         let addr = (host.clone(), port);
         let stream = TcpStream::connect(addr)
             .await
@@ -209,8 +211,8 @@ impl RetSession {
 
     /// Function for making the request for the official server instance
     /// from the redirector server.
-    async fn get_main_instance(&mut self) -> BlazeResult<InstanceResponse> {
-        self.request::<InstanceRequest, InstanceResponse>(
+    async fn get_main_instance(&mut self) -> BlazeResult<InstanceDetails> {
+        self.request::<InstanceRequest, InstanceDetails>(
             Components::Redirector(Redirector::GetServerInstance),
             &InstanceRequest,
         )

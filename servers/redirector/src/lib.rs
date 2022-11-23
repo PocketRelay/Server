@@ -1,6 +1,7 @@
 //! Module for the Redirector server which handles redirecting the clients
 //! to the correct address for the main server.
 
+use core::blaze::codec::{InstanceDetails, InstanceNet};
 use core::blaze::components::{Components, Redirector};
 use core::{env, state::GlobalState};
 use std::net::SocketAddr;
@@ -16,10 +17,6 @@ use tokio::select;
 use tokio::time::sleep;
 use utils::net::{accept_stream, listener};
 
-pub mod codec;
-
-use self::codec::{InstanceType, RedirectorInstance};
-
 /// Starts the Redirector server
 pub async fn start_server() {
     // The server details of the instance clients should
@@ -27,8 +24,10 @@ pub async fn start_server() {
     let instance = {
         let host = env::env(env::EXT_HOST);
         let port = env::from_env(env::MAIN_PORT);
-        let ty = InstanceType::from_host(host);
-        RedirectorInstance::new(ty, port)
+        InstanceDetails {
+            net: InstanceNet::from((host, port)),
+            secure: false,
+        }
     };
     let instance = Arc::new(instance);
     let listener = listener("Redirector", env::from_env(env::REDIRECTOR_PORT)).await;
@@ -47,7 +46,7 @@ static DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 /// `stream`   The stream to the client
 /// `addr`     The client address
 /// `instance` The server instance information
-async fn handle_client(stream: TcpStream, addr: SocketAddr, instance: Arc<RedirectorInstance>) {
+async fn handle_client(stream: TcpStream, addr: SocketAddr, instance: Arc<InstanceDetails>) {
     let mut shutdown = GlobalState::shutdown();
     let mut stream = match BlazeStream::new(stream, StreamMode::Server).await {
         Ok(stream) => stream,
