@@ -1,4 +1,5 @@
 use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*};
+use tokio::fs::read_to_string;
 
 use crate::session::Session;
 use core::blaze::components::Authentication;
@@ -8,6 +9,8 @@ use core::retriever::origin::{OriginDetails, OriginFlow};
 use core::state::GlobalState;
 use database::{DatabaseConnection, DbResult, Player};
 use log::{debug, error, warn};
+use std::borrow::Cow;
+use std::path::Path;
 use utils::{
     hashing::{hash_password, verify_password},
     validate::is_email,
@@ -869,7 +872,7 @@ async fn handle_get_legal_docs_info(session: &mut Session, packet: &Packet) -> H
 }
 
 /// The default terms of service document
-const DEFAULT_TERMS_OF_SERVICE: &str = include_str!("../resources/defaults/term_of_service.html");
+const DEFAULT_TERMS_OF_SERVICE: &str = include_str!("../resources/defaults/terms_of_service.html");
 
 #[derive(Debug)]
 pub struct TermsContent<'a, 'b> {
@@ -887,6 +890,21 @@ impl Codec for TermsContent<'_, '_> {
     }
 }
 
+/// Attempts to load the local file returnin the fallback value instead
+/// if the local path doesn't exist, is not a file, or couldn't be read
+///
+/// `path`     The path to the file
+/// `fallback` The fallback contents to use
+async fn load_local(path: &str, fallback: &'static str) -> Cow<'static, str> {
+    let path = Path::new(path);
+    if path.exists() && path.is_file() {
+        if let Ok(value) = read_to_string(path).await {
+            return Cow::Owned(value);
+        }
+    }
+    Cow::Borrowed(fallback)
+}
+
 /// Handles serving the contents of the terms of service. This is an HTML document which is
 /// rendered inside the game when you click the button for viewing terms of service.
 ///
@@ -901,13 +919,13 @@ impl Codec for TermsContent<'_, '_> {
 /// ```
 ///
 async fn handle_terms_of_service_content(session: &mut Session, packet: &Packet) -> HandleResult {
-    // TODO: Attempt to load local terms of service before reverting to default
+    let content = load_local("terms_of_service.html", DEFAULT_TERMS_OF_SERVICE).await;
     session
         .response(
             packet,
             &TermsContent {
                 path: "webterms/au/en/pc/default/09082020/02042022",
-                content: DEFAULT_TERMS_OF_SERVICE,
+                content: &content,
                 col: 0xdaed,
             },
         )
@@ -931,13 +949,13 @@ const DEFAULT_PRIVACY_POLICY: &str = include_str!("../resources/defaults/privacy
 /// ```
 ///
 async fn handle_privacy_policy_content(session: &mut Session, packet: &Packet) -> HandleResult {
-    // TODO: Attempt to load local privacy policy before reverting to default
+    let content = load_local("privacy_policy.html", DEFAULT_PRIVACY_POLICY).await;
     session
         .response(
             packet,
             &TermsContent {
                 path: "webprivacy/au/en/pc/default/08202020/02042022",
-                content: DEFAULT_PRIVACY_POLICY,
+                content: &content,
                 col: 0xc99c,
             },
         )
