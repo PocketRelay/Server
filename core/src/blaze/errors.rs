@@ -1,6 +1,6 @@
 use blaze_pk::codec::CodecError;
 use database::DbErr;
-use std::io;
+use std::{fmt::Display, io};
 
 pub type HandleResult = Result<(), BlazeError>;
 pub type BlazeResult<T> = Result<T, BlazeError>;
@@ -11,7 +11,17 @@ pub enum BlazeError {
     IO(io::Error),
     Other(&'static str),
     Database(DbErr),
-    MissingPlayer,
+}
+
+impl Display for BlazeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CodecError(value) => write!(f, "Codec error occurred: {value:?}"),
+            Self::IO(value) => write!(f, "IO error: {value:?}"),
+            Self::Other(value) => write!(f, "Other: {value}"),
+            Self::Database(value) => write!(f, "Database error: {value}"),
+        }
+    }
 }
 
 impl From<CodecError> for BlazeError {
