@@ -3,6 +3,7 @@
 
 use core::blaze::codec::{InstanceDetails, InstanceNet};
 use core::blaze::components::{Components, Redirector};
+use core::blaze::errors::{BlazeError, HandleResult};
 use core::{env, state::GlobalState};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -17,73 +18,77 @@ use tokio::select;
 use tokio::time::sleep;
 use utils::net::{accept_stream, listener};
 
-/// Starts the Redirector server
+/// Starts the Redirector server this server is what the Mass Effect 3 game
+/// client initially reaches out to. This server is responsible for telling
+/// the client where the server is and whether it should use SSLv3 to connect.
 pub async fn start_server() {
     // The server details of the instance clients should
     // connect to. In this case its the main server details
-    let instance = {
+    let instance = Arc::new({
         let host = env::env(env::EXT_HOST);
         let port = env::from_env(env::MAIN_PORT);
         InstanceDetails {
             net: InstanceNet::from((host, port)),
             secure: false,
         }
-    };
-    let instance = Arc::new(instance);
+    });
+
     let listener = listener("Redirector", env::from_env(env::REDIRECTOR_PORT)).await;
     let mut shutdown = GlobalState::shutdown();
     while let Some((stream, addr)) = accept_stream(&listener, &mut shutdown).await {
-        tokio::spawn(handle_client(stream, addr, instance.clone()));
+        let instance = instance.clone();
+        tokio::spawn(async move {
+            if let Err(err) = handle_client(stream, addr, instance).await {
+                error!("Unable to handle redirect: {err}");
+            };
+        });
     }
 }
 
 /// The timeout before idle redirector connections are terminated
 /// (1 minutes before disconnect timeout)
 static DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+/// The component to look for when waiting for redirects
+const REDIRECT_COMPONENT: Components = Components::Redirector(Redirector::GetServerInstance);
 
 /// Handles dealing with a redirector client
 ///
 /// `stream`   The stream to the client
 /// `addr`     The client address
 /// `instance` The server instance information
-async fn handle_client(stream: TcpStream, addr: SocketAddr, instance: Arc<InstanceDetails>) {
+async fn handle_client(
+    stream: TcpStream,
+    addr: SocketAddr,
+    instance: Arc<InstanceDetails>,
+) -> HandleResult {
     let mut shutdown = GlobalState::shutdown();
-    let mut stream = match BlazeStream::new(stream, StreamMode::Server).await {
-        Ok(stream) => stream,
-        Err(err) => {
-            error!("Failed to accept connection: {err:?}");
-            return;
-        }
-    };
+    let mut stream = BlazeStream::new(stream, StreamMode::Server)
+        .await
+        .map_err(|_| BlazeError::Other("Unable to establish SSL connection"))?;
 
     loop {
-        let result = select! {
+        let (component, packet) = select! {
+            // Attempt to read packets from the stream
             result = Packet::read_blaze_typed::<Components, TcpStream>(&mut stream) => result,
-            _ = shutdown.changed() => {
-                break;
-            }
+            // Shutdown hook to ensure we don't keep trying to read after shutdown
+            _ = shutdown.changed() => { break; }
+            // If the timeout completes before the redirect is complete the
+            // request is considered over and terminates
             _ = sleep(DEFAULT_TIMEOUT) => { break; }
-        };
+        }?;
 
-        let Ok((component, packet)) = result else {
-            error!("Failed to read packet from redirector client");
-            break;
-        };
-
-        if component != Components::Redirector(Redirector::GetServerInstance) {
-            let response = Packet::response_empty(&packet);
-            if let Err(_) = response.write_blaze(&mut stream) {
-                break;
-            }
-            if let Err(_) = stream.flush().await {
-                break;
-            }
-        } else {
+        if component == REDIRECT_COMPONENT {
             debug!("Redirecting client (Addr: {addr:?})");
             let response = Packet::response(&packet, &*instance);
-            response.write_blaze(&mut stream).ok();
-            stream.flush().await.ok();
+            response.write_blaze(&mut stream)?;
+            stream.flush().await?;
             break;
+        } else {
+            let response = Packet::response_empty(&packet);
+            response.write_blaze(&mut stream)?;
+            stream.flush().await?;
         }
     }
+
+    Ok(())
 }
