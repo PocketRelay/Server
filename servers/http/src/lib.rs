@@ -5,6 +5,7 @@ use core::env;
 use log::{error, info};
 
 mod routes;
+mod stores;
 
 /// Starts the HTTP server using the provided global state
 /// which is cloned for use as app data on the server.
