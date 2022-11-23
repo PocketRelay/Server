@@ -2,11 +2,15 @@ use log::warn;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
+    ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait, QueryFilter,
 };
-use utils::parse::MEStringParser;
+use tokio::try_join;
+use utils::{parse::MEStringParser, types::PlayerID};
 
-use crate::{entities::players, DbResult, PlayerCharacter, PlayerClass};
+use crate::{
+    entities::{player_characters, player_classes, players},
+    DbResult, GalaxyAtWar, PlayerCharacter, PlayerClass,
+};
 
 use std::iter::Iterator;
 
@@ -59,8 +63,24 @@ impl players::Model {
     ///
     /// `db` The database instance
     /// `id` The ID of the player to find
-    pub async fn by_id(db: &DatabaseConnection, id: u32) -> DbResult<Option<Self>> {
+    pub async fn by_id(db: &DatabaseConnection, id: PlayerID) -> DbResult<Option<Self>> {
         players::Entity::find_by_id(id).one(db).await
+    }
+
+    /// Collects all the related classes, characters and galaxy at war
+    /// data all at once rturning the loaded result if no errors
+    /// occurred.
+    ///
+    /// `db` The database connection
+    pub async fn collect_relations(
+        &self,
+        db: &DatabaseConnection,
+    ) -> DbResult<(Vec<PlayerClass>, Vec<PlayerCharacter>, GalaxyAtWar)> {
+        let classes = self.find_related(player_classes::Entity).all(db);
+        let characters = self.find_related(player_characters::Entity).all(db);
+        let galaxy_at_war = GalaxyAtWar::find_or_create(db, self, 0.0);
+
+        try_join!(classes, characters, galaxy_at_war)
     }
 
     /// Attempts to find a player with the provided ID and matching session

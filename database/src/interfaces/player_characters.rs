@@ -6,9 +6,9 @@ use log::warn;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, DatabaseConnection, DbErr, IntoActiveModel, ModelTrait, QueryFilter,
+    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, IntoActiveModel, ModelTrait, QueryFilter,
 };
-use utils::parse::MEStringParser;
+use utils::{parse::MEStringParser, types::PlayerID};
 
 impl player_characters::Model {
     /// Finds all the player characters for the provided player model
@@ -17,6 +17,17 @@ impl player_characters::Model {
     /// `player` The player to find the characters for
     pub async fn find_all(db: &DatabaseConnection, player: &players::Model) -> DbResult<Vec<Self>> {
         player.find_related(player_characters::Entity).all(db).await
+    }
+
+    /// Finds all the player classes for the player with the provided ID
+    ///
+    /// `db`        The databse connection
+    /// `player_id` The player ID to find classes for
+    pub async fn find_by_pid(db: &DatabaseConnection, player_id: PlayerID) -> DbResult<Vec<Self>> {
+        player_characters::Entity::find()
+            .filter(player_characters::Column::PlayerId.eq(player_id))
+            .all(db)
+            .await
     }
 
     /// Attempts to find a player character relating to the provided player in the database

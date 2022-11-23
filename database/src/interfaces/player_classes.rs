@@ -2,9 +2,9 @@ use log::warn;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, DatabaseConnection, DbErr, IntoActiveModel, ModelTrait, QueryFilter,
+    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, IntoActiveModel, ModelTrait, QueryFilter,
 };
-use utils::parse::MEStringParser;
+use utils::{parse::MEStringParser, types::PlayerID};
 
 use crate::{
     entities::{player_classes, players},
@@ -20,6 +20,16 @@ impl player_classes::Model {
         player.find_related(player_classes::Entity).all(db).await
     }
 
+    /// Finds all the player classes for the player with the provided ID
+    ///
+    /// `db`        The databse connection
+    /// `player_id` The player ID to find classes for
+    pub async fn find_by_pid(db: &DatabaseConnection, player_id: PlayerID) -> DbResult<Vec<Self>> {
+        player_classes::Entity::find()
+            .filter(player_classes::Column::PlayerId.eq(player_id))
+            .all(db)
+            .await
+    }
     /// Attempts to find a player class relating to the provided player in the database
     /// using its index and relation to the player. If None could be found a new value
     /// will be created and returned instead.

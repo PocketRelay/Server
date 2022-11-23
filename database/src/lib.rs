@@ -3,7 +3,6 @@ use std::path::Path;
 mod entities;
 mod interfaces;
 mod migration;
-pub mod snapshots;
 
 use log::{debug, info};
 use migration::{Migrator, MigratorTrait};
