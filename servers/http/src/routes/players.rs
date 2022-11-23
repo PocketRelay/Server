@@ -4,18 +4,19 @@ use std::fmt::Display;
 use actix_web::{
     get,
     http::StatusCode,
-    web::{Json, Path, ServiceConfig},
+    web::{Json, Path, Query, ServiceConfig},
     ResponseError,
 };
 use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter, PlayerClass};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utils::types::PlayerID;
 
 /// Function for configuring the services in this route
 ///
 /// `cfg` Service config to configure
 pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(get_player)
+    cfg.service(get_players)
+        .service(get_player)
         .service(get_player_full)
         .service(get_player_classes)
         .service(get_player_characters)
@@ -44,6 +45,47 @@ async fn find_player(db: &DatabaseConnection, player_id: PlayerID) -> Result<Pla
     Player::by_id(db, player_id)
         .await?
         .ok_or(PlayersError::PlayerNotFound)
+}
+
+/// The query structure for a players query
+#[derive(Deserialize)]
+struct PlayersQuery {
+    /// The offset in the database (offset = offset * count)
+    #[serde(default)]
+    offset: u16,
+    /// The number of players to return. This is restricted to
+    /// 255 to prevent the database having to do any larger
+    /// queries
+    count: Option<u8>,
+}
+
+/// Response from the players endpoint which contains a list of
+/// players and whether there is more players after
+#[derive(Serialize)]
+struct PlayersResponse {
+    /// The list of players retrieved
+    players: Vec<Player>,
+    /// Whether there is more players left in the database
+    more: bool,
+}
+
+/// Route for retrieving a list of players from the database. The
+/// offset value if used to know how many rows to skip and count
+/// is the number of rows to collect. Offset = offset * count
+///
+/// `query` The query containing the offset and count values
+#[get("/api/players")]
+async fn get_players(query: Query<PlayersQuery>) -> PlayersResult<PlayersResponse> {
+    const DEFAULT_COUNT: u8 = 20;
+    const DEFAULT_OFFSET: u16 = 0;
+
+    let query = query.into_inner();
+    let db = GlobalState::database();
+    let count = query.count.unwrap_or(DEFAULT_COUNT) as u64;
+    let offset = query.offset as u64 * count;
+    let (players, more) = Player::all(db, offset, count).await?;
+
+    Ok(Json(PlayersResponse { players, more }))
 }
 
 /// Route for retrieving a player from the database with an ID that

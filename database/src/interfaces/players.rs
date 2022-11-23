@@ -2,7 +2,8 @@ use log::warn;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait, QueryFilter,
+    ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait,
+    QueryFilter,
 };
 use tokio::try_join;
 use utils::{parse::MEStringParser, types::PlayerID};
@@ -17,6 +18,34 @@ use std::iter::Iterator;
 impl players::Model {
     /// The length of player session tokens
     const TOKEN_LENGTH: usize = 128;
+
+    /// Takes all the player models using a cursor starting at the offset row
+    /// and finding the count number of values will check the count + 1 rows
+    /// in order to determine if there are more entires to come.
+    ///
+    /// `db`     The database connection
+    /// `offset` The number of rows to skip
+    /// `count`  The number of rows to collect
+    pub async fn all(
+        db: &DatabaseConnection,
+        offset: u64,
+        count: u64,
+    ) -> DbResult<(Vec<Self>, bool)> {
+        let mut values = players::Entity::find()
+            .cursor_by(players::Column::Id)
+            .after(offset)
+            .first(count + 1)
+            .all(db)
+            .await?;
+
+        Ok(if values.len() == (count + 1) as usize {
+            // Pop the value being used to determine the leftover size
+            values.pop();
+            (values, true)
+        } else {
+            (values, false)
+        })
+    }
 
     /// Creates a new player with the proivded details and inserts
     /// it into the database
