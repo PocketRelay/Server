@@ -140,11 +140,7 @@ impl RetSession {
         component: Components,
         contents: &Req,
     ) -> BlazeResult<Res> {
-        let request = Packet::request(self.id, component, contents);
-        request.write_blaze(&mut self.stream)?;
-        self.stream.flush().await?;
-        self.id += 1;
-        let response = self.expect_response(&request).await?;
+        let response = self.request_raw(component, contents).await?;
         let contents = response.decode::<Res>()?;
         Ok(contents)
     }
@@ -167,11 +163,7 @@ impl RetSession {
     /// recieved returning the contents of that response packet. The
     /// request will have no content
     pub async fn request_empty<Res: Codec>(&mut self, component: Components) -> BlazeResult<Res> {
-        let request = Packet::request_empty(self.id, component);
-        request.write_blaze(&mut self.stream)?;
-        self.stream.flush().await?;
-        self.id += 1;
-        let response = self.expect_response(&request).await?;
+        let response = self.request_empty_raw(component).await?;
         let contents = response.decode::<Res>()?;
         Ok(contents)
     }
@@ -190,19 +182,13 @@ impl RetSession {
     /// that are recieved are handled in the handle_notify function.
     async fn expect_response(&mut self, request: &Packet) -> BlazeResult<Packet> {
         loop {
-            let (component, response): (Components, Packet) =
-                match Packet::read_blaze_typed(&mut self.stream).await {
-                    Ok(value) => value,
-                    Err(_) => return Err(BlazeError::Other("Unable to read / decode packet")),
-                };
-            if response.header.ty == PacketType::Notify {
+            let (component, response) = Packet::read_blaze_typed(&mut self.stream).await?;
+            let header = &request.header;
+            if header.ty == PacketType::Notify {
                 self.handle_notify(component, &response).await.ok();
-                continue;
+            } else if header.path_matches(&request.header) {
+                return Ok(response);
             }
-            if !response.header.path_matches(&request.header) {
-                continue;
-            }
-            return Ok(response);
         }
     }
 

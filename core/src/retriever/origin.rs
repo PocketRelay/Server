@@ -57,7 +57,7 @@ impl OriginFlow {
             .request_empty::<UserSettingsAll>(Components::Util(Util::UserSettingsLoadAll))
             .await
             .ok()?;
-        Some(value.value)
+        Some(value.settings)
     }
 }
 

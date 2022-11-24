@@ -7,6 +7,9 @@ use blaze_pk::{
 };
 
 /// Packet encoding for Redirector GetServerInstance packets
+/// this contains basic information about the client session.
+///
+/// These details are extracted from an official game copy
 pub struct InstanceRequest;
 
 impl Codec for InstanceRequest {
@@ -67,6 +70,6 @@ impl Codec for OriginLoginReq {
 
 packet! {
     struct UserSettingsAll {
-        SMAP value: TdfMap<String, String>
+        SMAP settings: TdfMap<String, String>
     }
 }
