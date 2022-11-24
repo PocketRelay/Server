@@ -9,6 +9,9 @@ use std::fmt::Display;
 use std::num::ParseIntError;
 use tokio::try_join;
 
+/// Function for configuring the services in this route
+///
+/// `cfg` Service config to configure
 pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(
         scope("gaw")
@@ -23,37 +26,6 @@ enum GAWError {
     InvalidID(ParseIntError),
     UnknownID,
     DatabaseError(DbErr),
-}
-
-impl Display for GAWError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::InvalidID(_) => f.write_str("Invalid ID"),
-            Self::UnknownID => f.write_str("Unknown ID"),
-            Self::DatabaseError(_) => f.write_str("Database Error"),
-        }
-    }
-}
-
-impl From<ParseIntError> for GAWError {
-    fn from(err: ParseIntError) -> Self {
-        GAWError::InvalidID(err)
-    }
-}
-
-impl From<DbErr> for GAWError {
-    fn from(err: DbErr) -> Self {
-        GAWError::DatabaseError(err)
-    }
-}
-
-impl ResponseError for GAWError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            GAWError::InvalidID(_) | GAWError::UnknownID => StatusCode::BAD_REQUEST,
-            GAWError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
 }
 
 type GAWResult<T> = Result<T, GAWError>;
@@ -223,4 +195,35 @@ fn ratings_response(promotions: u32, ratings: GalaxyAtWar) -> impl Responder {
     HttpResponse::build(StatusCode::OK)
         .content_type(ContentType::xml())
         .body(response)
+}
+
+impl Display for GAWError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidID(_) => f.write_str("Invalid ID"),
+            Self::UnknownID => f.write_str("Unknown ID"),
+            Self::DatabaseError(_) => f.write_str("Database Error"),
+        }
+    }
+}
+
+impl From<ParseIntError> for GAWError {
+    fn from(err: ParseIntError) -> Self {
+        GAWError::InvalidID(err)
+    }
+}
+
+impl From<DbErr> for GAWError {
+    fn from(err: DbErr) -> Self {
+        GAWError::DatabaseError(err)
+    }
+}
+
+impl ResponseError for GAWError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            GAWError::InvalidID(_) | GAWError::UnknownID => StatusCode::BAD_REQUEST,
+            GAWError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
 }
