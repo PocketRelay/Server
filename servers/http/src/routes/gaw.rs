@@ -1,53 +1,60 @@
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
-use actix_web::web::{scope, Path, Query, ServiceConfig};
+use actix_web::web::{Path, Query, ServiceConfig};
 use actix_web::{get, HttpResponse, Responder, ResponseError};
 use core::{env, state::GlobalState};
-use database::{DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player};
+use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player};
 use serde::Deserialize;
 use std::fmt::Display;
-use std::num::ParseIntError;
 use tokio::try_join;
 
 /// Function for configuring the services in this route
 ///
 /// `cfg` Service config to configure
 pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(
-        scope("gaw")
-            .service(authenticate)
-            .service(get_ratings)
-            .service(increase_ratings),
-    );
+    cfg.service(shared_token_login)
+        .service(get_ratings)
+        .service(increase_ratings);
 }
 
 #[derive(Debug)]
 enum GAWError {
-    InvalidID(ParseIntError),
+    InvalidID,
     UnknownID,
     DatabaseError(DbErr),
 }
 
 type GAWResult<T> = Result<T, GAWError>;
 
-/// Attempts to find a player from the provided GAW ID
-async fn gaw_player(db: &DatabaseConnection, id: &str) -> GAWResult<Player> {
-    let id = u32::from_str_radix(id, 16)?;
-    match Player::by_id(db, id).await? {
-        Some(value) => Ok(value),
-        None => Err(GAWError::UnknownID),
-    }
+/// Attempts to find a player in the database with a matching player ID
+/// to the provided ID that is hex encoded.
+///
+/// `db` The database connection
+/// `id` The hex encoded player ID
+async fn get_player(db: &DatabaseConnection, id: &str) -> GAWResult<Player> {
+    let id = match u32::from_str_radix(id, 16) {
+        Ok(value) => value,
+        Err(_) => return Err(GAWError::InvalidID),
+    };
+    let player = match Player::by_id(db, id).await? {
+        Some(value) => value,
+        None => return Err(GAWError::UnknownID),
+    };
+    Ok(player)
 }
 
+/// Query for authenticating with a shared login token. In this case
+/// the shared login token is simply the hex encoded ID of the player
 #[derive(Deserialize)]
 struct AuthQuery {
+    /// The authentication token
     auth: String,
 }
 
-#[get("authentication/sharedTokenLogin")]
-async fn authenticate(query: Query<AuthQuery>) -> GAWResult<impl Responder> {
+#[get("gaw/authentication/sharedTokenLogin")]
+async fn shared_token_login(query: Query<AuthQuery>) -> GAWResult<impl Responder> {
     let db = GlobalState::database();
-    let player = gaw_player(db, &query.auth).await?;
+    let player = get_player(db, &query.auth).await?;
     let (player, token) = player.with_token(db).await?;
 
     let id = player.id;
@@ -90,76 +97,84 @@ async fn authenticate(query: Query<AuthQuery>) -> GAWResult<impl Responder> {
         .body(response))
 }
 
-#[derive(Deserialize)]
-struct IncreaseQuery {
-    #[serde(rename = "rinc|0")]
-    a: Option<String>,
-    #[serde(rename = "rinc|1")]
-    b: Option<String>,
-    #[serde(rename = "rinc|2")]
-    c: Option<String>,
-    #[serde(rename = "rinc|3")]
-    d: Option<String>,
-    #[serde(rename = "rinc|4")]
-    e: Option<String>,
+/// Retrieves the galaxy at war data and promotions count for
+/// the player with the provided ID
+///
+/// `db` The dataabse connection
+/// `id` The hex ID of the player
+async fn get_player_gaw_data(db: &DatabaseConnection, id: &str) -> GAWResult<(GalaxyAtWar, u32)> {
+    let player = get_player(db, id).await?;
+    let gaw_task = GalaxyAtWar::find_or_create(db, &player, env::from_env(env::GAW_DAILY_DECAY));
+    let promotions_task = async {
+        Ok(if env::from_env(env::GAW_PROMOTIONS) {
+            GalaxyAtWar::find_promotions(db, &player).await
+        } else {
+            0
+        })
+    };
+
+    let (gaw_data, promotions) = try_join!(gaw_task, promotions_task)?;
+    Ok((gaw_data, promotions))
 }
 
-#[get("galaxyatwar/increaseRatings/{id}")]
+/// Route for retrieving the galaxy at war ratings for the player
+/// with the provied ID
+///
+/// `id` The hex encoded ID of the player
+#[get("gaw/galaxyatwar/getRatings/{id}")]
+async fn get_ratings(id: Path<String>) -> GAWResult<impl Responder> {
+    let db = GlobalState::database();
+    let id = id.into_inner();
+    let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
+    ratings_response(gaw_data, promotions)
+}
+
+/// The query structure for increasing the
+#[derive(Deserialize)]
+struct IncreaseQuery {
+    /// The increase amount for the first region
+    #[serde(rename = "rinc|0", default)]
+    a: u16,
+    /// The increase amount for the second region
+    #[serde(rename = "rinc|1", default)]
+    b: u16,
+    /// The increase amount for the third region
+    #[serde(rename = "rinc|2", default)]
+    c: u16,
+    /// The increase amount for the fourth region
+    #[serde(rename = "rinc|3", default)]
+    d: u16,
+    /// The increase amount for the fifth region
+    #[serde(rename = "rinc|4", default)]
+    e: u16,
+}
+
+/// Route for increasing the galaxy at war ratings for the player with
+/// the provided ID will respond with the new ratings after increasing
+/// them.
+///
+/// `id`    The hex encoded ID of the player
+/// `query` The query data containing the increase values
+#[get("gaw/galaxyatwar/increaseRatings/{id}")]
 async fn increase_ratings(
     id: Path<String>,
     query: Query<IncreaseQuery>,
 ) -> GAWResult<impl Responder> {
     let db = GlobalState::database();
     let id = id.into_inner();
-    let player = gaw_player(db, &id).await?;
-
-    let (gaw_data, promotions) = try_join!(
-        GalaxyAtWar::find_or_create(db, &player, env::from_env(env::GAW_DAILY_DECAY)),
-        get_promotions(db, &player, env::from_env(env::GAW_PROMOTIONS))
-    )?;
-
-    let a = get_inc_value(gaw_data.group_a, &query.a);
-    let b = get_inc_value(gaw_data.group_b, &query.b);
-    let c = get_inc_value(gaw_data.group_c, &query.c);
-    let d = get_inc_value(gaw_data.group_d, &query.d);
-    let e = get_inc_value(gaw_data.group_e, &query.e);
-    let gaw_data = gaw_data.increase(db, (a, b, c, d, e)).await?;
-    Ok(ratings_response(promotions, gaw_data))
+    let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
+    let gaw_data = gaw_data
+        .increase(db, (query.a, query.b, query.c, query.d, query.e))
+        .await?;
+    ratings_response(gaw_data, promotions)
 }
 
-fn get_inc_value(old: u16, value: &Option<String>) -> u16 {
-    match value {
-        None => old,
-        Some(value) => {
-            let value = value.parse().unwrap_or(0);
-            old + value
-        }
-    }
-}
-
-#[get("galaxyatwar/getRatings/{id}")]
-async fn get_ratings(id: Path<String>) -> GAWResult<impl Responder> {
-    let db = GlobalState::database();
-    let id = id.into_inner();
-    let player = gaw_player(db, &id).await?;
-
-    let (gaw_data, promotions) = try_join!(
-        GalaxyAtWar::find_or_create(db, &player, env::from_env(env::GAW_DAILY_DECAY)),
-        get_promotions(db, &player, env::from_env(env::GAW_PROMOTIONS))
-    )?;
-
-    Ok(ratings_response(promotions, gaw_data))
-}
-
-async fn get_promotions(db: &DatabaseConnection, player: &Player, enabled: bool) -> DbResult<u32> {
-    if !enabled {
-        return Ok(0);
-    }
-    Ok(GalaxyAtWar::find_promotions(db, &player).await)
-}
-
-/// Returns a XML response generated for the provided ratings
-fn ratings_response(promotions: u32, ratings: GalaxyAtWar) -> impl Responder {
+/// Generates a ratings XML response from the provided ratings struct and
+/// promotions value.
+///
+/// `ratings`    The galaxy at war ratings value
+/// `promotions` The promotions value
+fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> GAWResult<impl Responder> {
     let a = ratings.group_a;
     let b = ratings.group_b;
     let c = ratings.group_c;
@@ -192,24 +207,18 @@ fn ratings_response(promotions: u32, ratings: GalaxyAtWar) -> impl Responder {
 </galaxyatwargetratings>
 "#
     );
-    HttpResponse::build(StatusCode::OK)
+    Ok(HttpResponse::build(StatusCode::OK)
         .content_type(ContentType::xml())
-        .body(response)
+        .body(response))
 }
 
 impl Display for GAWError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidID(_) => f.write_str("Invalid ID"),
+            Self::InvalidID => f.write_str("Invalid ID"),
             Self::UnknownID => f.write_str("Unknown ID"),
             Self::DatabaseError(_) => f.write_str("Database Error"),
         }
-    }
-}
-
-impl From<ParseIntError> for GAWError {
-    fn from(err: ParseIntError) -> Self {
-        GAWError::InvalidID(err)
     }
 }
 
@@ -222,7 +231,7 @@ impl From<DbErr> for GAWError {
 impl ResponseError for GAWError {
     fn status_code(&self) -> StatusCode {
         match self {
-            GAWError::InvalidID(_) | GAWError::UnknownID => StatusCode::BAD_REQUEST,
+            GAWError::InvalidID | GAWError::UnknownID => StatusCode::BAD_REQUEST,
             GAWError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

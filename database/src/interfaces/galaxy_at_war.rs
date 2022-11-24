@@ -76,12 +76,18 @@ impl galaxy_at_war::Model {
         db: &DatabaseConnection,
         values: (u16, u16, u16, u16, u16),
     ) -> DbResult<galaxy_at_war::Model> {
+        let new_a = self.group_a + values.0;
+        let new_b = self.group_b + values.1;
+        let new_c = self.group_c + values.2;
+        let new_d = self.group_d + values.3;
+        let new_e = self.group_e + values.4;
+
         let mut gaw_data = self.into_active_model();
-        gaw_data.group_a = Set(cmp::min(values.0, Self::MAX_VALUE));
-        gaw_data.group_b = Set(cmp::min(values.1, Self::MAX_VALUE));
-        gaw_data.group_c = Set(cmp::min(values.2, Self::MAX_VALUE));
-        gaw_data.group_d = Set(cmp::min(values.3, Self::MAX_VALUE));
-        gaw_data.group_e = Set(cmp::min(values.4, Self::MAX_VALUE));
+        gaw_data.group_a = Set(cmp::min(new_a, Self::MAX_VALUE));
+        gaw_data.group_b = Set(cmp::min(new_b, Self::MAX_VALUE));
+        gaw_data.group_c = Set(cmp::min(new_c, Self::MAX_VALUE));
+        gaw_data.group_d = Set(cmp::min(new_d, Self::MAX_VALUE));
+        gaw_data.group_e = Set(cmp::min(new_e, Self::MAX_VALUE));
         gaw_data.update(db).await
     }
 
