@@ -18,8 +18,8 @@ use log4rs::{
 
 /// The pattern to use when logging
 const LOGGING_PATTERN: &str = "[{d} {h({l})} {M}] {m}{n}";
-/// Max logging file size before rolling over to the next log file. (1mb)
-const LOGGING_MAX_SIZE: u64 = 1024 * 1024;
+/// Max logging file size before rolling over to the next log file. (5mb)
+const LOGGING_MAX_SIZE: u64 = 1024 * 1024 * 5;
 /// The max number of logging files to keep before deleting
 const LOGGING_MAX_FILES: u32 = 8;
 /// The modules to enable logging for
