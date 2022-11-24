@@ -1,18 +1,13 @@
 use core::env;
-use std::{
-    collections::HashMap,
-    time::{Duration, SystemTime},
-};
-
+use std::collections::HashMap;
+use std::time::{Duration, SystemTime};
 use tokio::sync::Mutex;
 use utils::random::generate_random_string;
 
-/// The life duration of a session token (How long the session tokens will be valid for)
-/// currently set to 1day worth of life
-const TOKEN_LIFE_DURATION: Duration = Duration::from_millis(60 * 60 * 24);
-/// The length of randomly generated token to create
-const TOKEN_LENGTH: usize = 128;
-
+/// Structure of a store which stores tokens along with
+/// their expiry time used for storing and checking
+/// validity of session tokens
+#[derive(Default)]
 pub struct TokenStore {
     /// Hash map of tokens mapped to the time that they will
     /// become expired at.
@@ -20,11 +15,12 @@ pub struct TokenStore {
 }
 
 impl TokenStore {
-    pub fn new() -> Self {
-        Self {
-            tokens: Mutex::new(HashMap::new()),
-        }
-    }
+    /// The amount of time it takes for a session token to expire.
+    /// currently set to 1day before expiring
+    const EXPIRY_TIME: Duration = Duration::from_millis(60 * 60 * 24);
+
+    /// The length of randomly generated token to create
+    const TOKEN_LENGTH: usize = 128;
 
     /// Checks if the provided token is valid. If the token is
     /// expired then it is removed from the token store
@@ -37,13 +33,25 @@ impl TokenStore {
         tokens.contains_key(token)
     }
 
+    /// Removes the provided token from the map of tokens.
+    ///
+    /// `token` The token to removes
+    pub async fn remove_token(&self, token: &str) {
+        let tokens = &mut *self.tokens.lock().await;
+        tokens.remove(token);
+    }
+
     /// Attempts to authenticate a session with the provided username and password.
     /// Checks the API environment variables and will return a generated token
     /// if it was a success or None if the credentials were incorrect
     ///
     /// `username` The username to authenticate with
     /// `password` The password to authenticate with
-    pub async fn authenticate(&self, username: &str, password: &str) -> Option<String> {
+    pub async fn authenticate(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Option<(String, SystemTime)> {
         let api_username = env::env(env::API_USERNAME);
         let api_password = env::env(env::API_PASSWORD);
 
@@ -54,14 +62,14 @@ impl TokenStore {
         let tokens = &mut *self.tokens.lock().await;
         let mut token: String;
         loop {
-            token = generate_random_string(TOKEN_LENGTH);
+            token = generate_random_string(Self::TOKEN_LENGTH);
             if !tokens.contains_key(&token) {
                 break;
             }
         }
 
-        let expiry_time = SystemTime::now() + TOKEN_LIFE_DURATION;
+        let expiry_time = SystemTime::now() + Self::EXPIRY_TIME;
         tokens.insert(token.clone(), expiry_time);
-        Some(token)
+        Some((token, expiry_time))
     }
 }

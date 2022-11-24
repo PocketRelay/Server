@@ -16,7 +16,7 @@ pub async fn start_server() {
     let port = env::from_env(env::HTTP_PORT);
     info!("Starting HTTP Server on (Port: {port})");
 
-    let token_store = Arc::new(TokenStore::new());
+    let token_store = Arc::new(TokenStore::default());
 
     let result = HttpServer::new(move || {
         App::new()

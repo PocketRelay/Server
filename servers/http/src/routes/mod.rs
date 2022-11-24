@@ -8,13 +8,13 @@ use actix_web::{
 
 use crate::{middleware::TokenAuth, stores::token::TokenStore};
 
-mod auth;
 mod games;
 mod gaw;
 mod players;
 mod public;
 mod qos;
 mod server;
+mod token;
 
 pub fn configure(cfg: &mut ServiceConfig, token_store: Arc<TokenStore>) {
     server::configure(cfg);
@@ -24,7 +24,7 @@ pub fn configure(cfg: &mut ServiceConfig, token_store: Arc<TokenStore>) {
 
     if env::from_env(env::API) {
         cfg.app_data(Data::from(token_store.clone()));
-        auth::configure(cfg);
+        token::configure(cfg);
 
         let middleware = TokenAuth::new(token_store);
         cfg.service(
