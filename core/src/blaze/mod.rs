@@ -4,6 +4,13 @@ pub mod codec;
 pub mod components;
 pub mod errors;
 
+/// Decodes the provided packet into its string representation and appends
+/// the value to the provided output prefixed by Content: if an error
+/// occurs while decoding the raw values and decoding error will
+/// be appended to the output
+///
+/// `packet` The packet to decode
+/// `output` The output to append to
 pub fn append_packet_decoded(packet: &Packet, output: &mut String) {
     let mut reader = Reader::new(&packet.contents);
     let mut out = String::new();
