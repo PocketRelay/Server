@@ -4,10 +4,14 @@ use core::{constants, env};
 use serde::Serialize;
 
 /// Function for configuring the services in this route
+///
+/// `cfg` Service config to configure
 pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(server_details);
 }
 
+/// Response detailing the information about this Pocket Relay server
+/// contains the version information as well as the server information
 #[derive(Serialize)]
 struct ServerDetails {
     /// The server version
@@ -19,8 +23,11 @@ struct ServerDetails {
 /// Describes the details of a service
 #[derive(Serialize)]
 struct ServiceDetails {
+    /// The name of the server
     name: &'static str,
+    /// The port of the service
     port: u16,
+    /// The type of service it is
     #[serde(rename = "type")]
     ty: ServiceType,
 }
@@ -29,23 +36,33 @@ struct ServiceDetails {
 #[derive(Serialize)]
 #[allow(unused)]
 enum ServiceType {
-    /// HTTP Proxy Server
+    /// HTTP Server
     HTTP,
-    /// Blaze Packet Proxy Server
+    /// Blaze Packet Server
     Blaze,
+    /// Blaze SSL Packet Server
+    BlazeSecure,
     /// Direct buffer to buffer server (read -> write)
     DirectBuffer,
 }
 
+/// Route for retrieving the server details responds with
+/// the list of servers and server version.
 #[get("/api/server")]
 async fn server_details() -> Json<ServerDetails> {
+    let redirector_port = env::from_env(env::REDIRECTOR_PORT);
     let main_port = env::from_env(env::MAIN_PORT);
     let http_port = env::from_env(env::HTTP_PORT);
     Json(ServerDetails {
         version: constants::VERSION,
         services: vec![
             ServiceDetails {
-                name: "Main Blaze Server",
+                name: "Redirector Server",
+                ty: ServiceType::BlazeSecure,
+                port: redirector_port,
+            },
+            ServiceDetails {
+                name: "Main Server",
                 ty: ServiceType::Blaze,
                 port: main_port,
             },
