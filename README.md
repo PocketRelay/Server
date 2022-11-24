@@ -31,6 +31,11 @@ You can find the client [Here (https://github.com/PocketRelay/Client)](https://g
 The client tool makes it easy to do the setup process. But its possible to do everything the client
 does manually if you'd prefer. Documentation for how to do so will be posted at a later point.
 
+# 🔧 Configuration
+
+In order to configure the server such as changing the ports you can see the
+configuration documentation [Here (docs/CONFIG.md)](docs/CONFIG.md)
+
 # 📦 Releases
 
 As this implementation is still under active development there will be no 
