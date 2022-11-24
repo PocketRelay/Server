@@ -49,11 +49,10 @@ packet! {
 async fn handle_resume_session(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<ResumeSession>()?;
     let db = GlobalState::database();
-    let Some(player) = Player::by_token(db, &req.session_token).await? else {
-        return session
-            .response_error(packet, ServerError::InvalidSession)
-            .await;
-    };
+
+    let player = Player::by_token(db, &req.session_token)
+        .await?
+        .ok_or(ServerError::InvalidSession)?;
 
     let (player, session_token) = player.with_token(db).await?;
     let response = SilentAuthResponse::create(packet, &player, session_token);

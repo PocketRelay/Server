@@ -11,6 +11,7 @@ pub enum BlazeError {
     IO(io::Error),
     Other(&'static str),
     Database(DbErr),
+    ServerError(ServerError),
 }
 
 impl Display for BlazeError {
@@ -20,6 +21,7 @@ impl Display for BlazeError {
             Self::IO(value) => write!(f, "IO error: {value:?}"),
             Self::Other(value) => write!(f, "Other: {value}"),
             Self::Database(value) => write!(f, "Database error: {value}"),
+            Self::ServerError(value) => write!(f, "Server error: {value:?}"),
         }
     }
 }
@@ -39,6 +41,12 @@ impl From<io::Error> for BlazeError {
 impl From<DbErr> for BlazeError {
     fn from(err: DbErr) -> Self {
         BlazeError::Database(err)
+    }
+}
+
+impl From<ServerError> for BlazeError {
+    fn from(err: ServerError) -> Self {
+        BlazeError::ServerError(err)
     }
 }
 

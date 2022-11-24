@@ -288,9 +288,9 @@ impl Codec for PostAuthRes {
 /// packet(Components.UTIL, Commands.POST_AUTH, 0x1b) {}
 /// ```
 async fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResult {
-    let Some(player_id) = session.player_id() else {
-        return session.response_error(packet, ServerError::FailedNoLoginAction).await;
-    };
+    let player_id = session
+        .player_id()
+        .ok_or(ServerError::FailedNoLoginAction)?;
 
     session.update_self();
 
@@ -576,11 +576,14 @@ packet! {
 ///
 async fn handle_suspend_user_ping(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<SuspendUserPing>()?;
-    match req.value {
-        0x1312D00 => session.response_error(packet, 0x12Du16).await,
-        0x55D4A80 => session.response_error(packet, 0x12Eu16).await,
-        _ => session.response_empty(packet).await,
-    }
+    let error = match req.value {
+        0x1312D00 => 0x12Du16,
+        0x55D4A80 => 0x12Eu16,
+        _ => return session.response_empty(packet).await,
+    };
+    let packet = Packet::error_empty(packet, error);
+    session.write_immediate(&packet).await?;
+    Ok(())
 }
 
 packet! {
@@ -609,71 +612,48 @@ async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> Ha
     if key.starts_with("class") {
         debug!("Updating player class data: {key}");
         let db = GlobalState::database();
-        let player = match session.player.as_ref() {
-            Some(value) => value,
-            None => {
-                return session
-                    .response_error(packet, ServerError::FailedNoLoginAction)
-                    .await;
-            }
-        };
+        let player = session
+            .player
+            .as_ref()
+            .ok_or(ServerError::FailedNoLoginAction)?;
 
-        match PlayerClass::update(db, player, key, &value).await {
-            Ok(_) => {}
-            Err(err) => {
+        PlayerClass::update(db, player, key, &value)
+            .await
+            .map_err(|err| {
                 warn!("Failed to update player class: {err:?}");
-                return session
-                    .response_error(packet, ServerError::ServerUnavailable)
-                    .await;
-            }
-        }
+                ServerError::ServerUnavailable
+            })?;
+
         debug!("Updating player character data: {key}");
     } else if key.starts_with("char") {
         debug!("Updating player character data: {key}");
         let db = GlobalState::database();
-        let player = match session.player.as_ref() {
-            Some(value) => value,
-            None => {
-                return session
-                    .response_error(packet, ServerError::FailedNoLoginAction)
-                    .await;
-            }
-        };
+        let player = session
+            .player
+            .as_ref()
+            .ok_or(ServerError::FailedNoLoginAction)?;
 
-        match PlayerCharacter::update(db, player, key, &value).await {
-            Ok(_) => {}
-            Err(err) => {
+        PlayerCharacter::update(db, player, key, &value)
+            .await
+            .map_err(|err| {
                 warn!("Failed to update player character: {err:?}");
-                return session
-                    .response_error(packet, ServerError::ServerUnavailable)
-                    .await;
-            }
-        }
+                ServerError::ServerUnavailable
+            })?;
+
         debug!("Updated player character data: {key}");
     } else {
         debug!("Updating player base data");
-        let player = match session.player.take() {
-            Some(value) => value,
-            None => {
-                return session
-                    .response_error(packet, ServerError::FailedNoLoginAction)
-                    .await;
-            }
-        };
+        let player = session
+            .player
+            .take()
+            .ok_or(ServerError::FailedNoLoginAction)?;
         let db = GlobalState::database();
-
-        match player.update(db, key, value).await {
-            Ok(player) => {
-                session.player = Some(player);
-                debug!("Updated player base data");
-            }
-            Err(err) => {
-                warn!("Failed to update player data: {err:?}");
-                return session
-                    .response_error(packet, ServerError::ServerUnavailable)
-                    .await;
-            }
-        };
+        let player = player.update(db, key, value).await.map_err(|err| {
+            warn!("Failed to update player data: {err:?}");
+            ServerError::ServerUnavailable
+        })?;
+        session.player = Some(player);
+        debug!("Updated player base data");
     }
     session.response_empty(packet).await
 }
@@ -694,10 +674,10 @@ packet! {
 async fn handle_user_settings_load_all(session: &mut Session, packet: &Packet) -> HandleResult {
     let mut settings = TdfMap::<String, String>::new();
     {
-        let Some(player) = session.player.as_ref() else {
-            warn!("Client attempted to load settings without being authenticated. (SID: {})", session.id);
-            return session.response_error(packet, ServerError::FailedNoLoginAction).await;
-        };
+        let player = session
+            .player
+            .as_ref()
+            .ok_or(ServerError::FailedNoLoginAction)?;
 
         settings.insert("Base", player.encode_base());
 

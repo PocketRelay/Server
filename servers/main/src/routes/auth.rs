@@ -77,9 +77,10 @@ async fn handle_silent_login(session: &mut Session, packet: &Packet) -> HandleRe
     debug!("Attempted silent authentication: {id} ({token})");
 
     let db = GlobalState::database();
-    let Some(player) = Player::by_id_with_token(db, id, token).await? else {
-        return session.response_error(packet, ServerError::InvalidSession).await;
-    };
+
+    let player = Player::by_id_with_token(db, id, token)
+        .await?
+        .ok_or(ServerError::InvalidSession)?;
 
     debug!("Silent authentication success");
     debug!("ID = {}", &player.id);
@@ -251,26 +252,20 @@ async fn handle_login(session: &mut Session, packet: &Packet) -> HandleResult {
             "Client attempted to login with invalid email address: {}",
             &email
         );
-        return session
-            .response_error(packet, ServerError::InvalidEmail)
-            .await;
+        return Err(ServerError::InvalidEmail.into());
     }
 
     let db = GlobalState::database();
 
-    let Some(player) = Player::by_email(db, &email, false).await? else {
-        return session
-            .response_error(packet, ServerError::EmailNotFound)
-            .await;
-    };
+    let player = Player::by_email(db, &email, false)
+        .await?
+        .ok_or(ServerError::EmailNotFound)?;
 
     debug!("Attempting login for {}", player.email);
 
     if !verify_password(&password, &player.password) {
         debug!("Client provided password did not match stored hash");
-        return session
-            .response_error(packet, ServerError::WrongPassword)
-            .await;
+        return Err(ServerError::WrongPassword.into());
     }
 
     let (player, session_token) = player.with_token(db).await?;
@@ -319,9 +314,7 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
     let password = req.password;
 
     if !is_email(&email) {
-        return session
-            .response_error(packet, ServerError::InvalidEmail)
-            .await;
+        return Err(ServerError::InvalidEmail.into());
     }
 
     let db = GlobalState::database();
@@ -329,9 +322,7 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
     let email_exists = Player::is_email_taken(db, &email).await?;
 
     if email_exists {
-        return session
-            .response_error(packet, ServerError::EmailAlreadyInUse)
-            .await;
+        return Err(ServerError::EmailAlreadyInUse.into());
     }
 
     let hashed_password =
@@ -374,27 +365,25 @@ async fn handle_origin_login(session: &mut Session, packet: &Packet) -> HandleRe
 
     // Only continue if Origin Fetch is actually enabled
     if !env::from_env(env::ORIGIN_FETCH) {
-        return session
-            .response_error(packet, ServerError::ServerUnavailable)
-            .await;
+        return Err(ServerError::ServerUnavailable.into());
     }
 
     // Ensure the retriever is enabled
     let Some(retriever) = GlobalState::retriever() else {
         debug!("Unable to authenticate Origin: Retriever is disabled or unavailable");
-        return session.response_error(packet, ServerError::ServerUnavailable).await
+        return Err(ServerError::ServerUnavailable.into());
     };
 
     // Create an origin authentication flow
     let Some(mut flow) = retriever.create_origin_flow().await else {
         error!("Unable to authenticate Origin: Unable to connect to official servers");
-        return session.response_error(packet, ServerError::ServerUnavailable).await
+        return Err(ServerError::ServerUnavailable.into());
     };
 
     // Authenticate with the official servers
     let Some(details) = flow.authenticate(req.token).await else {
         error!("Unable to authenticate Origin: Failed to retrieve details from official server");
-        return session.response_error(packet, ServerError::ServerUnavailable).await
+        return Err(ServerError::ServerUnavailable.into());
     };
 
     let db = GlobalState::database();
@@ -798,9 +787,7 @@ async fn handle_list_user_entitlements_2(session: &mut Session, packet: &Packet)
 async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleResult {
     let Some(player) = session.player.take() else {
         warn!("Client attempted to login to persona without being authenticated");
-        return session
-            .response_error(packet, ServerError::FailedNoLoginAction)
-            .await;
+        return Err(ServerError::FailedNoLoginAction.into());
     };
     let (player, session_token) = player.with_token(GlobalState::database()).await?;
     session
@@ -835,9 +822,7 @@ packet! {
 async fn handle_forgot_password(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<ForgotPaswdReq>()?;
     if !is_email(&req.email) {
-        return session
-            .response_error(packet, ServerError::InvalidEmail)
-            .await;
+        return Err(ServerError::InvalidEmail.into());
     }
     debug!("Got request for password rest for email: {}", &req.email);
     session.response_empty(packet).await
@@ -998,9 +983,7 @@ packet! {
 async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> HandleResult {
     let Some(player) = session.player.as_ref() else {
         warn!("Client attempted to get auth token while not authenticated. (SID: {})", session.id);
-        return session
-            .response_error(packet, ServerError::FailedNoLoginAction)
-            .await;
+        return Err(ServerError::FailedNoLoginAction.into());
     };
     let value = format!("{:X}", player.id);
     session.response(packet, &GetAuthRes { auth: value }).await

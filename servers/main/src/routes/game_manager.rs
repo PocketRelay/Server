@@ -97,10 +97,9 @@ packet! {
 async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<CreateGameReq>()?;
 
-    let Some(player) = session.try_into_player() else {
-        warn!("Client attempted to matchmake while not authenticated. (SID: {})", session.id);
-        return session.response_error(packet, ServerError::FailedNoLoginAction).await;
-    };
+    let player = session
+        .try_into_player()
+        .ok_or(ServerError::FailedNoLoginAction)?;
 
     let games = GlobalState::games();
     let game_id = games.create_game(req.attributes, req.setting).await;
@@ -141,9 +140,7 @@ async fn handle_advance_game_state(session: &mut Session, packet: &Packet) -> Ha
             "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
             req.id, session.id
         );
-        session
-            .response_error(packet, ServerError::InvalidInformation)
-            .await
+        Err(ServerError::InvalidInformation.into())
     }
 }
 
@@ -175,9 +172,7 @@ async fn handle_set_game_setting(session: &mut Session, packet: &Packet) -> Hand
             "Client requested to set the game setting of an unknown game (GID: {}, SID: {})",
             req.id, session.id
         );
-        session
-            .response_error(packet, ServerError::InvalidInformation)
-            .await
+        Err(ServerError::InvalidInformation.into())
     }
 }
 
@@ -219,9 +214,7 @@ async fn handle_set_game_attribs(session: &mut Session, packet: &Packet) -> Hand
             "Client requested to set the game attributes of an unknown game (GID: {}, SID: {})",
             req.id, session.id
         );
-        session
-            .response_error(packet, ServerError::InvalidInformation)
-            .await
+        Err(ServerError::InvalidInformation.into())
     }
 }
 
@@ -255,9 +248,7 @@ async fn handle_remove_player(session: &mut Session, packet: &Packet) -> HandleR
             "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
             req.id, session.id
         );
-        session
-            .response_error(packet, ServerError::InvalidInformation)
-            .await
+        Err(ServerError::InvalidInformation.into())
     }
 }
 
@@ -476,10 +467,9 @@ packet! {
 async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<MatchmakingReq>()?;
 
-    let Some(player) = session.try_into_player() else {
-        warn!("Client attempted to matchmake while not authenticated. (SID: {})", session.id);
-        return session.response_error(packet, ServerError::FailedNoLoginAction).await;
-    };
+    let player = session
+        .try_into_player()
+        .ok_or(ServerError::FailedNoLoginAction)?;
 
     info!("Player {} started matchmaking", player.display_name);
 
@@ -507,10 +497,11 @@ async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> Han
 /// }
 /// ```
 async fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
-    let Some(player) = session.player.as_ref() else {
-        warn!("Client attempted to cancel matchmaking while not authenticated. (SID: {})", session.id);
-        return session.response_error(packet, ServerError::FailedNoLoginAction).await;
-    };
+    let player = session
+        .player
+        .as_ref()
+        .ok_or(ServerError::FailedNoLoginAction)?;
+
     info!("Player {} cancelled matchmaking", player.display_name);
     session.response_empty(packet).await?;
 

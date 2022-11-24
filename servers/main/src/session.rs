@@ -10,7 +10,10 @@ use std::{
 };
 
 use core::{
-    blaze::{append_packet_decoded, errors::ServerError},
+    blaze::{
+        append_packet_decoded,
+        errors::{BlazeError, ServerError},
+    },
     game::player::{GamePlayer, SessionMessage},
     state::GlobalState,
 };
@@ -139,11 +142,14 @@ impl Session {
     async fn handle_packet(&mut self, component: Components, packet: &Packet) {
         self.debug_log_packet("Read", packet);
         if let Err(err) = routes::route(self, component, packet).await {
-            error!("Error occurred while routing (SID: {}): {:?}", self.id, err);
-
-            self.write_immediate(&Packet::error_empty(packet, ServerError::ServerUnavailable))
-                .await
-                .ok();
+            let error = if let BlazeError::ServerError(err) = err {
+                err
+            } else {
+                error!("Error occurred while routing (SID: {}): {:?}", self.id, err);
+                ServerError::ServerUnavailable
+            };
+            let response = Packet::error_empty(packet, error);
+            self.write_immediate(&response).await.ok();
         }
         self.flush().await;
     }
@@ -317,16 +323,6 @@ impl Session {
     /// `packet` The packet to respond to.
     pub async fn response_empty(&self, packet: &Packet) -> HandleResult {
         let response = Packet::response_empty(packet);
-        self.write_immediate(&response).await?;
-        Ok(())
-    }
-
-    /// Shortcut for error responses that have empty contents
-    ///
-    /// `packet` The packet to respond to.
-    /// `error`  The error for the packet.
-    pub async fn response_error(&self, packet: &Packet, error: impl Into<u16>) -> HandleResult {
-        let response = Packet::error_empty(packet, error);
         self.write_immediate(&response).await?;
         Ok(())
     }
