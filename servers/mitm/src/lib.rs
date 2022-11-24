@@ -73,6 +73,12 @@ async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> 
     Ok(())
 }
 
+/// Logs the contents of the provided packet to the debug output along with
+/// the header information.
+///
+/// `component` The component for the packet routing
+/// `packet`    The packet that is being logged
+/// `direction` The direction name for the packet
 fn debug_log_packet(component: Components, packet: &Packet, direction: &str) {
     // Skip if debug logging is disabled
     if !log_enabled!(log::Level::Debug) {
