@@ -75,9 +75,17 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr)) {
-        let (message_sender, message_recv) = mpsc::channel(20);
-        let session = Self {
+    /// Creates a new session with the provided values.
+    ///
+    /// `id`             The unique session ID
+    /// `values`         The networking TcpStream and address
+    /// `message_sender` The message sender for session messages
+    pub fn new(
+        id: SessionID,
+        values: (TcpStream, SocketAddr),
+        message_sender: mpsc::Sender<SessionMessage>,
+    ) -> Self {
+        Self {
             id,
             stream: Mutex::new(values.0),
             addr: values.1,
@@ -87,20 +95,27 @@ impl Session {
             player: None,
             net: NetData::default(),
             game: None,
-        };
-        tokio::spawn(session.process(message_recv));
+        }
     }
 
-    async fn process(mut self, mut message: mpsc::Receiver<SessionMessage>) {
+    /// Processing function which handles recieving messages, flush notifications,
+    /// reading packets, and handling safe shutdowns for this session. This function
+    /// owns the session.
+    ///
+    /// `message` The receiver for receiving session messages
+    pub async fn process(mut self, mut message: mpsc::Receiver<SessionMessage>) {
         let mut shutdown = GlobalState::shutdown();
         loop {
             select! {
+                // Recieve session instruction messages
                 message = message.recv() => {
                     if let Some(message) = message {
                         self.handle_message(message).await;
                     }
                 }
+                // Handle flush notifications and flush the session
                 _ = self.flush.notified() => { self.flush().await; }
+                // Handle packet reads
                 result = self.read() => {
                     if let Ok((component, packet)) = result {
                         self.handle_packet(component, &packet).await;
@@ -108,7 +123,8 @@ impl Session {
                         break;
                     }
                 }
-                _ = shutdown.changed() => {break;}
+                // Shutdown hook to ensure we don't keep trying to process after shutdown
+                _ = shutdown.changed() => { break; }
             };
         }
     }
