@@ -14,8 +14,12 @@ use tokio::net::TcpStream;
 use tokio::select;
 use utils::net::{accept_stream, listener};
 
-/// Starts the MITM server
+/// Starts the MITM server. This server is responsible for creating a sort of
+/// proxy between this server and the official servers. All packets send and
+/// recieved by this server are forwarded to the official servers and are logged
+/// using the debug logging.
 pub async fn start_server() {
+    // MITM server is unable to start if the retriever is disabled or fails to connect
     let Some(retriever) = GlobalState::retriever() else {
         error!("Server is in MITM mode but was unable to connect to the official servers. Stopping server.");
         panic!();
