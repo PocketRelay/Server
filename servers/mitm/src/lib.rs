@@ -1,15 +1,14 @@
 //! Module for the Redirector server which handles redirecting the clients
 //! to the correct address for the main server.
 
+use core::blaze::append_packet_decoded;
 use core::blaze::components::Components;
+use core::blaze::errors::{BlazeError, HandleResult};
 use core::retriever::Retriever;
 use core::{env, state::GlobalState};
-use std::net::SocketAddr;
 
-use blaze_pk::codec::Reader;
 use blaze_pk::packet::{Packet, PacketType};
 
-use blaze_pk::tag::Tag;
 use log::{debug, error, log_enabled};
 use tokio::net::TcpStream;
 use tokio::select;
@@ -25,7 +24,11 @@ pub async fn start_server() {
     let listener = listener("MITM", env::from_env(env::MAIN_PORT)).await;
     let mut shutdown = GlobalState::shutdown();
     while let Some((stream, addr)) = accept_stream(&listener, &mut shutdown).await {
-        tokio::spawn(handle_client(stream, addr, retriever));
+        tokio::spawn(async move {
+            if let Err(err) = handle_client(stream, retriever).await {
+                error!("Unable to handle MITM (Addr: {addr}): {err}");
+            }
+        });
     }
 }
 
@@ -35,38 +38,35 @@ pub async fn start_server() {
 /// `addr`     The client address
 /// `instance` The server instance information
 /// `shutdown` Async safely shutdown reciever
-async fn handle_client(mut client: TcpStream, addr: SocketAddr, retriever: &'static Retriever) {
-    let Some(mut server) = retriever.stream().await else {
-        error!("Unable to connection to official server for MITM connection: (Addr: {addr})");
-        return;
-    };
+async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> HandleResult {
+    let mut server = retriever
+        .stream()
+        .await
+        .ok_or_else(|| BlazeError::Other("Unable to connection to official server"))?;
+
     let mut shutdown = GlobalState::shutdown();
 
     loop {
         select! {
+            // Read packets coming from the client
             result = Packet::read_async_typed::<Components, TcpStream>(&mut client) => {
-                let Ok((component, packet)) = result else { break; };
+                let (component, packet) = result?;
                 log_packet(component, &packet, "From Client");
-                if let Err(_) = packet.write_blaze(&mut server) {
-                    break;
-                }
-                if let Err(_) = server.flush().await {
-                    break;
-                }
+                packet.write_blaze(&mut server)?;
+                server.flush().await?;
             }
+            // Read packets from the official server
             result = Packet::read_blaze_typed::<Components, TcpStream>(&mut server) => {
-                let Ok((component, packet)) = result else { break; };
+                let (component, packet) = result?;
                 log_packet(component, &packet, "From Server");
-                if let Err(_) =  packet.write_async(&mut client).await {
-                    break;
-                }
+                packet.write_async(&mut client).await?;
             }
-            _ = shutdown.changed() => {
-                break;
-            }
-
+            // Shutdown hook to ensure we don't keep trying to read after shutdown
+            _ = shutdown.changed() => {   break;  }
         };
     }
+
+    Ok(())
 }
 
 fn log_packet(component: Components, packet: &Packet, direction: &str) {
@@ -80,32 +80,10 @@ fn log_packet(component: Components, packet: &Packet, direction: &str) {
     message.push_str(direction);
     message.push_str(&format!("\nComponent: {:?}", component));
     message.push_str(&format!("\nType: {:?}", header.ty));
-
-    match header.ty {
-        PacketType::Notify => {}
-        _ => {
-            message.push_str(&format!("\nID: {}", header.id));
-        }
+    if header.ty != PacketType::Notify {
+        message.push_str("\nID: ");
+        message.push_str(&header.id.to_string());
     }
-
-    let mut reader = Reader::new(&packet.contents);
-    let mut out = String::new();
-    out.push_str("{\n");
-    match Tag::stringify(&mut reader, &mut out, 1) {
-        Ok(_) => {}
-        Err(err) => {
-            message.push_str("\nExtra: Content was malformed");
-            message.push_str(&format!("\nError: {:?}", err));
-            message.push_str(&format!("\nPartial Content: {}", out));
-            debug!("{}", message);
-            return;
-        }
-    };
-    if out.len() == 2 {
-        // Remove new line if nothing else was appended
-        out.pop();
-    }
-    out.push('}');
-    message.push_str(&format!("\nContent: {}", out));
+    append_packet_decoded(packet, &mut message);
     debug!("{}", message);
 }

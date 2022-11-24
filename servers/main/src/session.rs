@@ -10,7 +10,7 @@ use std::{
 };
 
 use core::{
-    blaze::errors::ServerError,
+    blaze::{append_packet_decoded, errors::ServerError},
     game::player::{GamePlayer, SessionMessage},
     state::GlobalState,
 };
@@ -22,9 +22,8 @@ use utils::{
 };
 
 use blaze_pk::{
-    codec::{Codec, Reader},
+    codec::Codec,
     packet::{Packet, PacketComponents, PacketType},
-    tag::Tag,
 };
 
 use log::{debug, error, log_enabled};
@@ -225,25 +224,7 @@ impl Session {
             return;
         }
 
-        let mut reader = Reader::new(&packet.contents);
-        let mut out = String::new();
-        out.push_str("{\n");
-        match Tag::stringify(&mut reader, &mut out, 1) {
-            Ok(_) => {}
-            Err(err) => {
-                message.push_str("\nExtra: Content was malformed");
-                message.push_str(&format!("\nError: {:?}", err));
-                message.push_str(&format!("\nPartial Content: {}", out));
-                debug!("{}", message);
-                return;
-            }
-        };
-        if out.len() == 2 {
-            // Remove new line if nothing else was appended
-            out.pop();
-        }
-        out.push('}');
-        message.push_str(&format!("\nContent: {}", out));
+        append_packet_decoded(packet, &mut message);
         debug!("{}", message);
     }
 
