@@ -100,6 +100,13 @@ are log files and the database if using the SQLite database version.
 
 **Cracked & Origin Support** This server supports both cracked and Origin clients.
 
+# 📡 API
+
+Pocket Relay servers contain an API which allows you to query the list of players and view currently active games.
+This is not enabled by default but see the configuration documentation for the variable to enable it. 
+
+You can view its documentation [Here (docs/API.md)](docs/API.md)
+
 # ⛔️ Known Issues
 
 **Host Migration** Host migration is partially working however it only currently works
