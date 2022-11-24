@@ -23,9 +23,6 @@ use utils::net::lookup_host;
 mod codec;
 pub mod origin;
 
-#[cfg(test)]
-mod test;
-
 /// Type for SSL wrapped blaze stream
 type Stream = BlazeStream<TcpStream>;
 
