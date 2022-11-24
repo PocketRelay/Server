@@ -23,7 +23,7 @@ use utils::{
 
 use blaze_pk::{
     codec::{Codec, Reader},
-    packet::{Packet, PacketComponents},
+    packet::{Packet, PacketComponents, PacketType},
     tag::Tag,
 };
 
@@ -217,8 +217,9 @@ impl Session {
 
         message.push_str(&format!("\nComponent: {:?}", component));
         message.push_str(&format!("\nType: {:?}", header.ty));
-        message.push_str(&format!("\nID: {}", header.id));
-
+        if header.ty != PacketType::Notify {
+            message.push_str(&format!("\nID: {}", header.id));
+        }
         if Self::is_debug_minified(&component) {
             debug!("{}", message);
             return;
