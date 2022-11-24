@@ -51,14 +51,14 @@ async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> 
             // Read packets coming from the client
             result = Packet::read_async_typed::<Components, TcpStream>(&mut client) => {
                 let (component, packet) = result?;
-                log_packet(component, &packet, "From Client");
+                debug_log_packet(component, &packet, "From Client");
                 packet.write_blaze(&mut server)?;
                 server.flush().await?;
             }
             // Read packets from the official server
             result = Packet::read_blaze_typed::<Components, TcpStream>(&mut server) => {
                 let (component, packet) = result?;
-                log_packet(component, &packet, "From Server");
+                debug_log_packet(component, &packet, "From Server");
                 packet.write_async(&mut client).await?;
             }
             // Shutdown hook to ensure we don't keep trying to read after shutdown
@@ -69,7 +69,7 @@ async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> 
     Ok(())
 }
 
-fn log_packet(component: Components, packet: &Packet, direction: &str) {
+fn debug_log_packet(component: Components, packet: &Packet, direction: &str) {
     // Skip if debug logging is disabled
     if !log_enabled!(log::Level::Debug) {
         return;
