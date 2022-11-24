@@ -75,17 +75,6 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn into_player(&self) -> Option<GamePlayer> {
-        let player = self.player.as_ref()?;
-        Some(GamePlayer::new(
-            self.id,
-            player.id,
-            player.display_name.clone(),
-            self.net,
-            self.message_sender.clone(),
-        ))
-    }
-
     pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr)) {
         let (message_sender, message_recv) = mpsc::channel(20);
         let session = Self {
@@ -132,7 +121,7 @@ impl Session {
     /// `component` The component of the packet for routing
     /// `packet`    The packet itself
     async fn handle_packet(&mut self, component: Components, packet: &Packet) {
-        Session::debug_log_packet(self, "Read", packet);
+        self.debug_log_packet("Read", packet);
         if let Err(err) = routes::route(self, component, packet).await {
             error!("Error occurred while routing (SID: {}): {:?}", self.id, err);
 
@@ -143,6 +132,9 @@ impl Session {
         self.flush().await;
     }
 
+    /// Handles a message recieved for the session
+    ///
+    /// `message` The message that was recieved
     pub async fn handle_message(&mut self, message: SessionMessage) {
         match message {
             SessionMessage::SetGame(game) => self.set_game(game),
@@ -179,7 +171,7 @@ impl Session {
     /// `action` The name of the action this packet is undergoing.
     ///          (e.g. Writing or Reading)
     /// `packet` The packet that is being logged
-    pub fn debug_log_packet(&self, action: &str, packet: &Packet) {
+    fn debug_log_packet(&self, action: &str, packet: &Packet) {
         // Skip if debug logging is disabled
         if !log_enabled!(log::Level::Debug) {
             return;
@@ -219,18 +211,19 @@ impl Session {
         if header.ty != PacketType::Notify {
             message.push_str(&format!("\nID: {}", header.id));
         }
-        if Self::is_debug_minified(&component) {
-            debug!("{}", message);
-            return;
+
+        if !Self::is_debug_minified(&component) {
+            append_packet_decoded(packet, &mut message);
         }
 
-        append_packet_decoded(packet, &mut message);
         debug!("{}", message);
     }
 
     /// Checks whether the provided `component` is ignored completely
     /// when debug logging. This is for packets such as Ping and SuspendUserPing
     /// where they occur frequently but provide no useful data for debugging.
+    ///
+    /// `component` The component to check
     fn is_debug_ignored(component: &Components) -> bool {
         Components::Util(components::Util::Ping).eq(component)
             || Components::Util(components::Util::SuspendUserPing).eq(component)
@@ -239,6 +232,8 @@ impl Session {
     /// Checks whether the provided `component` should have its contents
     /// hidden when being debug printed. Used to hide the contents of
     /// larger packets.
+    ///
+    /// `component` The component to check
     fn is_debug_minified(component: &Components) -> bool {
         Components::Authentication(components::Authentication::ListUserEntitlements2).eq(component)
             || Components::Util(components::Util::FetchClientConfig).eq(component)
@@ -255,7 +250,7 @@ impl Session {
 
         let stream = &mut *self.stream.lock().await;
         while let Some(item) = self.queue.pop_front() {
-            Self::debug_log_packet(self, "Wrote", &item);
+            self.debug_log_packet("Wrote", &item);
             match item.write_async(stream).await {
                 Ok(_) => {
                     write_count += 1;
@@ -362,6 +357,19 @@ impl Session {
     /// Clears the current player value
     pub fn clear_player(&mut self) {
         self.player = None;
+    }
+
+    /// Attempts to obtain a game player from this session will return None
+    /// if this session is not authenticated
+    pub fn try_into_player(&self) -> Option<GamePlayer> {
+        let player = self.player.as_ref()?;
+        Some(GamePlayer::new(
+            self.id,
+            player.id,
+            player.display_name.clone(),
+            self.net,
+            self.message_sender.clone(),
+        ))
     }
 
     /// Sets the game details for the current session and updates

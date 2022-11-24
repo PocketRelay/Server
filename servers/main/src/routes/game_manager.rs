@@ -97,7 +97,7 @@ packet! {
 async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<CreateGameReq>()?;
 
-    let Some(player) = session.into_player() else {
+    let Some(player) = session.try_into_player() else {
         warn!("Client attempted to matchmake while not authenticated. (SID: {})", session.id);
         return session.response_error(packet, ServerError::FailedNoLoginAction).await;
     };
@@ -476,7 +476,7 @@ packet! {
 async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<MatchmakingReq>()?;
 
-    let Some(player) = session.into_player() else {
+    let Some(player) = session.try_into_player() else {
         warn!("Client attempted to matchmake while not authenticated. (SID: {})", session.id);
         return session.response_error(packet, ServerError::FailedNoLoginAction).await;
     };
