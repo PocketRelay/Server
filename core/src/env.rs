@@ -2,11 +2,6 @@ use std::str::FromStr;
 
 use log::LevelFilter;
 
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// The external host environment variable
-pub const EXT_HOST: (&str, &str) = ("PR_EXT_HOST", "gosredirector.ea.com");
-
 pub const REDIRECTOR_PORT: (&str, u16) = ("PR_REDIRECTOR_PORT", 42127);
 pub const MAIN_PORT: (&str, u16) = ("PR_MAIN_PORT", 14219);
 pub const HTTP_PORT: (&str, u16) = ("PR_HTTP_PORT", 80);

@@ -1,7 +1,7 @@
 use log::info;
 use tokio::join;
 
-use core::{env, state::GlobalState};
+use core::{constants, env, state::GlobalState};
 
 use http_server;
 use main_server;
@@ -20,7 +20,7 @@ async fn main() {
     // Initialize logging
     logging::setup();
 
-    info!("Starting Pocket Relay v{}", env::VERSION);
+    info!("Starting Pocket Relay v{}", constants::VERSION);
 
     // Initialize global state
     GlobalState::init().await;

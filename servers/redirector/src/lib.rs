@@ -4,6 +4,7 @@
 use core::blaze::codec::{InstanceDetails, InstanceNet};
 use core::blaze::components::{Components, Redirector};
 use core::blaze::errors::{BlazeError, HandleResult};
+use core::constants;
 use core::{env, state::GlobalState};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -25,10 +26,10 @@ pub async fn start_server() {
     // The server details of the instance clients should
     // connect to. In this case its the main server details
     let instance = Arc::new({
-        let host = env::env(env::EXT_HOST);
+        let host = constants::EXTERNAL_HOST;
         let port = env::from_env(env::MAIN_PORT);
         InstanceDetails {
-            net: InstanceNet::from((host, port)),
+            net: InstanceNet::from((host.to_string(), port)),
             secure: false,
         }
     });

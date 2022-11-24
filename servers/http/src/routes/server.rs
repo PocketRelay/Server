@@ -1,6 +1,6 @@
-use crate::env;
 use actix_web::get;
 use actix_web::web::{Json, ServiceConfig};
+use core::{constants, env};
 use serde::Serialize;
 
 /// Function for configuring the services in this route
@@ -10,8 +10,6 @@ pub fn configure(cfg: &mut ServiceConfig) {
 
 #[derive(Serialize)]
 struct ServerDetails {
-    /// The external server address value
-    address: String,
     /// The server version
     version: &'static str,
     /// The list of proxy services
@@ -41,12 +39,10 @@ enum ServiceType {
 
 #[get("/api/server")]
 async fn server_details() -> Json<ServerDetails> {
-    let ext_host = env::env(env::EXT_HOST);
     let main_port = env::from_env(env::MAIN_PORT);
     let http_port = env::from_env(env::HTTP_PORT);
     Json(ServerDetails {
-        address: ext_host,
-        version: env::VERSION,
+        version: constants::VERSION,
         services: vec![
             ServiceDetails {
                 name: "Main Blaze Server",

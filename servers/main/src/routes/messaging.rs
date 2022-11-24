@@ -10,7 +10,7 @@ use core::blaze::errors::HandleResult;
 use crate::session::Session;
 use core::blaze::components::{Components, Messaging, UserSessions};
 
-use core::{env, env::VERSION};
+use core::{constants::VERSION, env};
 use log::debug;
 use utils::{time::server_unix_time, types::PlayerID};
 

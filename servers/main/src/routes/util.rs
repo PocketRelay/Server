@@ -2,7 +2,8 @@ use crate::session::Session;
 use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*, types::TdfMap};
 use core::blaze::components::Util;
 use core::blaze::errors::{HandleResult, ServerError};
-use core::env::{self, VERSION};
+use core::constants::{self, VERSION};
+use core::env;
 use core::state::GlobalState;
 use database::{PlayerCharacter, PlayerClass};
 use log::{debug, warn};
@@ -34,13 +35,12 @@ pub async fn route(session: &mut Session, component: Util, packet: &Packet) -> H
 
 #[derive(Debug)]
 pub struct TelemetryRes {
-    pub address: String,
     pub session_id: u32,
 }
 
 impl Codec for TelemetryRes {
     fn encode(&self, output: &mut Vec<u8>) {
-        tag_str(output, "ADRS", &self.address);
+        tag_str(output, "ADRS", constants::EXTERNAL_HOST);
         tag_zero(output, "ANON");
         tag_str(output, "DISA", TELEMTRY_DISA);
         tag_str(output, "FILT", "-UION/****");
@@ -63,16 +63,13 @@ impl Codec for TelemetryRes {
 /// ```
 ///
 async fn handle_get_telemetry_server(session: &mut Session, packet: &Packet) -> HandleResult {
-    let ext_host = env::env(env::EXT_HOST);
     let res = TelemetryRes {
-        address: ext_host,
         session_id: session.id,
     };
     session.response(packet, &res).await
 }
 
 pub struct PreAuthRes {
-    host: String,
     port: u16,
 }
 
@@ -127,7 +124,7 @@ impl Codec for PreAuthRes {
         // in two locations
         let qoss_group = &mut Vec::new();
         {
-            tag_str(qoss_group, "PSA", &self.host);
+            tag_str(qoss_group, "PSA", constants::EXTERNAL_HOST);
             tag_u16(qoss_group, "PSP", self.port);
             tag_str(qoss_group, "SNA", "prod-sjc");
             tag_group_end(qoss_group);
@@ -195,15 +192,12 @@ impl Codec for PreAuthRes {
 /// }
 /// ```
 async fn handle_pre_auth(session: &mut Session, packet: &Packet) -> HandleResult {
-    let host = env::env(env::EXT_HOST);
     let port = env::from_env(env::HTTP_PORT);
 
-    session.response(packet, &PreAuthRes { host, port }).await
+    session.response(packet, &PreAuthRes { port }).await
 }
 
 struct PostAuthRes {
-    ext_host: String,
-
     ticker_port: u16,
     telemtry_port: u16,
 
@@ -244,7 +238,7 @@ impl Codec for PostAuthRes {
         {
             tag_group_start(output, "TELE");
             // Last known telemetry address: 159.153.235.32
-            tag_str(output, "ADRS", &self.ext_host);
+            tag_str(output, "ADRS", constants::EXTERNAL_HOST);
             tag_zero(output, "ANON");
             tag_str(output, "DISA", TELEMTRY_DISA);
             tag_str(output, "FILT", "-UION/****");
@@ -265,7 +259,7 @@ impl Codec for PostAuthRes {
         {
             tag_group_start(output, "TICK");
             // Last known ticker address: 10.23.15.2
-            tag_str(output, "ADRS", &self.ext_host);
+            tag_str(output, "ADRS", constants::EXTERNAL_HOST);
             // Last known ticker port: 8999
             tag_u16(output, "PORT", self.ticker_port);
             tag_str(output, "SKEY", TICKER_KEY);
@@ -294,10 +288,8 @@ async fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResul
 
     session.update_self();
 
-    let ext_host = env::env(env::EXT_HOST);
     let res = PostAuthRes {
         player_id,
-        ext_host,
         ticker_port: 8999,
         telemtry_port: 9988,
     };
@@ -532,10 +524,8 @@ impl Message {
 /// Telemetry Server: 159.153.235.32:9988
 ///
 fn data_config() -> TdfMap<String, String> {
-    let ext_host = env::env(env::EXT_HOST);
     let http_port = env::from_env(env::HTTP_PORT);
-
-    let prefix = format!("http://{ext_host}:{http_port}");
+    let prefix = format!("http://{}:{}", constants::EXTERNAL_HOST, http_port);
 
     let mut config = TdfMap::with_capacity(15);
     config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/gaw"));
@@ -553,7 +543,7 @@ fn data_config() -> TdfMap<String, String> {
     config.insert("TEL_PORT", "9988");
     config.insert("TEL_SEND_DELAY", "15000");
     config.insert("TEL_SEND_PCT", "75");
-    config.insert("TEL_SERVER", ext_host);
+    config.insert("TEL_SERVER", constants::EXTERNAL_HOST);
     config
 }
 
