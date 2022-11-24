@@ -125,6 +125,23 @@ taken to a login screen where you can create a new account with Pocket Relay.
 - 📁 **utils** *Utilities used throughout the servers and core*
 - 📁 **tools** *Tools seperate to the server used for compiling things like talk files ahead of time*
 
+# 🚧 Stablity 
+
+The following is a list of the servers and how stable they are for production use. The table below describes each level of stablity
+
+| Level         | Description                                                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 🟢 STABLE      | The server is stable for use in production                                                                        |
+| 🟡 SEMI-STABLE | The server is mostly stable but is not fully tested and may have edge cases or unknown issues. Needs more testing |
+| 🟠 UNSTABLE    | The server is not stable and should not be used in production                                                     |
+
+| Server     | Stablity | Details                                                                                                  |
+| ---------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| Redirector | 🟢        | The redirector server is quite simple and is fully implemented and function                              |
+| MITM       | 🟢        | The MITM server only needs to pass packets onto the official server so this is complete                  |
+| HTTP       | 🟡        | The HTTP server is mostly stable and implements the features it needs but needs to be tested             |
+| Main       | 🟡        | The Main server is mostly stable however changes are expected and not all functionality works correectly |
+
 
 # 📌 EA / BioWare Notice
 All code in this repository is authored by Jacobtread and none is taken from BioWare. This code has been 
