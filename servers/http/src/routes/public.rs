@@ -7,10 +7,18 @@ use rust_embed::RustEmbed;
 #[folder = "src/public"]
 struct PublicContent;
 
+/// Function for configuring the services in this route
+///
+/// `cfg` Service config to configure
 pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(content);
 }
 
+/// Function for serving content from the embedded public
+/// content. Directory structure matches the paths vistied
+/// in this url.
+///
+/// `path` The path of the content to serve
 #[get("/content/{filename:.*}")]
 async fn content(path: web::Path<String>) -> impl Responder {
     let path = path.into_inner();
