@@ -41,6 +41,16 @@ impl TokenStore {
         tokens.remove(token);
     }
 
+    /// Finds the expiry time for the provided token if it
+    /// exists in the tokens map.
+    ///
+    /// `token` The token to find the expiry time for
+    pub async fn get_token_expiry(&self, token: &str) -> Option<SystemTime> {
+        let tokens = &*self.tokens.lock().await;
+        let expiry_time = tokens.get(token);
+        expiry_time.copied()
+    }
+
     /// Attempts to authenticate a session with the provided username and password.
     /// Checks the API environment variables and will return a generated token
     /// if it was a success or None if the credentials were incorrect
