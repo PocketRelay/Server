@@ -491,4 +491,135 @@ a specific ID. This only includes the galaxy at war data for the player
 
 # Games API 🔑🔵
 
-GAMES API NOT YET DOCUMENTED.
+The games API is for retrieving the details about the active games and the players that
+are in those games.
+
+> This API may be altered to include routes for modifying information 
+> about the games.
+
+## Games List
+```http
+GET /api/games
+```
+
+This route allows retrieiving a list of all the currently running games 
+
+### Response
+
+```json
+
+{
+    "games": [
+        {
+            "id": 1,
+            "state": "InGame",
+            "setting": 287,
+            "attributes": {
+                "ME3_dlc2300": "required",
+                "ME3gameEnemyType": "enemy1",
+                "ME3_dlc2700": "required",
+                "ME3map": "map2",
+                "ME3_dlc3225": "required",
+                "ME3privacy": "PUBLIC",
+                "ME3gameState": "IN_LOBBY",
+                "ME3_dlc3050": "required",
+                "ME3_dlc2500": "required",
+                "ME3gameDifficulty": "difficulty1"
+            },
+            "players": [
+                {
+                    "session_id": 1,
+                    "player_id": 1,
+                    "display_name": "test@test.com",
+                    "net": {
+                        "groups": {
+                            "internal": {
+                                "address": "IP ADDRESS OMITTED",
+                                "port": 3659
+                            },
+                            "external": {
+                                "address": "IP ADDRESS OMITTED",
+                                "port": 3659
+                            }
+                        },
+                        "qos": {
+                            "dbps": 0,
+                            "natt": "Strict",
+                            "ubps": 0
+                        },
+                        "hardware_flags": 1,
+                        "is_set": true
+                    }
+                }
+            ]
+        }
+    ]
+}
+
+```
+
+
+## Get Game Specific
+
+```http
+GET /api/games/{GAME_ID}
+```
+
+This route allows retrieving a specific game based on its game ID. Replace {GAME_ID} with the ID of
+the game to retrieve
+
+### Response
+
+```json
+
+{
+    "id": 1,
+    "state": "InGame",
+    "setting": 287,
+    "attributes": {
+        "ME3_dlc2300": "required",
+        "ME3gameEnemyType": "enemy1",
+        "ME3_dlc2700": "required",
+        "ME3map": "map2",
+        "ME3_dlc3225": "required",
+        "ME3privacy": "PUBLIC",
+        "ME3gameState": "IN_LOBBY",
+        "ME3_dlc3050": "required",
+        "ME3_dlc2500": "required",
+        "ME3gameDifficulty": "difficulty1"
+    },
+    "players": [
+        {
+            "session_id": 1,
+            "player_id": 1,
+            "display_name": "test@test.com",
+            "net": {
+                "groups": {
+                    "internal": {
+                        "address": "IP ADDRESS OMITTED",
+                        "port": 3659
+                    },
+                    "external": {
+                        "address": "IP ADDRESS OMITTED",
+                        "port": 3659
+                    }
+                },
+                "qos": {
+                    "dbps": 0,
+                    "natt": "Strict",
+                    "ubps": 0
+                },
+                "hardware_flags": 1,
+                "is_set": true
+            }
+        }
+    ]
+}
+
+```
+
+### Error Responses 
+
+| Status Code   | Body                        | Meaning                                  |
+| ------------- | --------------------------- | ---------------------------------------- |
+| 404 Not Found | Game with that ID not found | Game with matching ID could not be found |
