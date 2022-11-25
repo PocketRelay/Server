@@ -1,8 +1,8 @@
-# API Documentation
+# 📄 API Documentation
 
 This file contains the API documentation for the Pocket Relay HTTP server
 
-# Markers
+# 📌 Markers
 These markers describe certain information about a specific API or route. When
 you see these icons next to a route they have the following meanings
 

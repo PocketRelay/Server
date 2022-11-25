@@ -8,9 +8,6 @@
 ![Cargo Version](https://img.shields.io/crates/v/pocket-relay?style=for-the-badge)
 ![Cargo Downloads](https://img.shields.io/crates/d/pocket-relay?style=for-the-badge)
 
-This implementation of Pocket Relay is still under active development. See the [Kotlin Server (https://github.com/PocketRelay/ServerKotlin)](https://github.com/PocketRelay/ServerKotlin)
-for a working usable implementation
-
 Development on this implementation has made great strides and has surpassed the original Kotlin server in terms of performance
 reliabality, functionality and actual parody to the official server. However as this implementation is still considered to be
 in active development so no releases will be published YET. However you are welcome to build it yourself.
@@ -156,6 +153,7 @@ The following is a list of the servers and how stable they are for production us
 
 
 # 📌 EA / BioWare Notice
+
 All code in this repository is authored by Jacobtread and none is taken from BioWare. This code has been 
 produced from studying the protocol of the official servers and emulating its functionality. This program is in no way or form supported, endorsed, or provided by BioWare or Electronic Arts.
 
