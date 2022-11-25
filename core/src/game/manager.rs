@@ -28,7 +28,7 @@ pub struct Games {
 
 #[derive(Serialize)]
 pub struct GamesSnapshot {
-    games: HashMap<GameID, GameSnapshot>,
+    games: Vec<GameSnapshot>,
 }
 
 /// Structure for a entry in the matchmaking queue
@@ -61,12 +61,7 @@ impl Games {
             .collect::<Vec<_>>();
         let snapshots = futures::future::join_all(snapshots).await;
 
-        let mut games = HashMap::with_capacity(snapshots.len());
-        for snapshot in snapshots.into_iter() {
-            games.insert(snapshot.id, snapshot);
-        }
-
-        GamesSnapshot { games }
+        GamesSnapshot { games: snapshots }
     }
 
     /// Takes a snapshot of the game with the provided game ID
