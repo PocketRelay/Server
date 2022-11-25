@@ -10,9 +10,12 @@
 
 Development on this implementation has made great strides and has surpassed the original Kotlin server in terms of performance
 reliabality, functionality and actual parody to the official server. However as this implementation is still considered to be
-in active development so no releases will be published YET. However you are welcome to build it yourself.
+in active development.
 
-Because of this you may want to use the [Kotlin Server (https://github.com/PocketRelay/ServerKotlin)](https://github.com/PocketRelay/ServerKotlin) for the time being until this server is available for use.
+# 🎮 Pre Release
+
+You can find pre-release downloads in the [Releases (https://github.com/PocketRelay/ServerRust/releases)](https://github.com/PocketRelay/ServerRust/releases). The most recent pre release is 
+mostly stable but may have unknown bugs or features that are expecting to change 
 
 # ❔ What
 
