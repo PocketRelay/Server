@@ -10,7 +10,10 @@ use actix_web::{
     HttpResponse, Responder, ResponseError,
 };
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, time::SystemTime};
+use std::{
+    fmt::Display,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 /// Function for configuring the services in this route
 ///
@@ -46,8 +49,8 @@ struct GetTokenRequest {
 struct GetTokenResponse {
     /// The generated token
     token: String,
-    /// The time at which the token expires
-    expiry_time: SystemTime,
+    /// The time at which the token expires (Seconds since unix epoch)
+    expiry_time: u64,
 }
 
 /// Route for generating new tokens using a username and password to
@@ -60,10 +63,15 @@ async fn get_token(
     body: Json<GetTokenRequest>,
     token_store: Data<TokenStore>,
 ) -> TokenResult<GetTokenResponse> {
-    let (token, expiry_time) = token_store
+    let (token, expiry_time): (String, SystemTime) = token_store
         .authenticate(&body.username, &body.password)
         .await
         .ok_or_else(|| TokenError::InvalidCredentials)?;
+
+    let expiry_time = expiry_time
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_secs();
 
     Ok(Json(GetTokenResponse { token, expiry_time }))
 }

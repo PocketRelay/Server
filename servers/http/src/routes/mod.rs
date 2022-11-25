@@ -6,7 +6,7 @@ use actix_web::{
     Scope,
 };
 
-use crate::{middleware::TokenAuth, stores::token::TokenStore};
+use crate::{middleware::token::TokenAuth, stores::token::TokenStore};
 
 mod games;
 mod gaw;

@@ -20,7 +20,7 @@ impl TokenStore {
     const EXPIRY_TIME: Duration = Duration::from_millis(60 * 60 * 24);
 
     /// The length of randomly generated token to create
-    const TOKEN_LENGTH: usize = 128;
+    const TOKEN_LENGTH: usize = 64;
 
     /// Checks if the provided token is valid. If the token is
     /// expired then it is removed from the token store
