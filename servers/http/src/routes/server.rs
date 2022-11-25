@@ -1,3 +1,6 @@
+//! This modules contains routes that handle serving information
+//! about the server such as the version and services running
+
 use actix_web::get;
 use actix_web::web::{Json, ServiceConfig};
 use core::{constants, env};

@@ -17,7 +17,7 @@ pub struct TokenStore {
 impl TokenStore {
     /// The amount of time it takes for a session token to expire.
     /// currently set to 1day before expiring
-    const EXPIRY_TIME: Duration = Duration::from_millis(60 * 60 * 24);
+    const EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24);
 
     /// The length of randomly generated token to create
     const TOKEN_LENGTH: usize = 64;
