@@ -283,9 +283,10 @@ impl Codec for PostAuthRes {
 /// ```
 async fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResult {
     let player_id = session
-        .player_id()
+        .player
+        .as_ref()
+        .map(|value| value.id)
         .ok_or(ServerError::FailedNoLoginAction)?;
-
     session.update_self();
 
     let res = PostAuthRes {

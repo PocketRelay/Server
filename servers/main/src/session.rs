@@ -21,7 +21,7 @@ use core::{
 use database::Player;
 use utils::{
     net::public_address,
-    types::{GameID, PlayerID, SessionID},
+    types::{GameID, SessionID},
 };
 
 use blaze_pk::{
@@ -341,17 +341,6 @@ impl Session {
         Ok(())
     }
 
-    /// Retrieves the ID of the underlying player returning on failure
-    /// will return 1 as a fallback value.
-    pub fn player_id_safe(&self) -> PlayerID {
-        self.player.as_ref().map(|player| player.id).unwrap_or(1)
-    }
-
-    /// Retrieves the ID of the underlying player returning None on failure
-    pub fn player_id(&self) -> Option<PlayerID> {
-        self.player.as_ref().map(|player| player.id)
-    }
-
     /// Sets the player thats attached to this session. Will log information
     /// about the previous player if there was one
     ///
@@ -458,10 +447,11 @@ impl Session {
     /// Updates the data stored on the client so that it matches
     /// the data stored in this session
     pub fn update_client(&mut self) {
+        let player_id = self.player.as_ref().map(|player| player.id).unwrap_or(1);
         let packet = Packet::notify(
             Components::UserSessions(UserSessions::SetSession),
             &SetSession {
-                player_id: self.player_id_safe(),
+                player_id,
                 session: self,
             },
         );
