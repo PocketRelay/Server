@@ -17,6 +17,7 @@ COPY ./Cargo.lock .
 COPY ./utils/Cargo.toml ./utils/Cargo.toml
 COPY ./database/Cargo.toml ./database/Cargo.toml
 COPY ./core/Cargo.toml ./core/Cargo.toml
+COPY ./tools/Cargo.toml ./tools/Cargo.toml
 COPY ./servers/http/Cargo.toml ./servers/http/Cargo.toml
 COPY ./servers/main/Cargo.toml ./servers/main/Cargo.toml
 COPY ./servers/mitm/Cargo.toml ./servers/mitm/Cargo.toml
@@ -28,6 +29,7 @@ RUN mkdir ./src && echo 'fn main() { println!("Dummy!"); }' > ./src/main.rs
 RUN mkdir ./utils/src && touch ./utils/src/lib.rs
 RUN mkdir ./database/src && touch ./database/src/lib.rs
 RUN mkdir ./core/src && touch ./core/src/lib.rs
+RUN mkdir ./tools/src && touch ./tools/src/lib.rs
 RUN mkdir ./servers/http/src && touch ./servers/http/src/lib.rs
 RUN mkdir ./servers/main/src && touch ./servers/main/src/lib.rs
 RUN mkdir ./servers/mitm/src && touch ./servers/mitm/src/lib.rs
