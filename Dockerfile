@@ -19,6 +19,7 @@ COPY ./database/Cargo.toml ./database/Cargo.toml
 COPY ./core/Cargo.toml ./core/Cargo.toml
 COPY ./servers/http/Cargo.toml ./servers/http/Cargo.toml
 COPY ./servers/main/Cargo.toml ./servers/main/Cargo.toml
+COPY ./servers/mitm/Cargo.toml ./servers/mitm/Cargo.toml
 COPY ./servers/redirector/Cargo.toml ./servers/redirector/Cargo.toml
 
 
@@ -29,6 +30,7 @@ RUN mkdir ./database/src && touch ./database/src/lib.rs
 RUN mkdir ./core/src && touch ./core/src/lib.rs
 RUN mkdir ./servers/http/src && touch ./servers/http/src/lib.rs
 RUN mkdir ./servers/main/src && touch ./servers/main/src/lib.rs
+RUN mkdir ./servers/mitm/src && touch ./servers/mitm/src/lib.rs
 RUN mkdir ./servers/redirector/src && touch ./servers/redirector/src/lib.rs
 
 # Cargo build the dummy project for dependency caching
@@ -41,6 +43,7 @@ RUN rm -rf ./core/src
 RUN rm -rf ./database/src 
 RUN rm -rf ./servers/http/src 
 RUN rm -rf ./servers/main/src 
+RUN rm -rf ./servers/mitm/src 
 RUN rm -rf ./servers/redirector/src 
 
 # Copy real source code over
@@ -50,6 +53,7 @@ COPY ./core/src ./core/src
 COPY ./database/src ./database/src
 COPY ./servers/http/src ./servers/http/src
 COPY ./servers/main/src ./servers/main/src
+COPY ./servers/mitm/src ./servers/mitm/src
 COPY ./servers/redirector/src ./servers/redirector/src
 
 # Update the modified time on the project files so they recompile
@@ -59,6 +63,7 @@ RUN touch -a -m ./core/src/lib.rs
 RUN touch -a -m ./database/src/lib.rs
 RUN touch -a -m ./servers/http/src/lib.rs
 RUN touch -a -m ./servers/main/src/lib.rs
+RUN touch -a -m ./servers/mitm/src/lib.rs
 RUN touch -a -m ./servers/redirector/src/lib.rs
 
 # Cargo build real source code
