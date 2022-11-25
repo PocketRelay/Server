@@ -487,3 +487,8 @@ a specific ID. This only includes the galaxy at war data for the player
 | 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
 
 
+
+
+# Games API 🔑🔵
+
+GAMES API NOT YET DOCUMENTED.
