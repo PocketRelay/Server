@@ -93,19 +93,17 @@ impl Codec for MenuMessage {
 /// ```
 ///
 async fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult {
-    let (player_name, player_id) = match session.player.as_ref() {
-        Some(player) => (player.display_name.clone(), player.id),
-        None => {
-            // Not authenticated return empty count
-            return session.response(packet, &MessageCount { count: 0 }).await;
-        }
+    let Some(player) = session.player.as_ref() else {
+        // Not authenticated return empty count
+        return session.response(packet, &MessageCount { count: 0 }).await;
     };
+
     session.response(packet, &MessageCount { count: 1 }).await?;
     let time = server_unix_time();
-    let menu_message = get_menu_message(session, player_name);
+    let menu_message = get_menu_message(session, &player.display_name);
     let response = MenuMessage {
         message: menu_message,
-        player_id,
+        player_id: player.id,
         time,
     };
 
@@ -122,13 +120,13 @@ async fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> Handle
 /// - {v} = Server Version
 /// - {n} = Player Display Name
 /// - {ip} = Session IP Address
-fn get_menu_message(session: &mut Session, player_name: String) -> String {
+fn get_menu_message(session: &Session, player_name: &str) -> String {
     let mut message = env::env(env::MENU_MESSAGE);
     if message.contains("{v}") {
         message = message.replace("{v}", VERSION);
     }
     if message.contains("{n}") {
-        message = message.replace("{n}", &player_name);
+        message = message.replace("{n}", player_name);
     }
     if message.contains("{ip}") {
         message = message.replace("{ip}", &session.addr.to_string());
