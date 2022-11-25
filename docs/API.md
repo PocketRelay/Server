@@ -1,7 +1,6 @@
-# API is not currently stable and may change.
+# API Documentation
 
-This documentation is not yet complete and is expected to change
-
+This file contains the API documentation for the Pocket Relay HTTP server
 
 # Markers
 These markers describe certain information about a specific API or route. When
@@ -12,6 +11,7 @@ you see these icons next to a route they have the following meanings
 | 🚧    | Work in progress and could change at any time                                                                                            |
 | 🔑    | Requires authentication token from the Token API                                                                                         |
 | 🟢    | Stable not expected to make structure or breaking changes without notice                                                                 |
+| 🔵    | Partially stable but incomplete expecting more routes / features to be added                                                             |
 | 🟠    | Semi Stable / Internal feature. Route is used for internal purposes and may change but changes will be reflected in the internal tooling |
 | 🔴    | Unstable could change at any time                                                                                                        |
 
@@ -167,3 +167,323 @@ the servers running under Pocket Relay along with their ports and the type of se
     ]
 }
 ```
+
+
+# Players API 🔑🔵
+
+This API is for listing players in the database through paginated results or direcly inspecting
+the details for a specific player such as their classes, characters, and galaxy at war data.
+
+> This API is likely to have additional POST routes for updating players, characters, classes, and
+> galaxy at war data.
+
+## Get Players
+
+```
+GET /api/players?offset=0&count=20
+```
+
+The query paramater offset is the page offset and the count is the number of players to include
+on each page. Offset 1 & Count = 20 = Skip first 20 row and return next 20 rows.
+
+
+> Omitting the count query parameter will default to 20 players
+
+### Response
+
+The "players" field contains the list of players within the offset and count. The "more" field determines whether there are more players at the next offset value.
+
+```json
+{
+    "players": [
+        {
+            "id": 1,
+            "email": "test@test.com",
+            "display_name": "test@test.com",
+            "origin": false,
+            "credits": 1666449040,
+            "credits_spent": 1668442722,
+            "games_played": 16,
+            "seconds_played": 3384,
+            "inventory": "01010000030000010...LONG VALUE OMMITTED FROM EXAMPLE",
+            "csreward": 0,
+            "face_codes": "20;",
+            "new_item": "20;4;13 223 584,10 75 131,8 98 95 529 93 517 528,9 79 111 84",
+            "completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+            "progress": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+            "cs_completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+            "cs_timestamps1": "0,... LONG LIST OMMITTED FROM EXAMPLE",
+            "cs_timestamps2": "0,... LONG LIST OMMITTED FROM EXAMPLE",
+            "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
+        },
+        {
+            "id": 2,
+            "email": "test1@test.com",
+            "display_name": "test1@test.com",
+            "origin": false,
+            "credits": 1666449040,
+            "credits_spent": 1668442722,
+            "games_played": 16,
+            "seconds_played": 3384,
+            "inventory": "01010000030000010...LONG VALUE OMMITTED FROM EXAMPLE",
+            "csreward": 0,
+            "face_codes": "20;",
+            "new_item": "20;4;13 223 584,10 75 131,8 98 95 529 93 517 528,9 79 111 84",
+            "completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+            "progress": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+            "cs_completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+            "cs_timestamps1": "0,... LONG LIST OMMITTED FROM EXAMPLE",
+            "cs_timestamps2": "0,... LONG LIST OMMITTED FROM EXAMPLE",
+            "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
+        },
+    ],
+    "more": false
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body                  | Meaning                                 |
+| ------------------------- | --------------------- | --------------------------------------- |
+| 500 Internal Server Error | Internal Server Error | Database or other server error occurred |
+
+
+## Get Specific Player
+
+```
+GET /api/players/{PLAYER_ID}
+```
+
+Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+a specific ID. This only includes the basic player data and not the classes or characters
+
+### Response
+
+```json
+{
+    "id": 1,
+    "email": "test@test.com",
+    "display_name": "test@test.com",
+    "origin": false,
+    "credits": 1666449040,
+    "credits_spent": 1668442722,
+    "games_played": 16,
+    "seconds_played": 3384,
+    "inventory": "01010000030000010...LONG VALUE OMMITTED FROM EXAMPLE",
+    "csreward": 0,
+    "face_codes": "20;",
+    "new_item": "20;4;13 223 584,10 75 131,8 98 95 529 93 517 528,9 79 111 84",
+    "completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+    "progress": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+    "cs_completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+    "cs_timestamps1": "0,... LONG LIST OMMITTED FROM EXAMPLE",
+    "cs_timestamps2": "0,... LONG LIST OMMITTED FROM EXAMPLE",
+    "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body                                   | Meaning                                    |
+| ------------------------- | -------------------------------------- | ------------------------------------------ |
+| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
+| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
+
+## Get Specific Player Full
+
+```
+GET /api/players/{PLAYER_ID}/full
+```
+
+Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+a specific ID. This includes all the player data, classes, characters and galaxy at war data.
+
+### Response
+
+```json
+{
+    "player": {
+        "id": 1,
+        "email": "test@test.com",
+        "display_name": "test@test.com",
+        "origin": false,
+        "credits": 1666449040,
+        "credits_spent": 1668442722,
+        "games_played": 16,
+        "seconds_played": 3384,
+        "inventory": "01010000030000010...LONG VALUE OMMITTED FROM EXAMPLE",
+        "csreward": 0,
+        "face_codes": "20;",
+        "new_item": "20;4;13 223 584,10 75 131,8 98 95 529 93 517 528,9 79 111 84",
+        "completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+        "progress": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+        "cs_completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+        "cs_timestamps1": "0,... LONG LIST OMMITTED FROM EXAMPLE",
+        "cs_timestamps2": "0,... LONG LIST OMMITTED FROM EXAMPLE",
+        "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
+    },
+    "classes": [
+        {
+            "index": 1,
+            "name": "Adept",
+            "level": 1,
+            "exp": 0.0,
+            "promotions": 0
+        },
+        ... Remaining classes ommitted for documentation
+    ],
+    "characters": [
+        {
+            "index": 0,
+            "kit_name": "AdeptHumanMale",
+            "name": "Test",
+            "tint1": 0,
+            "tint2": 26,
+            "pattern": 0,
+            "pattern_color": 47,
+            "phong": 45,
+            "emissive": 9,
+            "skin_tone": 9,
+            "seconds_played": 0,
+            "timestamp_year": 0,
+            "timestamp_month": 0,
+            "timestamp_day": 0,
+            "timestamp_seconds": 0,
+            "powers": "Singularity 179 1.000_Shield 89 1.0000 0 0 0 0 0 0 0...Remaining ommited",
+            "hotkeys": "",
+            "weapons": "0,25",
+            "weapon_mods": "",
+            "deployed": true,
+            "leveled_up": false
+        },
+        ... Remaining characters ommitted for documentation
+    ],
+    "galaxy_at_war": {
+        "last_modified": "2022-10-29T15:29:22.515609800",
+        "group_a": 5300,
+        "group_b": 5300,
+        "group_c": 5300,
+        "group_d": 5300,
+        "group_e": 6000
+    }
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body                                   | Meaning                                    |
+| ------------------------- | -------------------------------------- | ------------------------------------------ |
+| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
+| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
+
+
+## Get Specific Player Classes
+
+```
+GET /api/players/{PLAYER_ID}/classes
+```
+
+Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+a specific ID. This only includes the classes for the player
+
+### Response
+
+```json
+[
+    {
+        "index": 1,
+        "name": "Adept",
+        "level": 1,
+        "exp": 0.0,
+        "promotions": 0
+    },
+    ... Remaining classes ommitted for documentation
+]
+```
+
+### Error Responses 
+
+| Status Code               | Body                                   | Meaning                                    |
+| ------------------------- | -------------------------------------- | ------------------------------------------ |
+| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
+| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
+
+
+## Get Specific Player Characters
+
+```
+GET /api/players/{PLAYER_ID}/characters
+```
+
+Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+a specific ID. This only includes the characters for the player
+
+### Response
+
+```json
+[
+    {
+        "index": 0,
+        "kit_name": "AdeptHumanMale",
+        "name": "Test",
+        "tint1": 0,
+        "tint2": 26,
+        "pattern": 0,
+        "pattern_color": 47,
+        "phong": 45,
+        "emissive": 9,
+        "skin_tone": 9,
+        "seconds_played": 0,
+        "timestamp_year": 0,
+        "timestamp_month": 0,
+        "timestamp_day": 0,
+        "timestamp_seconds": 0,
+        "powers": "Singularity 179 1.000_Shield 89 1.0000 0 0 0 0 0 0 0...Remaining ommited",
+        "hotkeys": "",
+        "weapons": "0,25",
+        "weapon_mods": "",
+        "deployed": true,
+        "leveled_up": false
+    },
+    ... Remaining characters ommitted for documentation
+]
+```
+
+### Error Responses 
+
+| Status Code               | Body                                   | Meaning                                    |
+| ------------------------- | -------------------------------------- | ------------------------------------------ |
+| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
+| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
+
+
+## Get Specific Player Galaxy At War
+
+```
+GET /api/players/{PLAYER_ID}/galaxy_at_war
+```
+
+Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+a specific ID. This only includes the galaxy at war data for the player
+
+### Response
+
+```json
+{
+    "last_modified": "2022-10-29T15:29:22.515609800",
+    "group_a": 5300,
+    "group_b": 5300,
+    "group_c": 5300,
+    "group_d": 5300,
+    "group_e": 6000
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body                                   | Meaning                                    |
+| ------------------------- | -------------------------------------- | ------------------------------------------ |
+| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
+| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
+
+
