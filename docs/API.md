@@ -3,7 +3,24 @@
 This documentation is not yet complete and is expected to change
 
 
-# Token API
+# Markers
+These markers describe certain information about a specific API or route. When
+you see these icons next to a route they have the following meanings
+
+| Icon | Meaning                                                                                                                                  |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 🚧    | Work in progress and could change at any time                                                                                            |
+| 🔑    | Requires authentication token from the Token API                                                                                         |
+| 🟢    | Stable not expected to make structure or breaking changes without notice                                                                 |
+| 🟠    | Semi Stable / Internal feature. Route is used for internal purposes and may change but changes will be reflected in the internal tooling |
+| 🔴    | Unstable could change at any time                                                                                                        |
+
+
+# Token API 🟢
+
+Some routes are protected and require a Token from the tokens API. See
+Create Token for information on creating a token. After generating a token
+provide it as the X-Token header on future requests
 
 ## Create Token
 
@@ -105,3 +122,48 @@ configuration file
 
 This request will always succeed returning the 200 OK status code so the
 result of this endpoint can always be ignored
+
+
+
+
+# Server API 🟠
+
+This API is for retrieving information about the server. This includes the verison and the ports
+and server types for each of the sub servers
+
+## Get 
+
+```
+GET /api/server
+```
+
+Simple get request with no paramaters. This route is used internally by the Client tool to ensure
+that a server is actually a Pocket Relay server.
+
+### Response
+
+The "version" field is the server version and the "services" field contains a list of each of
+the servers running under Pocket Relay along with their ports and the type of server
+
+```json
+{
+    "version": "0.1.0",
+    "services": [
+        {
+            "name": "Redirector Server",
+            "port": 42127,
+            "type": "BlazeSecure"
+        },
+        {
+            "name": "Main Server",
+            "port": 14219,
+            "type": "Blaze"
+        },
+        {
+            "name": "HTTP Server",
+            "port": 80,
+            "type": "HTTP"
+        }
+    ]
+}
+```
