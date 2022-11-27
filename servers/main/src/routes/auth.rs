@@ -25,6 +25,10 @@ use utils::{
 /// Routing function for handling packets with the `Authentication` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
+///
+/// `session`   The session that the packet was recieved by
+/// `component` The component of the packet recieved
+/// `packet`    The recieved packet
 pub async fn route(
     session: &mut Session,
     component: Authentication,
@@ -56,40 +60,53 @@ pub async fn route(
     }
 }
 
-/// Handles silent authentication from a client (Token based authentication) If the token provided
-/// by the client is correct the session is updated accordingly to match the player
-/// # Structure
+/// This route handles all the different authentication types, Silent, Origin,
+/// and Login parsing  the request and handling the authentication with the
+/// correct function.
+///
+/// # Silent Login
+///
+/// This is the silent token authentication packet which is when the client
+/// authenticates with an already known session token and player ID
+///
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.SILENT_LOGIN, 0x6) {
-///   text("AUTH", "128 CHAR TOKEN OMITTED")
-///   number("PID", 0x1)
-///   number("TYPE", 0x2)
+/// Route: Authentication(SilentLogin)
+/// ID: 6
+/// Content: {
+///     "AUTH": "128_CHARACTER_TOKEN", // Authentication token
+///     "PID": 1, // Player ID
+///     "TYPE": 2 // Authentication type
 /// }
 /// ```
 ///
-/// Handles logging in with a session token provided by Origin rather than with email
-/// and password. This requires connecting to the official server to get the correct
-/// credentials.
+/// # Origin Login
 ///
-/// # Structure
+/// This is the authentication packet used when the game is launched through
+/// origin. This token must be authenticated through the official servers
+///
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.ORIGIN_LOGIN, INCOMING_TYPE, 0x0) {
-///   text("AUTH", "ORIGIN TOKEN OMITTED")
-///   number("TYPE", 0x1)
+/// Route: Authentication(OriginLogin)
+/// ID: 0
+/// Content: {
+///     "AUTH": "ORIGIN_TOKEN", // Origin authentication token
+///     "TYPE": 1 // Authentication type
 /// }
 /// ```
 ///
-/// Handles logging into an account with the email and password provided. This is
-/// when the login prompt appears in game
+/// # Login
 ///
-/// # Structure
+/// This is login through the in game login menu using a username and
+/// password.
+///
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.LOGIN, 0xe) {
-///   number("DVID", 0x0)
-///   text("MAIL", "EMAIL OMITTED")
-///   text("PASS", "PASSWORD OMITTED")
-///   text("TOKN", "")
-///   number("TYPE", 0x0)
+/// Route: Authentication(Login)
+/// ID: 14
+/// Content: {
+///     "DVID": 0,
+///     "MAIL": "ACCOUNT_EMAIL", // Email
+///     "PASS": "ACCOUNT_PASSWORD", // Password
+///     "TOKN": "",
+///     "TYPE": 0 // Authentication type
 /// }
 /// ```
 async fn handle_auth_request(session: &mut Session, packet: &Packet) -> HandleResult {
@@ -236,9 +253,10 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
 /// Handles logging out by the client this removes any current player data from the
 /// session and updating anything that depends on the session having a player.
 ///
-/// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.LOGOUT, 0x7) {}
+/// Route: Authentication(Logout)
+/// ID: 8
+/// Content: {}
 /// ```
 async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
     debug!("Logging out for session: (ID: {})", &session.id);
@@ -246,97 +264,26 @@ async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
     session.response_empty(packet).await
 }
 
-/// Handles creating accounts
-///
-/// # Structure
-/// ```
-/// packet(Components.AUTHENTICATION, Commands.CREATE_ACCOUNT, 0x12) {
-///   number("BDAY", 0x0)
-///   number("BMON", 0x0)
-///   number("BYR", 0x0)
-///   text("CTRY", "NZ")
-///   number("DVID", 0x0)
-///   number("GEST", 0x0)
-///   text("LANG", "en")
-///   text("MAIL", "EMAIL OMITTED")
-///   number("OPT", 0x0)
-///   number("OPT", 0x0)
-///   text("PASS", "PASSWORD OMITTED")
-///   text("PNAM")
-///   text("PRIV", "webprivacy/au/en/pc/default/08202020/02042022")
-///   text("PRNT")
-///   +group("PROF") {
-///     text("CITY")
-///     text("CTRY")
-///     number("GNDR", 0x0)
-///     text("STAT")
-///     text("STRT")
-///     text("ZIP")
-///   }
-///   text("TOSV", "webterms/au/en/pc/default/09082020/02042022")
-///   text("TSUI", "webterms/au/en/pc/default/09082020/02042022")
-/// }
-/// ```
-///
-async fn handle_create_account(session: &mut Session, packet: &Packet) -> HandleResult {
-    let req = packet.decode::<CreateAccountRequest>()?;
-    let email = req.email;
-
-    if !is_email(&email) {
-        return Err(ServerError::InvalidEmail.into());
-    }
-
-    let db = GlobalState::database();
-
-    let email_exists = Player::is_email_taken(db, &email).await?;
-
-    if email_exists {
-        return Err(ServerError::EmailAlreadyInUse.into());
-    }
-
-    let hashed_password = hash_password(&req.password)
-        .map_err(|_| BlazeError::Other("Failed to hash user password"))?;
-
-    let display_name = if email.len() > 99 {
-        email[0..99].to_string()
-    } else {
-        email.clone()
-    };
-
-    let player = Player::create(db, email, display_name, hashed_password, false).await?;
-    let (player, session_token) = player.with_token(db).await?;
-    let response = Packet::response(
-        packet,
-        &AuthResponse {
-            player: &player,
-            session_token,
-            silent: false,
-        },
-    );
-    session.write_immediate(&response).await?;
-    session.set_player(player);
-    Ok(())
-}
-
 /// Handles list user entitlements 2 responses requests which contains information
 /// about certain content the user has access two
 ///
-/// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.LIST_USER_ENTITLEMENTS_2, 0x8) {
-///   number("BUID", 0x0)
-///   number("EPSN", 0x1)
-///   number("EPSZ", 0x32)
-///   text("ETAG", "")
-///   text("GDAY", "")
-///   list("GNLS", listOf("ME3PCOffers", "ME3PCContent", "ME3GenOffers", "ME3GenContent", "ME3GenAncillary"))
-///   number("HAUP", 0x0)
-///   text("PJID", "")
-///   text("PRID", "")
-///   number("RECU", 0x0)
-///   number("STAT", 0x0)
-///   text("TERD", "")
-///   number("TYPE", 0x0)
+/// Route: Authentication(ListUserEntitlements2)
+/// ID: 8
+/// Content: {
+///     "BUID": 0,
+///     "EPSN": 1,
+///     "EPSZ": 50,
+///     "ETAG": "",
+///     "GDAY": "",
+///     "GNLS": List<String> ["ME3PCOffers", "ME3PCContent", "ME3GenOffers", "ME3GenContent", "ME3GenAncillary"],
+///     "HAUP": 0,
+///     "PJID": "",
+///     "PRID": "",
+///     "RECU": 0,
+///     "STAT": 0,
+///     "TERD": "",
+///     "TYPE": 0
 /// }
 /// ```
 async fn handle_list_user_entitlements_2(session: &mut Session, packet: &Packet) -> HandleResult {
@@ -393,10 +340,11 @@ async fn handle_list_user_entitlements_2(session: &mut Session, packet: &Packet)
 /// Handles logging into a persona. This system doesn't implement the persona system so
 /// the account details are just used instead
 ///
-/// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.LOGIN_PERSONA, 0xe) {
-///   text("PNAM", "Jacobtread")
+/// Route: Authentication(LoginPersona),
+/// ID: 14
+/// Content: {
+///     "PMAM": "Jacobtread"
 /// }
 /// ```
 async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleResult {
@@ -422,10 +370,11 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
 /// email but this server does not yet implement that functionality so it is just
 /// logged to debug output
 ///
-/// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.PASSWORD_FORGOT, 0x11) {
-///   text("MAIL", "EMAIL OMITTED")
+/// Route: Authentication(PasswordForgot)
+/// ID: 17
+/// Content: {
+///     "MAIL": "ACCOUNT_EMAIL"
 /// }
 /// ```
 async fn handle_forgot_password(session: &mut Session, packet: &Packet) -> HandleResult {
@@ -437,14 +386,79 @@ async fn handle_forgot_password(session: &mut Session, packet: &Packet) -> Handl
     session.response_empty(packet).await
 }
 
+/// Handles creating accounts
+///
+/// ```
+/// Route: Authentication(CreateAccount)
+/// ID: 18
+/// Content: {
+///     "BDAY": 0, // Birthday Day
+///     "BMON": 0, // Birthday Month
+///     "BYR": 0,  // Birthday Year
+///     "CTRY": "NZ", // Country Code
+///     "DVID": 0,
+///     "GEST": 0,
+///     "LANG": "en", // Language
+///     "MAIL": "ACCOUNT_EMAIL",
+///     "OPT": 0,
+///     "OPT": 0,
+///     "PASS": "ACCOUNT_PASSWORD",
+///     "PNAM": "",
+///     "PRIV": "webprivacy/au/en/pc/default/08202020/02042022", // Privacy policy path
+///     "PRNT": "",
+///     "PROF": {
+///         "CITY": "",
+///         "CTRY": "",
+///         "GNDR": 0,
+///         "STAT": "",
+///         "STRT": "",
+///         "ZIP": ""
+///     },
+///     "TOSV": "webterms/au/en/pc/default/09082020/02042022", // Terms of service path
+///     "TSUI": "webterms/au/en/pc/default/09082020/02042022" // Terms of service path
+/// }
+/// ```
+///
+async fn handle_create_account(session: &mut Session, packet: &Packet) -> HandleResult {
+    let req = packet.decode::<CreateAccountRequest>()?;
+    let email = req.email;
+    if !is_email(&email) {
+        return Err(ServerError::InvalidEmail.into());
+    }
+
+    let db = GlobalState::database();
+    let email_exists = Player::is_email_taken(db, &email).await?;
+    if email_exists {
+        return Err(ServerError::EmailAlreadyInUse.into());
+    }
+
+    let hashed_password = hash_password(&req.password)
+        .map_err(|_| BlazeError::Other("Failed to hash user password"))?;
+    let display_name = email.chars().take(99).collect::<String>();
+    let player = Player::create(db, email, display_name, hashed_password, false).await?;
+    let (player, session_token) = player.with_token(db).await?;
+    let response = Packet::response(
+        packet,
+        &AuthResponse {
+            player: &player,
+            session_token,
+            silent: false,
+        },
+    );
+    session.write_immediate(&response).await?;
+    session.set_player(player);
+    Ok(())
+}
+
 /// Expected to be getting information about the legal docs however the exact meaning
 /// of the response content is not yet known and further research is required
 ///
-/// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.GET_LEGAL_DOCS_INFO, 0x16) {
-///   text("CTRY", "") // Country?
-///   text("PTFM", "pc") // Platform?
+/// Route: Authentication(GetLegalDocsInfo)
+/// ID: 22
+/// Content: {
+///     "CTRY": "",
+///     "PTFM": "pc" // Platform
 /// }
 /// ```
 async fn handle_get_legal_docs_info(session: &mut Session, packet: &Packet) -> HandleResult {
@@ -469,16 +483,16 @@ async fn load_local<'a>(path: &str, fallback: &'a str) -> Cow<'a, str> {
 /// Handles serving the contents of the terms of service. This is an HTML document which is
 /// rendered inside the game when you click the button for viewing terms of service.
 ///
-/// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.GET_TERMS_OF_SERVICE_CONTENT, 0x17) {
-///   text("CTRY", "")
-///   text("LANG", "")
-///   text("PTFM", "pc")
-///   number("TEXT", 0x1)
+/// Route: Authentication(GetTermsOfServiceContent)
+/// ID: 23
+/// Content: {
+///     "CTRY": "",
+///     "LANG": "",
+///     "PTFM": "pc",
+///     "TEXT": 1
 /// }
 /// ```
-///
 async fn handle_terms_of_service_content(session: &mut Session, packet: &Packet) -> HandleResult {
     let default = include_str!("../resources/defaults/terms_of_service.html");
     let content = load_local("terms_of_service.html", default).await;
@@ -493,13 +507,14 @@ async fn handle_terms_of_service_content(session: &mut Session, packet: &Packet)
 /// Handles serving the contents of the privacy policy. This is an HTML document which is
 /// rendered inside the game when you click the button for viewing privacy policy.
 ///
-/// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.GET_PRIVACY_POLICY_CONTENT, 0x18) {
-///   text("CTRY", "")
-///   text("LANG", "")
-///   text("PTFM", "pc")
-///   number("TEXT", 0x1)
+/// Route: Authentication(GetPrivacyPolicyContent)
+/// ID: 24
+/// Content: {
+///     "CTRY": "",
+///     "LANG": "",
+///     "PTFM": "pc",
+///     "TEXT": 1
 /// }
 /// ```
 ///
@@ -517,9 +532,10 @@ async fn handle_privacy_policy_content(session: &mut Session, packet: &Packet) -
 /// Handles retrieving an authentication token for use with the Galaxy At War HTTP service
 /// however in this case we are just using the player ID in hex format as the token.
 ///
-/// # Structure
 /// ```
-/// packet(Components.AUTHENTICATION, Commands.GET_AUTH_TOKEN, 0x23) {}
+/// Route: Authentication(GetAuthToken),
+/// ID: 35
+/// Content: {}
 /// ```
 async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> HandleResult {
     let player = session
