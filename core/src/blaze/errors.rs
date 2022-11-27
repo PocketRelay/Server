@@ -4,6 +4,7 @@ use std::{fmt::Display, io};
 
 pub type HandleResult = Result<(), BlazeError>;
 pub type BlazeResult<T> = Result<T, BlazeError>;
+pub type ServerResult<T> = Result<T, ServerError>;
 
 #[derive(Debug)]
 pub enum BlazeError {

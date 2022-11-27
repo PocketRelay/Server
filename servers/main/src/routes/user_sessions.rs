@@ -8,12 +8,10 @@ use blaze_pk::{
 use core::blaze::errors::{HandleResult, ServerError};
 use core::{blaze::components::UserSessions, state::GlobalState};
 
-use crate::session::Session;
+use crate::{models::auth::AuthResponse, session::Session};
 use core::blaze::codec::{NetGroups, QosNetworkData};
 
 use log::{debug, warn};
-
-use super::auth::SilentAuthResponse;
 
 use database::Player;
 
@@ -55,7 +53,14 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
         .ok_or(ServerError::InvalidSession)?;
 
     let (player, session_token) = player.with_token(db).await?;
-    let response = SilentAuthResponse::create(packet, &player, session_token);
+    let response = Packet::response(
+        packet,
+        &AuthResponse {
+            player: &player,
+            session_token,
+            silent: true,
+        },
+    );
     session.write_immediate(&response).await?;
     session.set_player(player);
     Ok(())

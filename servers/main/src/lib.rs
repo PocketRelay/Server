@@ -1,6 +1,7 @@
 use core::{env, state::GlobalState};
 
 mod codec;
+mod models;
 mod routes;
 mod session;
 
