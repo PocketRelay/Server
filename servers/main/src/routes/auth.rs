@@ -40,23 +40,14 @@ pub async fn route(
         }
         Authentication::Logout => handle_logout(session, packet).await,
         Authentication::LoginPersona => handle_login_persona(session, packet).await,
-        Authentication::ListUserEntitlements2 => {
-            handle_list_user_entitlements_2(session, packet).await
-        }
+        Authentication::ListUserEntitlements2 => handle_list_entitlements(session, packet).await,
         Authentication::CreateAccount => handle_create_account(session, packet).await,
         Authentication::PasswordForgot => handle_forgot_password(session, packet).await,
         Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(session, packet).await,
-        Authentication::GetTermsOfServiceConent => {
-            handle_terms_of_service_content(session, packet).await
-        }
-        Authentication::GetPrivacyPolicyContent => {
-            handle_privacy_policy_content(session, packet).await
-        }
+        Authentication::GetTermsOfServiceConent => handle_tos_content(session, packet).await,
+        Authentication::GetPrivacyPolicyContent => handle_privacy_content(session, packet).await,
         Authentication::GetAuthToken => handle_get_auth_token(session, packet).await,
-        component => {
-            debug!("Got Authentication({component:?})");
-            session.response_empty(packet).await
-        }
+        _ => session.response_empty(packet).await,
     }
 }
 
@@ -286,7 +277,7 @@ async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
 ///     "TYPE": 0
 /// }
 /// ```
-async fn handle_list_user_entitlements_2(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_list_entitlements(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<ListEntitlementsRequest>()?;
     let tag = req.tag;
     if !tag.is_empty() {
@@ -493,7 +484,7 @@ async fn load_local<'a>(path: &str, fallback: &'a str) -> Cow<'a, str> {
 ///     "TEXT": 1
 /// }
 /// ```
-async fn handle_terms_of_service_content(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_tos_content(session: &mut Session, packet: &Packet) -> HandleResult {
     let default = include_str!("../resources/defaults/terms_of_service.html");
     let content = load_local("terms_of_service.html", default).await;
     let response = LegalContent {
@@ -518,7 +509,7 @@ async fn handle_terms_of_service_content(session: &mut Session, packet: &Packet)
 /// }
 /// ```
 ///
-async fn handle_privacy_policy_content(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_privacy_content(session: &mut Session, packet: &Packet) -> HandleResult {
     let default = include_str!("../resources/defaults/privacy_policy.html");
     let content = load_local("privacy_policy.html", default).await;
     let response = LegalContent {
