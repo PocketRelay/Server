@@ -1,5 +1,6 @@
 use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*};
 use tokio::fs::read_to_string;
+use utils::types::PlayerID;
 
 use crate::session::Session;
 use core::blaze::components::Authentication;
@@ -54,7 +55,7 @@ pub async fn route(
 packet! {
     struct SilentLoginReq {
         AUTH token: String,
-        PID id: u32,
+        PID id: PlayerID,
     }
 }
 
@@ -70,23 +71,11 @@ packet! {
 /// ```
 ///
 async fn handle_silent_login(session: &mut Session, packet: &Packet) -> HandleResult {
-    let silent_login = packet.decode::<SilentLoginReq>()?;
-    let id = silent_login.id;
-    let token = silent_login.token;
-
-    debug!("Attempted silent authentication: {id} ({token})");
-
+    let req = packet.decode::<SilentLoginReq>()?;
     let db = GlobalState::database();
-
-    let player = Player::by_id_with_token(db, id, token)
+    let player = Player::by_id_with_token(db, req.id, req.token)
         .await?
         .ok_or(ServerError::InvalidSession)?;
-
-    debug!("Silent authentication success");
-    debug!("ID = {}", &player.id);
-    debug!("Username = {}", &player.display_name);
-    debug!("Email = {}", &player.email);
-
     let (player, session_token) = player.with_token(db).await?;
     let response = SilentAuthResponse::create(packet, &player, session_token);
     session.write_immediate(&response).await?;
