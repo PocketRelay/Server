@@ -42,7 +42,7 @@ pub fn route(_session: &mut Session, component: Stats, packet: &Packet) -> Handl
 /// ```
 fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
     let response = EntityCountResponse { count: 1 };
-    Ok(packet.respond(&response))
+    Ok(packet.respond(response))
 }
 
 /// Handles returning a centered leaderboard object. This is currently not implemented
@@ -66,7 +66,7 @@ fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
 /// }
 /// ```
 fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
-    Ok(packet.respond(&EmptyLeaderboardResponse))
+    Ok(packet.respond(EmptyLeaderboardResponse))
 }
 
 /// Handles returning a filtered leaderboard object. This is currently not implemented
@@ -89,7 +89,7 @@ fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
 /// }
 /// ```
 fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
-    Ok(packet.respond(&EmptyLeaderboardResponse))
+    Ok(packet.respond(EmptyLeaderboardResponse))
 }
 
 fn get_locale_name(code: &str) -> String {
@@ -144,5 +144,5 @@ fn handle_leaderboard_group(packet: &Packet) -> HandleResult {
             gname: "ME3ChallengePoints",
         }
     };
-    Ok(packet.respond(&group))
+    Ok(packet.respond(group))
 }

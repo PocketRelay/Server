@@ -97,7 +97,7 @@ async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleRes
     games.add_host(game_id, player).await;
 
     let response = CreateGameResponse { game_id };
-    Ok(packet.respond(&response))
+    Ok(packet.respond(response))
 }
 
 /// Handles changing the state of the game with the provided ID
@@ -371,7 +371,7 @@ async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> Han
     }
 
     let response = MatchmakingResponse { id: session.id };
-    Ok(packet.respond(&response))
+    Ok(packet.respond(response))
 }
 
 /// Handles cancelling matchmaking for the current session removing

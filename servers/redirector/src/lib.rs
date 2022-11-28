@@ -71,7 +71,7 @@ async fn handle_client(stream: TcpStream, addr: SocketAddr) -> BlazeResult<()> {
                 secure: false,
             };
 
-            let response = Packet::response(&packet, &instance);
+            let response = Packet::response(&packet, instance);
             response.write_blaze(&mut stream)?;
             stream.flush().await?;
             break;

@@ -50,7 +50,7 @@ pub fn route_game_reporting(
 fn handle_submit_offline(session: &mut Session, packet: &Packet) -> HandleResult {
     let notify = Packet::notify(
         Components::GameReporting(GameReporting::GameReportSubmitted),
-        &GameReportResponse,
+        GameReportResponse,
     );
 
     session.push(notify);
@@ -93,5 +93,5 @@ pub fn route_assoc_lists(component: AssociationLists, packet: &Packet) -> Handle
 /// }
 /// ```
 fn handle_get_lists(packet: &Packet) -> HandleResult {
-    Ok(packet.respond(&AssocListResponse))
+    Ok(packet.respond(AssocListResponse))
 }

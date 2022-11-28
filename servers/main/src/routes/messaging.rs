@@ -45,12 +45,12 @@ fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult
     let Some(player) = session.player.as_ref() else {
         // Not authenticated return empty count
         let response = FetchMessageResponse { count: 0 };
-        return Ok(packet.respond(&response));
+        return Ok(packet.respond(response));
     };
     let message = get_menu_message(session, &player.display_name);
     let notify = Packet::notify(
         Components::Messaging(Messaging::SendMessage),
-        &MessageNotify {
+        MessageNotify {
             message,
             player_id: player.id,
         },
@@ -58,7 +58,7 @@ fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult
 
     session.push(notify);
     let response = FetchMessageResponse { count: 1 };
-    Ok(packet.respond(&response))
+    Ok(packet.respond(response))
 }
 
 /// Retrieves the menu message from the environment variables and replaces

@@ -422,7 +422,7 @@ impl Session {
         let player_id = self.player.as_ref().map(|player| player.id).unwrap_or(1);
         let packet = Packet::notify(
             Components::UserSessions(UserSessions::SetSession),
-            &SetSession {
+            SetSession {
                 player_id,
                 session: self,
             },
@@ -435,7 +435,7 @@ impl Session {
         let packets = vec![
             Packet::notify(
                 Components::UserSessions(UserSessions::SessionDetails),
-                &SessionUpdate {
+                SessionUpdate {
                     session: self,
                     player_id: player.id,
                     display_name: &player.display_name,
@@ -443,7 +443,7 @@ impl Session {
             ),
             Packet::notify(
                 Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
-                &UpdateExtDataAttr {
+                UpdateExtDataAttr {
                     flags: 0x3,
                     player_id: player.id,
                 },

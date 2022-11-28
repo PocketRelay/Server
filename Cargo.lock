@@ -491,9 +491,9 @@ dependencies = [
 
 [[package]]
 name = "blaze-pk"
-version = "0.5.4"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df66ee97a5fd21641cc168e2e1cf90ab0008a72865770fbd142784de2290596c"
+checksum = "8d1927bc8c9fdf3af73cf880d0f374a6eca20aedcb426609d248f8ef2bd5b60c"
 dependencies = [
  "blaze-ssl-async",
  "tokio",

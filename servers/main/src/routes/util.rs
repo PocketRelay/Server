@@ -63,7 +63,7 @@ impl Codec for TelemetryRes {
 async fn handle_get_telemetry_server(session: &mut Session, packet: &Packet) -> HandleResult {
     let session_id = session.id;
     let response = TelemetryRes { session_id };
-    Ok(packet.respond(&response))
+    Ok(packet.respond(response))
 }
 
 pub struct PreAuthRes {
@@ -191,7 +191,7 @@ impl Codec for PreAuthRes {
 fn handle_pre_auth(packet: &Packet) -> HandleResult {
     let port = env::from_env(env::HTTP_PORT);
     let response = PreAuthRes { port };
-    Ok(packet.respond(&response))
+    Ok(packet.respond(response))
 }
 
 struct PostAuthRes {
@@ -291,7 +291,7 @@ async fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResul
         ticker_port: 8999,
         telemtry_port: 9988,
     };
-    Ok(packet.respond(&response))
+    Ok(packet.respond(response))
 }
 
 packet! {
@@ -312,7 +312,7 @@ packet! {
 fn handle_ping(packet: &Packet) -> HandleResult {
     let server_time = server_unix_time();
     let response = PingRes { server_time };
-    Ok(packet.respond(&response))
+    Ok(packet.respond(response))
 }
 
 packet! {
@@ -377,7 +377,7 @@ fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
     };
 
     let response = FetchConfigRes { config };
-    Ok(packet.respond(&response))
+    Ok(packet.respond(response))
 }
 
 /// Contents of the default talk dmap file
@@ -706,5 +706,5 @@ async fn handle_user_settings_load_all(session: &mut Session, packet: &Packet) -
         insert_optional(&mut settings, "Progress", &player.progress);
     }
     let response = UserSettingsAll { settings };
-    Ok(packet.respond(&response))
+    Ok(packet.respond(response))
 }

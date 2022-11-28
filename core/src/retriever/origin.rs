@@ -32,7 +32,7 @@ impl OriginFlow {
             .session
             .request::<OriginLoginReq, OriginLoginRes>(
                 Components::Authentication(Authentication::OriginLogin),
-                &OriginLoginReq { token },
+                OriginLoginReq { token },
             )
             .await
             .ok()?;

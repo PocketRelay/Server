@@ -129,7 +129,7 @@ impl Game {
     ///
     /// `component` The packet component
     /// `contents`  The packet contents
-    async fn notify_all<C: Codec>(&self, component: Components, contents: &C) {
+    async fn notify_all<C: Codec>(&self, component: Components, contents: C) {
         let packet = Packet::notify(component, contents);
         self.push_all(&packet).await;
     }
@@ -148,7 +148,7 @@ impl Game {
 
         self.notify_all(
             Components::GameManager(GameManager::GameStateChange),
-            &StateChange { id: self.id, state },
+            StateChange { id: self.id, state },
         )
         .await;
     }
@@ -167,7 +167,7 @@ impl Game {
 
         self.notify_all(
             Components::GameManager(GameManager::GameSettingsChange),
-            &SettingChange {
+            SettingChange {
                 id: self.id,
                 setting,
             },
@@ -184,7 +184,7 @@ impl Game {
         debug!("Updating game attributes");
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameAttribChange),
-            &AttributesChange {
+            AttributesChange {
                 id: self.id,
                 attributes: &attributes,
             },
@@ -308,7 +308,7 @@ impl Game {
         }
         let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerJoining),
-            &PlayerJoining { slot, player },
+            PlayerJoining { slot, player },
         );
         self.push_all(&packet).await;
         player.push(packet).await;
@@ -330,7 +330,7 @@ impl Game {
 
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameSetup),
-            &GameDetails {
+            GameDetails {
                 id: self.id,
                 players,
                 game_data,
@@ -359,7 +359,7 @@ impl Game {
 
         let packet = Packet::notify(
             Components::GameManager(GameManager::GamePlayerStateChange),
-            &PlayerStateChange {
+            PlayerStateChange {
                 gid: self.id,
                 pid: player_id,
                 state,
@@ -384,7 +384,7 @@ impl Game {
         };
         let packet = Packet::notify(
             Components::GameManager(GameManager::AdminListChange),
-            &AdminListChange {
+            AdminListChange {
                 game_id: self.id,
                 player_id: target,
                 operation,
@@ -425,7 +425,7 @@ impl Game {
         };
         let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerJoinCompleted),
-            &JoinComplete {
+            JoinComplete {
                 game_id: self.id,
                 player_id: player.player_id,
             },
@@ -499,7 +499,7 @@ impl Game {
     async fn notify_player_removed(&self, player: &GamePlayer, reason: RemoveReason) {
         let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerRemoved),
-            &PlayerRemoved {
+            PlayerRemoved {
                 game_id: self.id,
                 player_id: player.player_id,
                 reason,
@@ -520,7 +520,7 @@ impl Game {
         let players = &*self.players.read().await;
         let removed_packet = Packet::notify(
             Components::UserSessions(UserSessions::FetchExtendedData),
-            &FetchExtendedData {
+            FetchExtendedData {
                 player_id: player.player_id,
             },
         );
@@ -530,7 +530,7 @@ impl Game {
             .map(|value| {
                 Packet::notify(
                     Components::UserSessions(UserSessions::FetchExtendedData),
-                    &FetchExtendedData {
+                    FetchExtendedData {
                         player_id: value.player_id,
                     },
                 )
@@ -566,7 +566,7 @@ impl Game {
     async fn notify_migrate_start(&self, new_host: &GamePlayer) {
         let packet = Packet::notify(
             Components::GameManager(GameManager::HostMigrationStart),
-            &HostMigrateStart {
+            HostMigrateStart {
                 game_id: self.id,
                 host_id: new_host.player_id,
             },
@@ -578,7 +578,7 @@ impl Game {
     async fn notify_migrate_finish(&self) {
         let packet = Packet::notify(
             Components::GameManager(GameManager::HostMigrationFinished),
-            &HostMigrateFinished { game_id: self.id },
+            HostMigrateFinished { game_id: self.id },
         );
         self.push_all(&packet).await;
     }

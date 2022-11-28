@@ -138,7 +138,7 @@ impl RetSession {
     pub async fn request<Req: Codec, Res: Codec>(
         &mut self,
         component: Components,
-        contents: &Req,
+        contents: Req,
     ) -> BlazeResult<Res> {
         let response = self.request_raw(component, contents).await?;
         let contents = response.decode::<Res>()?;
@@ -150,7 +150,7 @@ impl RetSession {
     pub async fn request_raw<Req: Codec>(
         &mut self,
         component: Components,
-        contents: &Req,
+        contents: Req,
     ) -> BlazeResult<Packet> {
         let request = Packet::request(self.id, component, contents);
         request.write_blaze(&mut self.stream)?;
@@ -197,7 +197,7 @@ impl RetSession {
     async fn get_main_instance(&mut self) -> BlazeResult<InstanceDetails> {
         self.request::<InstanceRequest, InstanceDetails>(
             Components::Redirector(Redirector::GetServerInstance),
-            &InstanceRequest,
+            InstanceRequest,
         )
         .await
         .map_err(|err| {

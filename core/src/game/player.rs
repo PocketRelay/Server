@@ -89,11 +89,11 @@ impl GamePlayer {
         let packets = vec![
             Packet::notify(
                 Components::UserSessions(UserSessions::SessionDetails),
-                &PlayerUpdate { player: self },
+                PlayerUpdate { player: self },
             ),
             Packet::notify(
                 Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
-                &UpdateExtDataAttr {
+                UpdateExtDataAttr {
                     flags: 0x3,
                     player_id: self.player_id,
                 },
@@ -112,7 +112,7 @@ impl GamePlayer {
     pub fn create_set_session(&self) -> Packet {
         Packet::notify(
             Components::UserSessions(UserSessions::SetSession),
-            &SetPlayer { player: self },
+            SetPlayer { player: self },
         )
     }
 
