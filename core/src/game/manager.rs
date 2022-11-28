@@ -10,7 +10,11 @@ use serde::Serialize;
 use tokio::sync::{Mutex, RwLock};
 use utils::types::{GameID, PlayerID, SessionID};
 
-use super::{codec::GameState, game::GameSnapshot, rules::RuleSet};
+use super::{
+    codec::{GameState, RemoveReason},
+    game::GameSnapshot,
+    rules::RuleSet,
+};
 use super::{
     game::{AttrMap, Game},
     player::GamePlayer,
@@ -239,11 +243,16 @@ impl Games {
     ///
     /// `game_id` The game to remove the player from
     /// `pid`     The id of the player to remove
-    pub async fn remove_player_pid(&self, game_id: GameID, pid: PlayerID) -> bool {
+    pub async fn remove_player_pid(
+        &self,
+        game_id: GameID,
+        pid: PlayerID,
+        reason: RemoveReason,
+    ) -> bool {
         {
             let games = self.games.read().await;
             let Some(game) = games.get(&game_id) else { return false; };
-            game.remove_by_pid(pid).await;
+            game.remove_by_pid(pid, reason).await;
             if game.is_empty().await {
                 game.release().await;
             } else {

@@ -13,7 +13,8 @@ use super::{
     codec::{
         AdminListChange, AdminListOperation, AttributesChange, FetchExtendedData, GameDetails,
         GameDetailsType, GameState, HostMigrateFinished, HostMigrateStart, JoinComplete,
-        PlayerJoining, PlayerRemoved, PlayerState, PlayerStateChange, SettingChange, StateChange,
+        PlayerJoining, PlayerRemoved, PlayerState, PlayerStateChange, RemoveReason, SettingChange,
+        StateChange,
     },
     player::{GamePlayer, GamePlayerSnapshot},
 };
@@ -439,7 +440,7 @@ impl Game {
     /// the packet system.
     ///
     /// `pid` The player id of the player to remove
-    pub async fn remove_by_pid(&self, pid: PlayerID) {
+    pub async fn remove_by_pid(&self, pid: PlayerID, reason: RemoveReason) {
         let Some((slot, player)) = self.take_player_pid(pid).await else {
             warn!(
                 "Attempted to remove player that wasn't in game (PID: {}, GID: {})",
@@ -447,7 +448,7 @@ impl Game {
             );
             return;
         };
-        self.on_player_removed(player, slot).await;
+        self.on_player_removed(player, slot, reason).await;
     }
 
     /// Attempts to remove a player by its session ID
@@ -463,7 +464,8 @@ impl Game {
             );
             return;
         };
-        self.on_player_removed(player, slot).await;
+        self.on_player_removed(player, slot, RemoveReason::Generic)
+            .await;
     }
 
     /// Runs the actions after a player was removed takes the
@@ -472,9 +474,9 @@ impl Game {
     ///
     /// `player` The player that was removed
     /// `slot`   The slot the player used to be in
-    async fn on_player_removed(&self, player: GamePlayer, slot: GameSlot) {
+    async fn on_player_removed(&self, player: GamePlayer, slot: GameSlot, reason: RemoveReason) {
         player.set_game(None).await;
-        self.notify_player_removed(&player).await;
+        self.notify_player_removed(&player, reason).await;
         self.notify_fetch_data(&player).await;
         self.modify_admin_list(player.player_id, AdminListOperation::Remove)
             .await;
@@ -494,12 +496,13 @@ impl Game {
     ///
     /// `player`    The player that was removed
     /// `player_id` The player ID of the removed player
-    async fn notify_player_removed(&self, player: &GamePlayer) {
+    async fn notify_player_removed(&self, player: &GamePlayer, reason: RemoveReason) {
         let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerRemoved),
             &PlayerRemoved {
                 game_id: self.id,
                 player_id: player.player_id,
+                reason,
             },
         );
         self.push_all(&packet).await;

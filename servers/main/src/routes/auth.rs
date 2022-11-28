@@ -35,10 +35,10 @@ pub async fn route(
     packet: &Packet,
 ) -> HandleResult {
     match component {
+        Authentication::Logout => handle_logout(session, packet).await,
         Authentication::SilentLogin | Authentication::OriginLogin | Authentication::Login => {
             handle_auth_request(session, packet).await
         }
-        Authentication::Logout => handle_logout(session, packet).await,
         Authentication::LoginPersona => handle_login_persona(session, packet).await,
         Authentication::ListUserEntitlements2 => handle_list_entitlements(session, packet).await,
         Authentication::CreateAccount => handle_create_account(session, packet).await,

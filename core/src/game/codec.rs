@@ -374,8 +374,10 @@ impl Codec for AdminListOperation {
 pub struct PlayerRemoved {
     pub game_id: GameID,
     pub player_id: PlayerID,
+    pub reason: RemoveReason,
 }
 
+#[repr(u8)]
 pub enum RemoveReason {
     // 0x0
     JoinTimeout,
@@ -385,6 +387,45 @@ pub enum RemoveReason {
     Generic,
     // 0x8
     Kick,
+    // Unknown value
+    Unknown(u8),
+}
+
+impl RemoveReason {
+    pub fn from_value(value: u8) -> Self {
+        match value {
+            0 => Self::JoinTimeout,
+            1 => Self::ConnectionLost,
+            6 => Self::Generic,
+            8 => Self::Kick,
+            value => Self::Unknown(value),
+        }
+    }
+
+    pub fn to_value(&self) -> u8 {
+        match self {
+            Self::JoinTimeout => 0,
+            Self::ConnectionLost => 1,
+            Self::Generic => 6,
+            Self::Kick => 8,
+            Self::Unknown(value) => *value,
+        }
+    }
+}
+
+impl Codec for RemoveReason {
+    fn encode(&self, output: &mut Vec<u8>) {
+        let value = self.to_value();
+        value.encode(output);
+    }
+    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+        let value = u8::decode(reader)?;
+        Ok(Self::from_value(value))
+    }
+
+    fn value_type() -> ValueType {
+        ValueType::VarInt
+    }
 }
 
 impl Codec for PlayerRemoved {
@@ -392,7 +433,7 @@ impl Codec for PlayerRemoved {
         tag_u8(output, "CNTX", 0);
         tag_u32(output, "GID", self.game_id);
         tag_u32(output, "PID", self.player_id);
-        tag_u8(output, "REAS", 0x6);
+        tag_value(output, "REAS", &self.reason);
     }
 }
 
