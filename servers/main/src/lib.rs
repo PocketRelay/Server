@@ -1,13 +1,16 @@
-use core::{env, state::GlobalState};
+use core::{blaze::errors::BlazeError, env, state::GlobalState};
 
 mod codec;
 mod models;
 mod routes;
 mod session;
 
+use blaze_pk::packet::Packet;
 use session::Session;
 use tokio::sync::mpsc;
 use utils::net::{accept_stream, listener};
+
+pub type HandleResult = Result<Packet, BlazeError>;
 
 /// Starts the Blaze server
 pub async fn start_server() {

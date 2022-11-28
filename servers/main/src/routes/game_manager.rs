@@ -3,9 +3,10 @@ use crate::models::game_manager::{
     MatchmakingResponse, RemovePlayerRequest, UpdateMeshRequest,
 };
 use crate::session::Session;
+use crate::HandleResult;
 use blaze_pk::packet::Packet;
 use core::blaze::components::GameManager;
-use core::blaze::errors::{HandleResult, ServerError};
+use core::blaze::errors::ServerError;
 
 use core::state::GlobalState;
 use log::{debug, info, warn};
@@ -27,7 +28,7 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
         GameManager::UpdateMeshConnection => handle_update_mesh_connection(session, packet).await,
         GameManager::StartMatchaking => handle_start_matchmaking(session, packet).await,
         GameManager::CancelMatchmaking => handle_cancel_matchmaking(session, packet).await,
-        _ => session.response_empty(packet).await,
+        _ => Ok(packet.respond_empty()),
     }
 }
 
@@ -95,9 +96,8 @@ async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleRes
 
     games.add_host(game_id, player).await;
 
-    session
-        .response(packet, CreateGameResponse { game_id })
-        .await
+    let response = CreateGameResponse { game_id };
+    Ok(packet.respond(&response))
 }
 
 /// Handles changing the state of the game with the provided ID
@@ -165,7 +165,7 @@ async fn handle_game_modify(session: &mut Session, packet: &Packet) -> HandleRes
         return Err(ServerError::InvalidInformation.into());
     }
 
-    session.response_empty(packet).await
+    Ok(packet.respond_empty())
 }
 
 /// Handles removing a player from a game
@@ -195,7 +195,7 @@ async fn handle_remove_player(session: &mut Session, packet: &Packet) -> HandleR
         return Err(ServerError::InvalidInformation.into());
     }
 
-    session.response_empty(packet).await
+    Ok(packet.respond_empty())
 }
 
 /// Handles updating mesh connections
@@ -218,7 +218,7 @@ async fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -
     let req: UpdateMeshRequest = packet.decode()?;
     let target = match req.targets.first() {
         Some(value) => *value,
-        None => return Ok(()),
+        None => return Ok(packet.respond_empty()),
     };
 
     let games = GlobalState::games();
@@ -232,7 +232,7 @@ async fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -
         );
     }
 
-    session.response_empty(packet).await
+    Ok(packet.respond_empty())
 }
 
 /// Handles either directly joining a game or placing the
@@ -370,9 +370,8 @@ async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> Han
         debug!("Matchmaking Ended")
     }
 
-    session
-        .response(packet, MatchmakingResponse { id: session.id })
-        .await
+    let response = MatchmakingResponse { id: session.id };
+    Ok(packet.respond(&response))
 }
 
 /// Handles cancelling matchmaking for the current session removing
@@ -399,5 +398,5 @@ async fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> Ha
         games.unqueue_session(session.id).await;
     }
 
-    session.response_empty(packet).await
+    Ok(packet.respond_empty())
 }

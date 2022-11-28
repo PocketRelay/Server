@@ -24,10 +24,7 @@ use utils::{
     types::{GameID, SessionID},
 };
 
-use blaze_pk::{
-    codec::Codec,
-    packet::{Packet, PacketComponents, PacketType},
-};
+use blaze_pk::packet::{Packet, PacketComponents, PacketType};
 
 use log::{debug, error, log_enabled};
 use tokio::{
@@ -39,7 +36,6 @@ use tokio::{
 use core::blaze::{
     codec::{NetAddress, NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
     components::{self, Components, UserSessions},
-    errors::HandleResult,
 };
 
 use crate::{
@@ -141,15 +137,25 @@ impl Session {
     /// `packet`    The packet itself
     async fn handle_packet(&mut self, component: Components, packet: &Packet) {
         self.debug_log_packet("Read", packet);
-        if let Err(err) = routes::route(self, component, packet).await {
-            let error = if let BlazeError::ServerError(err) = err {
-                err
-            } else {
-                error!("Error occurred while routing (SID: {}): {:?}", self.id, err);
-                ServerError::ServerUnavailable
-            };
-            let response = Packet::error_empty(packet, error);
-            self.write(response).await.ok();
+        match routes::route(self, component, packet).await {
+            Ok(response) => {
+                if let Err(err) = self.write(response).await {
+                    error!(
+                        "Error occurred while responding (SID: {}): {:?}",
+                        self.id, err
+                    );
+                }
+            }
+            Err(err) => {
+                let error = if let BlazeError::ServerError(err) = err {
+                    err
+                } else {
+                    error!("Error occurred while routing (SID: {}): {:?}", self.id, err);
+                    ServerError::ServerUnavailable
+                };
+                let response = Packet::error_empty(packet, error as u16);
+                self.write(response).await.ok();
+            }
         }
         self.flush().await;
     }
@@ -304,27 +310,6 @@ impl Session {
     async fn read(&self) -> io::Result<(Components, Packet)> {
         let stream = &mut *self.stream.lock().await;
         Packet::read_async_typed(stream).await
-    }
-
-    /// Shortcut for response packets. These are written directly as they are
-    /// only ever used client processing tasks.
-    ///
-    /// `packet`   The packet to respond to.
-    /// `contents` The contents of the response packet.
-    ///
-    pub async fn response<T: Codec>(&self, packet: &Packet, contents: T) -> HandleResult {
-        let response = Packet::response(packet, &contents);
-        self.write(response).await?;
-        Ok(())
-    }
-
-    /// Shortcut for responses that have empty contents.
-    ///
-    /// `packet` The packet to respond to.
-    pub async fn response_empty(&self, packet: &Packet) -> HandleResult {
-        let response = Packet::response_empty(packet);
-        self.write(response).await?;
-        Ok(())
     }
 
     /// Sets the player thats attached to this session. Will log information

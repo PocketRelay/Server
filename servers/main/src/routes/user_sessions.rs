@@ -4,9 +4,10 @@ use crate::{
         user_sessions::{HardwareFlagRequest, ResumeSessionRequest, UpdateNetworkRequest},
     },
     session::Session,
+    HandleResult,
 };
 use blaze_pk::packet::Packet;
-use core::blaze::errors::{HandleResult, ServerError};
+use core::blaze::errors::ServerError;
 use core::{blaze::components::UserSessions, state::GlobalState};
 use database::Player;
 
@@ -26,14 +27,13 @@ pub async fn route(
         UserSessions::ResumeSession => handle_resume_session(session, packet).await,
         UserSessions::UpdateNetworkInfo => handle_update_network_info(session, packet).await,
         UserSessions::UpdateHardwareFlags => handle_update_hardware_flag(session, packet).await,
-        _ => session.response_empty(packet).await,
+        _ => Ok(packet.respond_empty()),
     }
 }
 
 /// Attempts to resume an existing session for a player that has the
 /// provided session token.
 ///
-/// # Structure
 /// ```
 /// Route: UserSessions(ResumeSession)
 /// ID: 207
@@ -41,7 +41,6 @@ pub async fn route(
 ///     "SKEY": "127_CHARACTER_TOKEN"
 /// }
 /// ```
-/// *To be recorded*
 async fn handle_resume_session(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: ResumeSessionRequest = packet.decode()?;
     let db = GlobalState::database();
@@ -52,7 +51,7 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
     let (player, session_token) = player.with_token(db).await?;
     let player = session.set_player(player);
     let response = AuthResponse::new(player, session_token, true);
-    session.response(packet, response).await
+    Ok(packet.respond(&response))
 }
 
 /// Handles updating the stored networking information for the current session
@@ -87,7 +86,7 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
 async fn handle_update_network_info(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: UpdateNetworkRequest = packet.decode()?;
     session.set_network_info(req.address, req.qos).await;
-    session.response_empty(packet).await
+    Ok(packet.respond_empty())
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
@@ -102,5 +101,5 @@ async fn handle_update_network_info(session: &mut Session, packet: &Packet) -> H
 async fn handle_update_hardware_flag(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: HardwareFlagRequest = packet.decode()?;
     session.set_hardware_flag(req.hardware_flag);
-    session.response_empty(packet).await
+    Ok(packet.respond_empty())
 }

@@ -3,28 +3,24 @@ use crate::models::stats::{
     LeaderboardGroupResponse,
 };
 use crate::session::Session;
+use crate::HandleResult;
 use blaze_pk::packet::Packet;
 use core::blaze::components::Stats;
-use core::blaze::errors::HandleResult;
-use log::debug;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
 ///
 /// `session`   The session that the packet was recieved by
-/// `component` The component of the packet recieved
+/// `component` The component of thet recieved
 /// `packet`    The recieved packet
-pub async fn route(session: &mut Session, component: Stats, packet: &Packet) -> HandleResult {
+pub fn route(_session: &mut Session, component: Stats, packet: &Packet) -> HandleResult {
     match component {
-        Stats::GetLeaderboardEntityCount => handle_leaderboard_entity_count(session, packet).await,
-        Stats::GetCenteredLeaderboard => handle_centered_leaderboard(session, packet).await,
-        Stats::GetFilteredLeaderboard => handle_filtered_leaderboard(session, packet).await,
-        Stats::GetLeaderboardGroup => handle_leaderboard_group(session, packet).await,
-        component => {
-            debug!("Got Stats({component:?})");
-            session.response_empty(packet).await
-        }
+        Stats::GetLeaderboardEntityCount => handle_leaderboard_entity_count(packet),
+        Stats::GetCenteredLeaderboard => handle_centered_leaderboard(packet),
+        Stats::GetFilteredLeaderboard => handle_filtered_leaderboard(packet),
+        Stats::GetLeaderboardGroup => handle_leaderboard_group(packet),
+        _ => Ok(packet.respond_empty()),
     }
 }
 
@@ -44,10 +40,9 @@ pub async fn route(session: &mut Session, component: Stats, packet: &Packet) -> 
 ///     "POFF": 0
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(session: &mut Session, packet: &Packet) -> HandleResult {
-    session
-        .response(packet, EntityCountResponse { count: 1 })
-        .await
+fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
+    let response = EntityCountResponse { count: 1 };
+    Ok(packet.respond(&response))
 }
 
 /// Handles returning a centered leaderboard object. This is currently not implemented
@@ -70,8 +65,8 @@ async fn handle_leaderboard_entity_count(session: &mut Session, packet: &Packet)
 ///     "USET": (0, 0, 0)
 /// }
 /// ```
-async fn handle_centered_leaderboard(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.response(packet, EmptyLeaderboardResponse).await
+fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
+    Ok(packet.respond(&EmptyLeaderboardResponse))
 }
 
 /// Handles returning a filtered leaderboard object. This is currently not implemented
@@ -93,8 +88,8 @@ async fn handle_centered_leaderboard(session: &mut Session, packet: &Packet) -> 
 ///     "USET": (0, 0, 0)
 /// }
 /// ```
-async fn handle_filtered_leaderboard(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.response(packet, EmptyLeaderboardResponse).await
+fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
+    Ok(packet.respond(&EmptyLeaderboardResponse))
 }
 
 fn get_locale_name(code: &str) -> String {
@@ -123,12 +118,12 @@ fn get_locale_name(code: &str) -> String {
 ///     "NAME": "N7RatingGlobal"
 /// }
 /// ```
-async fn handle_leaderboard_group(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_leaderboard_group(packet: &Packet) -> HandleResult {
     let req: LeaderboardGroupRequest = packet.decode()?;
     let name = req.name;
     let is_n7 = name.starts_with("N7Rating");
     if !is_n7 && !name.starts_with("ChallengePoints") {
-        return session.response_empty(packet).await;
+        return Ok(packet.respond_empty());
     }
     let split = if is_n7 { 8 } else { 15 };
     let locale = get_locale_name(name.split_at(split).1);
@@ -149,5 +144,5 @@ async fn handle_leaderboard_group(session: &mut Session, packet: &Packet) -> Han
             gname: "ME3ChallengePoints",
         }
     };
-    session.response(packet, group).await
+    Ok(packet.respond(&group))
 }

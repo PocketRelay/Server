@@ -8,8 +8,9 @@ use crate::models::auth::{
     ListEntitlementsResponse, PersonaResponse,
 };
 use crate::session::Session;
+use crate::HandleResult;
 use core::blaze::components::Authentication;
-use core::blaze::errors::{BlazeError, HandleResult, ServerError, ServerResult};
+use core::blaze::errors::{BlazeError, ServerError, ServerResult};
 use core::env;
 
 use core::state::GlobalState;
@@ -40,14 +41,14 @@ pub async fn route(
             handle_auth_request(session, packet).await
         }
         Authentication::LoginPersona => handle_login_persona(session, packet).await,
-        Authentication::ListUserEntitlements2 => handle_list_entitlements(session, packet).await,
+        Authentication::ListUserEntitlements2 => handle_list_entitlements(packet),
         Authentication::CreateAccount => handle_create_account(session, packet).await,
-        Authentication::PasswordForgot => handle_forgot_password(session, packet).await,
-        Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(session, packet).await,
-        Authentication::GetTermsOfServiceConent => handle_tos_content(session, packet).await,
-        Authentication::GetPrivacyPolicyContent => handle_privacy_content(session, packet).await,
+        Authentication::PasswordForgot => handle_forgot_password(packet),
+        Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(packet),
+        Authentication::GetTermsOfServiceConent => handle_tos_content(packet).await,
+        Authentication::GetPrivacyPolicyContent => handle_privacy_content(packet).await,
         Authentication::GetAuthToken => handle_get_auth_token(session, packet).await,
-        _ => session.response_empty(packet).await,
+        _ => Ok(packet.respond_empty()),
     }
 }
 
@@ -112,8 +113,7 @@ async fn handle_auth_request(session: &mut Session, packet: &Packet) -> HandleRe
     let (player, session_token) = player.with_token(db).await?;
     let player = session.set_player(player);
     let response = AuthResponse::new(player, session_token, silent);
-
-    session.response(packet, response).await
+    Ok(packet.respond(&response))
 }
 
 /// Handles finding a player through an authentication token and a player ID
@@ -245,7 +245,8 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
 async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
     debug!("Logging out for session: (ID: {})", &session.id);
     session.clear_player();
-    session.response_empty(packet).await
+
+    Ok(packet.respond_empty())
 }
 
 /// Handles list user entitlements 2 responses requests which contains information
@@ -270,14 +271,12 @@ async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
 ///     "TYPE": 0
 /// }
 /// ```
-async fn handle_list_entitlements(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_list_entitlements(packet: &Packet) -> HandleResult {
     let req = packet.decode::<ListEntitlementsRequest>()?;
     let tag = req.tag;
     if !tag.is_empty() {
-        return session.response_empty(packet).await;
+        return Ok(packet.respond_empty());
     }
-    const PC_TAG: &str = "ME3PCOffers";
-    const GEN_TAG: &str = "ME3GenOffers";
     // Skip formatting these entitlement creations
     #[rustfmt::skip]
     let list = vec![
@@ -318,7 +317,7 @@ async fn handle_list_entitlements(session: &mut Session, packet: &Packet) -> Han
         Entitlement::new_pc(0xec50be8aff,"300241",2,"OFB-MASS:61524","ME3_PRC_DARKHORSECOMIC",5),
     ];
     let response = ListEntitlementsResponse { list };
-    session.response(packet, response).await
+    Ok(packet.respond(&response))
 }
 
 /// Handles logging into a persona. This system doesn't implement the persona system so
@@ -339,7 +338,8 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
     let (player, session_token) = player.with_token(GlobalState::database()).await?;
     let player = session.set_player(player);
     let response = PersonaResponse::new(player, session_token);
-    session.response(packet, response).await
+
+    Ok(packet.respond(&response))
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -353,13 +353,14 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
 ///     "MAIL": "ACCOUNT_EMAIL"
 /// }
 /// ```
-async fn handle_forgot_password(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_forgot_password(packet: &Packet) -> HandleResult {
     let req = packet.decode::<ForgotPasswordRequest>()?;
     if !is_email(&req.email) {
         return Err(ServerError::InvalidEmail.into());
     }
     debug!("Got request for password rest for email: {}", &req.email);
-    session.response_empty(packet).await
+
+    Ok(packet.respond_empty())
 }
 
 /// Handles creating accounts
@@ -415,7 +416,7 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
     let (player, session_token) = player.with_token(db).await?;
     let player = session.set_player(player);
     let response = AuthResponse::new(player, session_token, false);
-    session.response(packet, response).await
+    Ok(packet.respond(&response))
 }
 
 /// Expected to be getting information about the legal docs however the exact meaning
@@ -429,8 +430,8 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
 ///     "PTFM": "pc" // Platform
 /// }
 /// ```
-async fn handle_get_legal_docs_info(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.response(packet, LegalDocsInfo).await
+fn handle_get_legal_docs_info(packet: &Packet) -> HandleResult {
+    Ok(packet.respond(&LegalDocsInfo))
 }
 
 /// Attempts to load the local file returnin the fallback value instead
@@ -461,7 +462,7 @@ async fn load_local<'a>(path: &str, fallback: &'a str) -> Cow<'a, str> {
 ///     "TEXT": 1
 /// }
 /// ```
-async fn handle_tos_content(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_tos_content(packet: &Packet) -> HandleResult {
     let default = include_str!("../resources/defaults/terms_of_service.html");
     let content = load_local("terms_of_service.html", default).await;
     let response = LegalContent {
@@ -469,7 +470,7 @@ async fn handle_tos_content(session: &mut Session, packet: &Packet) -> HandleRes
         content: &content,
         col: 0xdaed,
     };
-    session.response(packet, response).await
+    Ok(packet.respond(&response))
 }
 
 /// Handles serving the contents of the privacy policy. This is an HTML document which is
@@ -486,7 +487,7 @@ async fn handle_tos_content(session: &mut Session, packet: &Packet) -> HandleRes
 /// }
 /// ```
 ///
-async fn handle_privacy_content(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_privacy_content(packet: &Packet) -> HandleResult {
     let default = include_str!("../resources/defaults/privacy_policy.html");
     let content = load_local("privacy_policy.html", default).await;
     let response = LegalContent {
@@ -494,7 +495,7 @@ async fn handle_privacy_content(session: &mut Session, packet: &Packet) -> Handl
         content: &content,
         col: 0xc99c,
     };
-    session.response(packet, response).await
+    Ok(packet.respond(&response))
 }
 
 /// Handles retrieving an authentication token for use with the Galaxy At War HTTP service
@@ -511,5 +512,6 @@ async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> Handle
         .as_ref()
         .ok_or_else(|| ServerError::FailedNoLoginAction)?;
     let token = format!("{:X}", player.id);
-    session.response(packet, GetTokenResponse { token }).await
+    let response = GetTokenResponse { token };
+    Ok(packet.respond(&response))
 }

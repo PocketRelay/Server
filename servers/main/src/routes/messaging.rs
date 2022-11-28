@@ -1,10 +1,10 @@
 use crate::{
     models::messaging::{FetchMessageResponse, MessageNotify},
     session::Session,
+    HandleResult,
 };
 use blaze_pk::packet::Packet;
 use core::blaze::components::{Components, Messaging};
-use core::blaze::errors::HandleResult;
 use core::{constants::VERSION, env};
 
 /// Routing function for handling packets with the `Stats` component and routing them
@@ -16,8 +16,8 @@ use core::{constants::VERSION, env};
 /// `packet`    The recieved packet
 pub async fn route(session: &mut Session, component: Messaging, packet: &Packet) -> HandleResult {
     match component {
-        Messaging::FetchMessages => handle_fetch_messages(session, packet).await,
-        _ => session.response_empty(packet).await,
+        Messaging::FetchMessages => handle_fetch_messages(session, packet),
+        _ => Ok(packet.respond_empty()),
     }
 }
 
@@ -41,10 +41,11 @@ pub async fn route(session: &mut Session, component: Messaging, packet: &Packet)
 /// }
 /// ```
 ///
-async fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult {
     let Some(player) = session.player.as_ref() else {
         // Not authenticated return empty count
-        return session.response(packet, FetchMessageResponse { count: 0 }).await;
+        let response = FetchMessageResponse { count: 0 };
+        return Ok(packet.respond(&response));
     };
     let message = get_menu_message(session, &player.display_name);
     let notify = Packet::notify(
@@ -56,9 +57,8 @@ async fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> Handle
     );
 
     session.push(notify);
-    session
-        .response(packet, FetchMessageResponse { count: 1 })
-        .await
+    let response = FetchMessageResponse { count: 1 };
+    Ok(packet.respond(&response))
 }
 
 /// Retrieves the menu message from the environment variables and replaces

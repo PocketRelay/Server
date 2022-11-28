@@ -1,8 +1,8 @@
 use crate::models::other::{AssocListResponse, GameReportResponse};
 use crate::session::Session;
+use crate::HandleResult;
 use blaze_pk::packet::Packet;
 use core::blaze::components::{AssociationLists, Components, GameReporting};
-use core::blaze::errors::HandleResult;
 
 /// Routing function for handling packets with the `GameReporting` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -11,14 +11,14 @@ use core::blaze::errors::HandleResult;
 /// `session`   The session that the packet was recieved by
 /// `component` The component of the packet recieved
 /// `packet`    The recieved packet
-pub async fn route_game_reporting(
+pub fn route_game_reporting(
     session: &mut Session,
     component: GameReporting,
     packet: &Packet,
 ) -> HandleResult {
     match component {
-        GameReporting::SubmitOfflineGameReport => handle_submit_offline(session, packet).await,
-        _ => session.response_empty(packet).await,
+        GameReporting::SubmitOfflineGameReport => handle_submit_offline(session, packet),
+        _ => Ok(packet.respond_empty()),
     }
 }
 
@@ -47,14 +47,14 @@ pub async fn route_game_reporting(
 ///     "GTYP": "massEffectReport"
 /// }
 /// ```
-async fn handle_submit_offline(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_submit_offline(session: &mut Session, packet: &Packet) -> HandleResult {
     let notify = Packet::notify(
         Components::GameReporting(GameReporting::GameReportSubmitted),
         &GameReportResponse,
     );
 
     session.push(notify);
-    session.response_empty(packet).await
+    Ok(packet.respond_empty())
 }
 
 /// Routing function for handling packets with the `AssociationLists` component and routing them
@@ -64,14 +64,10 @@ async fn handle_submit_offline(session: &mut Session, packet: &Packet) -> Handle
 /// `session`   The session that the packet was recieved by
 /// `component` The component of the packet recieved
 /// `packet`    The recieved packet
-pub async fn route_association_lists(
-    session: &mut Session,
-    component: AssociationLists,
-    packet: &Packet,
-) -> HandleResult {
+pub fn route_assoc_lists(component: AssociationLists, packet: &Packet) -> HandleResult {
     match component {
-        AssociationLists::GetLists => handle_get_lists(session, packet).await,
-        _ => session.response_empty(packet).await,
+        AssociationLists::GetLists => handle_get_lists(packet),
+        _ => Ok(packet.respond_empty()),
     }
 }
 /// Handles getting associated lists for the player
@@ -96,6 +92,6 @@ pub async fn route_association_lists(
 ///     "OFRC": 0
 /// }
 /// ```
-async fn handle_get_lists(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.response(packet, AssocListResponse).await
+fn handle_get_lists(packet: &Packet) -> HandleResult {
+    Ok(packet.respond(&AssocListResponse))
 }

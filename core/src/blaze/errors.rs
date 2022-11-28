@@ -2,7 +2,6 @@ use blaze_pk::codec::CodecError;
 use database::DbErr;
 use std::{fmt::Display, io};
 
-pub type HandleResult = Result<(), BlazeError>;
 pub type BlazeResult<T> = Result<T, BlazeError>;
 pub type ServerResult<T> = Result<T, ServerError>;
 
@@ -77,10 +76,4 @@ pub enum ServerError {
     // Errors from suspend
     Suspend12D = 0x12D,
     Suspend12E = 0x12E,
-}
-
-impl Into<u16> for ServerError {
-    fn into(self) -> u16 {
-        self as u16
-    }
 }

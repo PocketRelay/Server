@@ -1,7 +1,8 @@
 use crate::session::Session;
+use crate::HandleResult;
 use blaze_pk::{codec::Codec, packet, packet::Packet, tag::ValueType, tagging::*, types::TdfMap};
 use core::blaze::components::Util;
-use core::blaze::errors::{HandleResult, ServerError};
+use core::blaze::errors::ServerError;
 use core::constants::{self, VERSION};
 use core::env;
 use core::state::GlobalState;
@@ -18,18 +19,15 @@ use utils::types::PlayerID;
 /// is printed to the output and an empty response is sent.
 pub async fn route(session: &mut Session, component: Util, packet: &Packet) -> HandleResult {
     match component {
-        Util::PreAuth => handle_pre_auth(session, packet).await,
+        Util::PreAuth => handle_pre_auth(packet),
         Util::PostAuth => handle_post_auth(session, packet).await,
-        Util::Ping => handle_ping(session, packet).await,
-        Util::FetchClientConfig => handle_fetch_client_config(session, packet).await,
-        Util::SuspendUserPing => handle_suspend_user_ping(session, packet).await,
+        Util::Ping => handle_ping(packet),
+        Util::FetchClientConfig => handle_fetch_client_config(packet),
+        Util::SuspendUserPing => handle_suspend_user_ping(packet),
         Util::UserSettingsSave => handle_user_settings_save(session, packet).await,
         Util::GetTelemetryServer => handle_get_telemetry_server(session, packet).await,
         Util::UserSettingsLoadAll => handle_user_settings_load_all(session, packet).await,
-        component => {
-            debug!("Got Util({component:?})");
-            session.response_empty(packet).await
-        }
+        _ => Ok(packet.respond_empty()),
     }
 }
 
@@ -65,7 +63,7 @@ impl Codec for TelemetryRes {
 async fn handle_get_telemetry_server(session: &mut Session, packet: &Packet) -> HandleResult {
     let session_id = session.id;
     let response = TelemetryRes { session_id };
-    session.response(packet, response).await
+    Ok(packet.respond(&response))
 }
 
 pub struct PreAuthRes {
@@ -190,10 +188,10 @@ impl Codec for PreAuthRes {
 ///   }
 /// }
 /// ```
-async fn handle_pre_auth(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_pre_auth(packet: &Packet) -> HandleResult {
     let port = env::from_env(env::HTTP_PORT);
-
-    session.response(packet, PreAuthRes { port }).await
+    let response = PreAuthRes { port };
+    Ok(packet.respond(&response))
 }
 
 struct PostAuthRes {
@@ -293,7 +291,7 @@ async fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResul
         ticker_port: 8999,
         telemtry_port: 9988,
     };
-    session.response(packet, response).await
+    Ok(packet.respond(&response))
 }
 
 packet! {
@@ -311,9 +309,10 @@ packet! {
 /// packet(Components.UTIL, Commands.PING, 0x0, 0x1) {}
 /// ```
 ///
-async fn handle_ping(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_ping(packet: &Packet) -> HandleResult {
     let server_time = server_unix_time();
-    session.response(packet, PingRes { server_time }).await
+    let response = PingRes { server_time };
+    Ok(packet.respond(&response))
 }
 
 packet! {
@@ -349,11 +348,11 @@ const ME3_DIME: &str = include_str!("../resources/data/dime.xml");
 ///   text("CFID", "ME3_DATA")
 /// }
 /// ```
-async fn handle_fetch_client_config(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
     let fetch_config = packet.decode::<FetchConfigReq>()?;
     let config = match fetch_config.id.as_ref() {
         "ME3_DATA" => data_config(),
-        "ME3_MSG" => messages().await,
+        "ME3_MSG" => messages(),
         "ME3_ENT" => load_dmap(ME3_ENT),
         "ME3_DIME" => {
             let mut map = TdfMap::with_capacity(1);
@@ -376,7 +375,9 @@ async fn handle_fetch_client_config(session: &mut Session, packet: &Packet) -> H
             }
         }
     };
-    session.response(packet, FetchConfigRes { config }).await
+
+    let response = FetchConfigRes { config };
+    Ok(packet.respond(&response))
 }
 
 /// Contents of the default talk dmap file
@@ -401,7 +402,7 @@ fn talk_file(lang: &str) -> TdfMap<String, String> {
 
 /// Loads the messages that should be displayed to the client and
 /// returns them in a list.
-async fn messages() -> TdfMap<String, String> {
+fn messages() -> TdfMap<String, String> {
     let mut config = TdfMap::new();
 
     let intro = Message {
@@ -564,13 +565,13 @@ packet! {
 /// ```
 ///
 ///
-async fn handle_suspend_user_ping(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_suspend_user_ping(packet: &Packet) -> HandleResult {
     let req = packet.decode::<SuspendUserPing>()?;
 
     match req.value {
         0x1312D00 => Err(ServerError::Suspend12D.into()),
         0x55D4A80 => Err(ServerError::Suspend12E.into()),
-        _ => session.response_empty(packet).await,
+        _ => Ok(packet.respond_empty()),
     }
 }
 
@@ -643,7 +644,7 @@ async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> Ha
         session.player = Some(player);
         debug!("Updated player base data");
     }
-    session.response_empty(packet).await
+    Ok(packet.respond_empty())
 }
 
 packet! {
@@ -704,5 +705,6 @@ async fn handle_user_settings_load_all(session: &mut Session, packet: &Packet) -
         insert_optional(&mut settings, "NewItem", &player.new_item);
         insert_optional(&mut settings, "Progress", &player.progress);
     }
-    session.response(packet, UserSettingsAll { settings }).await
+    let response = UserSettingsAll { settings };
+    Ok(packet.respond(&response))
 }
