@@ -3,7 +3,7 @@
 
 use core::blaze::codec::{InstanceDetails, InstanceNet};
 use core::blaze::components::{Components, Redirector};
-use core::blaze::errors::{BlazeError, HandleResult};
+use core::blaze::errors::{BlazeError, BlazeResult};
 use core::constants;
 use core::{env, state::GlobalState};
 use std::net::SocketAddr;
@@ -61,7 +61,7 @@ async fn handle_client(
     stream: TcpStream,
     addr: SocketAddr,
     instance: Arc<InstanceDetails>,
-) -> HandleResult {
+) -> BlazeResult<()> {
     let mut shutdown = GlobalState::shutdown();
     let mut stream = BlazeStream::new(stream, StreamMode::Server)
         .await

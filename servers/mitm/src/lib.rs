@@ -3,7 +3,7 @@
 
 use core::blaze::append_packet_decoded;
 use core::blaze::components::Components;
-use core::blaze::errors::{BlazeError, HandleResult};
+use core::blaze::errors::{BlazeError, BlazeResult};
 use core::retriever::Retriever;
 use core::{env, state::GlobalState};
 
@@ -42,7 +42,7 @@ pub async fn start_server() {
 /// `addr`     The client address
 /// `instance` The server instance information
 /// `shutdown` Async safely shutdown reciever
-async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> HandleResult {
+async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> BlazeResult<()> {
     let mut server = retriever
         .stream()
         .await

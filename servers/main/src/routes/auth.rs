@@ -112,6 +112,7 @@ async fn handle_auth_request(session: &mut Session, packet: &Packet) -> HandleRe
     let (player, session_token) = player.with_token(db).await?;
     let player = session.set_player(player);
     let response = AuthResponse::new(player, session_token, silent);
+
     session.response(packet, response).await
 }
 
