@@ -1,114 +1,64 @@
-use blaze_pk::{
-    codec::Codec,
-    packet::{Packet, PacketComponents},
-    tag::ValueType,
-    tagging::*,
-    types::encode_str,
+use crate::{
+    models::messaging::{FetchMessageResponse, MessageNotify},
+    session::Session,
 };
+use blaze_pk::packet::Packet;
+use core::blaze::components::{Components, Messaging};
 use core::blaze::errors::HandleResult;
-
-use crate::session::Session;
-use core::blaze::components::{Components, Messaging, UserSessions};
-
 use core::{constants::VERSION, env};
-use log::debug;
-use utils::{time::server_unix_time, types::PlayerID};
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
+///
+/// `session`   The session that the packet was recieved by
+/// `component` The component of the packet recieved
+/// `packet`    The recieved packet
 pub async fn route(session: &mut Session, component: Messaging, packet: &Packet) -> HandleResult {
     match component {
         Messaging::FetchMessages => handle_fetch_messages(session, packet).await,
-        component => {
-            debug!("Got Messaging({component:?})");
-            session.response_empty(packet).await
-        }
-    }
-}
-
-#[derive(Debug)]
-struct MessageCount {
-    count: u8,
-}
-
-impl Codec for MessageCount {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u8(output, "MCNT", self.count)
-    }
-}
-
-#[derive(Debug)]
-struct MenuMessage {
-    message: String,
-    player_id: PlayerID,
-    time: u64,
-}
-
-impl Codec for MenuMessage {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u8(output, "FLAG", 0x1);
-        tag_u8(output, "MGID", 0x1);
-        tag_str(output, "NAME", &self.message);
-
-        let ref_value = Components::UserSessions(UserSessions::SetSession).values();
-        let player_ref = (ref_value.0, ref_value.1, self.player_id);
-
-        {
-            tag_group_start(output, "PYLD");
-            {
-                tag_map_start(output, "ATTR", ValueType::String, ValueType::String, 1);
-                encode_str("B0000", output);
-                encode_str("160", output);
-            }
-            tag_u8(output, "FLAG", 0x1);
-            tag_u8(output, "STAT", 0x0);
-            tag_u8(output, "TAG", 0x0);
-            tag_triple(output, "TARG", &player_ref);
-            tag_u8(output, "TYPE", 0x0);
-            tag_group_end(output);
-        }
-        tag_triple(output, "SRCE", &player_ref);
-        tag_u64(output, "TIME", self.time)
+        _ => session.response_empty(packet).await,
     }
 }
 
 /// Handles requests from the client to fetch the server messages. The initial response contains
 /// the amount of messages and then each message is sent using a SendMessage notification.
 ///
-/// # Structure
 /// ```
-/// packet(Components.MESSAGING, Commands.FETCH_MESSAGES, 0x18) {
-///   number("FLAG", 0x0)
-///   number("MGID", 0x0)
-///   number("PIDX", 0x0)
-///   number("PSIZ", 0x0)
-///   number("SMSK", 0x0)
-///   number("SORT", 0x0)
-///   tripple("SRCE", 0x0, 0x0, 0x0)
-///   number("STAT", 0x0)
-///   tripple("TARG", 0x0, 0x0, 0x0)
-///   number("TYPE", 0x0)
+/// Route: Messaging(FetchMessages)
+/// ID: 24
+/// Content: {
+///     "FLAG": 0,
+///     "MGID": 0,
+///     "PIDX": 0,
+///     "PSIZ": 0,
+///     "SMSK": 0,
+///     "SORT": 0,
+///     "SRCE": (0, 0, 0),
+///     "STAT": 0,
+///     "TARG": (0, 0, 0),
+///     "TYPE": 0
 /// }
 /// ```
 ///
 async fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult {
     let Some(player) = session.player.as_ref() else {
         // Not authenticated return empty count
-        return session.response(packet, &MessageCount { count: 0 }).await;
-    };
-
-    session.response(packet, &MessageCount { count: 1 }).await?;
-    let time = server_unix_time();
-    let menu_message = get_menu_message(session, &player.display_name);
-    let response = MenuMessage {
-        message: menu_message,
-        player_id: player.id,
-        time,
+        return session.response(packet, &FetchMessageResponse { count: 0 }).await;
     };
 
     session
-        .notify_immediate(Components::Messaging(Messaging::SendMessage), &response)
+        .response(packet, &FetchMessageResponse { count: 1 })
+        .await?;
+    let message = get_menu_message(session, &player.display_name);
+    session
+        .notify_immediate(
+            Components::Messaging(Messaging::SendMessage),
+            &MessageNotify {
+                message,
+                player_id: player.id,
+            },
+        )
         .await?;
     Ok(())
 }
