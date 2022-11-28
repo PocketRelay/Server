@@ -7,3 +7,4 @@ pub mod messaging;
 pub mod other;
 pub mod stats;
 pub mod user_sessions;
+pub mod util;

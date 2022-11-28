@@ -7,6 +7,5 @@ pub mod hashing;
 pub mod net;
 pub mod parse;
 pub mod random;
-pub mod time;
 pub mod types;
 pub mod validate;
