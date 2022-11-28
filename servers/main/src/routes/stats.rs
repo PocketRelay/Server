@@ -46,7 +46,7 @@ pub async fn route(session: &mut Session, component: Stats, packet: &Packet) -> 
 /// ```
 async fn handle_leaderboard_entity_count(session: &mut Session, packet: &Packet) -> HandleResult {
     session
-        .response(packet, &EntityCountResponse { count: 1 })
+        .response(packet, EntityCountResponse { count: 1 })
         .await
 }
 
@@ -71,7 +71,7 @@ async fn handle_leaderboard_entity_count(session: &mut Session, packet: &Packet)
 /// }
 /// ```
 async fn handle_centered_leaderboard(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.response(packet, &EmptyLeaderboardResponse).await
+    session.response(packet, EmptyLeaderboardResponse).await
 }
 
 /// Handles returning a filtered leaderboard object. This is currently not implemented
@@ -94,7 +94,7 @@ async fn handle_centered_leaderboard(session: &mut Session, packet: &Packet) -> 
 /// }
 /// ```
 async fn handle_filtered_leaderboard(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.response(packet, &EmptyLeaderboardResponse).await
+    session.response(packet, EmptyLeaderboardResponse).await
 }
 
 fn get_locale_name(code: &str) -> String {
@@ -149,5 +149,5 @@ async fn handle_leaderboard_group(session: &mut Session, packet: &Packet) -> Han
             gname: "ME3ChallengePoints",
         }
     };
-    session.response(packet, &group).await
+    session.response(packet, group).await
 }

@@ -112,7 +112,7 @@ async fn handle_auth_request(session: &mut Session, packet: &Packet) -> HandleRe
     let (player, session_token) = player.with_token(db).await?;
     let player = session.set_player(player);
     let response = AuthResponse::new(player, session_token, silent);
-    session.response(packet, &response).await
+    session.response(packet, response).await
 }
 
 /// Handles finding a player through an authentication token and a player ID
@@ -317,7 +317,7 @@ async fn handle_list_entitlements(session: &mut Session, packet: &Packet) -> Han
         Entitlement::new_pc(0xec50be8aff,"300241",2,"OFB-MASS:61524","ME3_PRC_DARKHORSECOMIC",5),
     ];
     let response = ListEntitlementsResponse { list };
-    session.response(packet, &response).await
+    session.response(packet, response).await
 }
 
 /// Handles logging into a persona. This system doesn't implement the persona system so
@@ -338,7 +338,7 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
     let (player, session_token) = player.with_token(GlobalState::database()).await?;
     let player = session.set_player(player);
     let response = PersonaResponse::new(player, session_token);
-    session.response(packet, &response).await
+    session.response(packet, response).await
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -414,7 +414,7 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
     let (player, session_token) = player.with_token(db).await?;
     let player = session.set_player(player);
     let response = AuthResponse::new(player, session_token, false);
-    session.response(packet, &response).await
+    session.response(packet, response).await
 }
 
 /// Expected to be getting information about the legal docs however the exact meaning
@@ -429,7 +429,7 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
 /// }
 /// ```
 async fn handle_get_legal_docs_info(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.response(packet, &LegalDocsInfo).await
+    session.response(packet, LegalDocsInfo).await
 }
 
 /// Attempts to load the local file returnin the fallback value instead
@@ -468,7 +468,7 @@ async fn handle_tos_content(session: &mut Session, packet: &Packet) -> HandleRes
         content: &content,
         col: 0xdaed,
     };
-    session.response(packet, &response).await
+    session.response(packet, response).await
 }
 
 /// Handles serving the contents of the privacy policy. This is an HTML document which is
@@ -493,7 +493,7 @@ async fn handle_privacy_content(session: &mut Session, packet: &Packet) -> Handl
         content: &content,
         col: 0xc99c,
     };
-    session.response(packet, &response).await
+    session.response(packet, response).await
 }
 
 /// Handles retrieving an authentication token for use with the Galaxy At War HTTP service
@@ -510,5 +510,5 @@ async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> Handle
         .as_ref()
         .ok_or_else(|| ServerError::FailedNoLoginAction)?;
     let token = format!("{:X}", player.id);
-    session.response(packet, &GetTokenResponse { token }).await
+    session.response(packet, GetTokenResponse { token }).await
 }

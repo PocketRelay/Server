@@ -97,5 +97,5 @@ pub async fn route_association_lists(
 /// }
 /// ```
 async fn handle_get_lists(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.response(packet, &AssocListResponse).await
+    session.response(packet, AssocListResponse).await
 }

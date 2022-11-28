@@ -149,7 +149,7 @@ impl Session {
                 ServerError::ServerUnavailable
             };
             let response = Packet::error_empty(packet, error);
-            self.write(&response).await.ok();
+            self.write(response).await.ok();
         }
         self.flush().await;
     }
@@ -293,10 +293,10 @@ impl Session {
     /// rather than pushing to the buffer. Only use when handling
     /// responses will cause long blocks because will wait for all
     /// the data to be written.
-    async fn write(&self, packet: &Packet) -> io::Result<()> {
+    async fn write(&self, packet: Packet) -> io::Result<()> {
         let stream = &mut *self.stream.lock().await;
         packet.write_async(stream).await?;
-        self.debug_log_packet("Wrote", packet);
+        self.debug_log_packet("Wrote", &packet);
         Ok(())
     }
 
@@ -312,9 +312,9 @@ impl Session {
     /// `packet`   The packet to respond to.
     /// `contents` The contents of the response packet.
     ///
-    pub async fn response<T: Codec>(&self, packet: &Packet, contents: &T) -> HandleResult {
-        let response = Packet::response(packet, contents);
-        self.write(&response).await?;
+    pub async fn response<T: Codec>(&self, packet: &Packet, contents: T) -> HandleResult {
+        let response = Packet::response(packet, &contents);
+        self.write(response).await?;
         Ok(())
     }
 
@@ -323,7 +323,7 @@ impl Session {
     /// `packet` The packet to respond to.
     pub async fn response_empty(&self, packet: &Packet) -> HandleResult {
         let response = Packet::response_empty(packet);
-        self.write(&response).await?;
+        self.write(response).await?;
         Ok(())
     }
 

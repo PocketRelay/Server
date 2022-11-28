@@ -96,7 +96,7 @@ async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleRes
     games.add_host(game_id, player).await;
 
     session
-        .response(packet, &CreateGameResponse { game_id })
+        .response(packet, CreateGameResponse { game_id })
         .await
 }
 
@@ -371,7 +371,7 @@ async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> Han
     }
 
     session
-        .response(packet, &MatchmakingResponse { id: session.id })
+        .response(packet, MatchmakingResponse { id: session.id })
         .await
 }
 

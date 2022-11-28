@@ -44,7 +44,7 @@ pub async fn route(session: &mut Session, component: Messaging, packet: &Packet)
 async fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult {
     let Some(player) = session.player.as_ref() else {
         // Not authenticated return empty count
-        return session.response(packet, &FetchMessageResponse { count: 0 }).await;
+        return session.response(packet, FetchMessageResponse { count: 0 }).await;
     };
     let message = get_menu_message(session, &player.display_name);
     let notify = Packet::notify(
@@ -57,7 +57,7 @@ async fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> Handle
 
     session.push(notify);
     session
-        .response(packet, &FetchMessageResponse { count: 1 })
+        .response(packet, FetchMessageResponse { count: 1 })
         .await
 }
 

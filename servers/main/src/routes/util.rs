@@ -63,10 +63,9 @@ impl Codec for TelemetryRes {
 /// ```
 ///
 async fn handle_get_telemetry_server(session: &mut Session, packet: &Packet) -> HandleResult {
-    let res = TelemetryRes {
-        session_id: session.id,
-    };
-    session.response(packet, &res).await
+    let session_id = session.id;
+    let response = TelemetryRes { session_id };
+    session.response(packet, response).await
 }
 
 pub struct PreAuthRes {
@@ -194,7 +193,7 @@ impl Codec for PreAuthRes {
 async fn handle_pre_auth(session: &mut Session, packet: &Packet) -> HandleResult {
     let port = env::from_env(env::HTTP_PORT);
 
-    session.response(packet, &PreAuthRes { port }).await
+    session.response(packet, PreAuthRes { port }).await
 }
 
 struct PostAuthRes {
@@ -289,12 +288,12 @@ async fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResul
         .ok_or(ServerError::FailedNoLoginAction)?;
     session.update_self();
 
-    let res = PostAuthRes {
+    let response = PostAuthRes {
         player_id,
         ticker_port: 8999,
         telemtry_port: 9988,
     };
-    session.response(packet, &res).await
+    session.response(packet, response).await
 }
 
 packet! {
@@ -314,7 +313,7 @@ packet! {
 ///
 async fn handle_ping(session: &mut Session, packet: &Packet) -> HandleResult {
     let server_time = server_unix_time();
-    session.response(packet, &PingRes { server_time }).await
+    session.response(packet, PingRes { server_time }).await
 }
 
 packet! {
@@ -377,7 +376,7 @@ async fn handle_fetch_client_config(session: &mut Session, packet: &Packet) -> H
             }
         }
     };
-    session.response(packet, &FetchConfigRes { config }).await
+    session.response(packet, FetchConfigRes { config }).await
 }
 
 /// Contents of the default talk dmap file
@@ -705,7 +704,5 @@ async fn handle_user_settings_load_all(session: &mut Session, packet: &Packet) -
         insert_optional(&mut settings, "NewItem", &player.new_item);
         insert_optional(&mut settings, "Progress", &player.progress);
     }
-    session
-        .response(packet, &UserSettingsAll { settings })
-        .await
+    session.response(packet, UserSettingsAll { settings }).await
 }
