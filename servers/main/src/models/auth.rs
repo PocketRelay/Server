@@ -53,10 +53,10 @@ impl Codec for AuthRequest {
 
 /// Encodes a mock persona from the provided player using its
 /// display name and ID as the values
-fn encode_persona(output: &mut Vec<u8>, player: &Player) {
-    tag_str(output, "DSNM", &player.display_name);
+fn encode_persona(output: &mut Vec<u8>, id: PlayerID, display_name: &str) {
+    tag_str(output, "DSNM", display_name);
     tag_zero(output, "LAST");
-    tag_u32(output, "PID", player.id);
+    tag_u32(output, "PID", id);
     tag_zero(output, "STAS");
     tag_zero(output, "XREF");
     tag_zero(output, "XTYP");
@@ -64,16 +64,38 @@ fn encode_persona(output: &mut Vec<u8>, player: &Player) {
 }
 
 /// Structure for the response to an authentication request.
-pub struct AuthResponse<'a> {
-    /// The authenticated player
-    pub player: &'a Player,
+pub struct AuthResponse {
+    /// The ID of the authenticated player
+    player_id: PlayerID,
+    /// The email of the authenticated player
+    email: String,
+    /// The display name of the authenticated player
+    display_name: String,
     /// The session token for the completed authentication
-    pub session_token: String,
+    session_token: String,
     /// Whether the authentication proccess was silent
-    pub silent: bool,
+    silent: bool,
 }
 
-impl Codec for AuthResponse<'_> {
+impl AuthResponse {
+    /// Creates a new auth response from the provided player, session token
+    /// and whether or not to be a silent value
+    ///
+    /// `player`        The player that was authenticated
+    /// `session_token` The session token to use
+    /// `silent`        Whether the auth request was silent
+    pub fn new(player: &Player, session_token: String, silent: bool) -> Self {
+        Self {
+            player_id: player.id,
+            email: player.email.clone(),
+            display_name: player.display_name.clone(),
+            session_token,
+            silent,
+        }
+    }
+}
+
+impl Codec for AuthResponse {
     fn encode(&self, output: &mut Vec<u8>) {
         if self.silent {
             tag_zero(output, "AGUP");
@@ -85,21 +107,21 @@ impl Codec for AuthResponse<'_> {
             tag_empty_str(output, "PRIV");
             {
                 tag_group_start(output, "SESS");
-                tag_u32(output, "BUID", self.player.id);
+                tag_u32(output, "BUID", self.player_id);
                 tag_zero(output, "FRST");
                 tag_str(output, "KEY", &self.session_token); // Session Token
                 tag_zero(output, "LLOG");
-                tag_str(output, "MAIL", &self.player.email); // Player Email
+                tag_str(output, "MAIL", &self.email); // Player Email
                 {
                     tag_group_start(output, "PDTL");
-                    encode_persona(output, &self.player); // Persona Details
+                    encode_persona(output, self.player_id, &self.display_name); // Persona Details
                 }
-                tag_u32(output, "UID", self.player.id);
+                tag_u32(output, "UID", self.player_id);
                 tag_group_end(output);
             }
         } else {
             tag_list_start(output, "PLST", ValueType::Group, 1);
-            encode_persona(output, &self.player);
+            encode_persona(output, self.player_id, &self.display_name);
             tag_empty_str(output, "PRIV");
             tag_str(output, "SKEY", &self.session_token);
         }
@@ -108,7 +130,7 @@ impl Codec for AuthResponse<'_> {
         tag_empty_str(output, "TSUI");
         tag_empty_str(output, "TURI");
         if !self.silent {
-            tag_u32(output, "UID", self.player.id);
+            tag_u32(output, "UID", self.player_id);
         }
     }
 }
@@ -130,21 +152,38 @@ impl Codec for CreateAccountRequest {
     }
 }
 
-pub struct PersonaResponse<'a> {
-    pub player: &'a Player,
-    pub session_token: String,
+pub struct PersonaResponse {
+    player_id: PlayerID,
+    email: String,
+    display_name: String,
+    session_token: String,
 }
 
-impl Codec for PersonaResponse<'_> {
+impl PersonaResponse {
+    /// Creates a new auth response from the provided player, session token
+    ///
+    /// `player`        The player that was authenticated
+    /// `session_token` The session token to use
+    pub fn new(player: &Player, session_token: String) -> Self {
+        Self {
+            player_id: player.id,
+            email: player.email.clone(),
+            display_name: player.display_name.clone(),
+            session_token,
+        }
+    }
+}
+
+impl Codec for PersonaResponse {
     fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "BUID", self.player.id);
+        tag_u32(output, "BUID", self.player_id);
         tag_zero(output, "FRST");
         tag_str(output, "KEY", &self.session_token);
         tag_zero(output, "LLOG");
-        tag_str(output, "MAIL", &self.player.email);
+        tag_str(output, "MAIL", &self.email);
         tag_group_start(output, "PDTL");
-        encode_persona(output, &self.player);
-        tag_u32(output, "UID", self.player.id);
+        encode_persona(output, self.player_id, &self.display_name);
+        tag_u32(output, "UID", self.player_id);
     }
 }
 

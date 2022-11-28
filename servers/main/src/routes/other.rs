@@ -48,13 +48,13 @@ pub async fn route_game_reporting(
 /// }
 /// ```
 async fn handle_submit_offline(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.response_empty(packet).await?;
-    session
-        .notify_immediate(
-            Components::GameReporting(GameReporting::GameReportSubmitted),
-            &GameReportResponse,
-        )
-        .await
+    let notify = Packet::notify(
+        Components::GameReporting(GameReporting::GameReportSubmitted),
+        &GameReportResponse,
+    );
+
+    session.push(notify);
+    session.response_empty(packet).await
 }
 
 /// Routing function for handling packets with the `AssociationLists` component and routing them

@@ -46,19 +46,18 @@ async fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> Handle
         // Not authenticated return empty count
         return session.response(packet, &FetchMessageResponse { count: 0 }).await;
     };
+    let message = get_menu_message(session, &player.display_name);
+    let notify = Packet::notify(
+        Components::Messaging(Messaging::SendMessage),
+        &MessageNotify {
+            message,
+            player_id: player.id,
+        },
+    );
 
+    session.push(notify);
     session
         .response(packet, &FetchMessageResponse { count: 1 })
-        .await?;
-    let message = get_menu_message(session, &player.display_name);
-    session
-        .notify_immediate(
-            Components::Messaging(Messaging::SendMessage),
-            &MessageNotify {
-                message,
-                player_id: player.id,
-            },
-        )
         .await
 }
 

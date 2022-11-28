@@ -74,6 +74,9 @@ pub enum ServerError {
     FailedNoLoginAction = 0x4004,
     ServerUnavailableNothing = 0x4005,
     ConnectionLost = 0x4007,
+    // Errors from suspend
+    Suspend12D = 0x12D,
+    Suspend12E = 0x12E,
 }
 
 impl Into<u16> for ServerError {

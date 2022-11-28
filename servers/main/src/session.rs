@@ -149,7 +149,7 @@ impl Session {
                 ServerError::ServerUnavailable
             };
             let response = Packet::error_empty(packet, error);
-            self.write_immediate(&response).await.ok();
+            self.write(&response).await.ok();
         }
         self.flush().await;
     }
@@ -293,7 +293,7 @@ impl Session {
     /// rather than pushing to the buffer. Only use when handling
     /// responses will cause long blocks because will wait for all
     /// the data to be written.
-    pub async fn write_immediate(&self, packet: &Packet) -> io::Result<()> {
+    async fn write(&self, packet: &Packet) -> io::Result<()> {
         let stream = &mut *self.stream.lock().await;
         packet.write_async(stream).await?;
         self.debug_log_packet("Wrote", packet);
@@ -301,7 +301,7 @@ impl Session {
     }
 
     /// Attempts to read a packet from the client stream.
-    pub async fn read(&self) -> io::Result<(Components, Packet)> {
+    async fn read(&self) -> io::Result<(Components, Packet)> {
         let stream = &mut *self.stream.lock().await;
         Packet::read_async_typed(stream).await
     }
@@ -314,7 +314,7 @@ impl Session {
     ///
     pub async fn response<T: Codec>(&self, packet: &Packet, contents: &T) -> HandleResult {
         let response = Packet::response(packet, contents);
-        self.write_immediate(&response).await?;
+        self.write(&response).await?;
         Ok(())
     }
 
@@ -323,36 +323,23 @@ impl Session {
     /// `packet` The packet to respond to.
     pub async fn response_empty(&self, packet: &Packet) -> HandleResult {
         let response = Packet::response_empty(packet);
-        self.write_immediate(&response).await?;
-        Ok(())
-    }
-
-    /// Writes a new notify packet directly to the client stream
-    ///
-    /// `component` The component for the packet.
-    /// `contents`  The contents of the packet.
-    pub async fn notify_immediate<T: Codec>(
-        &self,
-        component: Components,
-        contents: &T,
-    ) -> HandleResult {
-        let packet = Packet::notify(component, contents);
-        self.write_immediate(&packet).await?;
+        self.write(&response).await?;
         Ok(())
     }
 
     /// Sets the player thats attached to this session. Will log information
-    /// about the previous player if there was one
+    /// about the previous player if there was one. Returns a mutable reference
+    /// to the player that was inserted
     ///
     /// `player` The player to set the state to or None to clear the player
-    pub fn set_player(&mut self, player: Player) {
-        let existing = self.player.replace(player);
-        if let Some(existing) = existing {
+    pub fn set_player(&mut self, player: Player) -> &mut Player {
+        if let Some(existing) = self.player.take() {
             debug!(
                 "Swapped authentication from:\nPrevious (ID: {}, Username: {}, Email: {})",
                 existing.id, existing.display_name, existing.email,
             );
         }
+        self.player.insert(player)
     }
 
     /// Clears the current player value

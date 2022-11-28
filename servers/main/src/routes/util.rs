@@ -567,14 +567,12 @@ packet! {
 ///
 async fn handle_suspend_user_ping(session: &mut Session, packet: &Packet) -> HandleResult {
     let req = packet.decode::<SuspendUserPing>()?;
-    let error = match req.value {
-        0x1312D00 => 0x12Du16,
-        0x55D4A80 => 0x12Eu16,
-        _ => return session.response_empty(packet).await,
-    };
-    let packet = Packet::error_empty(packet, error);
-    session.write_immediate(&packet).await?;
-    Ok(())
+
+    match req.value {
+        0x1312D00 => Err(ServerError::Suspend12D.into()),
+        0x55D4A80 => Err(ServerError::Suspend12E.into()),
+        _ => session.response_empty(packet).await,
+    }
 }
 
 packet! {

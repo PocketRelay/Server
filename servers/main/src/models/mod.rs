@@ -6,3 +6,4 @@ pub mod game_manager;
 pub mod messaging;
 pub mod other;
 pub mod stats;
+pub mod user_sessions;

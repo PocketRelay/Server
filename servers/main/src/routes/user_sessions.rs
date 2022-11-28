@@ -1,23 +1,22 @@
-use blaze_pk::{
-    codec::{Codec, CodecResult, Reader},
-    packet,
-    packet::Packet,
-    tag::Tag,
-    types::Union,
+use crate::{
+    models::{
+        auth::AuthResponse,
+        user_sessions::{HardwareFlagRequest, ResumeSessionRequest, UpdateNetworkRequest},
+    },
+    session::Session,
 };
+use blaze_pk::packet::Packet;
 use core::blaze::errors::{HandleResult, ServerError};
 use core::{blaze::components::UserSessions, state::GlobalState};
-
-use crate::{models::auth::AuthResponse, session::Session};
-use core::blaze::codec::{NetGroups, QosNetworkData};
-
-use log::{debug, warn};
-
 use database::Player;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
 /// is printed to the output and an empty response is sent.
+///
+/// `session`   The session that the packet was recieved by
+/// `component` The component of the packet recieved
+/// `packet`    The recieved packet
 pub async fn route(
     session: &mut Session,
     component: UserSessions,
@@ -27,120 +26,81 @@ pub async fn route(
         UserSessions::ResumeSession => handle_resume_session(session, packet).await,
         UserSessions::UpdateNetworkInfo => handle_update_network_info(session, packet).await,
         UserSessions::UpdateHardwareFlags => handle_update_hardware_flag(session, packet).await,
-        component => {
-            debug!("Got UserSessions({component:?})");
-            session.response_empty(packet).await
-        }
+        _ => session.response_empty(packet).await,
     }
 }
 
-packet! {
-    struct ResumeSession {
-        SKEY session_token: String
-    }
-}
-
-/// Handles resuming a session with the provides session token
+/// Attempts to resume an existing session for a player that has the
+/// provided session token.
 ///
 /// # Structure
+/// ```
+/// Route: UserSessions(ResumeSession)
+/// ID: 207
+/// Content: {
+///     "SKEY": "127_CHARACTER_TOKEN"
+/// }
+/// ```
 /// *To be recorded*
 async fn handle_resume_session(session: &mut Session, packet: &Packet) -> HandleResult {
-    let req = packet.decode::<ResumeSession>()?;
+    let req: ResumeSessionRequest = packet.decode()?;
     let db = GlobalState::database();
-
     let player = Player::by_token(db, &req.session_token)
         .await?
         .ok_or(ServerError::InvalidSession)?;
 
     let (player, session_token) = player.with_token(db).await?;
-    let response = Packet::response(
-        packet,
-        &AuthResponse {
-            player: &player,
-            session_token,
-            silent: true,
-        },
-    );
-    session.write_immediate(&response).await?;
-    session.set_player(player);
-    Ok(())
-}
-
-#[derive(Debug)]
-struct UpdateNetworkInfo {
-    address: Union<NetGroups>,
-    nqos: QosNetworkData,
-}
-
-impl Codec for UpdateNetworkInfo {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let address = Tag::expect(reader, "ADDR")?;
-        let nqos = Tag::expect(reader, "NQOS")?;
-
-        Ok(Self { address, nqos })
-    }
+    let player = session.set_player(player);
+    let response = AuthResponse::new(player, session_token, true);
+    session.response(packet, &response).await
 }
 
 /// Handles updating the stored networking information for the current session
 /// this is required for clients to be able to connect to each-other
 ///
-/// # Structure
 /// ```
-/// packet(Components.USER_SESSIONS, Commands.UPDATE_NETWORK_INFO, 0x0, 0x8) {
-///   optional("ADDR",
-///   0x2,
-///     group("VALU") {
-///       +group("EXIP") {
-///         number("IP", 0x0)
-///         number("PORT", 0x0)
-///       }
-///       +group("INIP") {
-///         number("IP", 0x0)
-///         number("PORT", 0x0)
-///       }
+/// Route: UserSessions(UpdateNetworkInfo)
+/// ID: 8
+/// Content: {
+///     "ADDR": Union("VALUE", 2: {
+///         "EXIP": {
+///             "IP": 0,
+///             "PORT": 0
+///         },
+///         "INIP": {
+///             "IP": 0,
+///             "PORT": 0
+///         }
+///     }),
+///     "NLMP": Map { // Map of latency to Quality of service servers
+///         "ea-sjc": 156,
+///         "rs-iad": 0xFFF0FFF
+///         "rs-lhr": 0xFFF0FFF
 ///     }
-///   )
-///   map("NLMP", mapOf(
-///     "ea-sjc" to 0x9c,
-///     "rs-iad" to 0xfff0fff,
-///     "rs-lhr" to 0xfff0fff,
-///   ))
-///   +group("NQOS") {
-///     number("DBPS", 0x0)
-///     number("NATT", 0x4)
-///     number("UBPS", 0x0)
-///   }
+///     "NQOS": {
+///         "DBPS": 0,
+///         "NATT": 4,
+///         "UBPS": 0
+///     }
 /// }
 /// ```
 async fn handle_update_network_info(session: &mut Session, packet: &Packet) -> HandleResult {
-    let req = packet.decode::<UpdateNetworkInfo>()?;
-    let groups = match req.address {
-        Union::Set { value, .. } => value,
-        Union::Unset => {
-            warn!("Client didn't provide the expected networking information");
-            return session.response_empty(packet).await;
-        }
-    };
-    session.set_network_info(groups, req.nqos).await;
+    let req: UpdateNetworkRequest = packet.decode()?;
+    session.set_network_info(req.address, req.qos).await;
     session.response_empty(packet).await
-}
-
-packet! {
-    struct UpdateHWFlagReq {
-        HWFG hardware_flag: u16,
-    }
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
 ///
-/// # Structure
 /// ```
-/// packet(Components.USER_SESSIONS, Commands.UPDATE_HARDWARE_FLAGS, 0x0, 0x16) {
-///   number("HWFG", 0x0)
+/// Route: UserSessions(UpdateHardwareFlags)
+/// ID: 22
+/// Content: {
+///     "HWFG": 0
 /// }
 /// ```
 async fn handle_update_hardware_flag(session: &mut Session, packet: &Packet) -> HandleResult {
-    let req = packet.decode::<UpdateHWFlagReq>()?;
+    let req: HardwareFlagRequest = packet.decode()?;
     session.set_hardware_flag(req.hardware_flag);
     session.response_empty(packet).await
 }

@@ -110,17 +110,9 @@ async fn handle_auth_request(session: &mut Session, packet: &Packet) -> HandleRe
         AuthRequest::Origin { token } => handle_login_origin(db, token).await,
     }?;
     let (player, session_token) = player.with_token(db).await?;
-    let response = Packet::response(
-        packet,
-        &AuthResponse {
-            player: &player,
-            session_token,
-            silent,
-        },
-    );
-    session.set_player(player);
-    session.write_immediate(&response).await?;
-    Ok(())
+    let player = session.set_player(player);
+    let response = AuthResponse::new(player, session_token, silent);
+    session.response(packet, &response).await
 }
 
 /// Handles finding a player through an authentication token and a player ID
@@ -344,17 +336,9 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
         .take()
         .ok_or_else(|| ServerError::FailedNoLoginAction)?;
     let (player, session_token) = player.with_token(GlobalState::database()).await?;
-    session
-        .response(
-            packet,
-            &PersonaResponse {
-                player: &player,
-                session_token: session_token,
-            },
-        )
-        .await?;
-    session.set_player(player);
-    Ok(())
+    let player = session.set_player(player);
+    let response = PersonaResponse::new(player, session_token);
+    session.response(packet, &response).await
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -428,17 +412,9 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
     let display_name = email.chars().take(99).collect::<String>();
     let player = Player::create(db, email, display_name, hashed_password, false).await?;
     let (player, session_token) = player.with_token(db).await?;
-    let response = Packet::response(
-        packet,
-        &AuthResponse {
-            player: &player,
-            session_token,
-            silent: false,
-        },
-    );
-    session.write_immediate(&response).await?;
-    session.set_player(player);
-    Ok(())
+    let player = session.set_player(player);
+    let response = AuthResponse::new(player, session_token, false);
+    session.response(packet, &response).await
 }
 
 /// Expected to be getting information about the legal docs however the exact meaning
