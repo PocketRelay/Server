@@ -59,8 +59,7 @@ async fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> Handle
                 player_id: player.id,
             },
         )
-        .await?;
-    Ok(())
+        .await
 }
 
 /// Retrieves the menu message from the environment variables and replaces
