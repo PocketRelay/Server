@@ -7,7 +7,6 @@ use core::blaze::errors::{BlazeError, BlazeResult};
 use core::constants;
 use core::{env, state::GlobalState};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 
 use blaze_pk::packet::Packet;
@@ -23,23 +22,11 @@ use utils::net::{accept_stream, listener};
 /// client initially reaches out to. This server is responsible for telling
 /// the client where the server is and whether it should use SSLv3 to connect.
 pub async fn start_server() {
-    // The server details of the instance clients should
-    // connect to. In this case its the main server details
-    let instance = Arc::new({
-        let host = constants::EXTERNAL_HOST;
-        let port = env::from_env(env::MAIN_PORT);
-        InstanceDetails {
-            net: InstanceNet::from((host.to_string(), port)),
-            secure: false,
-        }
-    });
-
     let listener = listener("Redirector", env::from_env(env::REDIRECTOR_PORT)).await;
     let mut shutdown = GlobalState::shutdown();
     while let Some((stream, addr)) = accept_stream(&listener, &mut shutdown).await {
-        let instance = instance.clone();
         tokio::spawn(async move {
-            if let Err(err) = handle_client(stream, addr, instance).await {
+            if let Err(err) = handle_client(stream, addr).await {
                 error!("Unable to handle redirect: {err}");
             };
         });
@@ -57,11 +44,7 @@ const REDIRECT_COMPONENT: Components = Components::Redirector(Redirector::GetSer
 /// `stream`   The stream to the client
 /// `addr`     The client address
 /// `instance` The server instance information
-async fn handle_client(
-    stream: TcpStream,
-    addr: SocketAddr,
-    instance: Arc<InstanceDetails>,
-) -> BlazeResult<()> {
+async fn handle_client(stream: TcpStream, addr: SocketAddr) -> BlazeResult<()> {
     let mut shutdown = GlobalState::shutdown();
     let mut stream = BlazeStream::new(stream, StreamMode::Server)
         .await
@@ -80,7 +63,15 @@ async fn handle_client(
 
         if component == REDIRECT_COMPONENT {
             debug!("Redirecting client (Addr: {addr:?})");
-            let response = Packet::response(&packet, &*instance);
+
+            let host = constants::EXTERNAL_HOST;
+            let port = env::from_env(env::MAIN_PORT);
+            let instance = InstanceDetails {
+                net: InstanceNet::from((host.to_string(), port)),
+                secure: false,
+            };
+
+            let response = Packet::response(&packet, &instance);
             response.write_blaze(&mut stream)?;
             stream.flush().await?;
             break;
