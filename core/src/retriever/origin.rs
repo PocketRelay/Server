@@ -5,7 +5,7 @@ use log::debug;
 use crate::blaze::components::{Authentication, Components, Util};
 
 use super::{
-    codec::{OriginLoginReq, OriginLoginRes, UserSettingsAll},
+    codec::{OriginLoginRequest, OriginLoginResponse, SettingsResponse},
     RetSession, Retriever,
 };
 
@@ -30,9 +30,9 @@ impl OriginFlow {
     pub async fn authenticate(&mut self, token: String) -> Option<OriginDetails> {
         let value = self
             .session
-            .request::<OriginLoginReq, OriginLoginRes>(
+            .request::<OriginLoginRequest, OriginLoginResponse>(
                 Components::Authentication(Authentication::OriginLogin),
-                OriginLoginReq { token },
+                OriginLoginRequest { token },
             )
             .await
             .ok()?;
@@ -54,7 +54,7 @@ impl OriginFlow {
     pub async fn get_settings(&mut self) -> Option<TdfMap<String, String>> {
         let value = self
             .session
-            .request_empty::<UserSettingsAll>(Components::Util(Util::UserSettingsLoadAll))
+            .request_empty::<SettingsResponse>(Components::Util(Util::UserSettingsLoadAll))
             .await
             .ok()?;
         Some(value.settings)

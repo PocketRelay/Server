@@ -1,7 +1,6 @@
 use blaze_pk::{
     codec::{Codec, CodecResult, Reader},
-    group, packet,
-    tag::Tag,
+    tag::{Tag, ValueType},
     tagging::*,
     types::TdfMap,
 };
@@ -30,46 +29,55 @@ impl Codec for InstanceRequest {
     }
 }
 
-pub struct OriginLoginRes {
+/// Structure for the response from the server after
+/// authenticating with Origin. Contains the email and
+/// display name of the authenticated account
+pub struct OriginLoginResponse {
+    /// The email address of the Origin Account
     pub email: String,
+    /// The display name of the origin account
     pub display_name: String,
 }
 
-group! {
-    struct OriginSess {
-        MAIL mail: String,
-        PDTL data: OriginPlayerData,
-    }
-}
-
-group! {
-    struct OriginPlayerData {
-        DSNM display_name: String
-    }
-}
-
-impl Codec for OriginLoginRes {
+impl Codec for OriginLoginResponse {
     fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let sess = Tag::expect::<OriginSess>(reader, "SESS")?;
+        Tag::decode_until(reader, "SESS", ValueType::Group)?;
+        let email = expect_tag(reader, "MAIL")?;
+        Tag::decode_until(reader, "PDTL", ValueType::Group)?;
+        let display_name = expect_tag(reader, "DSNM")?;
+        Tag::discard_group(reader)?; // End group PDTL
+        Tag::discard_group(reader)?; // End group MAIL
         Ok(Self {
-            email: sess.mail,
-            display_name: sess.data.display_name,
+            email,
+            display_name,
         })
     }
 }
-pub struct OriginLoginReq {
+
+/// Structure for a request to login with Origin using
+/// the Origin token that was provided by the client
+pub struct OriginLoginRequest {
+    /// The origin token provided by the client
     pub token: String,
 }
 
-impl Codec for OriginLoginReq {
+impl Codec for OriginLoginRequest {
     fn encode(&self, output: &mut Vec<u8>) {
         tag_str(output, "AUTH", &self.token);
         tag_u8(output, "TYPE", 0x1);
     }
 }
 
-packet! {
-    struct UserSettingsAll {
-        SMAP settings: TdfMap<String, String>
+/// Structure for the response from retrieving the user
+/// settings from the official servers
+pub struct SettingsResponse {
+    /// The settings from the server
+    pub settings: TdfMap<String, String>,
+}
+
+impl Codec for SettingsResponse {
+    fn decode(reader: &mut Reader) -> CodecResult<Self> {
+        let settings = expect_tag(reader, "SMAP")?;
+        Ok(Self { settings })
     }
 }
