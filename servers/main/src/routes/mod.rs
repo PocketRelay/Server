@@ -11,6 +11,12 @@ mod stats;
 mod user_sessions;
 mod util;
 
+/// Root routing function handles the different components passing each
+/// component onto its specific route function in its module.
+///
+/// `session`   The session to route the packet for
+/// `component` The component of the packet
+/// `packet`    The packet itself
 pub async fn route(session: &mut Session, component: Components, packet: &Packet) -> HandleResult {
     match component {
         Components::Authentication(value) => auth::route(session, value, packet).await,
