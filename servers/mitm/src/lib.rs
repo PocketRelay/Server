@@ -3,7 +3,7 @@
 
 use core::blaze::append_packet_decoded;
 use core::blaze::components::Components;
-use core::blaze::errors::{BlazeError, BlazeResult};
+use core::blaze::errors::BlazeResult;
 use core::retriever::Retriever;
 use core::{env, state::GlobalState};
 
@@ -43,10 +43,13 @@ pub async fn start_server() {
 /// `instance` The server instance information
 /// `shutdown` Async safely shutdown reciever
 async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> BlazeResult<()> {
-    let mut server = retriever
-        .stream()
-        .await
-        .ok_or_else(|| BlazeError::Other("Unable to connection to official server"))?;
+    let mut server = match retriever.stream().await {
+        Some(stream) => stream,
+        None => {
+            error!("MITM unable to connect to official server");
+            return Ok(());
+        }
+    };
 
     let mut shutdown = GlobalState::shutdown();
 

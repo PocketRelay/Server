@@ -46,9 +46,14 @@ const REDIRECT_COMPONENT: Components = Components::Redirector(Redirector::GetSer
 /// `instance` The server instance information
 async fn handle_client(stream: TcpStream, addr: SocketAddr) -> BlazeResult<()> {
     let mut shutdown = GlobalState::shutdown();
-    let mut stream = BlazeStream::new(stream, StreamMode::Server)
-        .await
-        .map_err(|_| BlazeError::Other("Unable to establish SSL connection"))?;
+
+    let mut server = match BlazeStream::new(stream, StreamMode::Server).await {
+        Ok(stream) => stream,
+        Err(_) => {
+            error!("Unable to establish SSL connection within redirector");
+            return Ok(());
+        }
+    };
 
     loop {
         let (component, packet) = select! {

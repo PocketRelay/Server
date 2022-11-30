@@ -10,7 +10,7 @@ use crate::models::auth::{
 use crate::session::Session;
 use crate::HandleResult;
 use core::blaze::components::Authentication;
-use core::blaze::errors::{BlazeError, ServerError, ServerResult};
+use core::blaze::errors::{ServerError, ServerResult};
 use core::env;
 
 use core::state::GlobalState;
@@ -409,8 +409,14 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
         return Err(ServerError::EmailAlreadyInUse.into());
     }
 
-    let hashed_password = hash_password(&req.password)
-        .map_err(|_| BlazeError::Other("Failed to hash user password"))?;
+    let hashed_password = match hash_password(&req.password) {
+        Ok(password) => password,
+        Err(err) => {
+            error!("Failed to hash passsword: {err:?}");
+            return Err(ServerError::ServerUnavailable.into());
+        }
+    };
+
     let display_name = email.chars().take(99).collect::<String>();
     let player = Player::create(db, email, display_name, hashed_password, false).await?;
     let (player, session_token) = player.with_token(db).await?;

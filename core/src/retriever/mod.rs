@@ -12,7 +12,7 @@ use crate::{
     blaze::{
         codec::{InstanceDetails, Port},
         components::{Components, Redirector},
-        errors::{BlazeError, BlazeResult},
+        errors::BlazeResult,
     },
     env,
     retriever::codec::InstanceRequest,
@@ -200,9 +200,5 @@ impl RetSession {
             InstanceRequest,
         )
         .await
-        .map_err(|err| {
-            error!("Failed to request server instance: {err:?}");
-            BlazeError::Other("Unable to obtain main instance")
-        })
     }
 }
