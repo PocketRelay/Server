@@ -5,7 +5,6 @@ use std::{
 
 use blaze_pk::{
     codec::{Codec, CodecError, CodecResult, Reader},
-    packet,
     tag::{Tag, ValueType},
     tagging::*,
     types::Union,
@@ -132,10 +131,15 @@ impl Codec for InstanceDetails {
     }
 }
 
-packet! {
-    struct UpdateExtDataAttr {
-        FLGS flags: u8,
-        ID player_id: PlayerID
+pub struct UpdateExtDataAttr {
+    pub flags: u8,
+    pub player_id: PlayerID,
+}
+
+impl Codec for UpdateExtDataAttr {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_u8(output, "FLGS", self.flags);
+        tag_u32(output, "ID", self.player_id);
     }
 }
 

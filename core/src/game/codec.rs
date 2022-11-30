@@ -1,6 +1,5 @@
 use blaze_pk::{
     codec::{Codec, CodecResult, Reader},
-    packet,
     tag::ValueType,
     tagging::*,
 };
@@ -164,23 +163,27 @@ impl Codec for PlayerState {
     }
 }
 
-packet! {
-    // Packet for game state changes
-    struct StateChange {
-        // The id of the game the state has changed for
-        GID id: GameID,
-        // The new state value
-        GSTA state: GameState
+pub struct StateChange {
+    pub id: GameID,
+    pub state: GameState,
+}
+
+impl Codec for StateChange {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_u32(output, "GID", self.id);
+        tag_value(output, "GSTA", &self.state);
     }
 }
 
-packet! {
-    // Packet for game setting changes
-    struct SettingChange {
-        // The new setting value
-        ATTR setting: u16,
-        // The id of the game the setting has changed for
-        GID id: GameID,
+pub struct SettingChange {
+    pub setting: u16,
+    pub id: GameID,
+}
+
+impl Codec for SettingChange {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_u16(output, "ATTR", self.setting);
+        tag_u32(output, "GID", self.id);
     }
 }
 
@@ -331,27 +334,45 @@ impl Codec for GameDetails<'_> {
     }
 }
 
-packet! {
-    struct PlayerStateChange {
-        GID gid: GameID,
-        PID pid: PlayerID,
-        STAT state: PlayerState,
+pub struct PlayerStateChange {
+    pub gid: GameID,
+    pub pid: PlayerID,
+    pub state: PlayerState,
+}
+
+impl Codec for PlayerStateChange {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_u32(output, "GID", self.gid);
+        tag_u32(output, "PID", self.pid);
+        tag_value(output, "STAT", &self.state);
     }
 }
 
-packet! {
-    struct JoinComplete {
-        GID game_id: GameID,
-        PID player_id: PlayerID,
+pub struct JoinComplete {
+    pub game_id: GameID,
+    pub player_id: PlayerID,
+}
+
+impl Codec for JoinComplete {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_u32(output, "GID", self.game_id);
+        tag_u32(output, "PID", self.player_id);
     }
 }
 
-packet! {
-    struct AdminListChange {
-        ALST player_id: PlayerID,
-        GID game_id: GameID,
-        OPER operation: AdminListOperation,
-        UID host_id: PlayerID,
+pub struct AdminListChange {
+    pub player_id: PlayerID,
+    pub game_id: GameID,
+    pub operation: AdminListOperation,
+    pub host_id: PlayerID,
+}
+
+impl Codec for AdminListChange {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_u32(output, "ALST", self.player_id);
+        tag_u32(output, "GID", self.game_id);
+        tag_value(output, "OPER", &self.operation);
+        tag_u32(output, "UID", self.host_id);
     }
 }
 
@@ -437,9 +458,13 @@ impl Codec for PlayerRemoved {
     }
 }
 
-packet! {
-    struct FetchExtendedData {
-        BUID player_id: PlayerID,
+pub struct FetchExtendedData {
+    pub player_id: PlayerID,
+}
+
+impl Codec for FetchExtendedData {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_u32(output, "BUID", self.player_id);
     }
 }
 
@@ -457,9 +482,13 @@ impl Codec for HostMigrateStart {
     }
 }
 
-packet! {
-    struct HostMigrateFinished {
-        GID game_id: GameID,
+pub struct HostMigrateFinished {
+    pub game_id: GameID,
+}
+
+impl Codec for HostMigrateFinished {
+    fn encode(&self, output: &mut Vec<u8>) {
+        tag_u32(output, "GID", self.game_id)
     }
 }
 
