@@ -4,10 +4,13 @@ use std::{
 };
 
 use blaze_pk::{
-    codec::{Codec, CodecError, CodecResult, Reader},
-    tag::{Tag, ValueType},
-    tagging::*,
+    codec::{Decodable, Encodable},
+    error::DecodeResult,
+    reader::TdfReader,
+    tag::TdfType,
     types::Union,
+    value_type,
+    writer::TdfWriter,
 };
 
 use serde::{ser::SerializeStruct, Serialize};
@@ -27,24 +30,24 @@ impl From<(String, Port)> for InstanceNet {
     }
 }
 
-impl Codec for InstanceNet {
-    fn encode(&self, output: &mut Vec<u8>) {
-        self.host.encode(output);
-        tag_u16(output, "PORT", self.port);
-        tag_group_end(output);
-    }
-
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let host = InstanceHost::decode(reader)?;
-        let port = Tag::expect::<u16>(reader, "PORT")?;
-        reader.take_one()?;
-        Ok(Self { host, port })
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::Group
+impl Encodable for InstanceNet {
+    fn encode(&self, writer: &mut TdfWriter) {
+        self.host.encode(writer);
+        writer.tag_u16(b"PORT", self.port);
+        writer.tag_group_end();
     }
 }
+
+impl Decodable for InstanceNet {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let host: InstanceHost = InstanceHost::decode(reader)?;
+        let port: u16 = reader.tag("PORT")?;
+        reader.read_byte()?;
+        Ok(Self { host, port })
+    }
+}
+
+value_type!(InstanceNet, TdfType::Group);
 
 /// Type of instance details provided either hostname
 /// encoded as string or IP address encoded as NetAddress
@@ -77,24 +80,23 @@ impl Into<String> for InstanceHost {
     }
 }
 
-impl Codec for InstanceHost {
-    fn encode(&self, output: &mut Vec<u8>) {
+impl Encodable for InstanceHost {
+    fn encode(&self, writer: &mut TdfWriter) {
         match self {
-            InstanceHost::Host(value) => tag_str(output, "HOST", value),
-            InstanceHost::Address(value) => tag_u32(output, "IP", value.0),
+            InstanceHost::Host(value) => writer.tag_str(b"HOST", value),
+            InstanceHost::Address(value) => writer.tag_u32(b"IP", value.0),
         }
     }
+}
 
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let host = Tag::try_expect::<String>(reader, "HOST")?;
-        let ip = Tag::try_expect::<NetAddress>(reader, "IP")?;
+impl Decodable for InstanceHost {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let host: Option<String> = reader.try_tag("HOST")?;
         if let Some(host) = host {
-            Ok(Self::Host(host))
-        } else if let Some(ip) = ip {
-            Ok(Self::Address(ip))
-        } else {
-            Err(CodecError::Other("Instance host was missing HOST and IP"))
+            return Ok(Self::Host(host));
         }
+        let ip: NetAddress = reader.tag("IP")?;
+        Ok(Self::Address(ip))
     }
 }
 
@@ -107,26 +109,28 @@ pub struct InstanceDetails {
     pub secure: bool,
 }
 
-impl Codec for InstanceDetails {
-    fn encode(&self, output: &mut Vec<u8>) {
-        // Starting the union value for the instance address details
-        tag_union_start(output, "ADDR", NetworkAddressType::Server.into());
-        tag_value(output, "VALU", &self.net);
+impl Encodable for InstanceDetails {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_union_start(b"ADDR", NetworkAddressType::Server.into());
+        writer.tag_value(b"VALU", &self.net);
 
-        tag_bool(output, "SECU", self.secure);
-        tag_bool(output, "XDNS", false)
+        writer.tag_bool(b"SECU", self.secure);
+        writer.tag_bool(b"XDNS", false);
     }
+}
 
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let net = match Tag::expect::<Union<InstanceNet>>(reader, "ADDR")? {
+impl Decodable for InstanceDetails {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let net: InstanceNet = match reader.tag::<Union<InstanceNet>>("ADDR")? {
             Union::Set { value, .. } => value,
             Union::Unset => {
-                return Err(CodecError::Other(
-                    "Instance details did not contain address value",
-                ))
+                return Err(blaze_pk::error::DecodeError::MissingTag {
+                    tag: "ADDR".to_string(),
+                    ty: TdfType::Union,
+                })
             }
         };
-        let secure = Tag::expect(reader, "SECU")?;
+        let secure: bool = reader.tag("SECU")?;
         Ok(InstanceDetails { net, secure })
     }
 }
@@ -136,10 +140,10 @@ pub struct UpdateExtDataAttr {
     pub player_id: PlayerID,
 }
 
-impl Codec for UpdateExtDataAttr {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u8(output, "FLGS", self.flags);
-        tag_u32(output, "ID", self.player_id);
+impl Encodable for UpdateExtDataAttr {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u8(b"FLGS", self.flags);
+        writer.tag_u32(b"ID", self.player_id);
     }
 }
 
@@ -232,43 +236,42 @@ impl Default for NatType {
     }
 }
 
-impl Codec for NatType {
-    fn encode(&self, output: &mut Vec<u8>) {
-        let value = self.value();
-        value.encode(output);
-    }
-
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let value = u8::decode(reader)?;
-        Ok(Self::from_value(value))
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::VarInt
+impl Encodable for NatType {
+    #[inline]
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.write_u8(self.value());
     }
 }
 
-//noinspection SpellCheckingInspection
-impl Codec for QosNetworkData {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u16(output, "DBPS", self.dbps);
-        tag_value(output, "NATT", &self.natt);
-        tag_u16(output, "UBPS", self.ubps);
-        tag_group_end(output);
+impl Decodable for NatType {
+    #[inline]
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        Ok(Self::from_value(reader.read_u8()?))
     }
+}
 
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let dbps = Tag::expect(reader, "DBPS")?;
-        let natt = Tag::expect(reader, "NATT")?;
-        let ubps = Tag::expect(reader, "UBPS")?;
-        reader.take_one()?;
+value_type!(NatType, TdfType::VarInt);
+
+impl Encodable for QosNetworkData {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u16(b"DBPS", self.dbps);
+        writer.tag_value(b"NATT", &self.natt);
+        writer.tag_u16(b"UBPS", self.ubps);
+        writer.tag_group_end();
+    }
+}
+
+impl Decodable for QosNetworkData {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let dbps: u16 = reader.tag("DBPS");
+        let natt: NatType = reader.tag("NATT")?;
+        let ubps: u16 = reader.tag("UBPS")?;
+        reader.read_byte()?;
         Ok(Self { dbps, natt, ubps })
     }
-
-    fn value_type() -> ValueType {
-        ValueType::Group
-    }
 }
+
+value_type!(QosNetworkData, TdfType::Group);
 
 /// Type alias for ports which are always u16
 pub type Port = u16;
@@ -287,44 +290,37 @@ pub struct NetGroups {
     pub external: NetGroup,
 }
 
-//noinspection SpellCheckingInspection
-impl Codec for NetGroups {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_group_start(output, "EXIP");
-        self.external.encode(output);
+impl Encodable for NetGroups {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_group(b"EXIP");
+        self.external.encode(writer);
 
-        tag_group_start(output, "INIP");
-        self.internal.encode(output);
+        writer.tag_group(b"INIP");
+        self.internal.encode(writer);
 
-        tag_group_end(output);
-    }
-
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let external = Tag::expect(reader, "EXIP")?;
-        let internal = Tag::expect(reader, "INIP")?;
-        reader.take_one()?;
-        Ok(Self { external, internal })
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::Group
+        writer.tag_group_end();
     }
 }
 
+impl Decodable for NetGroups {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let external: NetGroup = reader.tag(b"EXIP")?;
+        let internal: NetGroup = reader.tag(b"INIP")?;
+        reader.read_byte()?;
+        Ok(Self { external, internal })
+    }
+}
+
+value_type!(NetGroups, TdfType::Group);
+
 impl NetData {
-    pub fn tag_groups(&self, tag: &str, output: &mut Vec<u8>) {
+    pub fn tag_groups(&self, tag: &str, writer: &mut TdfWriter) {
         if !self.is_set {
-            tag_union_unset(output, tag);
+            writer.tag_union_unset(tag);
             return;
         }
 
-        tag_union_value(
-            output,
-            tag,
-            NetworkAddressType::Pair.into(),
-            "VALU",
-            self.groups,
-        );
+        writer.tag_union_value(tag, NetworkAddressType::Pair.into(), "VALU", self.groups);
     }
 }
 
@@ -333,24 +329,24 @@ impl NetData {
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
 pub struct NetGroup(pub NetAddress, pub Port);
 
-impl Codec for NetGroup {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "IP", self.0 .0);
-        tag_u16(output, "PORT", self.1);
-        tag_group_end(output);
-    }
-
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let ip = Tag::expect(reader, "IP")?;
-        let port = Tag::expect(reader, "PORT")?;
-        reader.take_one()?;
-        Ok(Self(ip, port))
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::Group
+impl Encodable for NetGroup {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"IP", self.0 .0);
+        writer.tag_u16(b"PORT", self.1);
+        writer.tag_group_end();
     }
 }
+
+impl Decodable for NetGroup {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let ip: NetAddress = reader.tag(b"IP")?;
+        let port: u16 = reader.tag(b"PORT")?;
+        reader.read_byte()?;
+        Ok(Self(ip, port))
+    }
+}
+
+value_type!(NetGroup, TdfType::Group);
 
 impl Serialize for NetGroup {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -368,21 +364,20 @@ impl Serialize for NetGroup {
 #[derive(Copy, Clone, Default, Eq, PartialEq)]
 pub struct NetAddress(pub u32);
 
-/// NetAddress can be encoded and decoded directly as u32 VarInt values
-impl Codec for NetAddress {
-    fn encode(&self, output: &mut Vec<u8>) {
-        self.0.encode(output);
-    }
-
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let value = u32::decode(reader)?;
-        Ok(Self(value))
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::VarInt
+impl Encodable for NetAddress {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.write_u32(self.0);
     }
 }
+
+impl Decodable for NetAddress {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let value = reader.read_u32()?;
+        Ok(Self(value))
+    }
+}
+
+value_type!(NetAddress, TdfType::VarInt);
 
 /// Debug trait implementation sample implementation as the Display
 /// implementation so that is just called instead

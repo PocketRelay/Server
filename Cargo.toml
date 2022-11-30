@@ -33,7 +33,7 @@ database = { path = "database" }
 blaze-ssl-async = "0.1.1"
 
 [workspace.dependencies.blaze-pk]
-version = "0.5.6-alpha"
+version = "0.6.0-alpha"
 default-features = false
 features = ["async", "blaze-ssl"]
 

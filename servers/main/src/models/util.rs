@@ -96,10 +96,10 @@ impl Codec for PreAuthResponse {
         tag_str(output, "ASRC", SRC_VERSION);
         // This list appears to contain the IDs of the components that the game
         // uses throughout its lifecycle
-        tag_list(
+        tag_value(
             output,
             "CIDS",
-            vec![
+            &vec![
                 0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803,
                 0x7805, 0x7806, 0x7d0,
             ],
