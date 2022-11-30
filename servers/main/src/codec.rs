@@ -1,31 +1,31 @@
-use blaze_pk::{codec::Codec, tag::ValueType, tagging::*};
+use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
 use utils::types::PlayerID;
 
 use crate::session::Session;
 
-fn encode_session(session: &Session, output: &mut Vec<u8>) {
-    session.net.tag_groups("ADDR", output);
-    tag_str(output, "BPS", "ea-sjc");
-    tag_empty_str(output, "CTY");
-    tag_var_int_list_empty(output, "CVAR");
+fn encode_session(session: &Session, writer: &mut TdfWriter) {
+    session.net.tag_groups(b"ADDR", writer);
+    writer.tag_str(b"BPS", "ea-sjc");
+    writer.tag_str_empty(b"CTY");
+    writer.tag_var_int_list_empty(b"CVAR");
     {
-        tag_map_start(output, "DMAP", ValueType::VarInt, ValueType::VarInt, 1);
-        0x70001.encode(output);
-        0x409a.encode(output);
+        writer.tag_map_start(b"DMAP", TdfType::VarInt, TdfType::VarInt, 1);
+        writer.write_u32(0x70001);
+        writer.write_u16(0x409a);
     }
-    tag_u16(output, "HWFG", session.net.hardware_flags);
+    writer.tag_u16(b"HWFG", session.net.hardware_flags);
     {
         // Ping latency to the Quality of service servers
-        tag_list_start(output, "PSLM", ValueType::VarInt, 1);
-        0xfff0fff.encode(output);
+        writer.tag_list_start(b"PSLM", TdfType::VarInt, 1);
+        0xfff0fff.encode(writer);
     }
-    tag_value(output, "QDAT", &session.net.qos);
-    tag_u8(output, "UATT", 0);
+    writer.tag_value(b"QDAT", &session.net.qos);
+    writer.tag_u8(b"UATT", 0);
     if let Some(game_id) = &session.game {
-        tag_list_start(output, "ULST", ValueType::Triple, 1);
-        (4, 1, *game_id).encode(output);
+        writer.tag_list_start(b"ULST", TdfType::Triple, 1);
+        (4, 1, *game_id).encode(writer);
     }
-    tag_group_end(output);
+    writer.tag_group_end();
 }
 
 /// Session update for a session other than ourselves
@@ -36,19 +36,19 @@ pub struct SessionUpdate<'a> {
     pub display_name: &'a str,
 }
 
-impl Codec for SessionUpdate<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_group_start(output, "DATA");
-        encode_session(self.session, output);
+impl Encodable for SessionUpdate<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_group(b"DATA");
+        encode_session(self.session, writer);
 
-        tag_group_start(output, "USER");
-        tag_u32(output, "AID", self.player_id);
-        tag_u32(output, "ALOC", 0x64654445);
-        tag_empty_blob(output, "EXBB");
-        tag_u8(output, "EXID", 0);
-        tag_u32(output, "ID", self.player_id);
-        tag_str(output, "NAME", self.display_name);
-        tag_group_end(output);
+        writer.tag_group(b"USER");
+        writer.tag_u32(b"AID", self.player_id);
+        writer.tag_u32(b"ALOC", 0x64654445);
+        writer.tag_empty_blob(b"EXBB");
+        writer.tag_u8(b"EXID", 0);
+        writer.tag_u32(b"ID", self.player_id);
+        writer.tag_str(b"NAME", self.display_name);
+        writer.tag_group_end();
     }
 }
 
@@ -58,10 +58,10 @@ pub struct SetSession<'a> {
     pub session: &'a Session,
 }
 
-impl Codec for SetSession<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_group_start(output, "DATA");
-        encode_session(self.session, output);
-        tag_u32(output, "USID", self.player_id);
+impl Encodable for SetSession<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_group(b"DATA");
+        encode_session(self.session, writer);
+        writer.tag_u32(b"USID", self.player_id);
     }
 }

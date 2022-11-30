@@ -1,4 +1,4 @@
-use blaze_pk::codec::CodecError;
+use blaze_pk::error::DecodeError;
 use database::DbErr;
 use std::{fmt::Display, io};
 
@@ -7,28 +7,28 @@ pub type ServerResult<T> = Result<T, ServerError>;
 
 #[derive(Debug)]
 pub enum BlazeError {
-    CodecError(CodecError),
+    Decode(DecodeError),
     IO(io::Error),
     Other(&'static str),
     Database(DbErr),
-    ServerError(ServerError),
+    Server(ServerError),
 }
 
 impl Display for BlazeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CodecError(value) => write!(f, "Codec error occurred: {value:?}"),
+            Self::Decode(value) => write!(f, "Decode error occurred: {value:?}"),
             Self::IO(value) => write!(f, "IO error: {value:?}"),
             Self::Other(value) => write!(f, "Other: {value}"),
             Self::Database(value) => write!(f, "Database error: {value}"),
-            Self::ServerError(value) => write!(f, "Server error: {value:?}"),
+            Self::Server(value) => write!(f, "Server error: {value:?}"),
         }
     }
 }
 
-impl From<CodecError> for BlazeError {
-    fn from(err: CodecError) -> Self {
-        BlazeError::CodecError(err)
+impl From<DecodeError> for BlazeError {
+    fn from(err: DecodeError) -> Self {
+        BlazeError::Decode(err)
     }
 }
 
@@ -46,7 +46,7 @@ impl From<DbErr> for BlazeError {
 
 impl From<ServerError> for BlazeError {
     fn from(err: ServerError) -> Self {
-        BlazeError::ServerError(err)
+        BlazeError::Server(err)
     }
 }
 

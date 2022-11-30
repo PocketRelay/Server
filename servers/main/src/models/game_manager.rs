@@ -5,9 +5,11 @@ use core::game::{
 };
 
 use blaze_pk::{
-    codec::{Codec, CodecError, CodecResult, Reader},
-    tag::{Tag, ValueType},
-    tagging::{expect_list, expect_tag, tag_u32},
+    codec::{Decodable, Encodable},
+    error::{DecodeError, DecodeResult},
+    reader::TdfReader,
+    tag::{Tag, TdfType},
+    writer::TdfWriter,
 };
 use utils::types::{GameID, PlayerID, SessionID};
 
@@ -20,10 +22,10 @@ pub struct CreateGameRequest {
     pub setting: u16,
 }
 
-impl Codec for CreateGameRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let attributes = Tag::expect(reader, "ATTR")?;
-        let setting = Tag::expect(reader, "GSET")?;
+impl Decodable for CreateGameRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let attributes: AttrMap = reader.tag("ATTR")?;
+        let setting: u16 = reader.tag("GSET")?;
         Ok(Self {
             attributes,
             setting,
@@ -38,9 +40,9 @@ pub struct CreateGameResponse {
     pub game_id: GameID,
 }
 
-impl Codec for CreateGameResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "GID", self.game_id);
+impl Encodable for CreateGameResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"GID", self.game_id);
     }
 }
 
@@ -54,11 +56,11 @@ pub struct RemovePlayerRequest {
     pub reason: RemoveReason,
 }
 
-impl Codec for RemovePlayerRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let game_id = expect_tag(reader, "GID")?;
-        let player_id = expect_tag(reader, "PID")?;
-        let reason = expect_tag(reader, "REAS")?;
+impl Decodable for RemovePlayerRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let game_id: GameID = reader.tag("GID")?;
+        let player_id: PlayerID = reader.tag("PID")?;
+        let reason: RemoveReason = reader.tag("REAS")?;
         Ok(Self {
             game_id,
             player_id,
@@ -78,31 +80,31 @@ pub enum GameModifyRequest {
     Attributes(GameID, AttrMap),
 }
 
-impl Codec for GameModifyRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let first = Tag::decode(reader)?;
+impl Decodable for GameModifyRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let first: Tag = reader.read_tag()?;
         let first_name: &str = &first.0;
         let game_id = match first_name {
             "ATTR" => {
-                let attributes = AttrMap::decode(reader)?;
-                let game_id = Tag::expect(reader, "GID")?;
+                let attributes: AttrMap = AttrMap::decode(reader)?;
+                let game_id: GameID = reader.tag("GID")?;
                 return Ok(Self::Attributes(game_id, attributes));
             }
             "GID" => GameID::decode(reader)?,
-            _ => return Err(CodecError::Other("Unknown game modify attribute")),
+            _ => return Err(DecodeError::Other("Unknown game modify attribute")),
         };
-        let value_tag = Tag::decode(reader)?;
+        let value_tag: Tag = reader.read_tag()?;
         let tag: &str = &value_tag.0;
         Ok(match tag {
             "GSTA" => {
-                let state = GameState::decode(reader)?;
+                let state: GameState = GameState::decode(reader)?;
                 Self::State(game_id, state)
             }
             "GSET" => {
-                let setting = u16::decode(reader)?;
+                let setting: u16 = reader.read_u16()?;
                 Self::Setting(game_id, setting)
             }
-            _ => return Err(CodecError::Other("Missing modify contents")),
+            _ => return Err(DecodeError::Other("Missing modify contents")),
         })
     }
 }
@@ -114,17 +116,16 @@ pub struct UpdateMeshRequest {
     pub targets: Vec<PlayerID>,
 }
 
-impl Codec for UpdateMeshRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let game_id = Tag::expect(reader, "GID")?;
-        let count = expect_list(reader, "TARG", ValueType::Group)?;
-        let mut targets = Vec::with_capacity(count);
+impl Decodable for UpdateMeshRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let game_id: GameID = reader.tag("GID")?;
+        let count: usize = reader.until_list("TARG", TdfType::Group)?;
+        let mut targets: Vec<PlayerID> = Vec::with_capacity(count);
         for _ in 0..count {
-            let player_id = Tag::expect(reader, "PID")?;
+            let player_id: PlayerID = reader.tag("PID")?;
             targets.push(player_id);
-            Tag::discard_group(reader)?;
+            reader.skip_group()?;
         }
-
         Ok(Self { game_id, targets })
     }
 }
@@ -136,26 +137,24 @@ pub struct MatchmakingRequest {
     pub rules: RuleSet,
 }
 
-impl Codec for MatchmakingRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        Tag::decode_until(reader, "CRIT", ValueType::Group)?;
-        let rule_count = expect_list(reader, "RLST", ValueType::Group)?;
-        let mut rules = Vec::new();
+impl Decodable for MatchmakingRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.until_tag("CRIT", TdfType::Group)?;
+        let rule_count: usize = reader.until_list("RLST", TdfType::Group)?;
+        let mut rules: Vec<MatchRules> = Vec::with_capacity(rule_count);
         for _ in 0..rule_count {
-            let name: String = expect_tag(reader, "NAME")?;
-            let values_count = expect_list(reader, "VALU", ValueType::String)?;
+            let name: String = reader.tag("NAME")?;
+            let values_count: usize = reader.until_list("VALU", TdfType::String)?;
             if values_count < 1 {
                 continue;
             }
-            let value: String = String::decode(reader)?;
+            let value: String = reader.read_string()?;
             if values_count > 1 {
                 for _ in 1..rule_count {
-                    String::skip(reader)?;
+                    reader.skip_blob()?;
                 }
             }
-
-            Tag::discard_group(reader)?;
-
+            reader.skip_group()?;
             if let Some(rule) = MatchRules::parse(&name, &value) {
                 rules.push(rule);
             }
@@ -174,8 +173,8 @@ pub struct MatchmakingResponse {
     pub id: SessionID,
 }
 
-impl Codec for MatchmakingResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "MSID", self.id);
+impl Encodable for MatchmakingResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"MSID", self.id);
     }
 }

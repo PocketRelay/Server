@@ -227,7 +227,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
 
             // Update the player settings with those retrieved from origin
             player
-                .update_all(&db, settings)
+                .update_all(&db, settings.into_iter())
                 .await
                 .map_err(|_| ServerError::ServerUnavailable)
         }

@@ -1,8 +1,9 @@
 use core::blaze::codec::{NetGroups, QosNetworkData};
 
 use blaze_pk::{
-    codec::{Codec, CodecError, CodecResult, Reader},
-    tagging::expect_tag,
+    codec::Decodable,
+    error::{DecodeError, DecodeResult},
+    reader::TdfReader,
     types::Union,
 };
 
@@ -12,9 +13,9 @@ pub struct ResumeSessionRequest {
     pub session_token: String,
 }
 
-impl Codec for ResumeSessionRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let session_token = expect_tag(reader, "SKEY")?;
+impl Decodable for ResumeSessionRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let session_token: String = reader.tag("SKEY")?;
         Ok(Self { session_token })
     }
 }
@@ -28,13 +29,13 @@ pub struct UpdateNetworkRequest {
     pub qos: QosNetworkData,
 }
 
-impl Codec for UpdateNetworkRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let address = match expect_tag(reader, "ADDR")? {
+impl Decodable for UpdateNetworkRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let address: NetGroups = match reader.tag("ADDR")? {
             Union::Set { value, .. } => value,
-            Union::Unset => return Err(CodecError::Other("Client address was unset")),
+            Union::Unset => return Err(DecodeError::Other("Client address was unset")),
         };
-        let qos = expect_tag(reader, "NQOS")?;
+        let qos: QosNetworkData = reader.tag("NQOS")?;
         Ok(Self { address, qos })
     }
 }
@@ -45,9 +46,9 @@ pub struct HardwareFlagRequest {
     pub hardware_flag: u16,
 }
 
-impl Codec for HardwareFlagRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let hardware_flag = expect_tag(reader, "HWFG")?;
+impl Decodable for HardwareFlagRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let hardware_flag: u16 = reader.tag("HWFG")?;
         Ok(Self { hardware_flag })
     }
 }

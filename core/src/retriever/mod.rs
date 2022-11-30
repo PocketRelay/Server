@@ -1,7 +1,7 @@
 //! Module for retrieving data from the official Mass Effect 3 Servers
 
 use blaze_pk::{
-    codec::Codec,
+    codec::{Decodable, Encodable},
     packet::{Packet, PacketType},
 };
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
@@ -135,7 +135,7 @@ impl RetSession {
 
     /// Writes a request packet and waits until the response packet is
     /// recieved returning the contents of that response packet.
-    pub async fn request<Req: Codec, Res: Codec>(
+    pub async fn request<Req: Encodable, Res: Decodable>(
         &mut self,
         component: Components,
         contents: Req,
@@ -147,7 +147,7 @@ impl RetSession {
 
     /// Writes a request packet and waits until the response packet is
     /// recieved returning the contents of that response packet.
-    pub async fn request_raw<Req: Codec>(
+    pub async fn request_raw<Req: Encodable>(
         &mut self,
         component: Components,
         contents: Req,
@@ -162,7 +162,10 @@ impl RetSession {
     /// Writes a request packet and waits until the response packet is
     /// recieved returning the contents of that response packet. The
     /// request will have no content
-    pub async fn request_empty<Res: Codec>(&mut self, component: Components) -> BlazeResult<Res> {
+    pub async fn request_empty<Res: Decodable>(
+        &mut self,
+        component: Components,
+    ) -> BlazeResult<Res> {
         let response = self.request_empty_raw(component).await?;
         let contents = response.decode::<Res>()?;
         Ok(contents)

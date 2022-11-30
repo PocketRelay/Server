@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use blaze_pk::{codec::Codec, packet::Packet, types::TdfMap};
+use blaze_pk::{codec::Encodable, packet::Packet, types::TdfMap};
 
 use log::{debug, warn};
 use serde::Serialize;
@@ -93,7 +93,7 @@ impl Game {
         let data = &*self.data.read().await;
         let old_attributes = &data.attributes;
         let mut attributes = HashMap::with_capacity(old_attributes.len());
-        for (key, value) in old_attributes {
+        for (key, value) in old_attributes.iter() {
             attributes.insert(key.to_owned(), value.to_owned());
         }
 
@@ -129,7 +129,7 @@ impl Game {
     ///
     /// `component` The packet component
     /// `contents`  The packet contents
-    async fn notify_all<C: Codec>(&self, component: Components, contents: C) {
+    async fn notify_all<C: Encodable>(&self, component: Components, contents: C) {
         let packet = Packet::notify(component, contents);
         self.push_all(&packet).await;
     }

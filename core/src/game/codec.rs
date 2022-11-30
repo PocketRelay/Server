@@ -1,9 +1,11 @@
 use blaze_pk::{
-    codec::{Codec, CodecResult, Reader},
-    tag::ValueType,
-    tagging::*,
+    codec::{Decodable, Encodable},
+    error::DecodeResult,
+    reader::TdfReader,
+    tag::TdfType,
+    value_type,
+    writer::TdfWriter,
 };
-
 use serde::Serialize;
 use utils::types::{GameID, GameSlot, PlayerID};
 
@@ -119,21 +121,20 @@ impl GameState {
     }
 }
 
-impl Codec for GameState {
-    fn encode(&self, output: &mut Vec<u8>) {
-        let value = self.value();
-        value.encode(output);
-    }
-
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let value = u8::decode(reader)?;
-        Ok(Self::from_value(value))
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::VarInt
+impl Encodable for GameState {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.write_u8(self.value());
     }
 }
+
+impl Decodable for GameState {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let value = reader.read_u8()?;
+        Ok(Self::from_value(value))
+    }
+}
+
+value_type!(GameState, TdfType::VarInt);
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerState {
@@ -152,26 +153,23 @@ impl PlayerState {
     }
 }
 
-impl Codec for PlayerState {
-    fn encode(&self, output: &mut Vec<u8>) {
-        let value = self.value();
-        value.encode(output);
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::VarInt
+impl Encodable for PlayerState {
+    fn encode(&self, output: &mut TdfWriter) {
+        output.write_u8(self.value())
     }
 }
+
+value_type!(PlayerState, TdfType::VarInt);
 
 pub struct StateChange {
     pub id: GameID,
     pub state: GameState,
 }
 
-impl Codec for StateChange {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "GID", self.id);
-        tag_value(output, "GSTA", &self.state);
+impl Encodable for StateChange {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"GID", self.id);
+        writer.tag_value(b"GSTA", &self.state);
     }
 }
 
@@ -180,10 +178,10 @@ pub struct SettingChange {
     pub id: GameID,
 }
 
-impl Codec for SettingChange {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u16(output, "ATTR", self.setting);
-        tag_u32(output, "GID", self.id);
+impl Encodable for SettingChange {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u16(b"ATTR", self.setting);
+        writer.tag_u32(b"GID", self.id);
     }
 }
 
@@ -195,10 +193,10 @@ pub struct AttributesChange<'a> {
     pub attributes: &'a AttrMap,
 }
 
-impl Codec for AttributesChange<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_value(output, "ATTR", self.attributes);
-        tag_u32(output, "GID", self.id);
+impl Encodable for AttributesChange<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_value(b"ATTR", self.attributes);
+        writer.tag_u32(b"GID", self.id);
     }
 }
 
@@ -209,17 +207,17 @@ pub struct PlayerJoining<'a> {
     pub player: &'a GamePlayer,
 }
 
-impl Codec for PlayerJoining<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "GID", self.player.game_id);
+impl Encodable for PlayerJoining<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"GID", self.player.game_id);
 
-        tag_group_start(output, "PDAT");
-        self.player.encode(self.slot, output);
+        writer.tag_group(b"PDAT");
+        self.player.encode(self.slot, writer);
     }
 }
 
 pub fn encode_game_data(
-    output: &mut Vec<u8>,
+    writer: &mut TdfWriter,
     id: GameID,
     players: &Vec<GamePlayer>,
     player: &GamePlayer,
@@ -232,74 +230,78 @@ pub fn encode_game_data(
     player_ids.push(player.player_id);
     let host_player = players.first().unwrap_or(player);
 
-    tag_group_start(output, "GAME");
+    writer.tag_group(b"GAME");
+
     let game_name = &host_player.display_name;
-    tag_value(output, "ADMN", &player_ids);
-    tag_value(output, "ATTR", &game_data.attributes);
-    {
-        tag_list_start(output, "CAP", ValueType::VarInt, 2);
-        output.push(4);
-        output.push(0);
-    }
-    tag_u32(output, "GID", id);
-    tag_str(output, "GNAM", game_name);
-    tag_u64(output, "GPVH", 0x5a4f2b378b715c6);
-    tag_u16(output, "GSET", game_data.setting);
-    tag_u64(output, "GSID", 0x4000000a76b645);
-    tag_value(output, "GSTA", &game_data.state);
 
-    tag_empty_str(output, "GTYP");
+    writer.tag_value(b"ADMN", &player_ids);
+    writer.tag_value(b"ATTR", &game_data.attributes);
     {
-        tag_list_start(output, "HNET", ValueType::Group, 1);
-        output.push(2);
-        host_player.net.groups.encode(output);
+        writer.tag_list_start(b"CAP", TdfType::VarInt, 2);
+        writer.write_u8(4);
+        writer.write_u8(0);
     }
 
-    tag_u32(output, "HSES", host_player.session_id);
-    tag_zero(output, "IGNO");
-    tag_u8(output, "MCAP", 4);
-    tag_value(output, "NQOS", &host_player.net.qos);
-    tag_zero(output, "NRES");
-    tag_zero(output, "NTOP");
-    tag_empty_str(output, "PGID");
-    tag_empty_blob(output, "PGSR");
+    writer.tag_u32(b"GID", id);
+    writer.tag_str(b"GNAM", game_name);
 
+    writer.tag_u64(b"GPVH", 0x5a4f2b378b715c6);
+    writer.tag_u16(b"GSET", game_data.setting);
+    writer.tag_u64(b"GSID", 0x4000000a76b645);
+    writer.tag_value(b"GSTA", &game_data.state);
+
+    writer.tag_str_empty(b"GTYP");
     {
-        tag_group_start(output, "PHST");
-        tag_u32(output, "HPID", host_player.player_id);
-        tag_zero(output, "HSLT");
-        tag_group_end(output);
+        writer.tag_list_start(b"HNET", TdfType::Group, 1);
+        writer.write_byte(2);
+        host_player.net.groups.encode(writer);
     }
 
-    tag_u8(output, "PRES", 0x1);
-    tag_empty_str(output, "PSAS");
-    tag_u8(output, "QCAP", 0x0);
-    tag_u32(output, "SEED", 0x4cbc8585);
-    tag_u8(output, "TCAP", 0x0);
+    writer.tag_u32(b"HSES", host_player.session_id);
+    writer.tag_zero(b"IGNO");
+    writer.tag_u8(b"MCAP", 4);
+    writer.tag_value(b"NQOS", &host_player.net.qos);
+    writer.tag_zero(b"NRES");
+    writer.tag_zero(b"NTOP");
+    writer.tag_str_empty(b"PGID");
+    writer.tag_empty_blob(b"PGSR");
 
     {
-        tag_group_start(output, "THST");
-        tag_u32(output, "HPID", host_player.player_id);
-        tag_u8(output, "HSLT", 0x0);
-        tag_group_end(output);
+        writer.tag_group(b"PHST");
+        writer.tag_u32(b"HPID", host_player.player_id);
+        writer.tag_zero(b"HSLT");
+        writer.tag_group_end();
     }
 
-    tag_str(output, "UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
-    tag_u8(output, "VOIP", 0x2);
-    tag_str(output, "VSTR", "ME3-295976325-179181965240128");
-    tag_empty_blob(output, "XNNC");
-    tag_empty_blob(output, "XSES");
-    tag_group_end(output);
+    writer.tag_u8(b"PRES", 0x1);
+    writer.tag_str_empty(b"PSAS");
+    writer.tag_u8(b"QCAP", 0x0);
+    writer.tag_u32(b"SEED", 0x4cbc8585);
+    writer.tag_u8(b"TCAP", 0x0);
+
+    {
+        writer.tag_group(b"THST");
+        writer.tag_u32(b"HPID", host_player.player_id);
+        writer.tag_u8(b"HSLT", 0x0);
+        writer.tag_group_end();
+    }
+
+    writer.tag_str(b"UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
+    writer.tag_u8(b"VOIP", 0x2);
+    writer.tag_str(b"VSTR", "ME3-295976325-179181965240128");
+    writer.tag_empty_blob(b"XNNC");
+    writer.tag_empty_blob(b"XSES");
+    writer.tag_group_end();
 }
 
-pub fn encode_players_list(output: &mut Vec<u8>, players: &Vec<GamePlayer>, player: &GamePlayer) {
-    tag_list_start(output, "PROS", ValueType::Group, players.len() + 1);
+pub fn encode_players_list(writer: &mut TdfWriter, players: &Vec<GamePlayer>, player: &GamePlayer) {
+    writer.tag_list_start(b"PROS", TdfType::Group, players.len() + 1);
     let mut slot = 0;
     for player in players {
-        player.encode(slot, output);
+        player.encode(slot, writer);
         slot += 1;
     }
-    player.encode(slot, output);
+    player.encode(slot, writer);
 }
 
 pub struct GameDetails<'a> {
@@ -310,27 +312,27 @@ pub struct GameDetails<'a> {
     pub ty: GameDetailsType,
 }
 
-impl Codec for GameDetails<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        encode_game_data(output, self.id, self.players, self.player, self.game_data);
-        encode_players_list(output, self.players, self.player);
+impl Encodable for GameDetails<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        encode_game_data(writer, self.id, self.players, self.player, self.game_data);
+        encode_players_list(writer, self.players, self.player);
         let union_value = self.ty.value();
-        tag_union_start(output, "REAS", union_value);
-        tag_group_start(output, "VALU");
+        writer.tag_union_start(b"REAS", union_value);
+        writer.tag_group(b"VALU");
         match self.ty {
             GameDetailsType::Created => {
-                tag_u8(output, "DCTX", 0x0);
+                writer.tag_u8(b"DCTX", 0x0);
             }
             GameDetailsType::Joined => {
                 let session_id = self.player.session_id;
-                tag_u16(output, "FIT", 0x3f7a);
-                tag_u16(output, "MAXF", 0x5460);
-                tag_u32(output, "MSID", session_id);
-                tag_u8(output, "RSLT", 0x2);
-                tag_u32(output, "USID", session_id);
+                writer.tag_u16(b"FIT", 0x3f7a);
+                writer.tag_u16(b"MAXF", 0x5460);
+                writer.tag_u32(b"MSID", session_id);
+                writer.tag_u8(b"RSLT", 0x2);
+                writer.tag_u32(b"USID", session_id);
             }
         }
-        tag_group_end(output);
+        writer.tag_group_end();
     }
 }
 
@@ -340,11 +342,11 @@ pub struct PlayerStateChange {
     pub state: PlayerState,
 }
 
-impl Codec for PlayerStateChange {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "GID", self.gid);
-        tag_u32(output, "PID", self.pid);
-        tag_value(output, "STAT", &self.state);
+impl Encodable for PlayerStateChange {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"GID", self.gid);
+        writer.tag_u32(b"PID", self.pid);
+        writer.tag_value(b"STAT", &self.state);
     }
 }
 
@@ -353,10 +355,10 @@ pub struct JoinComplete {
     pub player_id: PlayerID,
 }
 
-impl Codec for JoinComplete {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "GID", self.game_id);
-        tag_u32(output, "PID", self.player_id);
+impl Encodable for JoinComplete {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"GID", self.game_id);
+        writer.tag_u32(b"PID", self.player_id);
     }
 }
 
@@ -367,12 +369,12 @@ pub struct AdminListChange {
     pub host_id: PlayerID,
 }
 
-impl Codec for AdminListChange {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "ALST", self.player_id);
-        tag_u32(output, "GID", self.game_id);
-        tag_value(output, "OPER", &self.operation);
-        tag_u32(output, "UID", self.host_id);
+impl Encodable for AdminListChange {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"ALST", self.player_id);
+        writer.tag_u32(b"GID", self.game_id);
+        writer.tag_value(b"OPER", &self.operation);
+        writer.tag_u32(b"UID", self.host_id);
     }
 }
 
@@ -383,14 +385,16 @@ pub enum AdminListOperation {
     Remove,
 }
 
-impl Codec for AdminListOperation {
-    fn encode(&self, output: &mut Vec<u8>) {
+impl Encodable for AdminListOperation {
+    fn encode(&self, writer: &mut TdfWriter) {
         match self {
-            Self::Add => output.push(0),
-            Self::Remove => output.push(1),
+            Self::Add => writer.write_byte(0),
+            Self::Remove => writer.write_byte(1),
         }
     }
 }
+
+value_type!(AdminListOperation, TdfType::VarInt);
 
 pub struct PlayerRemoved {
     pub game_id: GameID,
@@ -434,27 +438,27 @@ impl RemoveReason {
     }
 }
 
-impl Codec for RemoveReason {
-    fn encode(&self, output: &mut Vec<u8>) {
-        let value = self.to_value();
-        value.encode(output);
-    }
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let value = u8::decode(reader)?;
-        Ok(Self::from_value(value))
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::VarInt
+impl Encodable for RemoveReason {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.write_u8(self.to_value());
     }
 }
 
-impl Codec for PlayerRemoved {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u8(output, "CNTX", 0);
-        tag_u32(output, "GID", self.game_id);
-        tag_u32(output, "PID", self.player_id);
-        tag_value(output, "REAS", &self.reason);
+impl Decodable for RemoveReason {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let value: u8 = reader.read_u8()?;
+        Ok(Self::from_value(value))
+    }
+}
+
+value_type!(RemoveReason, TdfType::VarInt);
+
+impl Encodable for PlayerRemoved {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u8(b"CNTX", 0);
+        writer.tag_u32(b"GID", self.game_id);
+        writer.tag_u32(b"PID", self.player_id);
+        writer.tag_value(b"REAS", &self.reason);
     }
 }
 
@@ -462,9 +466,9 @@ pub struct FetchExtendedData {
     pub player_id: PlayerID,
 }
 
-impl Codec for FetchExtendedData {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "BUID", self.player_id);
+impl Encodable for FetchExtendedData {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"BUID", self.player_id);
     }
 }
 
@@ -473,12 +477,12 @@ pub struct HostMigrateStart {
     pub host_id: PlayerID,
 }
 
-impl Codec for HostMigrateStart {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "GID", self.game_id);
-        tag_u32(output, "HOST", self.host_id);
-        tag_u8(output, "PMIG", 0x2);
-        tag_u8(output, "SLOT", 0x0);
+impl Encodable for HostMigrateStart {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"GID", self.game_id);
+        writer.tag_u32(b"HOST", self.host_id);
+        writer.tag_u8(b"PMIG", 0x2);
+        writer.tag_u8(b"SLOT", 0x0);
     }
 }
 
@@ -486,9 +490,9 @@ pub struct HostMigrateFinished {
     pub game_id: GameID,
 }
 
-impl Codec for HostMigrateFinished {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "GID", self.game_id)
+impl Encodable for HostMigrateFinished {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"GID", self.game_id)
     }
 }
 

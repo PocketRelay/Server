@@ -1,8 +1,10 @@
 use blaze_pk::{
-    codec::{Codec, CodecResult, Reader},
-    tag::{Tag, ValueType},
-    tagging::*,
+    codec::{Decodable, Encodable},
+    error::DecodeResult,
+    reader::TdfReader,
+    tag::TdfType,
     types::TdfMap,
+    writer::TdfWriter,
 };
 
 /// Packet encoding for Redirector GetServerInstance packets
@@ -11,21 +13,21 @@ use blaze_pk::{
 /// These details are extracted from an official game copy
 pub struct InstanceRequest;
 
-impl Codec for InstanceRequest {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_str(output, "BSDK", "3.15.6.0");
-        tag_str(output, "BTIM", "Dec 21 2012 12:47:10");
-        tag_str(output, "CLNT", "MassEffect3-pc");
-        tag_u8(output, "CLTP", 0);
-        tag_str(output, "CSKU", "134845");
-        tag_str(output, "CVER", "05427.124");
-        tag_str(output, "DSDK", "8.14.7.1");
-        tag_str(output, "ENV", "prod");
-        tag_union_unset(output, "FPID");
-        tag_u32(output, "LOC", 0x656e4e5a);
-        tag_str(output, "NAME", "masseffect-3-pc");
-        tag_str(output, "PLAT", "Windows");
-        tag_str(output, "PROF", "standardSecure_v3");
+impl Encodable for InstanceRequest {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_str(b"BSDK", "3.15.6.0");
+        writer.tag_str(b"BTIM", "Dec 21 2012 12:47:10");
+        writer.tag_str(b"CLNT", "MassEffect3-pc");
+        writer.tag_u8(b"CLTP", 0);
+        writer.tag_str(b"CSKU", "134845");
+        writer.tag_str(b"CVER", "05427.124");
+        writer.tag_str(b"DSDK", "8.14.7.1");
+        writer.tag_str(b"ENV", "prod");
+        writer.tag_union_unset(b"FPID");
+        writer.tag_u32(b"LOC", 0x656e4e5a);
+        writer.tag_str(b"NAME", "masseffect-3-pc");
+        writer.tag_str(b"PLAT", "Windows");
+        writer.tag_str(b"PROF", "standardSecure_v3");
     }
 }
 
@@ -39,14 +41,12 @@ pub struct OriginLoginResponse {
     pub display_name: String,
 }
 
-impl Codec for OriginLoginResponse {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        Tag::decode_until(reader, "SESS", ValueType::Group)?;
-        let email = expect_tag(reader, "MAIL")?;
-        Tag::decode_until(reader, "PDTL", ValueType::Group)?;
-        let display_name = expect_tag(reader, "DSNM")?;
-        Tag::discard_group(reader)?; // End group PDTL
-        Tag::discard_group(reader)?; // End group MAIL
+impl Decodable for OriginLoginResponse {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.until_tag("SESS", TdfType::Group)?;
+        let email: String = reader.tag("MAIL")?;
+        reader.until_tag("PDTL", TdfType::Group)?;
+        let display_name: String = reader.tag("DNSM")?;
         Ok(Self {
             email,
             display_name,
@@ -61,10 +61,10 @@ pub struct OriginLoginRequest {
     pub token: String,
 }
 
-impl Codec for OriginLoginRequest {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_str(output, "AUTH", &self.token);
-        tag_u8(output, "TYPE", 0x1);
+impl Encodable for OriginLoginRequest {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_str(b"AUTH", &self.token);
+        writer.tag_u8(b"TYPE", 0x1);
     }
 }
 
@@ -75,9 +75,9 @@ pub struct SettingsResponse {
     pub settings: TdfMap<String, String>,
 }
 
-impl Codec for SettingsResponse {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let settings = expect_tag(reader, "SMAP")?;
+impl Decodable for SettingsResponse {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let settings: TdfMap<String, String> = reader.tag("SMAP")?;
         Ok(Self { settings })
     }
 }

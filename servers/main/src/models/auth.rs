@@ -1,7 +1,10 @@
 use blaze_pk::{
-    codec::{Codec, CodecError, CodecResult, Reader},
-    tag::{Tag, ValueType},
-    tagging::*,
+    codec::{Decodable, Encodable},
+    error::{DecodeError, DecodeResult},
+    reader::TdfReader,
+    tag::TdfType,
+    value_type,
+    writer::TdfWriter,
 };
 use database::Player;
 use utils::types::PlayerID;
@@ -25,42 +28,45 @@ impl AuthRequest {
     }
 }
 
-impl Codec for AuthRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        reader.mark();
-        // Read the type of request
-        let ty = Tag::expect::<u8>(reader, "TYPE")?;
-        reader.reset_marker();
+impl Decodable for AuthRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let ty = {
+            let start = reader.cursor;
+            let ty: u8 = reader.tag("TYPE")?;
+            reader.cursor = start;
+            ty
+        };
+
         match ty {
             0 => {
-                let email = Tag::expect(reader, "MAIL")?;
-                let password = Tag::expect(reader, "PASS")?;
+                let email: String = reader.tag("MAIL")?;
+                let password: String = reader.tag("PASS")?;
                 Ok(Self::Login { email, password })
             }
             1 => {
-                let token = Tag::expect(reader, "AUTH")?;
+                let token: String = reader.tag("AUTH")?;
                 Ok(Self::Origin { token })
             }
             2 => {
-                let token = Tag::expect(reader, "AUTH")?;
-                let player_id = Tag::expect(reader, "PID")?;
+                let token: String = reader.tag("AUTH")?;
+                let player_id: u32 = reader.tag("PID")?;
                 Ok(Self::Silent { token, player_id })
             }
-            _ => Err(CodecError::Other("Unknown auth request type")),
+            _ => Err(DecodeError::UnknownType { ty }),
         }
     }
 }
 
 /// Encodes a mock persona from the provided player using its
 /// display name and ID as the values
-fn encode_persona(output: &mut Vec<u8>, id: PlayerID, display_name: &str) {
-    tag_str(output, "DSNM", display_name);
-    tag_zero(output, "LAST");
-    tag_u32(output, "PID", id);
-    tag_zero(output, "STAS");
-    tag_zero(output, "XREF");
-    tag_zero(output, "XTYP");
-    tag_group_end(output);
+fn encode_persona(writer: &mut TdfWriter, id: PlayerID, display_name: &str) {
+    writer.tag_str(b"DSNM", display_name);
+    writer.tag_zero(b"LAST");
+    writer.tag_u32(b"PID", id);
+    writer.tag_zero(b"STAS");
+    writer.tag_zero(b"XREF");
+    writer.tag_zero(b"XTYP");
+    writer.tag_group_end();
 }
 
 /// Structure for the response to an authentication request.
@@ -95,42 +101,42 @@ impl AuthResponse {
     }
 }
 
-impl Codec for AuthResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
+impl Encodable for AuthResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
         if self.silent {
-            tag_zero(output, "AGUP");
+            writer.tag_zero(b"AGUP");
         }
-        tag_empty_str(output, "LDHT");
-        tag_zero(output, "NTOS");
-        tag_str(output, "PCTK", &self.session_token); // PC Authentication Token
+        writer.tag_str_empty(b"LDHT");
+        writer.tag_zero(b"NTOS");
+        writer.tag_str(b"PCTK", &self.session_token); // PC Authentication Token
         if self.silent {
-            tag_empty_str(output, "PRIV");
+            writer.tag_str_empty(b"PRIV");
             {
-                tag_group_start(output, "SESS");
-                tag_u32(output, "BUID", self.player_id);
-                tag_zero(output, "FRST");
-                tag_str(output, "KEY", &self.session_token); // Session Token
-                tag_zero(output, "LLOG");
-                tag_str(output, "MAIL", &self.email); // Player Email
+                writer.tag_group(b"SESS");
+                writer.tag_u32(b"BUID", self.player_id);
+                writer.tag_zero(b"FRST");
+                writer.tag_str(b"KEY", &self.session_token); // Session Token
+                writer.tag_zero(b"LLOG");
+                writer.tag_str(b"MAIL", &self.email); // Player Email
                 {
-                    tag_group_start(output, "PDTL");
-                    encode_persona(output, self.player_id, &self.display_name); // Persona Details
+                    writer.tag_group(b"PDTL");
+                    encode_persona(writer, self.player_id, &self.display_name); // Persona Details
                 }
-                tag_u32(output, "UID", self.player_id);
-                tag_group_end(output);
+                writer.tag_u32(b"UID", self.player_id);
+                writer.tag_group_end();
             }
         } else {
-            tag_list_start(output, "PLST", ValueType::Group, 1);
-            encode_persona(output, self.player_id, &self.display_name);
-            tag_empty_str(output, "PRIV");
-            tag_str(output, "SKEY", &self.session_token);
+            writer.tag_list_start(b"PLST", TdfType::Group, 1);
+            encode_persona(writer, self.player_id, &self.display_name);
+            writer.tag_str_empty(b"PRIV");
+            writer.tag_str(b"SKEY", &self.session_token);
         }
-        tag_zero(output, "SPAM");
-        tag_empty_str(output, "THST");
-        tag_empty_str(output, "TSUI");
-        tag_empty_str(output, "TURI");
+        writer.tag_zero(b"SPAM");
+        writer.tag_str_empty(b"THST");
+        writer.tag_str_empty(b"TSUI");
+        writer.tag_str_empty(b"TURI");
         if !self.silent {
-            tag_u32(output, "UID", self.player_id);
+            writer.tag_u32(b"UID", self.player_id);
         }
     }
 }
@@ -144,10 +150,10 @@ pub struct CreateAccountRequest {
     pub password: String,
 }
 
-impl Codec for CreateAccountRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let email = Tag::expect(reader, "MAIL")?;
-        let password = Tag::expect(reader, "PASS")?;
+impl Decodable for CreateAccountRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let email: String = reader.tag("MAIL")?;
+        let password: String = reader.tag("PASS")?;
         Ok(Self { email, password })
     }
 }
@@ -174,16 +180,17 @@ impl PersonaResponse {
     }
 }
 
-impl Codec for PersonaResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u32(output, "BUID", self.player_id);
-        tag_zero(output, "FRST");
-        tag_str(output, "KEY", &self.session_token);
-        tag_zero(output, "LLOG");
-        tag_str(output, "MAIL", &self.email);
-        tag_group_start(output, "PDTL");
-        encode_persona(output, self.player_id, &self.display_name);
-        tag_u32(output, "UID", self.player_id);
+impl Encodable for PersonaResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"BUID", self.player_id);
+        writer.tag_zero(b"FRST");
+        writer.tag_str(b"KEY", &self.session_token);
+        writer.tag_zero(b"LLOG");
+        writer.tag_str(b"MAIL", &self.email);
+
+        writer.tag_group(b"PDTL");
+        encode_persona(writer, self.player_id, &self.display_name);
+        writer.tag_u32(b"UID", self.player_id);
     }
 }
 
@@ -193,9 +200,9 @@ pub struct ListEntitlementsRequest {
     pub tag: String,
 }
 
-impl Codec for ListEntitlementsRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let tag = Tag::expect(reader, "ETAG")?;
+impl Decodable for ListEntitlementsRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let tag: String = reader.tag("ETAG")?;
         Ok(Self { tag })
     }
 }
@@ -205,9 +212,9 @@ pub struct ListEntitlementsResponse {
     pub list: Vec<Entitlement>,
 }
 
-impl Codec for ListEntitlementsResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_value(output, "NLST", &self.list);
+impl Encodable for ListEntitlementsResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_value(b"NLST", &self.list);
     }
 }
 
@@ -265,32 +272,29 @@ impl Entitlement {
     }
 }
 
-impl Codec for Entitlement {
-    //noinspection SpellCheckingInspection
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_empty_str(output, "DEVI");
-        tag_str(output, "GDAY", "2012-12-15T16:15Z");
-        tag_str(output, "GNAM", self.name);
-        tag_u64(output, "ID", self.id);
-        tag_u8(output, "ISCO", 0);
-        tag_u8(output, "PID", 0);
-        tag_str(output, "PJID", self.pjid);
-        tag_u8(output, "PRCA", self.prca);
-        tag_str(output, "PRID", self.prid);
-        tag_u8(output, "STAT", 1);
-        tag_u8(output, "STRC", 0);
-        tag_str(output, "TAG", self.tag);
-        tag_empty_str(output, "TDAY");
-        tag_u8(output, "TTYPE", self.ty);
-        tag_u8(output, "UCNT", 0);
-        tag_u8(output, "VER", 0);
-        tag_group_end(output);
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::Group
+impl Encodable for Entitlement {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_str_empty(b"DEVI");
+        writer.tag_str(b"GDAY", "2012-12-15T16:15Z");
+        writer.tag_str(b"GNAM", self.name);
+        writer.tag_u64(b"ID", self.id);
+        writer.tag_u8(b"ISCO", 0);
+        writer.tag_u8(b"PID", 0);
+        writer.tag_str(b"PJID", self.pjid);
+        writer.tag_u8(b"PRCA", self.prca);
+        writer.tag_str(b"PRID", self.prid);
+        writer.tag_u8(b"STAT", 1);
+        writer.tag_u8(b"STRC", 0);
+        writer.tag_str(b"TAG", self.tag);
+        writer.tag_str_empty(b"TDAY");
+        writer.tag_u8(b"TTYPE", self.ty);
+        writer.tag_u8(b"UCNT", 0);
+        writer.tag_u8(b"VER", 0);
+        writer.tag_group_end();
     }
 }
+
+value_type!(Entitlement, TdfType::Group);
 
 /// Structure for a request to send a forgot password email. Currently
 /// only logs that a reset was requested and doesn't actually send
@@ -300,9 +304,9 @@ pub struct ForgotPasswordRequest {
     pub email: String,
 }
 
-impl Codec for ForgotPasswordRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let email = Tag::expect(reader, "MAIL")?;
+impl Decodable for ForgotPasswordRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let email: String = reader.tag("MAIL")?;
         Ok(Self { email })
     }
 }
@@ -311,13 +315,13 @@ impl Codec for ForgotPasswordRequest {
 /// values in this struct ever change.
 pub struct LegalDocsInfo;
 
-impl Codec for LegalDocsInfo {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_zero(output, "EAMC");
-        tag_empty_str(output, "LHST");
-        tag_zero(output, "PMC");
-        tag_empty_str(output, "PPUI");
-        tag_empty_str(output, "TSUI");
+impl Encodable for LegalDocsInfo {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_zero(b"EAMC");
+        writer.tag_str_empty(b"LHST");
+        writer.tag_zero(b"PMC");
+        writer.tag_str_empty(b"PPUI");
+        writer.tag_str_empty(b"TSUI");
     }
 }
 
@@ -332,11 +336,11 @@ pub struct LegalContent<'a> {
     pub col: u16,
 }
 
-impl Codec for LegalContent<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_str(output, "LDVC", self.path);
-        tag_u16(output, "TCOL", self.col);
-        tag_str(output, "TCOT", self.content);
+impl Encodable for LegalContent<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_str(b"LDVC", self.path);
+        writer.tag_u16(b"TCOL", self.col);
+        writer.tag_str(b"TCOT", self.content);
     }
 }
 
@@ -346,8 +350,8 @@ pub struct GetTokenResponse {
     pub token: String,
 }
 
-impl Codec for GetTokenResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_str(output, "AUTH", &self.token)
+impl Encodable for GetTokenResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_str(b"AUTH", &self.token)
     }
 }

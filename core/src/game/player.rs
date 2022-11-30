@@ -1,4 +1,4 @@
-use blaze_pk::{codec::Codec, packet::Packet, tag::ValueType, tagging::*};
+use blaze_pk::{codec::Encodable, packet::Packet, tag::TdfType, writer::TdfWriter};
 use serde::Serialize;
 use tokio::{join, sync::mpsc};
 use utils::types::{GameID, PlayerID, SessionID};
@@ -116,44 +116,44 @@ impl GamePlayer {
         )
     }
 
-    pub fn encode(&self, slot: usize, output: &mut Vec<u8>) {
-        tag_empty_blob(output, "BLOB");
-        tag_u8(output, "EXID", 0);
-        tag_u32(output, "GID", self.game_id);
-        tag_u32(output, "LOC", 0x64654445);
-        tag_str(output, "NAME", &self.display_name);
-        tag_u32(output, "PID", self.player_id);
-        self.net.tag_groups("PNET", output);
-        tag_usize(output, "SID", slot);
-        tag_u8(output, "SLOT", 0);
-        tag_value(output, "STAT", &self.state);
-        tag_u16(output, "TIDX", 0xffff);
-        tag_u8(output, "TIME", 0);
-        tag_triple(output, "UGID", &(0, 0, 0));
-        tag_u32(output, "UID", self.session_id);
-        tag_group_end(output);
+    pub fn encode(&self, slot: usize, writer: &mut TdfWriter) {
+        writer.tag_empty_blob(b"BLOB");
+        writer.tag_u8(b"EXID", 0);
+        writer.tag_u32(b"GID", self.game_id);
+        writer.tag_u32(b"LOC", 0x64654445);
+        writer.tag_str(b"NAME", &self.display_name);
+        writer.tag_u32(b"PID", self.player_id);
+        self.net.tag_groups(b"PNET", writer);
+        writer.tag_usize(b"SID", slot);
+        writer.tag_u8(b"SLOT", 0);
+        writer.tag_value(b"STAT", &self.state);
+        writer.tag_u16(b"TIDX", 0xffff);
+        writer.tag_u8(b"TIME", 0);
+        writer.tag_triple(b"UGID", (0, 0, 0));
+        writer.tag_u32(b"UID", self.session_id);
+        writer.tag_group_end();
     }
 
-    pub fn encode_data(&self, output: &mut Vec<u8>) {
-        self.net.tag_groups("ADDR", output);
-        tag_str(output, "BPS", "ea-sjc");
-        tag_empty_str(output, "CTY");
-        tag_var_int_list_empty(output, "CVAR");
+    pub fn encode_data(&self, writer: &mut TdfWriter) {
+        self.net.tag_groups(b"ADDR", writer);
+        writer.tag_str(b"BPS", "ea-sjc");
+        writer.tag_str_empty(b"CTY");
+        writer.tag_var_int_list_empty(b"CVAR");
         {
-            tag_map_start(output, "DMAP", ValueType::VarInt, ValueType::VarInt, 1);
-            0x70001.encode(output);
-            0x409a.encode(output);
+            writer.tag_map_start(b"DMAP", TdfType::VarInt, TdfType::VarInt, 1);
+            writer.write_u32(0x70001);
+            writer.write_u16(0x409a);
         }
-        tag_u16(output, "HWFG", self.net.hardware_flags);
+        writer.tag_u16(b"HWFG", self.net.hardware_flags);
         {
-            tag_list_start(output, "PSLM", ValueType::VarInt, 1);
-            0xfff0fff.encode(output);
+            writer.tag_list_start(b"PSLM", TdfType::VarInt, 1);
+            writer.write_u32(0xfff0fff);
         }
-        tag_value(output, "QDAT", &self.net.qos);
-        tag_u8(output, "UATT", 0);
-        tag_list_start(output, "ULST", ValueType::Triple, 1);
-        (4, 1, self.game_id).encode(output);
-        tag_group_end(output);
+        writer.tag_value(b"QDAT", &self.net.qos);
+        writer.tag_u8(b"UATT", 0);
+        writer.tag_list_start(b"ULST", TdfType::Triple, 1);
+        (4, 1, self.game_id).encode(writer);
+        writer.tag_group_end();
     }
 }
 
@@ -169,19 +169,19 @@ pub struct PlayerUpdate<'a> {
     pub player: &'a GamePlayer,
 }
 
-impl Codec for PlayerUpdate<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_group_start(output, "DATA");
-        self.player.encode_data(output);
+impl Encodable for PlayerUpdate<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_group(b"DATA");
+        self.player.encode_data(writer);
 
-        tag_group_start(output, "USER");
-        tag_u32(output, "AID", self.player.player_id);
-        tag_u32(output, "ALOC", 0x64654445);
-        tag_empty_blob(output, "EXBB");
-        tag_u8(output, "EXID", 0);
-        tag_u32(output, "ID", self.player.player_id);
-        tag_str(output, "NAME", &self.player.display_name);
-        tag_group_end(output);
+        writer.tag_group(b"USER");
+        writer.tag_u32(b"AID", self.player.player_id);
+        writer.tag_u32(b"ALOC", 0x64654445);
+        writer.tag_empty_blob(b"EXBB");
+        writer.tag_u8(b"EXID", 0);
+        writer.tag_u32(b"ID", self.player.player_id);
+        writer.tag_str(b"NAME", &self.player.display_name);
+        writer.tag_group_end();
     }
 }
 
@@ -189,10 +189,10 @@ pub struct SetPlayer<'a> {
     pub player: &'a GamePlayer,
 }
 
-impl Codec for SetPlayer<'_> {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_group_start(output, "DATA");
-        self.player.encode_data(output);
-        tag_u32(output, "USID", self.player.player_id);
+impl Encodable for SetPlayer<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_group(b"DATA");
+        self.player.encode_data(writer);
+        writer.tag_u32(b"USID", self.player.player_id);
     }
 }

@@ -1,8 +1,6 @@
 use core::blaze::components::{Components, UserSessions};
 
-use blaze_pk::{
-    codec::Codec, packet::PacketComponents, tag::ValueType, tagging::*, types::encode_str,
-};
+use blaze_pk::{codec::Encodable, packet::PacketComponents, tag::TdfType, writer::TdfWriter};
 use utils::types::PlayerID;
 
 /// Structure of the response to a fetch messages request. Which tells
@@ -12,9 +10,9 @@ pub struct FetchMessageResponse {
     pub count: usize,
 }
 
-impl Codec for FetchMessageResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_usize(output, "MCNT", self.count);
+impl Encodable for FetchMessageResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_usize(b"MCNT", self.count);
     }
 }
 
@@ -26,29 +24,29 @@ pub struct MessageNotify {
     pub message: String,
 }
 
-impl Codec for MessageNotify {
-    fn encode(&self, output: &mut Vec<u8>) {
+impl Encodable for MessageNotify {
+    fn encode(&self, writer: &mut TdfWriter) {
         let ref_value = Components::UserSessions(UserSessions::SetSession).values();
         let player_ref = (ref_value.0, ref_value.1, self.player_id);
 
-        tag_u8(output, "FLAG", 0x1);
-        tag_u8(output, "MGID", 0x1);
-        tag_str(output, "NAME", &self.message);
+        writer.tag_u8(b"FLAG", 0x1);
+        writer.tag_u8(b"MGID", 0x1);
+        writer.tag_str(b"NAME", &self.message);
         {
-            tag_group_start(output, "PYLD");
+            writer.tag_group(b"PYLD");
             {
-                tag_map_start(output, "ATTR", ValueType::String, ValueType::String, 1);
-                encode_str("B0000", output);
-                encode_str("160", output);
+                writer.tag_map_start(b"ATTR", TdfType::String, TdfType::String, 1);
+                writer.write_str("B0000");
+                writer.write_str("160");
             }
-            tag_u8(output, "FLAG", 0x1);
-            tag_u8(output, "STAT", 0x0);
-            tag_u8(output, "TAG", 0x0);
-            tag_triple(output, "TARG", &player_ref);
-            tag_u8(output, "TYPE", 0x0);
-            tag_group_end(output);
+            writer.tag_u8(b"FLAG", 0x1);
+            writer.tag_u8(b"STAT", 0x0);
+            writer.tag_u8(b"TAG", 0x0);
+            writer.tag_value(b"TARG", &player_ref);
+            writer.tag_u8(b"TYPE", 0x0);
+            writer.tag_group_end();
         }
-        tag_triple(output, "SRCE", &player_ref);
-        tag_zero(output, "TIME");
+        writer.tag_value(b"SRCE", &player_ref);
+        writer.tag_zero(b"TIME");
     }
 }

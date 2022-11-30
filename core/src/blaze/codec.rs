@@ -263,7 +263,7 @@ impl Encodable for QosNetworkData {
 
 impl Decodable for QosNetworkData {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let dbps: u16 = reader.tag("DBPS");
+        let dbps: u16 = reader.tag("DBPS")?;
         let natt: NatType = reader.tag("NATT")?;
         let ubps: u16 = reader.tag("UBPS")?;
         reader.read_byte()?;
@@ -304,8 +304,8 @@ impl Encodable for NetGroups {
 
 impl Decodable for NetGroups {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let external: NetGroup = reader.tag(b"EXIP")?;
-        let internal: NetGroup = reader.tag(b"INIP")?;
+        let external: NetGroup = reader.tag("EXIP")?;
+        let internal: NetGroup = reader.tag("INIP")?;
         reader.read_byte()?;
         Ok(Self { external, internal })
     }
@@ -314,13 +314,13 @@ impl Decodable for NetGroups {
 value_type!(NetGroups, TdfType::Group);
 
 impl NetData {
-    pub fn tag_groups(&self, tag: &str, writer: &mut TdfWriter) {
+    pub fn tag_groups(&self, tag: &[u8], writer: &mut TdfWriter) {
         if !self.is_set {
             writer.tag_union_unset(tag);
             return;
         }
 
-        writer.tag_union_value(tag, NetworkAddressType::Pair.into(), "VALU", self.groups);
+        writer.tag_union_value(tag, NetworkAddressType::Pair.into(), b"VALU", self.groups);
     }
 }
 
@@ -339,8 +339,8 @@ impl Encodable for NetGroup {
 
 impl Decodable for NetGroup {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let ip: NetAddress = reader.tag(b"IP")?;
-        let port: u16 = reader.tag(b"PORT")?;
+        let ip: NetAddress = reader.tag("IP")?;
+        let port: u16 = reader.tag("PORT")?;
         reader.read_byte()?;
         Ok(Self(ip, port))
     }

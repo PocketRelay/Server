@@ -3,7 +3,7 @@
 
 use core::blaze::codec::{InstanceDetails, InstanceNet};
 use core::blaze::components::{Components, Redirector};
-use core::blaze::errors::{BlazeError, BlazeResult};
+use core::blaze::errors::BlazeResult;
 use core::constants;
 use core::{env, state::GlobalState};
 use std::net::SocketAddr;
@@ -47,7 +47,7 @@ const REDIRECT_COMPONENT: Components = Components::Redirector(Redirector::GetSer
 async fn handle_client(stream: TcpStream, addr: SocketAddr) -> BlazeResult<()> {
     let mut shutdown = GlobalState::shutdown();
 
-    let mut server = match BlazeStream::new(stream, StreamMode::Server).await {
+    let mut stream = match BlazeStream::new(stream, StreamMode::Server).await {
         Ok(stream) => stream,
         Err(_) => {
             error!("Unable to establish SSL connection within redirector");

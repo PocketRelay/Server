@@ -1,10 +1,13 @@
 use core::{blaze::codec::Port, constants};
 
 use blaze_pk::{
-    codec::{Codec, CodecResult, Reader},
-    tag::ValueType,
-    tagging::*,
+    codec::{Decodable, Encodable},
+    error::DecodeResult,
+    reader::TdfReader,
+    tag::TdfType,
     types::TdfMap,
+    value_type,
+    writer::TdfWriter,
 };
 use utils::types::PlayerID;
 
@@ -27,31 +30,29 @@ pub struct TelemetryServer {
     pub port: u16,
 }
 
-impl Codec for TelemetryServer {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_group_start(output, "TELE");
+impl Encodable for TelemetryServer {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_group(b"TELE");
         // Last known telemetry address: 159.153.235.32
-        tag_str(output, "ADRS", constants::EXTERNAL_HOST);
-        tag_zero(output, "ANON");
-        tag_str(output, "DISA", TELEMTRY_DISA);
-        tag_str(output, "FILT", "-UION/****");
-        tag_u32(output, "LOC", 1701727834);
-        tag_str(output, "NOOK", "US,CA,MX");
+        writer.tag_str(b"ADRS", constants::EXTERNAL_HOST);
+        writer.tag_zero(b"ANON");
+        writer.tag_str(b"DISA", TELEMTRY_DISA);
+        writer.tag_str(b"FILT", "-UION/****");
+        writer.tag_u32(b"LOC", 1701727834);
+        writer.tag_str(b"NOOK", "US,CA,MX");
         // Last known telemetry port: 9988
-        tag_u16(output, "PORT", self.port);
-        tag_u16(output, "SDLY", 15000);
-        tag_str(output, "SESS", "pcwdjtOCVpD");
+        writer.tag_u16(b"PORT", self.port);
+        writer.tag_u16(b"SDLY", 15000);
+        writer.tag_str(b"SESS", "pcwdjtOCVpD");
         let key = String::from_utf8_lossy(TELEMETRY_KEY);
-        tag_str(output, "SKEY", &key);
-        tag_u8(output, "SPCT", 75);
-        tag_empty_str(output, "STIM");
-        tag_group_end(output);
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::Group
+        writer.tag_str(b"SKEY", &key);
+        writer.tag_u8(b"SPCT", 75);
+        writer.tag_str_empty(b"STIM");
+        writer.tag_group_end();
     }
 }
+
+value_type!(TelemetryServer, TdfType::Group);
 
 /// Unique identifiyer key for the ticker server
 /// PLAYER_ID,TICKER_IP:TICKER_PORT,GAME_NAME,....Other values unknown
@@ -62,21 +63,19 @@ pub struct TickerServer {
     pub port: u16,
 }
 
-impl Codec for TickerServer {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_group_start(output, "TICK");
+impl Encodable for TickerServer {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_group(b"TICK");
         // Last known ticker address: 10.23.15.2
-        tag_str(output, "ADRS", constants::EXTERNAL_HOST);
+        writer.tag_str(b"ADRS", constants::EXTERNAL_HOST);
         // Last known ticker port: 8999
-        tag_u16(output, "PORT", self.port);
-        tag_str(output, "SKEY", TICKER_KEY);
-        tag_group_end(output);
-    }
-
-    fn value_type() -> ValueType {
-        ValueType::Group
+        writer.tag_u16(b"PORT", self.port);
+        writer.tag_str(b"SKEY", TICKER_KEY);
+        writer.tag_group_end();
     }
 }
+
+value_type!(TickerServer, TdfType::Group);
 
 /// Server SRC version
 pub const SRC_VERSION: &str = "303107";
@@ -90,85 +89,84 @@ pub struct PreAuthResponse {
     pub qos_port: Port,
 }
 
-impl Codec for PreAuthResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_zero(output, "ANON");
-        tag_str(output, "ASRC", SRC_VERSION);
+impl Encodable for PreAuthResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_zero(b"ANON");
+        writer.tag_str(b"ASRC", SRC_VERSION);
         // This list appears to contain the IDs of the components that the game
         // uses throughout its lifecycle
-        tag_value(
-            output,
-            "CIDS",
+        writer.tag_value(
+            b"CIDS",
             &vec![
                 0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803,
                 0x7805, 0x7806, 0x7d0,
             ],
         );
-        tag_empty_str(output, "CNGN");
+        writer.tag_str_empty(b"CNGN");
         // Double nested map containing configuration options for
         // ping intervals and VOIP headset update rates
         {
-            tag_group_start(output, "CONF");
+            writer.tag_group(b"CONF");
             {
-                tag_map_start(output, "CONF", ValueType::String, ValueType::String, 3);
+                writer.tag_map_start(b"CONF", TdfType::String, TdfType::String, 3);
 
-                "pingPeriod".encode(output);
-                PING_PERIOD.encode(output);
+                writer.write_str("pingPeriod");
+                writer.write_str(PING_PERIOD);
 
-                "voipHeadsetUpdateRate".encode(output);
-                "1000".encode(output);
+                writer.write_str("voipHeadsetUpdateRate");
+                writer.write_str("1000");
 
                 // XLSP (Xbox Live Server Platform)
-                "xlspConnectionIdleTimeout".encode(output);
-                "300".encode(output);
+                writer.write_str("xlspConnectionIdleTimeout");
+                writer.write_str("300");
             }
-            tag_group_end(output);
+            writer.tag_group_end();
         }
-        tag_str(output, "INST", "masseffect-3-pc");
-        tag_zero(output, "MINR");
-        tag_str(output, "NASP", "cem_ea_id");
-        tag_empty_str(output, "PILD");
-        tag_str(output, "PLAT", "pc");
-        tag_empty_str(output, "PTAG");
+        writer.tag_str(b"INST", "masseffect-3-pc");
+        writer.tag_zero(b"MINR");
+        writer.tag_str(b"NASP", "cem_ea_id");
+        writer.tag_str_empty(b"PILD");
+        writer.tag_str(b"PLAT", "pc");
+        writer.tag_str_empty(b"PTAG");
 
         // Quality of service group pre encoded due to it being appended
         // in two locations
-        let qoss_group = &mut Vec::new();
+        let mut qoss_group = TdfWriter::default();
         {
-            tag_str(qoss_group, "PSA", constants::EXTERNAL_HOST);
-            tag_u16(qoss_group, "PSP", self.qos_port);
-            tag_str(qoss_group, "SNA", "prod-sjc");
-            tag_group_end(qoss_group);
+            qoss_group.tag_str(b"PSA", constants::EXTERNAL_HOST);
+            qoss_group.tag_u16(b"PSP", self.qos_port);
+            qoss_group.tag_str(b"SNA", "prod-sjc");
+            qoss_group.tag_group_end();
         }
 
         {
             // Quality Of Service Server details
-            tag_group_start(output, "QOSS");
+            writer.tag_group(b"QOSS");
             {
                 // Bioware Primary Server
-                tag_group_start(output, "BWPS");
-                output.extend_from_slice(&qoss_group);
+                writer.tag_group(b"BWPS");
+                writer.write_slice(&qoss_group.buffer);
             }
 
-            tag_u8(output, "LNP", 10);
+            writer.tag_u8(b"LNP", 10);
 
             // List of other Quality Of Service servers? Values present in this
             // list are later included in a ping list
             {
-                tag_map_start(output, "LTPS", ValueType::String, ValueType::Group, 1);
-                "ea-sjc".encode(output);
-                output.extend_from_slice(&qoss_group);
+                writer.tag_map_start(b"LTPS", TdfType::String, TdfType::Group, 1);
+                writer.write_str("ea-sjc");
+                writer.write_slice(&qoss_group.buffer);
             }
 
             // Possibly server version ID (1161889797)
-            tag_u32(output, "SVID", 0x45410805);
-            tag_group_end(output)
+            writer.tag_u32(b"SVID", 0x45410805);
+            writer.tag_group_end()
         }
 
         // Server src version
-        tag_str(output, "RSRC", SRC_VERSION);
+        writer.tag_str(b"RSRC", SRC_VERSION);
         // Server blaze version
-        tag_str(output, "SVER", BLAZE_VERSION)
+        writer.tag_str(b"SVER", BLAZE_VERSION)
     }
 }
 
@@ -178,30 +176,29 @@ pub struct PostAuthResponse {
     pub ticker: TickerServer,
     pub player_id: PlayerID,
 }
-
-impl Codec for PostAuthResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
+impl Encodable for PostAuthResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
         // Player Sync Service server details
         {
-            tag_group_start(output, "PSS");
-            tag_str(output, "ADRS", "playersyncservice.ea.com");
-            tag_empty_blob(output, "CSIG");
-            tag_str(output, "PJID", SRC_VERSION);
-            tag_u16(output, "PORT", 443);
-            tag_u8(output, "RPRT", 0xF);
-            tag_u8(output, "TIID", 0);
-            tag_group_end(output);
+            writer.tag_group(b"PSS");
+            writer.tag_str(b"ADRS", "playersyncservice.ea.com");
+            writer.tag_empty_blob(b"CSIG");
+            writer.tag_str(b"PJID", SRC_VERSION);
+            writer.tag_u16(b"PORT", 443);
+            writer.tag_u8(b"RPRT", 0xF);
+            writer.tag_u8(b"TIID", 0);
+            writer.tag_group_end();
         }
 
-        tag_value(output, "TELE", &self.telemetry);
-        tag_value(output, "TICK", &self.ticker);
+        writer.tag_value(b"TELE", &self.telemetry);
+        writer.tag_value(b"TICK", &self.ticker);
 
         // User options
         {
-            tag_group_start(output, "UROP");
-            tag_u8(output, "TMOP", 1);
-            tag_u32(output, "UID", self.player_id);
-            tag_group_end(output);
+            writer.tag_group(b"UROP");
+            writer.tag_u8(b"TMOP", 1);
+            writer.tag_u32(b"UID", self.player_id);
+            writer.tag_group_end();
         }
     }
 }
@@ -212,9 +209,9 @@ pub struct PingResponse {
     pub server_time: u64,
 }
 
-impl Codec for PingResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_u64(output, "STIM", self.server_time)
+impl Encodable for PingResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u64(b"STIM", self.server_time)
     }
 }
 
@@ -224,9 +221,9 @@ pub struct FetchConfigRequest {
     pub id: String,
 }
 
-impl Codec for FetchConfigRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let id = expect_tag(reader, "CFID")?;
+impl Decodable for FetchConfigRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let id: String = reader.tag("CFID")?;
         Ok(Self { id })
     }
 }
@@ -236,9 +233,9 @@ pub struct FetchConfigResponse {
     pub config: TdfMap<String, String>,
 }
 
-impl Codec for FetchConfigResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_value(output, "CONF", &self.config)
+impl Encodable for FetchConfigResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_value(b"CONF", &self.config)
     }
 }
 
@@ -248,9 +245,9 @@ pub struct SuspendPingRequest {
     pub value: u32,
 }
 
-impl Codec for SuspendPingRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let value = expect_tag(reader, "TVAL")?;
+impl Decodable for SuspendPingRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let value: u32 = reader.tag("TVAL")?;
         Ok(Self { value })
     }
 }
@@ -263,11 +260,10 @@ pub struct SettingsSaveRequest {
     /// The new value for the key
     pub value: String,
 }
-
-impl Codec for SettingsSaveRequest {
-    fn decode(reader: &mut Reader) -> CodecResult<Self> {
-        let value = expect_tag(reader, "DATA")?;
-        let key = expect_tag(reader, "KEY")?;
+impl Decodable for SettingsSaveRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let value: String = reader.tag("DATA")?;
+        let key: String = reader.tag("KEY")?;
         Ok(Self { key, value })
     }
 }
@@ -278,8 +274,8 @@ pub struct SettingsResponse {
     pub settings: TdfMap<String, String>,
 }
 
-impl Codec for SettingsResponse {
-    fn encode(&self, output: &mut Vec<u8>) {
-        tag_value(output, "SMAP", &self.settings);
+impl Encodable for SettingsResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_value(b"SMAP", &self.settings);
     }
 }

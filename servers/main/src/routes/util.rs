@@ -191,7 +191,7 @@ fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
                 let lang = &id[16..];
                 talk_file(lang)
             } else {
-                TdfMap::empty()
+                TdfMap::default()
             }
         }
     };

@@ -147,7 +147,7 @@ impl Session {
                 }
             }
             Err(err) => {
-                let error = if let BlazeError::ServerError(err) = err {
+                let error = if let BlazeError::Server(err) = err {
                     err
                 } else {
                     error!("Error occurred while routing (SID: {}): {:?}", self.id, err);
