@@ -1,10 +1,27 @@
+use core::leaderboard::models::LeaderboardEntry;
+
 use blaze_pk::{
     codec::{Decodable, Encodable},
-    error::DecodeResult,
+    error::{DecodeError, DecodeResult},
     reader::TdfReader,
     tag::TdfType,
     writer::TdfWriter,
 };
+use utils::types::PlayerID;
+
+/// Structure for the request to retrieve the entity count
+/// of a leaderboard
+pub struct EntityCountRequest {
+    /// The leaderboard name
+    pub name: String,
+}
+
+impl Decodable for EntityCountRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let name: String = reader.tag("NAME")?;
+        Ok(Self { name })
+    }
+}
 
 /// Structure for the entity count response for finding the
 /// number of entities in a leaderboard section
@@ -16,6 +33,113 @@ pub struct EntityCountResponse {
 impl Encodable for EntityCountResponse {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_usize(b"CNT", self.count);
+    }
+}
+
+fn write_leaderboard_entry(writer: &mut TdfWriter, value: &LeaderboardEntry) {
+    writer.tag_str(b"ENAM", &value.player_name);
+    writer.tag_u32(b"ENID", value.player_id);
+    writer.tag_usize(b"RANK", value.rank);
+    let value_str = value.value.to_string();
+    writer.tag_str(b"RSTA", &value_str);
+    writer.tag_zero(b"RWFG");
+    writer.tag_union_unset(b"RWST");
+    {
+        writer.tag_list_start(b"STAT", TdfType::String, 1);
+        writer.write_str(&value_str);
+    }
+    writer.tag_zero(b"UATT");
+    writer.tag_group_end();
+}
+
+pub struct CenteredLeaderboardRequest {
+    /// The entity count
+    pub count: usize,
+    /// The leaderboard name
+    pub name: String,
+    /// The ID of the player to center on
+    pub center: PlayerID,
+}
+
+impl Decodable for CenteredLeaderboardRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let center: PlayerID = reader.tag("CENT")?;
+        let count: usize = reader.tag("COUN")?;
+        let name: String = reader.tag("NAME")?;
+        Ok(Self {
+            center,
+            count,
+            name,
+        })
+    }
+}
+
+pub struct LeaderboardResponse<'a> {
+    pub values: &'a [LeaderboardEntry],
+}
+
+impl Encodable for LeaderboardResponse<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_list_start(b"LDLS", TdfType::Group, self.values.len());
+        let mut iter = self.values.iter();
+        while let Some(value) = iter.next() {
+            write_leaderboard_entry(writer, value)
+        }
+    }
+}
+
+/// Structure for the request to retrieve a leaderboards
+/// contents at the provided start offset
+pub struct LeaderboardRequest {
+    /// The entity count
+    pub count: usize,
+    /// The leaderboard name
+    pub name: String,
+    /// The rank offset to start at
+    pub start: usize,
+}
+
+impl Decodable for LeaderboardRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let count: usize = reader.tag("COUN")?;
+        let name: String = reader.tag("NAME")?;
+        let start: usize = reader.tag("STRT")?;
+        Ok(Self { count, name, start })
+    }
+}
+
+/// Structure for a request to get a leaderboard only
+/// containing the details for a specific player
+pub struct FilteredLeaderboardRequest {
+    /// The player ID
+    pub id: PlayerID,
+    /// The leaderboard name
+    pub name: String,
+}
+
+impl Decodable for FilteredLeaderboardRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let count: usize = reader.until_list("IDLS", TdfType::VarInt)?;
+        if count < 1 {
+            return Err(DecodeError::Other("Missing player ID for filter"));
+        }
+        let id: PlayerID = reader.read_u32()?;
+        for _ in 1..count {
+            reader.skip_var_int();
+        }
+        let name: String = reader.tag("NAME")?;
+        Ok(Self { id, name })
+    }
+}
+
+pub struct FilteredLeaderboardResponse<'a> {
+    pub value: &'a LeaderboardEntry,
+}
+
+impl Encodable for FilteredLeaderboardResponse<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_list_start(b"LDLS", TdfType::Group, 1);
+        write_leaderboard_entry(writer, self.value)
     }
 }
 

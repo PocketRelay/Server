@@ -121,11 +121,13 @@ impl Leaderboard {
         }
         // Sort the values based on their value
         values.sort_by(|a, b| a.value.cmp(&b.value).reverse());
+
         // Apply the new rank order
-        values
-            .iter_mut()
-            .enumerate()
-            .for_each(|(rank, value)| value.rank = rank);
+        let mut rank = 1;
+        for value in values.iter_mut() {
+            value.rank = rank;
+            rank += 1;
+        }
 
         Ok(values)
     }
@@ -158,11 +160,11 @@ impl Leaderboard {
         // Sort the values based on their value
         values.sort_by(|a, b| a.value.cmp(&b.value).reverse());
         // Apply the new rank order
-        values
-            .iter_mut()
-            .enumerate()
-            .for_each(|(rank, value)| value.rank = rank);
-
+        let mut rank = 1;
+        for value in values.iter_mut() {
+            value.rank = rank;
+            rank += 1;
+        }
         Ok(values)
     }
 

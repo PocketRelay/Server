@@ -1,11 +1,16 @@
 use crate::models::stats::{
-    EmptyLeaderboardResponse, EntityCountResponse, LeaderboardGroupRequest,
-    LeaderboardGroupResponse,
+    CenteredLeaderboardRequest, EmptyLeaderboardResponse, EntityCountRequest, EntityCountResponse,
+    FilteredLeaderboardRequest, FilteredLeaderboardResponse, LeaderboardGroupRequest,
+    LeaderboardGroupResponse, LeaderboardRequest, LeaderboardResponse,
 };
 use crate::session::Session;
 use crate::HandleResult;
 use blaze_pk::packet::Packet;
 use core::blaze::components::Stats;
+use core::leaderboard::leaderboard::LeaderboardEntityGroup;
+
+use core::leaderboard::models::LeaderboardEntry;
+use core::state::GlobalState;
 
 /// Routing function for handling packets with the `Stats` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -14,18 +19,18 @@ use core::blaze::components::Stats;
 /// `session`   The session that the packet was recieved by
 /// `component` The component of thet recieved
 /// `packet`    The recieved packet
-pub fn route(_session: &mut Session, component: Stats, packet: &Packet) -> HandleResult {
+pub async fn route(_session: &mut Session, component: Stats, packet: &Packet) -> HandleResult {
     match component {
-        Stats::GetLeaderboardEntityCount => handle_leaderboard_entity_count(packet),
-        Stats::GetCenteredLeaderboard => handle_centered_leaderboard(packet),
-        Stats::GetFilteredLeaderboard => handle_filtered_leaderboard(packet),
+        Stats::GetLeaderboardEntityCount => handle_leaderboard_entity_count(packet).await,
+        Stats::GetLeaderboard => handle_leaderboard(packet).await,
+        Stats::GetCenteredLeaderboard => handle_centered_leaderboard(packet).await,
+        Stats::GetFilteredLeaderboard => handle_filtered_leaderboard(packet).await,
         Stats::GetLeaderboardGroup => handle_leaderboard_group(packet),
         _ => Ok(packet.respond_empty()),
     }
 }
 
 /// Handles returning the number of leaderboard objects present.
-/// This is currently not implemented
 ///
 /// ```
 /// Route: Stats(GetLeaderboardEntityCount)
@@ -40,10 +45,61 @@ pub fn route(_session: &mut Session, component: Stats, packet: &Packet) -> Handl
 ///     "POFF": 0
 /// }
 /// ```
-fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
-    // The total number of players in the database for both responses
-    let response = EntityCountResponse { count: 1 };
+async fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
+    let request: EntityCountRequest = packet.decode()?;
+    let leaderboard = GlobalState::leaderboard();
+    let count = if request.name.starts_with("N7Rating") {
+        leaderboard.update_n7().await
+    } else {
+        leaderboard.update_cp().await
+    }?;
+    let response = EntityCountResponse { count };
     Ok(packet.respond(response))
+}
+
+///
+///
+/// Component: Stats(GetLeaderboard)
+/// ```
+/// ID: 1274
+/// Content: {
+///   "COUN": 61,
+///   "KSUM": Map {
+///     "accountcountry": 0
+///     "ME3Map": 0
+///   },
+///   "LBID": 0,
+///   "NAME": "N7RatingGlobal",
+///   "POFF": 0,
+///   "STRT": 29,
+///   "TIME": 0,
+///   "USET": (0, 0, 0),
+/// }
+/// ```
+async fn handle_leaderboard(packet: &Packet) -> HandleResult {
+    let request: LeaderboardRequest = packet.decode()?;
+    // Leaderboard but only returns self
+    let leaderboard = GlobalState::leaderboard();
+    let is_n7 = request.name.starts_with("N7Rating");
+    let group = if is_n7 {
+        leaderboard.update_n7().await?;
+        &leaderboard.n7_group
+    } else {
+        leaderboard.update_cp().await?;
+        &leaderboard.cp_group
+    };
+
+    let group: &LeaderboardEntityGroup = &*group.read().await;
+
+    let start_index = request.start;
+    let end_index = request.count.min(group.values.len());
+
+    let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
+    if let Some(values) = values {
+        Ok(packet.respond(LeaderboardResponse { values }))
+    } else {
+        return Ok(packet.respond(EmptyLeaderboardResponse));
+    }
 }
 
 /// Handles returning a centered leaderboard object. This is currently not implemented
@@ -66,15 +122,46 @@ fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
 ///     "USET": (0, 0, 0)
 /// }
 /// ```
-fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
-    // 30 - pre
-    // me
-    // 29 - post
+async fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
+    let request: CenteredLeaderboardRequest = packet.decode()?;
+    let count = request.count.max(1);
+    let before = if count % 2 == 0 {
+        count / 2 + 1
+    } else {
+        count / 2
+    };
+    let after = count / 2;
 
-    // leaderboard but where the request CENT player ID is in the center
-    // or as close to center as possible for uneven COUN number
+    let leaderboard = GlobalState::leaderboard();
+    let is_n7 = request.name.starts_with("N7Rating");
+    let group = if is_n7 {
+        leaderboard.update_n7().await?;
+        &leaderboard.n7_group
+    } else {
+        leaderboard.update_cp().await?;
+        &leaderboard.cp_group
+    };
+    let group: &LeaderboardEntityGroup = &*group.read().await;
 
-    Ok(packet.respond(EmptyLeaderboardResponse))
+    let index_of = group
+        .values
+        .iter()
+        .position(|value| value.player_id == request.center);
+
+    let index_of = match index_of {
+        Some(value) => value,
+        None => return Ok(packet.respond(EmptyLeaderboardResponse)),
+    };
+
+    let start_index = index_of - before.min(index_of);
+    let end_index = (index_of + after).min(group.values.len());
+
+    let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
+    if let Some(values) = values {
+        Ok(packet.respond(LeaderboardResponse { values }))
+    } else {
+        return Ok(packet.respond(EmptyLeaderboardResponse));
+    }
 }
 
 /// Handles returning a filtered leaderboard object. This is currently not implemented
@@ -96,10 +183,30 @@ fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
 ///     "USET": (0, 0, 0)
 /// }
 /// ```
-fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
+async fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
+    let request: FilteredLeaderboardRequest = packet.decode()?;
+    let player_id = request.id;
     // Leaderboard but only returns self
+    let leaderboard = GlobalState::leaderboard();
+    let is_n7 = request.name.starts_with("N7Rating");
+    let group = if is_n7 {
+        leaderboard.update_n7().await?;
+        &leaderboard.n7_group
+    } else {
+        leaderboard.update_cp().await?;
+        &leaderboard.cp_group
+    };
+    let group: &LeaderboardEntityGroup = &*group.read().await;
+    let entry = group
+        .values
+        .iter()
+        .find(|value| value.player_id == player_id);
 
-    Ok(packet.respond(EmptyLeaderboardResponse))
+    if let Some(entry) = entry {
+        Ok(packet.respond(FilteredLeaderboardResponse { value: entry }))
+    } else {
+        Ok(packet.respond(EmptyLeaderboardResponse))
+    }
 }
 
 fn get_locale_name(code: &str) -> String {
