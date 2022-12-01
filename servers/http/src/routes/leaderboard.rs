@@ -1,4 +1,4 @@
-use core::state::GlobalState;
+use core::{leaderboard::models::LeaderboardType, state::GlobalState};
 use std::fmt::Display;
 
 use actix_web::{get, web::ServiceConfig, HttpResponse, Responder, ResponseError};
@@ -19,18 +19,18 @@ pub enum LeaderboardError {
 #[get("/api/leaderboard/n7")]
 async fn get_n7() -> Result<impl Responder, LeaderboardError> {
     let leaderboard = GlobalState::leaderboard();
-    leaderboard.update_n7().await?;
-    let values = &*leaderboard.n7_group.read().await;
-    let response = HttpResponse::Ok().json(&values.values);
+    let (_, group) = leaderboard.get(LeaderboardType::N7Rating).await?;
+    let group = &*group.read().await;
+    let response = HttpResponse::Ok().json(&group.values);
     Ok(response)
 }
 
 #[get("/api/leaderboard/cp")]
 async fn get_cp() -> Result<impl Responder, LeaderboardError> {
     let leaderboard = GlobalState::leaderboard();
-    leaderboard.update_cp().await?;
-    let values = &*leaderboard.cp_group.read().await;
-    let response = HttpResponse::Ok().json(&values.values);
+    let (_, group) = leaderboard.get(LeaderboardType::ChallengePoints).await?;
+    let group = &*group.read().await;
+    let response = HttpResponse::Ok().json(&group.values);
     Ok(response)
 }
 

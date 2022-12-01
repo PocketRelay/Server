@@ -3,9 +3,7 @@ use database::{self, DatabaseConnection, DatabaseType};
 use futures::join;
 use tokio::{signal, sync::watch};
 
-use crate::{
-    env, game::manager::Games, leaderboard::leaderboard::Leaderboard, retriever::Retriever,
-};
+use crate::{env, game::manager::Games, leaderboard::Leaderboard, retriever::Retriever};
 
 /// Global state that is shared throughout the application this
 /// will be unset until the value is initialized then it will be

@@ -7,9 +7,7 @@ use crate::session::Session;
 use crate::HandleResult;
 use blaze_pk::packet::Packet;
 use core::blaze::components::Stats;
-use core::leaderboard::leaderboard::LeaderboardEntityGroup;
-
-use core::leaderboard::models::LeaderboardEntry;
+use core::leaderboard::models::{LeaderboardEntityGroup, LeaderboardEntry, LeaderboardType};
 use core::state::GlobalState;
 
 /// Routing function for handling packets with the `Stats` component and routing them
@@ -48,11 +46,8 @@ pub async fn route(_session: &mut Session, component: Stats, packet: &Packet) ->
 async fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
     let request: EntityCountRequest = packet.decode()?;
     let leaderboard = GlobalState::leaderboard();
-    let count = if request.name.starts_with("N7Rating") {
-        leaderboard.update_n7().await
-    } else {
-        leaderboard.update_cp().await
-    }?;
+    let ty = LeaderboardType::from(request.name);
+    let (count, _) = leaderboard.get(ty).await?;
     let response = EntityCountResponse { count };
     Ok(packet.respond(response))
 }
@@ -80,16 +75,9 @@ async fn handle_leaderboard(packet: &Packet) -> HandleResult {
     let request: LeaderboardRequest = packet.decode()?;
     // Leaderboard but only returns self
     let leaderboard = GlobalState::leaderboard();
-    let is_n7 = request.name.starts_with("N7Rating");
-    let group = if is_n7 {
-        leaderboard.update_n7().await?;
-        &leaderboard.n7_group
-    } else {
-        leaderboard.update_cp().await?;
-        &leaderboard.cp_group
-    };
-
-    let group: &LeaderboardEntityGroup = &*group.read().await;
+    let ty = LeaderboardType::from(request.name);
+    let (_, group) = leaderboard.get(ty).await?;
+    let group = &*group.read().await;
 
     let start_index = request.start;
     let end_index = request.count.min(group.values.len());
@@ -133,14 +121,8 @@ async fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
     let after = count / 2;
 
     let leaderboard = GlobalState::leaderboard();
-    let is_n7 = request.name.starts_with("N7Rating");
-    let group = if is_n7 {
-        leaderboard.update_n7().await?;
-        &leaderboard.n7_group
-    } else {
-        leaderboard.update_cp().await?;
-        &leaderboard.cp_group
-    };
+    let ty = LeaderboardType::from(request.name);
+    let (_, group) = leaderboard.get(ty).await?;
     let group: &LeaderboardEntityGroup = &*group.read().await;
 
     let index_of = group
@@ -188,14 +170,8 @@ async fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
     let player_id = request.id;
     // Leaderboard but only returns self
     let leaderboard = GlobalState::leaderboard();
-    let is_n7 = request.name.starts_with("N7Rating");
-    let group = if is_n7 {
-        leaderboard.update_n7().await?;
-        &leaderboard.n7_group
-    } else {
-        leaderboard.update_cp().await?;
-        &leaderboard.cp_group
-    };
+    let ty = LeaderboardType::from(request.name);
+    let (_, group) = leaderboard.get(ty).await?;
     let group: &LeaderboardEntityGroup = &*group.read().await;
     let entry = group
         .values
