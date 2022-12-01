@@ -31,7 +31,7 @@ pub struct UpdateNetworkRequest {
 
 impl Decodable for UpdateNetworkRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let address: NetGroups = match reader.tag("ADDR")? {
+        let address: NetGroups = match reader.tag::<Union<NetGroups>>("ADDR")? {
             Union::Set { value, .. } => value,
             Union::Unset => return Err(DecodeError::Other("Client address was unset")),
         };
@@ -43,6 +43,7 @@ impl Decodable for UpdateNetworkRequest {
 /// Structure for request to update the hardware flags of the
 /// current session
 pub struct HardwareFlagRequest {
+    /// The hardware flag value
     pub hardware_flag: u16,
 }
 

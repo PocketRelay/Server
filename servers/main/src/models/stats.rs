@@ -9,6 +9,7 @@ use blaze_pk::{
 /// Structure for the entity count response for finding the
 /// number of entities in a leaderboard section
 pub struct EntityCountResponse {
+    /// The number of entities in the leaderboard
     pub count: usize,
 }
 

@@ -26,8 +26,8 @@ pub struct MessageNotify {
 
 impl Encodable for MessageNotify {
     fn encode(&self, writer: &mut TdfWriter) {
-        let ref_value = Components::UserSessions(UserSessions::SetSession).values();
-        let player_ref = (ref_value.0, ref_value.1, self.player_id);
+        let ref_value: (u16, u16) = Components::UserSessions(UserSessions::SetSession).values();
+        let player_ref: (u16, u16, u32) = (ref_value.0, ref_value.1, self.player_id);
 
         writer.tag_u8(b"FLAG", 0x1);
         writer.tag_u8(b"MGID", 0x1);

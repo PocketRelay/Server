@@ -1,4 +1,5 @@
 use core::{blaze::codec::Port, constants};
+use std::borrow::Cow;
 
 use blaze_pk::{
     codec::{Decodable, Encodable},
@@ -27,6 +28,7 @@ const TELEMETRY_KEY: &[u8] = &[
 
 /// Structure for encoding the telemetry server details
 pub struct TelemetryServer {
+    /// The port for the telemetry server
     pub port: u16,
 }
 
@@ -44,7 +46,7 @@ impl Encodable for TelemetryServer {
         writer.tag_u16(b"PORT", self.port);
         writer.tag_u16(b"SDLY", 15000);
         writer.tag_str(b"SESS", "pcwdjtOCVpD");
-        let key = String::from_utf8_lossy(TELEMETRY_KEY);
+        let key: Cow<str> = String::from_utf8_lossy(TELEMETRY_KEY);
         writer.tag_str(b"SKEY", &key);
         writer.tag_u8(b"SPCT", 75);
         writer.tag_str_empty(b"STIM");
@@ -60,6 +62,7 @@ const TICKER_KEY: &str = "1,10.23.15.2:8999,masseffect-3-pc,10,50,50,50,50,0,12"
 
 /// Structure for encoding the ticker server details
 pub struct TickerServer {
+    /// The port for the ticker server
     pub port: u16,
 }
 
@@ -131,7 +134,7 @@ impl Encodable for PreAuthResponse {
 
         // Quality of service group pre encoded due to it being appended
         // in two locations
-        let mut qoss_group = TdfWriter::default();
+        let mut qoss_group: TdfWriter = TdfWriter::default();
         {
             qoss_group.tag_str(b"PSA", constants::EXTERNAL_HOST);
             qoss_group.tag_u16(b"PSP", self.qos_port);
@@ -172,8 +175,11 @@ impl Encodable for PreAuthResponse {
 
 /// Structure for the response to a post authentication request
 pub struct PostAuthResponse {
+    /// The telemetry server details
     pub telemetry: TelemetryServer,
+    /// The ticker server details
     pub ticker: TickerServer,
+    /// The player ID of the player who this is for
     pub player_id: PlayerID,
 }
 impl Encodable for PostAuthResponse {
@@ -190,6 +196,7 @@ impl Encodable for PostAuthResponse {
             writer.tag_group_end();
         }
 
+        // Ticker & Telemtry server options
         writer.tag_value(b"TELE", &self.telemetry);
         writer.tag_value(b"TICK", &self.ticker);
 
@@ -230,6 +237,7 @@ impl Decodable for FetchConfigRequest {
 
 /// Structure for the response to fetching a config
 pub struct FetchConfigResponse {
+    /// The configuration map
     pub config: TdfMap<String, String>,
 }
 
