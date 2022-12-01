@@ -105,9 +105,7 @@ impl From<DbErr> for LeaderboardError {
 impl Display for LeaderboardError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::PlayerNotFound => {
-                f.write_str("Unable to find a player with that ID in the leaderboard")
-            }
+            Self::PlayerNotFound => f.write_str("Player not found"),
             Self::ServerError => f.write_str("Server Error Occurred"),
         }
     }

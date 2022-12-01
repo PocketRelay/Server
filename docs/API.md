@@ -623,3 +623,141 @@ the game to retrieve
 | Status Code   | Body                        | Meaning                                  |
 | ------------- | --------------------------- | ---------------------------------------- |
 | 404 Not Found | Game with that ID not found | Game with matching ID could not be found |
+
+
+# Leaderboard API 🟢
+
+## N7 Rating Leaderboard
+
+```http
+GET /api/leaderboard/n7?count=20&offset=0
+```
+
+This route allows you to retrieve the N7 ratings leaderboard. The `count` query parameter is the
+number of leaderboard entries to retrieve; Omitting this will default to 20. The `offset` query
+parameter is the number of entries to skip from the top. There is another optional query parameter
+`player` which when specified will only respond with that entry instead of multiple
+
+### List Response
+
+```json
+[
+    {
+        "player_id": 3,
+        "player_name": "Jacobtread",
+        "rank": 1,
+        "value": 45980
+    },
+    {
+        "player_id": 1,
+        "player_name": "test@test.com",
+        "rank": 2,
+        "value": 61
+    },
+    {
+        "player_id": 4,
+        "player_name": "test1@test.com",
+        "rank": 3,
+        "value": 1
+    },
+    {
+        "player_id": 5,
+        "player_name": "test2@test.com",
+        "rank": 4,
+        "value": 1
+    },
+    {
+        "player_id": 6,
+        "player_name": "test3@test.com",
+        "rank": 5,
+        "value": 1
+    }
+]
+
+```
+
+### Single Player Response
+
+```json
+{
+    "player_id": 3,
+    "player_name": "Jacobtread",
+    "rank": 1,
+    "value": 45980
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body                  | Meaning                                                                                                                      |
+| ------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 404 Not Found             | Player not found      | The specific player you queried for could not be found its possible the leaderboard hasnt updated to include this player yet |
+| 500 Internal Server Error | Server Error Occurred | An error occurred on the server likely a failure when updating the leaderboard                                               |
+
+## Challenge Points Leaderboard
+
+```http
+GET /api/leaderboard/cp?count=20&offset=0
+```
+
+This route allows you to retrieve the N7 ratings leaderboard. The `count` query parameter is the
+number of leaderboard entries to retrieve; Omitting this will default to 20. The `offset` query
+parameter is the number of entries to skip from the top. There is another optional query parameter
+`player` which when specified will only respond with that entry instead of multiple
+
+### List Response
+
+```json
+[
+    {
+        "player_id": 3,
+        "player_name": "Jacobtread",
+        "rank": 1,
+        "value": 45980
+    },
+    {
+        "player_id": 1,
+        "player_name": "test@test.com",
+        "rank": 2,
+        "value": 61
+    },
+    {
+        "player_id": 4,
+        "player_name": "test1@test.com",
+        "rank": 3,
+        "value": 1
+    },
+    {
+        "player_id": 5,
+        "player_name": "test2@test.com",
+        "rank": 4,
+        "value": 1
+    },
+    {
+        "player_id": 6,
+        "player_name": "test3@test.com",
+        "rank": 5,
+        "value": 1
+    }
+]
+
+```
+
+### Single Player Response
+
+```json
+{
+    "player_id": 3,
+    "player_name": "Jacobtread",
+    "rank": 1,
+    "value": 45980
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body                  | Meaning                                                                                                                      |
+| ------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 404 Not Found             | Player not found      | The specific player you queried for could not be found its possible the leaderboard hasnt updated to include this player yet |
+| 500 Internal Server Error | Server Error Occurred | An error occurred on the server likely a failure when updating the leaderboard                                               |
+
