@@ -5,6 +5,6 @@ use utils::types::PlayerID;
 pub struct LeaderboardEntry {
     pub player_id: PlayerID,
     pub player_name: String,
-    pub rank: u32,
-    pub value: String,
+    pub rank: usize,
+    pub value: u32,
 }

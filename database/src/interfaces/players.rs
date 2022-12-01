@@ -87,6 +87,15 @@ impl players::Model {
         active_model.insert(db).await
     }
 
+    /// Parses the challenge points value which is the second
+    /// item in the completion list.
+    pub fn get_challenge_points(&self) -> Option<u32> {
+        let list = self.completion.as_ref()?;
+        let part = list.split(",").skip(1).next()?;
+        let value: u32 = part.parse().ok()?;
+        Some(value)
+    }
+
     /// Attempts to find a player with the provided ID will return none
     /// if there was no players with that ID
     ///
@@ -110,6 +119,19 @@ impl players::Model {
         let galaxy_at_war = GalaxyAtWar::find_or_create(db, self, 0.0);
 
         try_join!(classes, characters, galaxy_at_war)
+    }
+
+    /// Collects all the related classes, characters all at once rturning
+    /// the loaded result if no errors occurred.
+    ///
+    /// `db` The database connection
+    pub async fn collect_relations_partial(
+        &self,
+        db: &DatabaseConnection,
+    ) -> DbResult<(Vec<PlayerClass>, Vec<PlayerCharacter>)> {
+        let classes = self.find_related(player_classes::Entity).all(db);
+        let characters = self.find_related(player_characters::Entity).all(db);
+        try_join!(classes, characters)
     }
 
     /// Attempts to find a player with the provided ID and matching session
