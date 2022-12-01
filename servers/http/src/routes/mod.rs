@@ -10,6 +10,7 @@ use crate::{middleware::token::TokenAuth, stores::token::TokenStore};
 
 mod games;
 mod gaw;
+mod leaderboard;
 mod players;
 mod public;
 mod qos;
@@ -31,6 +32,7 @@ pub fn configure(cfg: &mut ServiceConfig, token_store: Arc<TokenStore>) {
     if env::from_env(env::API) {
         cfg.app_data(Data::from(token_store.clone()));
         token::configure(cfg);
+        leaderboard::configure(cfg);
 
         // Auth protected routes
         let middleware = TokenAuth::new(token_store);

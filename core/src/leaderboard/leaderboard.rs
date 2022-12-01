@@ -9,8 +9,8 @@ use database::{DatabaseConnection, DbResult, Player};
 
 #[derive(Default)]
 pub struct Leaderboard {
-    n7_group: RwLock<LeaderboardEntityGroup>,
-    cp_group: RwLock<LeaderboardEntityGroup>,
+    pub n7_group: RwLock<LeaderboardEntityGroup>,
+    pub cp_group: RwLock<LeaderboardEntityGroup>,
 }
 
 /// Structure for a group of leaderboard entities ranked based
@@ -120,7 +120,7 @@ impl Leaderboard {
             offset += BATCH_COUNT;
         }
         // Sort the values based on their value
-        values.sort_by(|a, b| a.value.cmp(&b.value));
+        values.sort_by(|a, b| a.value.cmp(&b.value).reverse());
         // Apply the new rank order
         values
             .iter_mut()
@@ -156,7 +156,7 @@ impl Leaderboard {
             offset += BATCH_COUNT;
         }
         // Sort the values based on their value
-        values.sort_by(|a, b| a.value.cmp(&b.value));
+        values.sort_by(|a, b| a.value.cmp(&b.value).reverse());
         // Apply the new rank order
         values
             .iter_mut()
@@ -177,7 +177,7 @@ impl Leaderboard {
             // Classes are active if atleast one character from the class is deployed
             let is_active = characters
                 .iter()
-                .any(|char| char.name.starts_with(&class.name) && char.deployed);
+                .any(|char| char.kit_name.contains(&class.name) && char.deployed);
             if is_active {
                 total_level += class.level;
             }

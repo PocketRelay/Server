@@ -3,7 +3,9 @@ use database::{self, DatabaseConnection, DatabaseType};
 use futures::join;
 use tokio::{signal, sync::watch};
 
-use crate::{env, game::manager::Games, retriever::Retriever};
+use crate::{
+    env, game::manager::Games, leaderboard::leaderboard::Leaderboard, retriever::Retriever,
+};
 
 /// Global state that is shared throughout the application this
 /// will be unset until the value is initialized then it will be
@@ -14,6 +16,7 @@ pub enum GlobalState {
         games: Games,
         db: DatabaseConnection,
         retriever: Option<Retriever>,
+        leaderboard: Leaderboard,
         shutdown: watch::Receiver<()>,
     },
 }
@@ -30,12 +33,14 @@ impl GlobalState {
 
         let shutdown = Self::hook_shutdown();
         let games = Games::new();
+        let leaderboard = Leaderboard::default();
 
         unsafe {
             GLOBAL_STATE = GlobalState::Set {
                 db,
                 games,
                 retriever,
+                leaderboard,
                 shutdown,
             };
         }
@@ -98,6 +103,17 @@ impl GlobalState {
         unsafe {
             match &GLOBAL_STATE {
                 GlobalState::Set { retriever, .. } => retriever.as_ref(),
+                GlobalState::Unset => panic!("Global state not initialized"),
+            }
+        }
+    }
+
+    /// Obtains a option to the static reference of the leaderboard
+    /// stored on the global state if one exists
+    pub fn leaderboard() -> &'static Leaderboard {
+        unsafe {
+            match &GLOBAL_STATE {
+                GlobalState::Set { leaderboard, .. } => leaderboard,
                 GlobalState::Unset => panic!("Global state not initialized"),
             }
         }
