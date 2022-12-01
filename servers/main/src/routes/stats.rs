@@ -41,6 +41,7 @@ pub fn route(_session: &mut Session, component: Stats, packet: &Packet) -> Handl
 /// }
 /// ```
 fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
+    // The total number of players in the database for both responses
     let response = EntityCountResponse { count: 1 };
     Ok(packet.respond(response))
 }
@@ -66,6 +67,13 @@ fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
 /// }
 /// ```
 fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
+    // 30 - pre
+    // me
+    // 29 - post
+
+    // leaderboard but where the request CENT player ID is in the center
+    // or as close to center as possible for uneven COUN number
+
     Ok(packet.respond(EmptyLeaderboardResponse))
 }
 
@@ -89,6 +97,8 @@ fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
 /// }
 /// ```
 fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
+    // Leaderboard but only returns self
+
     Ok(packet.respond(EmptyLeaderboardResponse))
 }
 
