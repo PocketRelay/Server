@@ -5,6 +5,7 @@ use crate::models::util::{
 use crate::session::Session;
 use crate::HandleResult;
 use blaze_pk::{packet::Packet, types::TdfMap};
+use core::blaze::codec::Port;
 use core::blaze::components::Util;
 use core::blaze::errors::ServerError;
 use core::constants::{self, VERSION};
@@ -16,6 +17,7 @@ use rust_embed::RustEmbed;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::try_join;
 use utils::dmap::load_dmap;
+use utils::types::PlayerID;
 
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -97,7 +99,7 @@ fn handle_get_ticker_server(packet: &Packet) -> HandleResult {
 /// }
 /// ```
 fn handle_pre_auth(packet: &Packet) -> HandleResult {
-    let qos_port = env::from_env(env::HTTP_PORT);
+    let qos_port: Port = env::from_env(env::HTTP_PORT);
     let response = PreAuthResponse { qos_port };
     Ok(packet.respond(response))
 }
@@ -111,7 +113,7 @@ fn handle_pre_auth(packet: &Packet) -> HandleResult {
 /// Content: {}
 /// ```
 fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResult {
-    let player_id = session
+    let player_id: PlayerID = session
         .player
         .as_ref()
         .map(|value| value.id)
@@ -223,8 +225,6 @@ fn talk_file(lang: &str) -> TdfMap<String, String> {
 /// Loads the messages that should be displayed to the client and
 /// returns them in a list.
 fn messages() -> TdfMap<String, String> {
-    let mut config = TdfMap::new();
-
     let intro = Message {
         end_date: None,
         image: None,
@@ -240,6 +240,7 @@ fn messages() -> TdfMap<String, String> {
 
     let messages = vec![intro];
 
+    let mut config = TdfMap::new();
     let mut index = 1;
     for message in messages {
         message.append(index, &mut config);
@@ -250,6 +251,7 @@ fn messages() -> TdfMap<String, String> {
     config
 }
 
+/// Structure for a message
 struct Message {
     /// The end date of this message
     end_date: Option<String>,

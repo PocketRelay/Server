@@ -7,9 +7,11 @@ use crate::HandleResult;
 use blaze_pk::packet::Packet;
 use core::blaze::components::GameManager;
 use core::blaze::errors::ServerError;
-
+use core::game::player::GamePlayer;
 use core::state::GlobalState;
+use database::Player;
 use log::{debug, info, warn};
+use utils::types::GameID;
 
 /// Routing function for handling packets with the `GameManager` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -38,7 +40,7 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
 /// Route: GameManager(CreateGame)
 /// ID: 55
 /// Content: {
-///     "ATTR": Map<String, String> {
+///     "ATTR": Map {
 ///         "ME3_dlc2300": "required"
 ///         "ME3_dlc2500": "required",
 ///         "ME3_dlc2700": "required",
@@ -56,7 +58,7 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
 ///     "GSET": 287,
 ///     "GTYP": "",
 ///     "GURL": "",
-///     "HNET": Union(Group, 2: {
+///     "HNET": Union(Group, 2, {
 ///         "EXIP": {
 ///             "IP": 0, // Encoded IP address
 ///             "PORT": 0 // Port
@@ -69,9 +71,9 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
 ///     "IGNO": 0,
 ///     "NRES": 0,
 ///     "NTOP": 0,
-///     "PCAP": List<u8> [4, 0],
+///     "PCAP": [4, 0],
 ///     "PGID": "",
-///     "PGSC": Blob[],
+///     "PGSC": Blob [],
 ///     "PMAX": 4,
 ///     "PRES": 1,
 ///     "QCAP": 0,
@@ -81,18 +83,17 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
 ///     "TIDX": 0xFFFF,
 ///     "VOIP": 2,
 ///     "VSTR": "ME3-295976325-179181965240128"
-///     
 /// }
 /// ```
 async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleResult {
-    let req = packet.decode::<CreateGameRequest>()?;
+    let req: CreateGameRequest = packet.decode()?;
 
-    let player = session
+    let player: GamePlayer = session
         .try_into_player()
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let games = GlobalState::games();
-    let game_id = games.create_game(req.attributes, req.setting).await;
+    let game_id: GameID = games.create_game(req.attributes, req.setting).await;
 
     games.add_host(game_id, player).await;
 
@@ -342,7 +343,7 @@ async fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -
 ///     "MODE": 3
 ///     "NTOP": 0,
 ///     "PMAX": 0,
-///     "PNET": Union("VALU", 2: {
+///     "PNET": Union("VALU", 2, {
 ///         "EXIP": {
 ///             "IP": 0,
 ///             "PORT": 0,
@@ -359,7 +360,7 @@ async fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -
 async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: MatchmakingRequest = packet.decode()?;
 
-    let player = session
+    let player: GamePlayer = session
         .try_into_player()
         .ok_or(ServerError::FailedNoLoginAction)?;
 
@@ -385,7 +386,7 @@ async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> Han
 /// }
 /// ```
 async fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
-    let player = session
+    let player: &Player = session
         .player
         .as_ref()
         .ok_or(ServerError::FailedNoLoginAction)?;

@@ -102,7 +102,7 @@ pub async fn route(
 /// }
 /// ```
 async fn handle_auth_request(session: &mut Session, packet: &Packet) -> HandleResult {
-    let req = packet.decode::<AuthRequest>()?;
+    let req: AuthRequest = packet.decode()?;
     let silent = req.is_silent();
     let db = GlobalState::database();
     let player: Player = match req {
@@ -150,7 +150,7 @@ async fn handle_login_email(
     }
 
     // Find a non origin player with that email
-    let player = Player::by_email(db, &email, false)
+    let player: Player = Player::by_email(db, &email, false)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::EmailNotFound)?;
@@ -194,14 +194,14 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
     };
 
     // Lookup the player details to see if the player exists
-    let player = Player::by_email(&db, &details.email, true)
+    let player: Option<Player> = Player::by_email(&db, &details.email, true)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?;
 
     match player {
         Some(player) => Ok(player),
         None => {
-            let player = Player::create(
+            let player: Player = Player::create(
                 &db,
                 details.email,
                 details.display_name,
@@ -243,9 +243,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
 /// Content: {}
 /// ```
 async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
-    debug!("Logging out for session: (ID: {})", &session.id);
     session.clear_player();
-
     Ok(packet.respond_empty())
 }
 
@@ -272,8 +270,8 @@ async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
 /// }
 /// ```
 fn handle_list_entitlements(packet: &Packet) -> HandleResult {
-    let req = packet.decode::<ListEntitlementsRequest>()?;
-    let tag = req.tag;
+    let req: ListEntitlementsRequest = packet.decode()?;
+    let tag: String = req.tag;
     if !tag.is_empty() {
         return Ok(packet.respond_empty());
     }
@@ -331,14 +329,13 @@ fn handle_list_entitlements(packet: &Packet) -> HandleResult {
 /// }
 /// ```
 async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleResult {
-    let player = session
+    let player: Player = session
         .player
         .take()
         .ok_or_else(|| ServerError::FailedNoLoginAction)?;
     let (player, session_token) = player.with_token(GlobalState::database()).await?;
     let player = session.set_player(player);
     let response = PersonaResponse::new(player, session_token);
-
     Ok(packet.respond(response))
 }
 
@@ -354,12 +351,11 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
 /// }
 /// ```
 fn handle_forgot_password(packet: &Packet) -> HandleResult {
-    let req = packet.decode::<ForgotPasswordRequest>()?;
+    let req: ForgotPasswordRequest = packet.decode()?;
     if !is_email(&req.email) {
         return Err(ServerError::InvalidEmail.into());
     }
     debug!("Got request for password rest for email: {}", &req.email);
-
     Ok(packet.respond_empty())
 }
 
@@ -397,7 +393,7 @@ fn handle_forgot_password(packet: &Packet) -> HandleResult {
 /// ```
 ///
 async fn handle_create_account(session: &mut Session, packet: &Packet) -> HandleResult {
-    let req = packet.decode::<CreateAccountRequest>()?;
+    let req: CreateAccountRequest = packet.decode()?;
     let email = req.email;
     if !is_email(&email) {
         return Err(ServerError::InvalidEmail.into());
@@ -418,7 +414,7 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
     };
 
     let display_name = email.chars().take(99).collect::<String>();
-    let player = Player::create(db, email, display_name, hashed_password, false).await?;
+    let player: Player = Player::create(db, email, display_name, hashed_password, false).await?;
     let (player, session_token) = player.with_token(db).await?;
     let player = session.set_player(player);
     let response = AuthResponse::new(player, session_token, false);
@@ -469,8 +465,11 @@ async fn load_local<'a>(path: &str, fallback: &'a str) -> Cow<'a, str> {
 /// }
 /// ```
 async fn handle_tos_content(packet: &Packet) -> HandleResult {
-    let default = include_str!("../resources/defaults/terms_of_service.html");
-    let content = load_local("terms_of_service.html", default).await;
+    let content: Cow<'_, str> = load_local(
+        "terms_of_service.html",
+        include_str!("../resources/defaults/terms_of_service.html"),
+    )
+    .await;
     let response = LegalContent {
         path: "webterms/au/en/pc/default/09082020/02042022",
         content: &content,
@@ -492,10 +491,12 @@ async fn handle_tos_content(packet: &Packet) -> HandleResult {
 ///     "TEXT": 1
 /// }
 /// ```
-///
 async fn handle_privacy_content(packet: &Packet) -> HandleResult {
-    let default = include_str!("../resources/defaults/privacy_policy.html");
-    let content = load_local("privacy_policy.html", default).await;
+    let content = load_local(
+        "privacy_policy.html",
+        include_str!("../resources/defaults/privacy_policy.html"),
+    )
+    .await;
     let response = LegalContent {
         path: "webprivacy/au/en/pc/default/08202020/02042022",
         content: &content,
@@ -513,7 +514,7 @@ async fn handle_privacy_content(packet: &Packet) -> HandleResult {
 /// Content: {}
 /// ```
 async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> HandleResult {
-    let player = session
+    let player: &Player = session
         .player
         .as_ref()
         .ok_or_else(|| ServerError::FailedNoLoginAction)?;

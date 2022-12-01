@@ -44,7 +44,7 @@ pub async fn route(
 async fn handle_resume_session(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: ResumeSessionRequest = packet.decode()?;
     let db = GlobalState::database();
-    let player = Player::by_token(db, &req.session_token)
+    let player: Player = Player::by_token(db, &req.session_token)
         .await?
         .ok_or(ServerError::InvalidSession)?;
 
@@ -61,7 +61,7 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
 /// Route: UserSessions(UpdateNetworkInfo)
 /// ID: 8
 /// Content: {
-///     "ADDR": Union("VALUE", 2: {
+///     "ADDR": Union("VALUE", 2, {
 ///         "EXIP": {
 ///             "IP": 0,
 ///             "PORT": 0

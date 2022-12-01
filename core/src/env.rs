@@ -2,9 +2,11 @@ use std::str::FromStr;
 
 use log::LevelFilter;
 
-pub const REDIRECTOR_PORT: (&str, u16) = ("PR_REDIRECTOR_PORT", 42127);
-pub const MAIN_PORT: (&str, u16) = ("PR_MAIN_PORT", 14219);
-pub const HTTP_PORT: (&str, u16) = ("PR_HTTP_PORT", 80);
+use crate::blaze::codec::Port;
+
+pub const REDIRECTOR_PORT: (&str, Port) = ("PR_REDIRECTOR_PORT", 42127);
+pub const MAIN_PORT: (&str, Port) = ("PR_MAIN_PORT", 14219);
+pub const HTTP_PORT: (&str, Port) = ("PR_HTTP_PORT", 80);
 
 pub const MENU_MESSAGE: (&str, &str) = (
     "PR_MENU_MESSAGE",
