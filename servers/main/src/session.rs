@@ -39,7 +39,7 @@ use core::blaze::{
 };
 
 use crate::{
-    codec::{SessionUpdate, SetSession},
+    models::session::{SessionUpdate, SetSession},
     routes,
 };
 

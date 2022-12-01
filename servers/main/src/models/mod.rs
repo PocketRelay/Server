@@ -5,6 +5,7 @@ pub mod auth;
 pub mod game_manager;
 pub mod messaging;
 pub mod other;
+pub mod session;
 pub mod stats;
 pub mod user_sessions;
 pub mod util;

@@ -1,6 +1,5 @@
 use core::{blaze::errors::BlazeError, env, state::GlobalState};
 
-mod codec;
 mod models;
 mod routes;
 mod session;

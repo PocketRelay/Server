@@ -3,6 +3,11 @@ use utils::types::PlayerID;
 
 use crate::session::Session;
 
+/// Encodes the session details for the provided session using
+/// the provided writer
+///
+/// `session` The session to encode
+/// `writer`  The writer to encode with
 fn encode_session(session: &Session, writer: &mut TdfWriter) {
     session.net.tag_groups(b"ADDR", writer);
     writer.tag_str(b"BPS", "ea-sjc");
@@ -31,8 +36,11 @@ fn encode_session(session: &Session, writer: &mut TdfWriter) {
 /// Session update for a session other than ourselves
 /// which contains the details for that session
 pub struct SessionUpdate<'a> {
+    /// The session this update is for
     pub session: &'a Session,
+    /// The player ID the update is for
     pub player_id: PlayerID,
+    /// The display name of the player the update is
     pub display_name: &'a str,
 }
 
@@ -54,7 +62,9 @@ impl Encodable for SessionUpdate<'_> {
 
 /// Session update for ourselves
 pub struct SetSession<'a> {
+    /// The player ID the update is for
     pub player_id: PlayerID,
+    /// The session this update is for
     pub session: &'a Session,
 }
 
