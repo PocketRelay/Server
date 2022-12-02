@@ -1,6 +1,7 @@
 use database::{self, DatabaseConnection, DatabaseType};
 
 use futures::join;
+use log::info;
 use tokio::{signal, sync::watch};
 
 use crate::{env, game::manager::Games, leaderboard::Leaderboard, retriever::Retriever};
@@ -53,6 +54,7 @@ impl GlobalState {
         // Spawn a handler for safe shutdown
         tokio::spawn(async move {
             signal::ctrl_c().await.ok();
+            info!("Shutting down safely...");
             shutdown_send.send(()).ok();
         });
         shutdown_recv
