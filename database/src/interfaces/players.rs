@@ -88,12 +88,26 @@ impl players::Model {
         active_model.insert(db).await
     }
 
+    /// Deletes the current player
+    ///
+    /// `db` The database connection
     pub async fn delete(self, db: &DatabaseConnection) -> DbResult<()> {
         let model = self.into_active_model();
         model.delete(db).await?;
         Ok(())
     }
 
+    /// Updates the player using the optional values provided from the HTTP
+    /// API
+    ///
+    /// `db`           The database connection
+    /// `email`        The optional email to use
+    /// `display_name` The optional display name to use
+    /// `origin`       The optional origin value to use
+    /// `password`     The optional password to use
+    /// `credits`      The optional credits to use
+    /// `inventory`    The optional inventory to use
+    /// `csreward`     The optional csreward to use
     pub async fn update_http(
         self,
         db: &DatabaseConnection,

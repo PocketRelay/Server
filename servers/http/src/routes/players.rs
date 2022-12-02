@@ -27,7 +27,9 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(get_player_gaw)
         .service(modify_player)
         .service(delete_player)
-        .service(create_player);
+        .service(create_player)
+        .service(get_player_class)
+        .service(update_player_class);
 }
 
 /// Enum for errors that could occur when accessing any of
@@ -39,6 +41,7 @@ enum PlayersError {
     InvalidEmail,
     UpdateError(UpdateError),
     ServerError,
+    ClassNotFound,
 }
 
 /// Type alias for players result responses which wraps the provided type in
@@ -130,6 +133,11 @@ struct ModifyPlayerRequest {
     csreward: Option<u16>,
 }
 
+/// Route for modifying a player with the provided ID can take multiple
+/// fields to update.
+///
+/// `path` The route path with the ID for the player to find
+/// `req`  The request body
 #[put("/api/players/{id}")]
 async fn modify_player(
     path: Path<PlayerID>,
@@ -161,29 +169,41 @@ async fn modify_player(
     Ok(Json(player))
 }
 
+/// Request structure for a request to create a new player
 #[derive(Deserialize)]
 struct CreatePlayerRequest {
+    /// The email address of the player to create
     email: String,
+    /// The display name of the player to create
     display_name: String,
+    /// The plain text password for the player
     password: String,
 }
 
+/// Route for creating a new player from the provided creation
+/// request.
+///
+/// `req` The request containing the player details
 #[post("/api/players")]
 async fn create_player(req: Json<CreatePlayerRequest>) -> PlayersResult<Player> {
     let req = req.into_inner();
     let db = GlobalState::database();
-
-    let exists = Player::is_email_taken(db, &req.email).await?;
-
+    let email = req.email;
+    if !is_email(&email) {
+        return Err(PlayersError::InvalidEmail);
+    }
+    let exists = Player::is_email_taken(db, &email).await?;
     if exists {
         return Err(PlayersError::EmailTaken);
     }
-
     let password = hash_password(&req.password).map_err(|_| PlayersError::ServerError)?;
-    let player: Player = Player::create(db, req.email, req.display_name, password, false).await?;
+    let player: Player = Player::create(db, email, req.display_name, password, false).await?;
     Ok(Json(player))
 }
 
+/// Route for deleting a player using its Player ID
+///
+/// `path` The route path with the ID for the player to find
 #[delete("/api/players/{id}")]
 async fn delete_player(path: Path<PlayerID>) -> Result<impl Responder, PlayersError> {
     let db = GlobalState::database();
@@ -236,6 +256,51 @@ async fn get_player_classes(path: Path<PlayerID>) -> PlayersResult<Vec<PlayerCla
     Ok(Json(classes))
 }
 
+/// Request structure for a request to update the level and or promotions
+/// of a class
+#[derive(Deserialize)]
+struct UpdateClassRequest {
+    /// The level to change to
+    level: Option<u32>,
+    /// The promotions to change to
+    promotions: Option<u32>,
+}
+
+/// Route for retrieving the list of classes for a provided player
+/// matches the provided {id} with the provided {index}
+///
+/// `path` The route path with the ID for the player to find the classes for
+#[get("/api/players/{id}/classes/{index}")]
+async fn get_player_class(path: Path<(PlayerID, u16)>) -> PlayersResult<PlayerClass> {
+    let (player_id, index) = path.into_inner();
+    let db = GlobalState::database();
+    let player: Player = find_player(db, player_id).await?;
+    let class: PlayerClass = PlayerClass::find_index(db, &player, index)
+        .await?
+        .ok_or(PlayersError::ClassNotFound)?;
+    Ok(Json(class))
+}
+
+/// Route for updating the class for a player with the provided {id}
+/// at the class {index}
+///
+/// `path` The route path with the ID for the player to find the classes for and class index
+/// `req`  The update class request
+#[put("/api/players/{id}/classes/{index}")]
+async fn update_player_class(
+    path: Path<(PlayerID, u16)>,
+    req: Json<UpdateClassRequest>,
+) -> PlayersResult<PlayerClass> {
+    let (player_id, index) = path.into_inner();
+    let db = GlobalState::database();
+    let player: Player = find_player(db, player_id).await?;
+    let class: PlayerClass = PlayerClass::find_index(db, &player, index)
+        .await?
+        .ok_or(PlayersError::ClassNotFound)?;
+    let class = class.update_http(db, req.level, req.promotions).await?;
+    Ok(Json(class))
+}
+
 /// Route for retrieving the list of characters for a provided player
 /// matches the provided {id}
 ///
@@ -265,6 +330,7 @@ async fn get_player_gaw(path: Path<PlayerID>) -> PlayersResult<GalaxyAtWar> {
 impl Display for PlayersError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ClassNotFound => f.write_str("Class with that index not found"),
             Self::EmailTaken => f.write_str("Email address is already taken"),
             Self::PlayerNotFound => f.write_str("Couldn't find any players with that ID"),
             Self::UpdateError(err) => err.fmt(f),
@@ -279,6 +345,7 @@ impl Display for PlayersError {
 impl ResponseError for PlayersError {
     fn status_code(&self) -> actix_web::http::StatusCode {
         match self {
+            Self::ClassNotFound => StatusCode::NOT_FOUND,
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
             Self::EmailTaken => StatusCode::BAD_REQUEST,
             Self::UpdateError(err) => match err {

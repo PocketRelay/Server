@@ -30,6 +30,48 @@ impl player_classes::Model {
             .all(db)
             .await
     }
+
+    /// Updates the level and promotions value for the current class
+    /// if provided saving the changes to the database
+    ///
+    /// `level`      Optional level value to change
+    /// `promotions` Optional promotions value to change
+    pub async fn update_http(
+        self,
+        db: &DatabaseConnection,
+        level: Option<u32>,
+        promotions: Option<u32>,
+    ) -> DbResult<Self> {
+        let mut active = self.into_active_model();
+        if let Some(level) = level {
+            active.level = Set(level);
+        }
+        if let Some(promotions) = promotions {
+            active.promotions = Set(promotions);
+        }
+        active.update(db).await
+    }
+
+    /// Finds the player class with the specific index
+    ///
+    /// `db`     The database instance
+    /// `player` The player to find the class for
+    /// `index`  The index to find
+    pub async fn find_index(
+        db: &DatabaseConnection,
+        player: &players::Model,
+        index: u16,
+    ) -> DbResult<Option<Self>> {
+        player_classes::Entity::find()
+            .filter(
+                player_classes::Column::PlayerId
+                    .eq(player.id)
+                    .and(player_classes::Column::Index.eq(index)),
+            )
+            .one(db)
+            .await
+    }
+
     /// Attempts to find a player class relating to the provided player in the database
     /// using its index and relation to the player. If None could be found a new value
     /// will be created and returned instead.
