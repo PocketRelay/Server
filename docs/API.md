@@ -248,6 +248,52 @@ The "players" field contains the list of players within the offset and count. Th
 | 500 Internal Server Error | Internal Server Error | Database or other server error occurred |
 
 
+## Create Player
+
+```
+POST /api/players
+```
+```json
+{
+    "email": "test12@test.com",
+    "display_name": "Test 12",
+    "password": "test"
+}
+```
+
+### Response
+
+```json
+{
+	"id": 14,
+	"email": "test12@test.com",
+	"display_name": "Test 12",
+	"origin": false,
+	"credits": 0,
+	"credits_spent": 0,
+	"games_played": 0,
+	"seconds_played": 0,
+	"inventory": "",
+	"csreward": 0,
+	"face_codes": null,
+	"new_item": null,
+	"completion": null,
+	"progress": null,
+	"cs_completion": null,
+	"cs_timestamps1": null,
+	"cs_timestamps2": null,
+	"cs_timestamps3": null
+}
+```
+### Error Responses 
+
+| Status Code               | Body                                            | Meaning                                                          |
+| ------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
+| 400 Bad Request           | Email address is taken                          | The provided email address is already in use                     |
+| 400 Bad Request           | Email address is not valid                      | The provided email address is not a valid email address          |
+| 500 Internal Server Error | Internal Server Error                           | Database or other server error occurred                          |
+
+
 ## Get Specific Player
 
 ```
@@ -288,6 +334,68 @@ a specific ID. This only includes the basic player data and not the classes or c
 | ------------------------- | -------------------------------------- | ------------------------------------------ |
 | 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
 | 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
+
+## Update Player
+
+```
+PUT /api/players/{PLAYER_ID}
+```
+
+```json 
+{
+    "email": "test@test.com",
+    "display_name": "Test 1",
+    "origin": false,
+    "password": "test123",
+    "credits": 1020,
+    "inventory": "00123010230102301302102030000",
+    "csreward": 0,
+}
+```
+
+
+Replacing {PLAYER_ID} with the ID of the player 
+
+You can omit any of the fields within this JSON to only update specific values
+however if you specific "origin" as false the "password" field must be present
+in order to set the account password
+
+
+### Response
+
+The response is the player structure but with the new values updated
+
+```json
+{
+    "id": 1,
+    "email": "test@test.com",
+    "display_name": "Test 1",
+    "origin": false,
+    "credits": 1020,
+    "credits_spent": 1668442722,
+    "games_played": 16,
+    "seconds_played": 3384,
+    "inventory": "00123010230102301302102030000",
+    "csreward": 0,
+    "face_codes": "20;",
+    "new_item": "20;4;13 223 584,10 75 131,8 98 95 529 93 517 528,9 79 111 84",
+    "completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+    "progress": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+    "cs_completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
+    "cs_timestamps1": "0,... LONG LIST OMMITTED FROM EXAMPLE",
+    "cs_timestamps2": "0,... LONG LIST OMMITTED FROM EXAMPLE",
+    "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
+}
+```
+
+| Status Code               | Body                                            | Meaning                                                          |
+| ------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
+| 404 Not Found             | Couldn't find any players with that ID          | Player with matching ID could not be found                       |
+| 400 Bad Request           | Email address is taken                          | The provided email address is already in use                     |
+| 400 Bad Request           | Email address is not valid                      | The provided email address is not a valid email address          |
+| 400 Bad Request           | Origin was set to false so password is required | The "origin" field was set to false without the "password" field |
+| 500 Internal Server Error | Internal Server Error                           | Database or other server error occurred                          |
+
 
 ## Get Specific Player Full
 
@@ -406,6 +514,71 @@ a specific ID. This only includes the classes for the player
 | Status Code               | Body                                   | Meaning                                    |
 | ------------------------- | -------------------------------------- | ------------------------------------------ |
 | 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
+| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
+
+## Get Specific Player Class
+
+```
+GET /api/players/{PLAYER_ID}/classes/{INDEX}
+```
+
+Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+a specific ID. This only includes the classes for the player. Replacing {INDEX} with the class index
+
+### Response
+
+```json
+{
+    "index": 1,
+    "name": "Adept",
+    "level": 1,
+    "exp": 0.0,
+    "promotions": 0
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body                                   | Meaning                                    |
+| ------------------------- | -------------------------------------- | ------------------------------------------ |
+| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
+| 404 Not Found             | Class with that index not found        | Class with that index could not be found   |
+| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
+
+
+## Update Player Class
+
+```
+PUT /api/players/{PLAYER_ID}/classes/{INDEX}
+```
+
+Replacing {PLAYER_ID} with the ID. Replacing {INDEX} with the class index
+
+```json
+{
+    "level": 20,
+    "promotions": 5
+}
+```
+
+### Response
+
+```json
+{
+    "index": 1,
+    "name": "Adept",
+    "level": 20,
+    "exp": 0.0,
+    "promotions": 5
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body                                   | Meaning                                    |
+| ------------------------- | -------------------------------------- | ------------------------------------------ |
+| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
+| 404 Not Found             | Class with that index not found        | Class with that index could not be found   |
 | 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
 
 
