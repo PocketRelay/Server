@@ -1,7 +1,7 @@
 use std::path::Path;
 
 mod entities;
-mod interfaces;
+pub mod interfaces;
 mod migration;
 
 use log::{debug, info};

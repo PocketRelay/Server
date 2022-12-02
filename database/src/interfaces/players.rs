@@ -2,18 +2,19 @@ use log::warn;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait,
+    ColumnTrait, CursorTrait, DatabaseConnection, DbErr, EntityTrait, IntoActiveModel, ModelTrait,
     QueryFilter,
 };
+
 use tokio::try_join;
-use utils::{parse::MEStringParser, types::PlayerID};
+use utils::{hashing::hash_password, parse::MEStringParser, types::PlayerID};
 
 use crate::{
     entities::{player_characters, player_classes, players},
     DbResult, GalaxyAtWar, PlayerCharacter, PlayerClass,
 };
 
-use std::iter::Iterator;
+use std::{fmt::Display, iter::Iterator};
 
 impl players::Model {
     /// The length of player session tokens
@@ -85,6 +86,64 @@ impl players::Model {
             cs_timestamps3: NotSet,
         };
         active_model.insert(db).await
+    }
+
+    pub async fn delete(self, db: &DatabaseConnection) -> DbResult<()> {
+        let model = self.into_active_model();
+        model.delete(db).await?;
+        Ok(())
+    }
+
+    pub async fn update_http(
+        self,
+        db: &DatabaseConnection,
+        email: Option<String>,
+        display_name: Option<String>,
+        origin: Option<bool>,
+        password: Option<String>,
+        credits: Option<u32>,
+        inventory: Option<String>,
+        csreward: Option<u16>,
+    ) -> UpdateResult<Self> {
+        let was_origin = self.origin;
+        let mut active = self.into_active_model();
+        if let Some(email) = email {
+            if Self::by_email(db, &email, was_origin).await?.is_some() {
+                return Err(UpdateError::EmailTaken);
+            }
+            active.email = Set(email);
+        }
+
+        if let Some(display_name) = display_name {
+            active.display_name = Set(display_name);
+        }
+
+        if let Some(origin) = origin {
+            if !origin {
+                let password = password.ok_or(UpdateError::MissingPassword)?;
+                let password = hash_password(&password).map_err(|_| UpdateError::ServerError)?;
+                active.password = Set(password);
+            }
+            active.origin = Set(origin);
+        } else if let Some(password) = password {
+            let password = hash_password(&password).map_err(|_| UpdateError::ServerError)?;
+            active.password = Set(password);
+        }
+
+        if let Some(credits) = credits {
+            active.credits = Set(credits);
+        }
+
+        if let Some(inventory) = inventory {
+            active.inventory = Set(inventory);
+        }
+
+        if let Some(csreward) = csreward {
+            active.csreward = Set(csreward);
+        }
+
+        let player = active.update(db).await?;
+        Ok(player)
     }
 
     /// Parses the challenge points value which is the second
@@ -312,6 +371,31 @@ impl players::Model {
             Ok(model)
         } else {
             Ok(self)
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum UpdateError {
+    EmailTaken,
+    MissingPassword,
+    ServerError,
+}
+
+pub type UpdateResult<T> = Result<T, UpdateError>;
+
+impl From<DbErr> for UpdateError {
+    fn from(_: DbErr) -> Self {
+        Self::ServerError
+    }
+}
+
+impl Display for UpdateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmailTaken => f.write_str("Email address is taken"),
+            Self::MissingPassword => f.write_str("Origin was set to false so password is required"),
+            Self::ServerError => f.write_str("Internal server error"),
         }
     }
 }

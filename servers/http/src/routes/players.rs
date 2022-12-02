@@ -2,14 +2,18 @@ use core::state::GlobalState;
 use std::fmt::Display;
 
 use actix_web::{
-    get,
+    delete, get,
     http::StatusCode,
+    post, put,
     web::{Json, Path, Query, ServiceConfig},
-    ResponseError,
+    HttpResponse, Responder, ResponseError,
 };
-use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter, PlayerClass};
+use database::{
+    interfaces::players::UpdateError, DatabaseConnection, DbErr, GalaxyAtWar, Player,
+    PlayerCharacter, PlayerClass,
+};
 use serde::{Deserialize, Serialize};
-use utils::types::PlayerID;
+use utils::{hashing::hash_password, types::PlayerID, validate::is_email};
 
 /// Function for configuring the services in this route
 ///
@@ -20,7 +24,10 @@ pub fn configure(cfg: &mut ServiceConfig) {
         .service(get_player_full)
         .service(get_player_classes)
         .service(get_player_characters)
-        .service(get_player_gaw);
+        .service(get_player_gaw)
+        .service(modify_player)
+        .service(delete_player)
+        .service(create_player);
 }
 
 /// Enum for errors that could occur when accessing any of
@@ -28,7 +35,10 @@ pub fn configure(cfg: &mut ServiceConfig) {
 #[derive(Debug)]
 enum PlayersError {
     PlayerNotFound,
-    Database(DbErr),
+    EmailTaken,
+    InvalidEmail,
+    UpdateError(UpdateError),
+    ServerError,
 }
 
 /// Type alias for players result responses which wraps the provided type in
@@ -99,6 +109,89 @@ async fn get_player(path: Path<PlayerID>) -> PlayersResult<Player> {
     Ok(Json(player))
 }
 
+/// Request structure for a request to modify a player entity
+/// edits can range from simple name changes to converting the
+/// profile to a local profile
+#[derive(Deserialize)]
+struct ModifyPlayerRequest {
+    /// Email value
+    email: Option<String>,
+    /// Display name value
+    display_name: Option<String>,
+    /// Origin value
+    origin: Option<bool>,
+    /// Plain text password to be hashed and used
+    password: Option<String>,
+    /// Credits value
+    credits: Option<u32>,
+    /// Inventory value
+    inventory: Option<String>,
+    /// Challenge reward value
+    csreward: Option<u16>,
+}
+
+#[put("/api/players/{id}")]
+async fn modify_player(
+    path: Path<PlayerID>,
+    req: Json<ModifyPlayerRequest>,
+) -> PlayersResult<Player> {
+    let req = req.into_inner();
+    let db = GlobalState::database();
+    let player: Player = find_player(db, path.into_inner()).await?;
+
+    if let Some(email) = req.email.as_ref() {
+        if !is_email(email) {
+            return Err(PlayersError::InvalidEmail);
+        }
+    }
+
+    let player = player
+        .update_http(
+            db,
+            req.email,
+            req.display_name,
+            req.origin,
+            req.password,
+            req.credits,
+            req.inventory,
+            req.csreward,
+        )
+        .await?;
+
+    Ok(Json(player))
+}
+
+#[derive(Deserialize)]
+struct CreatePlayerRequest {
+    email: String,
+    display_name: String,
+    password: String,
+}
+
+#[post("/api/players")]
+async fn create_player(req: Json<CreatePlayerRequest>) -> PlayersResult<Player> {
+    let req = req.into_inner();
+    let db = GlobalState::database();
+
+    let exists = Player::is_email_taken(db, &req.email).await?;
+
+    if exists {
+        return Err(PlayersError::EmailTaken);
+    }
+
+    let password = hash_password(&req.password).map_err(|_| PlayersError::ServerError)?;
+    let player: Player = Player::create(db, req.email, req.display_name, password, false).await?;
+    Ok(Json(player))
+}
+
+#[delete("/api/players/{id}")]
+async fn delete_player(path: Path<PlayerID>) -> Result<impl Responder, PlayersError> {
+    let db = GlobalState::database();
+    let player: Player = find_player(db, path.into_inner()).await?;
+    player.delete(db).await?;
+    Ok(HttpResponse::Ok().finish())
+}
+
 /// Response structure for a response from the full player route
 /// which includes the player as well as all its relations
 #[derive(Serialize)]
@@ -121,7 +214,7 @@ struct FullPlayerResponse {
 #[get("/api/players/{id}/full")]
 async fn get_player_full(path: Path<PlayerID>) -> PlayersResult<FullPlayerResponse> {
     let db = GlobalState::database();
-    let player = find_player(db, path.into_inner()).await?;
+    let player: Player = find_player(db, path.into_inner()).await?;
     let (classes, characters, galaxy_at_war) = player.collect_relations(db).await?;
     Ok(Json(FullPlayerResponse {
         player,
@@ -138,7 +231,7 @@ async fn get_player_full(path: Path<PlayerID>) -> PlayersResult<FullPlayerRespon
 #[get("/api/players/{id}/classes")]
 async fn get_player_classes(path: Path<PlayerID>) -> PlayersResult<Vec<PlayerClass>> {
     let db = GlobalState::database();
-    let player = find_player(db, path.into_inner()).await?;
+    let player: Player = find_player(db, path.into_inner()).await?;
     let classes = PlayerClass::find_all(db, &player).await?;
     Ok(Json(classes))
 }
@@ -150,7 +243,7 @@ async fn get_player_classes(path: Path<PlayerID>) -> PlayersResult<Vec<PlayerCla
 #[get("/api/players/{id}/characters")]
 async fn get_player_characters(path: Path<PlayerID>) -> PlayersResult<Vec<PlayerCharacter>> {
     let db = GlobalState::database();
-    let player = find_player(db, path.into_inner()).await?;
+    let player: Player = find_player(db, path.into_inner()).await?;
     let characters = PlayerCharacter::find_all(db, &player).await?;
     Ok(Json(characters))
 }
@@ -172,7 +265,9 @@ async fn get_player_gaw(path: Path<PlayerID>) -> PlayersResult<GalaxyAtWar> {
 impl Display for PlayersError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::EmailTaken => f.write_str("Email address is already taken"),
             Self::PlayerNotFound => f.write_str("Couldn't find any players with that ID"),
+            Self::UpdateError(err) => err.fmt(f),
             _ => f.write_str("Internal Server Error"),
         }
     }
@@ -185,6 +280,11 @@ impl ResponseError for PlayersError {
     fn status_code(&self) -> actix_web::http::StatusCode {
         match self {
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
+            Self::EmailTaken => StatusCode::BAD_REQUEST,
+            Self::UpdateError(err) => match err {
+                UpdateError::EmailTaken | UpdateError::MissingPassword => StatusCode::BAD_REQUEST,
+                UpdateError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+            },
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -193,7 +293,13 @@ impl ResponseError for PlayersError {
 /// From implementation for converting database errors into
 /// players errors without needing to map the value
 impl From<DbErr> for PlayersError {
-    fn from(err: DbErr) -> Self {
-        PlayersError::Database(err)
+    fn from(_: DbErr) -> Self {
+        PlayersError::ServerError
+    }
+}
+
+impl From<UpdateError> for PlayersError {
+    fn from(err: UpdateError) -> Self {
+        PlayersError::UpdateError(err)
     }
 }
