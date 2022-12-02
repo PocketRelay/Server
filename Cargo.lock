@@ -714,7 +714,7 @@ dependencies = [
 
 [[package]]
 name = "core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "blaze-pk",
  "blaze-ssl-async",
@@ -860,7 +860,7 @@ dependencies = [
 
 [[package]]
 name = "database"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-std",
  "chrono",
@@ -1322,7 +1322,7 @@ dependencies = [
 
 [[package]]
 name = "http-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actix-web",
  "core",
@@ -1623,7 +1623,7 @@ dependencies = [
 
 [[package]]
 name = "main-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "blaze-pk",
  "blaze-ssl-async",
@@ -1705,7 +1705,7 @@ dependencies = [
 
 [[package]]
 name = "mitm-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "blaze-pk",
  "blaze-ssl-async",
@@ -2052,7 +2052,7 @@ checksum = "1df8c4ec4b0627e53bdf214615ad287367e482558cf84b109250b37464dc03ae"
 
 [[package]]
 name = "pocket-relay"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "core",
  "dotenvy",
@@ -2242,7 +2242,7 @@ dependencies = [
 
 [[package]]
 name = "redirector-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "blaze-pk",
  "blaze-ssl-async",
@@ -3158,7 +3158,7 @@ dependencies = [
 
 [[package]]
 name = "tools"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64",
  "blaze-pk",
@@ -3314,7 +3314,7 @@ dependencies = [
 
 [[package]]
 name = "utils"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "argon2",
  "blaze-pk",
