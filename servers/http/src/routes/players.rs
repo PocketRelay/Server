@@ -332,6 +332,7 @@ impl Display for PlayersError {
         match self {
             Self::ClassNotFound => f.write_str("Class with that index not found"),
             Self::EmailTaken => f.write_str("Email address is already taken"),
+            Self::InvalidEmail => f.write_str("Email address is not valid"),
             Self::PlayerNotFound => f.write_str("Couldn't find any players with that ID"),
             Self::UpdateError(err) => err.fmt(f),
             _ => f.write_str("Internal Server Error"),
@@ -347,7 +348,7 @@ impl ResponseError for PlayersError {
         match self {
             Self::ClassNotFound => StatusCode::NOT_FOUND,
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
-            Self::EmailTaken => StatusCode::BAD_REQUEST,
+            Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
             Self::UpdateError(err) => match err {
                 UpdateError::EmailTaken | UpdateError::MissingPassword => StatusCode::BAD_REQUEST,
                 UpdateError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
