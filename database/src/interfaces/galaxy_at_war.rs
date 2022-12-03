@@ -1,6 +1,6 @@
 use crate::{
     entities::{galaxy_at_war, player_classes, players},
-    DbResult,
+    DbResult, GalaxyAtWar,
 };
 use chrono::Local;
 use sea_orm::{
@@ -10,7 +10,7 @@ use sea_orm::{
 };
 use std::cmp;
 
-impl galaxy_at_war::Model {
+impl GalaxyAtWar {
     /// The minimum value for galaxy at war entries
     const MIN_VALUE: u16 = 5000;
     /// The maximum value for galaxy at war entries

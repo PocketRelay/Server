@@ -1,3 +1,7 @@
+use crate::{
+    entities::{player_classes, players},
+    DbResult, PlayerClass,
+};
 use log::warn;
 use sea_orm::{
     ActiveModelTrait,
@@ -6,12 +10,7 @@ use sea_orm::{
 };
 use utils::{parse::MEStringParser, types::PlayerID};
 
-use crate::{
-    entities::{player_classes, players},
-    DbResult,
-};
-
-impl player_classes::Model {
+impl PlayerClass {
     /// Finds all the player classes for the provided player model
     ///
     /// `db`     The database instance

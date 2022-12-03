@@ -5,19 +5,29 @@ use sea_orm::entity::prelude::*;
 use serde::Serialize;
 use utils::types::PlayerID;
 
+/// Structure for a galaxy at war model stored in the database
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
 #[sea_orm(table_name = "galaxy_at_war")]
 pub struct Model {
+    /// The unique ID for this galaxy at war data
     #[sea_orm(primary_key)]
     #[serde(skip)]
     pub id: u32,
+    /// The ID of the player this galaxy at war data belongs to
     #[serde(skip)]
     pub player_id: PlayerID,
+    /// The time at which this galaxy at war data was last modified. Used
+    /// to calculate how many days of decay have passed
     pub last_modified: NaiveDateTime,
+    /// The first group value
     pub group_a: u16,
+    /// The second group value
     pub group_b: u16,
+    /// The third group value
     pub group_c: u16,
+    /// The fourth group value
     pub group_d: u16,
+    /// The fifth group value
     pub group_e: u16,
 }
 

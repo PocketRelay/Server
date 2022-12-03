@@ -36,11 +36,17 @@ pub struct Model {
     pub csreward: u16,
     pub face_codes: Option<String>,
     pub new_item: Option<String>,
+    /// Challenge completion string starts with 22, then the
+    /// next field is the number of challenge points obtained
     pub completion: Option<String>,
+    /// Progress for each challenge
     pub progress: Option<String>,
     pub cs_completion: Option<String>,
+    /// List of timestamps for the completion time of each challenge
     pub cs_timestamps1: Option<String>,
+    /// List of timestamps for the completion time of each challenge
     pub cs_timestamps2: Option<String>,
+    /// List of timestamps for the completion time of each challenge
     pub cs_timestamps3: Option<String>,
 }
 

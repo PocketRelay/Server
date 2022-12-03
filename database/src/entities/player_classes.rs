@@ -4,18 +4,26 @@ use sea_orm::entity::prelude::*;
 use serde::Serialize;
 use utils::types::PlayerID;
 
+/// Structure for a player class model stored in the database
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
 #[sea_orm(table_name = "player_classes")]
 pub struct Model {
+    /// The unique ID for this player class
     #[sea_orm(primary_key)]
     #[serde(skip)]
     pub id: u32,
+    /// The ID of the player this class belongs to
     #[serde(skip)]
     pub player_id: PlayerID,
+    /// The index of this class
     pub index: u16,
+    /// The class name
     pub name: String,
+    /// The class level
     pub level: u32,
+    /// The amount of exp the class has
     pub exp: f32,
+    /// The number of promotions the class has
     pub promotions: u32,
 }
 

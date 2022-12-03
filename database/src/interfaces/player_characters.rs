@@ -1,6 +1,6 @@
 use crate::{
     entities::{player_characters, players},
-    DbResult,
+    DbResult, PlayerCharacter,
 };
 use log::warn;
 use sea_orm::{
@@ -10,7 +10,7 @@ use sea_orm::{
 };
 use utils::{parse::MEStringParser, types::PlayerID};
 
-impl player_characters::Model {
+impl PlayerCharacter {
     /// Finds all the player characters for the provided player model
     ///
     /// `db`     The database instance

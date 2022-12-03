@@ -1,3 +1,4 @@
+//! Migration logic for generating player classes table
 use super::m20221015_142649_players_table::Players;
 use sea_orm_migration::prelude::*;
 

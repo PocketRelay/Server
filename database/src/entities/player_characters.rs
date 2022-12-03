@@ -4,16 +4,22 @@ use sea_orm::entity::prelude::*;
 use serde::Serialize;
 use utils::types::PlayerID;
 
+/// Structure for a player character model stored in the database
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
 #[sea_orm(table_name = "player_characters")]
 pub struct Model {
+    /// The unique ID for this player character
     #[sea_orm(primary_key)]
     #[serde(skip)]
     pub id: u32,
+    /// The ID of the player this character belongs to
     #[serde(skip)]
     pub player_id: PlayerID,
+    /// The character index of this character
     pub index: u16,
+    /// The name of the character kit contains the name of the class
     pub kit_name: String,
+    /// The name given to this character by the player
     pub name: String,
     pub tint1: u16,
     pub tint2: u16,
@@ -22,16 +28,57 @@ pub struct Model {
     pub phong: u16,
     pub emissive: u16,
     pub skin_tone: u16,
+    /// The total number of seconds played as this character
     pub seconds_played: u32,
     pub timestamp_year: u32,
     pub timestamp_month: u32,
     pub timestamp_day: u32,
     pub timestamp_seconds: u32,
+    /// Powers configuration string
+    ///
+    /// Name
+    /// Unlocked rank 0 - 6
+    /// (1 if first split A is unlocked or 0 if not)
+    /// (1 if first split B is unlocked or 0 if not)
+    /// (2 if second split A is unlocked or 0 if not)
+    /// (2 if second split B is unlocked or 0 if not)
+    /// (3 if third split A is unlocked or 0 if not)
+    /// (3 if third split B is unlocked or 0 if not)
+    /// Unknown 0 - 6
+    /// Charcter specific flag? True/False
+    ///
+    /// # Examples
+    /// ```
+    /// AdrenalineRush 139 6.0000 1 0 2 0 3 0 0 True,
+    /// ConcussiveShot 148 6.0000 1 0 0 2 0 3 5 True,
+    /// FragGrenade 159 0.0000 0 0 0 0 0 0 2 True,
+    /// MPPassive 206 6.0000 0 1 2 0 0 3 5 True,
+    /// MPMeleePassive 204 6.0000 0 1 0 2 0 3 5 True,
+    /// ```
+    ///
+    /// ```
+    /// # Standard abilities from mp
+    /// Consumable_Rocket 88 1.0000 0 0 0 0 0 0 3 False,
+    /// Consumable_Revive 87 1.0000 0 0 0 0 0 0 4 False,
+    /// Consumable_Shield 89 1.0000 0 0 0 0 0 0 5 False,
+    /// Consumable_Ammo 86 1.0000 0 0 0 0 0 0 6 False
+    /// ```
     pub powers: String,
+    /// Hotkey configuration string
     pub hotkeys: String,
+    /// Weapon configuration string
+    /// List of weapon IDs should not be more than two
+    /// 135,25
     pub weapons: String,
+    /// Weapon mod configuration string
+    /// List of weapon mods split by spaces for each
+    /// gun. Can contain 1 or 2
+    /// 135 34,25 47
     pub weapon_mods: String,
+    /// Whether this character has been deployed before
+    /// (Aka used)
     pub deployed: bool,
+    /// Whether this character has leveled up
     pub leveled_up: bool,
 }
 

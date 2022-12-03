@@ -1,13 +1,12 @@
+use log::{debug, info};
+use migration::{Migrator, MigratorTrait};
+use sea_orm::Database as SeaDatabase;
 use std::path::Path;
+use tokio::fs::{create_dir_all, File};
 
 mod entities;
 pub mod interfaces;
 mod migration;
-
-use log::{debug, info};
-use migration::{Migrator, MigratorTrait};
-use sea_orm::Database as SeaDatabase;
-use tokio::fs::{create_dir_all, File};
 
 // Re-exports of named entities
 pub use entities::{GalaxyAtWar, Player, PlayerCharacter, PlayerClass};
@@ -16,10 +15,15 @@ pub use entities::{GalaxyAtWar, Player, PlayerCharacter, PlayerClass};
 pub use sea_orm::DatabaseConnection;
 pub use sea_orm::DbErr;
 
+/// Database error result type
 pub type DbResult<T> = Result<T, DbErr>;
 
+/// Type of database to connect to with the relevant
+/// connection string / file
 pub enum DatabaseType {
+    /// SQLite database connection with the file name / path
     Sqlite(String),
+    /// MySQL database connection with the MySQL Url
     MySQL(String),
 }
 

@@ -1,3 +1,7 @@
+use crate::{
+    entities::{player_characters, player_classes, players},
+    DbResult, GalaxyAtWar, Player, PlayerCharacter, PlayerClass,
+};
 use log::warn;
 use sea_orm::{
     ActiveModelTrait,
@@ -5,18 +9,11 @@ use sea_orm::{
     ColumnTrait, CursorTrait, DatabaseConnection, DbErr, EntityTrait, IntoActiveModel, ModelTrait,
     QueryFilter,
 };
-
+use std::{fmt::Display, iter::Iterator};
 use tokio::try_join;
 use utils::{hashing::hash_password, parse::MEStringParser, types::PlayerID};
 
-use crate::{
-    entities::{player_characters, player_classes, players},
-    DbResult, GalaxyAtWar, PlayerCharacter, PlayerClass,
-};
-
-use std::{fmt::Display, iter::Iterator};
-
-impl players::Model {
+impl Player {
     /// The length of player session tokens
     const TOKEN_LENGTH: usize = 128;
 

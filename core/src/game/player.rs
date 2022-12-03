@@ -18,16 +18,16 @@ pub struct GamePlayer {
     pub player_id: PlayerID,
     /// The player display name
     pub display_name: String,
-
     /// Networking information for the player
     pub net: NetData,
-
     /// State of the game player
     pub state: PlayerState,
-
     /// Sender for sending messages to the session
     pub message_sender: mpsc::Sender<SessionMessage>,
 }
+
+/// Structure for taking a snapshot of the players current
+/// state.
 
 #[derive(Serialize)]
 pub struct GamePlayerSnapshot {
@@ -38,6 +38,14 @@ pub struct GamePlayerSnapshot {
 }
 
 impl GamePlayer {
+    /// Creates a new game player structure with the provided player
+    /// details
+    ///
+    /// `session_id`     The session ID of the player
+    /// `player_id`      The ID of the player
+    /// `display_name`   The display name of the player
+    /// `net`            The player networking details
+    /// `message_sender` The message sender for sending session messages
     pub fn new(
         session_id: SessionID,
         player_id: PlayerID,
