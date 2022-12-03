@@ -6,12 +6,12 @@ use log::warn;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, CursorTrait, DatabaseConnection, DbErr, EntityTrait, IntoActiveModel, ModelTrait,
+    ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait,
     QueryFilter,
 };
-use std::{fmt::Display, iter::Iterator};
+use std::iter::Iterator;
 use tokio::try_join;
-use utils::{hashing::hash_password, parse::MEStringParser, types::PlayerID};
+use utils::{parse::MEStringParser, types::PlayerID};
 
 impl Player {
     /// The length of player session tokens
@@ -115,13 +115,9 @@ impl Player {
         credits: Option<u32>,
         inventory: Option<String>,
         csreward: Option<u16>,
-    ) -> UpdateResult<Self> {
-        let was_origin = self.origin;
+    ) -> DbResult<Self> {
         let mut active = self.into_active_model();
         if let Some(email) = email {
-            if Self::by_email(db, &email, was_origin).await?.is_some() {
-                return Err(UpdateError::EmailTaken);
-            }
             active.email = Set(email);
         }
 
@@ -130,14 +126,10 @@ impl Player {
         }
 
         if let Some(origin) = origin {
-            if !origin {
-                let password = password.ok_or(UpdateError::MissingPassword)?;
-                let password = hash_password(&password).map_err(|_| UpdateError::ServerError)?;
-                active.password = Set(password);
-            }
             active.origin = Set(origin);
-        } else if let Some(password) = password {
-            let password = hash_password(&password).map_err(|_| UpdateError::ServerError)?;
+        }
+
+        if let Some(password) = password {
             active.password = Set(password);
         }
 
@@ -153,8 +145,7 @@ impl Player {
             active.csreward = Set(csreward);
         }
 
-        let player = active.update(db).await?;
-        Ok(player)
+        active.update(db).await
     }
 
     /// Parses the challenge points value which is the second
@@ -382,31 +373,6 @@ impl Player {
             Ok(model)
         } else {
             Ok(self)
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum UpdateError {
-    EmailTaken,
-    MissingPassword,
-    ServerError,
-}
-
-pub type UpdateResult<T> = Result<T, UpdateError>;
-
-impl From<DbErr> for UpdateError {
-    fn from(_: DbErr) -> Self {
-        Self::ServerError
-    }
-}
-
-impl Display for UpdateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EmailTaken => f.write_str("Email address is taken"),
-            Self::MissingPassword => f.write_str("Origin was set to false so password is required"),
-            Self::ServerError => f.write_str("Internal server error"),
         }
     }
 }

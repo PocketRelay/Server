@@ -8,10 +8,7 @@ use actix_web::{
     web::{Json, Path, Query, ServiceConfig},
     HttpResponse, Responder, ResponseError,
 };
-use database::{
-    interfaces::players::UpdateError, DatabaseConnection, DbErr, GalaxyAtWar, Player,
-    PlayerCharacter, PlayerClass,
-};
+use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter, PlayerClass};
 use serde::{Deserialize, Serialize};
 use utils::{hashing::hash_password, types::PlayerID, validate::is_email};
 
@@ -39,7 +36,7 @@ enum PlayersError {
     PlayerNotFound,
     EmailTaken,
     InvalidEmail,
-    UpdateError(UpdateError),
+    MissingPassword,
     ServerError,
     ClassNotFound,
 }
@@ -151,6 +148,23 @@ async fn modify_player(
         if !is_email(email) {
             return Err(PlayersError::InvalidEmail);
         }
+
+        if Player::by_email(db, email, player.origin).await?.is_some() {
+            return Err(PlayersError::EmailTaken);
+        }
+    }
+
+    let password = if let Some(password) = req.password.as_ref() {
+        let password = hash_password(password).map_err(|_| PlayersError::ServerError)?;
+        Some(password)
+    } else {
+        None
+    };
+
+    if let Some(origin) = req.origin.as_ref() {
+        if !*origin && password.is_none() {
+            return Err(PlayersError::MissingPassword);
+        }
     }
 
     let player = player
@@ -159,7 +173,7 @@ async fn modify_player(
             req.email,
             req.display_name,
             req.origin,
-            req.password,
+            password,
             req.credits,
             req.inventory,
             req.csreward,
@@ -334,7 +348,7 @@ impl Display for PlayersError {
             Self::EmailTaken => f.write_str("Email address is already taken"),
             Self::InvalidEmail => f.write_str("Email address is not valid"),
             Self::PlayerNotFound => f.write_str("Couldn't find any players with that ID"),
-            Self::UpdateError(err) => err.fmt(f),
+            Self::MissingPassword => f.write_str("Origin was set to false so password is required"),
             _ => f.write_str("Internal Server Error"),
         }
     }
@@ -348,11 +362,9 @@ impl ResponseError for PlayersError {
         match self {
             Self::ClassNotFound => StatusCode::NOT_FOUND,
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
-            Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
-            Self::UpdateError(err) => match err {
-                UpdateError::EmailTaken | UpdateError::MissingPassword => StatusCode::BAD_REQUEST,
-                UpdateError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
-            },
+            Self::EmailTaken | Self::InvalidEmail | Self::MissingPassword => {
+                StatusCode::BAD_REQUEST
+            }
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -363,11 +375,5 @@ impl ResponseError for PlayersError {
 impl From<DbErr> for PlayersError {
     fn from(_: DbErr) -> Self {
         PlayersError::ServerError
-    }
-}
-
-impl From<UpdateError> for PlayersError {
-    fn from(err: UpdateError) -> Self {
-        PlayersError::UpdateError(err)
     }
 }

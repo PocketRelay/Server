@@ -289,7 +289,7 @@ POST /api/players
 
 | Status Code               | Body                                            | Meaning                                                          |
 | ------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
-| 400 Bad Request           | Email address is taken                          | The provided email address is already in use                     |
+| 400 Bad Request           | Email address is already taken                          | The provided email address is already in use                     |
 | 400 Bad Request           | Email address is not valid                      | The provided email address is not a valid email address          |
 | 500 Internal Server Error | Internal Server Error                           | Database or other server error occurred                          |
 
@@ -391,7 +391,7 @@ The response is the player structure but with the new values updated
 | Status Code               | Body                                            | Meaning                                                          |
 | ------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
 | 404 Not Found             | Couldn't find any players with that ID          | Player with matching ID could not be found                       |
-| 400 Bad Request           | Email address is taken                          | The provided email address is already in use                     |
+| 400 Bad Request           | Email address is already taken                          | The provided email address is already in use                     |
 | 400 Bad Request           | Email address is not valid                      | The provided email address is not a valid email address          |
 | 400 Bad Request           | Origin was set to false so password is required | The "origin" field was set to false without the "password" field |
 | 500 Internal Server Error | Internal Server Error                           | Database or other server error occurred                          |
