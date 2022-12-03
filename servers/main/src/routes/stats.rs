@@ -3,8 +3,8 @@ use crate::models::stats::{
     FilteredLeaderboardRequest, FilteredLeaderboardResponse, LeaderboardGroupRequest,
     LeaderboardGroupResponse, LeaderboardRequest, LeaderboardResponse,
 };
+use crate::routes::HandleResult;
 use crate::session::Session;
-use crate::HandleResult;
 use blaze_pk::packet::Packet;
 use core::blaze::components::Stats;
 use core::leaderboard::models::{LeaderboardEntityGroup, LeaderboardEntry, LeaderboardType};

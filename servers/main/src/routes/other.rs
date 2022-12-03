@@ -1,6 +1,6 @@
 use crate::models::other::{AssocListResponse, GameReportResponse};
+use crate::routes::HandleResult;
 use crate::session::Session;
-use crate::HandleResult;
 use blaze_pk::packet::Packet;
 use core::blaze::components::{AssociationLists, Components, GameReporting};
 

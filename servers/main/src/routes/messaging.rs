@@ -1,7 +1,7 @@
+use crate::routes::HandleResult;
 use crate::{
     models::messaging::{FetchMessageResponse, MessageNotify},
     session::Session,
-    HandleResult,
 };
 use blaze_pk::packet::Packet;
 use core::blaze::components::{Components, Messaging};

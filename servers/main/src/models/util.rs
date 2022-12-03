@@ -1,6 +1,3 @@
-use core::{blaze::codec::Port, constants};
-use std::borrow::Cow;
-
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeResult,
@@ -10,6 +7,8 @@ use blaze_pk::{
     value_type,
     writer::TdfWriter,
 };
+use core::{blaze::codec::Port, constants};
+use std::borrow::Cow;
 use utils::types::PlayerID;
 
 /// Possibly regions that the telemetry server is disabled for?

@@ -1,5 +1,3 @@
-use core::leaderboard::models::LeaderboardEntry;
-
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::{DecodeError, DecodeResult},
@@ -7,6 +5,7 @@ use blaze_pk::{
     tag::TdfType,
     writer::TdfWriter,
 };
+use core::leaderboard::models::LeaderboardEntry;
 use utils::types::PlayerID;
 
 /// Structure for the request to retrieve the entity count

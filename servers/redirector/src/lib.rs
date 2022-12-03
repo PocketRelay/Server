@@ -1,18 +1,16 @@
 //! Module for the Redirector server which handles redirecting the clients
 //! to the correct address for the main server.
 
+use blaze_pk::packet::Packet;
+use blaze_ssl_async::stream::{BlazeStream, StreamMode};
 use core::blaze::codec::{InstanceDetails, InstanceNet};
 use core::blaze::components::{Components, Redirector};
 use core::blaze::errors::BlazeResult;
 use core::constants;
 use core::{env, state::GlobalState};
+use log::{debug, error};
 use std::net::SocketAddr;
 use std::time::Duration;
-
-use blaze_pk::packet::Packet;
-
-use blaze_ssl_async::stream::{BlazeStream, StreamMode};
-use log::{debug, error};
 use tokio::net::TcpStream;
 use tokio::select;
 use tokio::time::sleep;

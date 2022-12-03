@@ -7,8 +7,8 @@ use crate::models::auth::{
     GetTokenResponse, LegalContent, LegalDocsInfo, ListEntitlementsRequest,
     ListEntitlementsResponse, PersonaResponse,
 };
+use crate::routes::HandleResult;
 use crate::session::Session;
-use crate::HandleResult;
 use core::blaze::components::Authentication;
 use core::blaze::errors::{ServerError, ServerResult};
 use core::env;

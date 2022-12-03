@@ -1,15 +1,14 @@
-use core::game::{
-    codec::{GameState, RemoveReason},
-    game::AttrMap,
-    rules::{MatchRules, RuleSet},
-};
-
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::{DecodeError, DecodeResult},
     reader::TdfReader,
     tag::{Tag, TdfType},
     writer::TdfWriter,
+};
+use core::game::{
+    codec::{GameState, RemoveReason},
+    game::AttrMap,
+    rules::{MatchRules, RuleSet},
 };
 use utils::types::{GameID, PlayerID, SessionID};
 

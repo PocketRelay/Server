@@ -1,14 +1,12 @@
 //! Module for the Redirector server which handles redirecting the clients
 //! to the correct address for the main server.
 
+use blaze_pk::packet::{Packet, PacketType};
 use core::blaze::append_packet_decoded;
 use core::blaze::components::Components;
 use core::blaze::errors::BlazeResult;
 use core::retriever::Retriever;
 use core::{env, state::GlobalState};
-
-use blaze_pk::packet::{Packet, PacketType};
-
 use log::{debug, error, log_enabled};
 use tokio::net::TcpStream;
 use tokio::select;

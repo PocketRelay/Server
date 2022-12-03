@@ -1,7 +1,7 @@
 use blaze_pk::packet::Packet;
-use core::blaze::components::Components;
+use core::blaze::{components::Components, errors::BlazeError};
 
-use crate::{session::Session, HandleResult};
+use crate::session::Session;
 
 mod auth;
 mod game_manager;
@@ -10,6 +10,10 @@ mod other;
 mod stats;
 mod user_sessions;
 mod util;
+
+/// Type alias for result from a routing function. Routing functions either
+/// return a Packet tor esponse with or an Error
+pub type HandleResult = Result<Packet, BlazeError>;
 
 /// Root routing function handles the different components passing each
 /// component onto its specific route function in its module.

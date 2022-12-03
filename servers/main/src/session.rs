@@ -3,44 +3,36 @@
 //! behind Arc's and are cloned into Games and other resources. Sesssion must be
 //! removed from all other structs in the release function.
 
-use std::{
-    collections::VecDeque,
-    io,
-    net::{IpAddr, SocketAddr},
+use crate::{
+    models::session::{SessionUpdate, SetSession},
+    routes,
 };
-
+use blaze_pk::packet::{Packet, PacketComponents, PacketType};
 use core::{
     blaze::{
         append_packet_decoded,
+        codec::{NetAddress, NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
+        components::{self, Components, UserSessions},
         errors::{BlazeError, ServerError},
     },
     game::player::{GamePlayer, SessionMessage},
     state::GlobalState,
 };
-
 use database::Player;
-use utils::{
-    net::public_address,
-    types::{GameID, SessionID},
-};
-
-use blaze_pk::packet::{Packet, PacketComponents, PacketType};
-
 use log::{debug, error, log_enabled};
+use std::{
+    collections::VecDeque,
+    io,
+    net::{IpAddr, SocketAddr},
+};
 use tokio::{
     net::TcpStream,
     select,
     sync::{mpsc, Mutex, Notify},
 };
-
-use core::blaze::{
-    codec::{NetAddress, NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
-    components::{self, Components, UserSessions},
-};
-
-use crate::{
-    models::session::{SessionUpdate, SetSession},
-    routes,
+use utils::{
+    net::public_address,
+    types::{GameID, SessionID},
 };
 
 /// Structure for storing a client session. This includes the
@@ -418,7 +410,7 @@ impl Session {
 
     /// Updates the data stored on the client so that it matches
     /// the data stored in this session
-    pub fn update_client(&mut self) {
+    fn update_client(&mut self) {
         let player_id = self.player.as_ref().map(|player| player.id).unwrap_or(1);
         let packet = Packet::notify(
             Components::UserSessions(UserSessions::SetSession),

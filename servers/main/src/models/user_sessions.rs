@@ -1,11 +1,10 @@
-use core::blaze::codec::{NetGroups, QosNetworkData};
-
 use blaze_pk::{
     codec::Decodable,
     error::{DecodeError, DecodeResult},
     reader::TdfReader,
     types::Union,
 };
+use core::blaze::codec::{NetGroups, QosNetworkData};
 
 /// Structure for a request to resume a session using a session token
 pub struct ResumeSessionRequest {

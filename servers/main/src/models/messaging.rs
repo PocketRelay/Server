@@ -1,6 +1,5 @@
-use core::blaze::components::{Components, UserSessions};
-
 use blaze_pk::{codec::Encodable, packet::PacketComponents, tag::TdfType, writer::TdfWriter};
+use core::blaze::components::{Components, UserSessions};
 use utils::types::PlayerID;
 
 /// Structure of the response to a fetch messages request. Which tells

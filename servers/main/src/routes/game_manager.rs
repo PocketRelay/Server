@@ -2,8 +2,8 @@ use crate::models::game_manager::{
     CreateGameRequest, CreateGameResponse, GameModifyRequest, MatchmakingRequest,
     MatchmakingResponse, RemovePlayerRequest, UpdateMeshRequest,
 };
+use crate::routes::HandleResult;
 use crate::session::Session;
-use crate::HandleResult;
 use blaze_pk::packet::Packet;
 use core::blaze::components::GameManager;
 use core::blaze::errors::ServerError;

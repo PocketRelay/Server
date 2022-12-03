@@ -1,17 +1,14 @@
-use core::{blaze::errors::BlazeError, env, state::GlobalState};
+use core::{env, state::GlobalState};
+use session::Session;
+use tokio::sync::mpsc;
+use utils::net::{accept_stream, listener};
 
 mod models;
 mod routes;
 mod session;
 
-use blaze_pk::packet::Packet;
-use session::Session;
-use tokio::sync::mpsc;
-use utils::net::{accept_stream, listener};
-
-pub type HandleResult = Result<Packet, BlazeError>;
-
-/// Starts the Blaze server
+/// Starts the main server which is responsible for a majority of the
+/// game logic such as games, sessions, etc.
 pub async fn start_server() {
     let listener = listener("Main", env::from_env(env::MAIN_PORT)).await;
     let mut shutdown = GlobalState::shutdown();

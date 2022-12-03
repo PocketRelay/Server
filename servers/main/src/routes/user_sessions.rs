@@ -1,10 +1,10 @@
+use crate::routes::HandleResult;
 use crate::{
     models::{
         auth::AuthResponse,
         user_sessions::{HardwareFlagRequest, ResumeSessionRequest, UpdateNetworkRequest},
     },
     session::Session,
-    HandleResult,
 };
 use blaze_pk::packet::Packet;
 use core::blaze::errors::ServerError;
