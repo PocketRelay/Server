@@ -15,6 +15,7 @@ futures-util = { version = "0.3.25" }
 
 # HTTP Server
 actix-web = "4"
+actix-cors = "0.6.4"
 
 # Serialization and packets
 serde = { workspace = true }

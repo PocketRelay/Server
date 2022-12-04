@@ -1,3 +1,4 @@
+use actix_cors::Cors;
 use actix_web::middleware::Logger;
 
 use actix_web::{App, HttpServer};
@@ -21,6 +22,7 @@ pub async fn start_server() {
     let result = HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
+            .wrap(Cors::permissive())
             .configure(|cfg| routes::configure(cfg, token_store.clone()))
     })
     .bind(("0.0.0.0", port));
