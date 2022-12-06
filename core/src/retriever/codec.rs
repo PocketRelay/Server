@@ -45,8 +45,9 @@ impl Decodable for OriginLoginResponse {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.until_tag("SESS", TdfType::Group)?;
         let email: String = reader.tag("MAIL")?;
+
         reader.until_tag("PDTL", TdfType::Group)?;
-        let display_name: String = reader.tag("DNSM")?;
+        let display_name: String = reader.tag("DSNM")?;
         Ok(Self {
             email,
             display_name,
