@@ -78,7 +78,7 @@ cargo build --release --features database-mysql --no-default-features
 **Origin Authentication** This server supports origin authentication through the official servers. This is enabled by default but can be changed using the PR_ORIGIN_FETCH environment variable.
 
 > NOTE: Origin Authentication requires that the PR_RETRIEVER must not be false. If the 
-> retriever system is disable then it won't be allowed to connect to the official servers
+> retriever system is disabled then it won't be allowed to connect to the official servers
 
 **Origin Fetching** This server supports copying over Origin credits, classes, characters, weapons, levels, etc from the official servers. This is enabled by default and can
 be changed using the PR_ORIGIN_FETCH_DATA environment variable.
