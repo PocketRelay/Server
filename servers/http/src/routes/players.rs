@@ -36,7 +36,6 @@ enum PlayersError {
     PlayerNotFound,
     EmailTaken,
     InvalidEmail,
-    MissingPassword,
     ServerError,
     ClassNotFound,
 }
@@ -160,12 +159,6 @@ async fn modify_player(
     } else {
         None
     };
-
-    if let Some(origin) = req.origin.as_ref() {
-        if !*origin && password.is_none() {
-            return Err(PlayersError::MissingPassword);
-        }
-    }
 
     let player = player
         .update_http(
@@ -348,7 +341,6 @@ impl Display for PlayersError {
             Self::EmailTaken => f.write_str("Email address is already taken"),
             Self::InvalidEmail => f.write_str("Email address is not valid"),
             Self::PlayerNotFound => f.write_str("Couldn't find any players with that ID"),
-            Self::MissingPassword => f.write_str("Origin was set to false so password is required"),
             _ => f.write_str("Internal Server Error"),
         }
     }
@@ -362,9 +354,7 @@ impl ResponseError for PlayersError {
         match self {
             Self::ClassNotFound => StatusCode::NOT_FOUND,
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
-            Self::EmailTaken | Self::InvalidEmail | Self::MissingPassword => {
-                StatusCode::BAD_REQUEST
-            }
+            Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
