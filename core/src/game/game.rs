@@ -388,7 +388,7 @@ impl Game {
                 game_id: self.id,
                 player_id: target,
                 operation,
-                host_id: host_id,
+                host_id,
             },
         );
         self.push_all(&packet).await;
