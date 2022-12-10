@@ -1,4 +1,5 @@
 use crate::{
+    dto::players::PlayerUpdate,
     entities::{player_characters, player_classes, players},
     DbResult, GalaxyAtWar, Player, PlayerCharacter, PlayerClass,
 };
@@ -108,40 +109,34 @@ impl Player {
     pub async fn update_http(
         self,
         db: &DatabaseConnection,
-        email: Option<String>,
-        display_name: Option<String>,
-        origin: Option<bool>,
-        password: Option<String>,
-        credits: Option<u32>,
-        inventory: Option<String>,
-        csreward: Option<u16>,
+        update: PlayerUpdate,
     ) -> DbResult<Self> {
         let mut active = self.into_active_model();
-        if let Some(email) = email {
+        if let Some(email) = update.email {
             active.email = Set(email);
         }
 
-        if let Some(display_name) = display_name {
+        if let Some(display_name) = update.display_name {
             active.display_name = Set(display_name);
         }
 
-        if let Some(origin) = origin {
+        if let Some(origin) = update.origin {
             active.origin = Set(origin);
         }
 
-        if let Some(password) = password {
+        if let Some(password) = update.password {
             active.password = Set(password);
         }
 
-        if let Some(credits) = credits {
+        if let Some(credits) = update.credits {
             active.credits = Set(credits);
         }
 
-        if let Some(inventory) = inventory {
+        if let Some(inventory) = update.inventory {
             active.inventory = Set(inventory);
         }
 
-        if let Some(csreward) = csreward {
+        if let Some(csreward) = update.csreward {
             active.csreward = Set(csreward);
         }
 

@@ -4,6 +4,7 @@ use sea_orm::Database as SeaDatabase;
 use std::path::Path;
 use tokio::fs::{create_dir_all, File};
 
+pub mod dto;
 mod entities;
 pub mod interfaces;
 mod migration;

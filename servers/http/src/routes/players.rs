@@ -8,7 +8,10 @@ use actix_web::{
     web::{Json, Path, Query, ServiceConfig},
     HttpResponse, Responder, ResponseError,
 };
-use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter, PlayerClass};
+use database::{
+    dto::players::PlayerUpdate, DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter,
+    PlayerClass,
+};
 use serde::{Deserialize, Serialize};
 use utils::{hashing::hash_password, types::PlayerID, validate::is_email};
 
@@ -143,16 +146,36 @@ async fn modify_player(
     let db = GlobalState::database();
     let player: Player = find_player(db, path.into_inner()).await?;
 
-    if let Some(email) = req.email.as_ref() {
-        if !is_email(email) {
+    let email = if let Some(email) = req.email {
+        // Ensure the email is valid email format
+        if !is_email(&email) {
             return Err(PlayersError::InvalidEmail);
         }
 
-        if Player::by_email(db, email, player.origin).await?.is_some() {
-            return Err(PlayersError::EmailTaken);
+        // Ignore unchanged email field
+        if email == player.email {
+            None
+        } else {
+            // Ensure the email is not already taken
+            if Player::by_email(db, &email, player.origin).await?.is_some() {
+                return Err(PlayersError::EmailTaken);
+            }
+            Some(email)
         }
-    }
+    } else {
+        None
+    };
 
+    // Ignore the display name field if it has not changed
+    let display_name = req.display_name.and_then(|value| {
+        if value == player.display_name {
+            None
+        } else {
+            Some(value)
+        }
+    });
+
+    // Hash the password value if it is present
     let password = if let Some(password) = req.password.as_ref() {
         let password = hash_password(password).map_err(|_| PlayersError::ServerError)?;
         Some(password)
@@ -160,18 +183,17 @@ async fn modify_player(
         None
     };
 
-    let player = player
-        .update_http(
-            db,
-            req.email,
-            req.display_name,
-            req.origin,
-            password,
-            req.credits,
-            req.inventory,
-            req.csreward,
-        )
-        .await?;
+    let update = PlayerUpdate {
+        email,
+        display_name,
+        origin: req.origin,
+        password,
+        credits: req.credits,
+        inventory: req.inventory,
+        csreward: req.csreward,
+    };
+
+    let player = player.update_http(db, update).await?;
 
     Ok(Json(player))
 }
