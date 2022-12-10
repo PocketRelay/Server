@@ -70,7 +70,7 @@ define_components! {
         SetPlayerAttributes (0x8)
         JoinGame (0x9)
         RemovePlayer (0xB)
-        StartMatchaking (0xD)
+        StartMatchmaking (0xD)
         CancelMatchmaking (0xE)
         FinalizeGameCreation (0xF)
         ListGames (0x11)

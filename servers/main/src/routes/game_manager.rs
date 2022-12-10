@@ -28,7 +28,7 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
         | GameManager::SetGameAttributes => handle_game_modify(session, packet).await,
         GameManager::RemovePlayer => handle_remove_player(session, packet).await,
         GameManager::UpdateMeshConnection => handle_update_mesh_connection(session, packet).await,
-        GameManager::StartMatchaking => handle_start_matchmaking(session, packet).await,
+        GameManager::StartMatchmaking => handle_start_matchmaking(session, packet).await,
         GameManager::CancelMatchmaking => handle_cancel_matchmaking(session, packet).await,
         _ => Ok(packet.respond_empty()),
     }
