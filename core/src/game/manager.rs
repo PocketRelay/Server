@@ -12,13 +12,10 @@ use utils::types::{GameID, PlayerID, SessionID};
 
 use super::{
     codec::{GameState, RemoveReason},
-    game::GameSnapshot,
     rules::RuleSet,
+    GameSnapshot,
 };
-use super::{
-    game::{AttrMap, Game},
-    player::GamePlayer,
-};
+use super::{player::GamePlayer, AttrMap, Game};
 
 /// Structure for managing games and the matchmaking queue
 pub struct Games {
@@ -46,16 +43,17 @@ struct QueueEntry {
     time: SystemTime,
 }
 
-impl Games {
-    /// Creates a new instance of the game manager
-    pub fn new() -> Self {
+impl Default for Games {
+    fn default() -> Self {
         Self {
-            games: RwLock::new(HashMap::new()),
-            queue: Mutex::new(VecDeque::new()),
+            games: Default::default(),
+            queue: Default::default(),
             id: AtomicU32::new(1),
         }
     }
+}
 
+impl Games {
     /// Takes a snapshot of all the current games for serialization
     pub async fn snapshot(&self) -> GamesSnapshot {
         let games = &*self.games.read().await;

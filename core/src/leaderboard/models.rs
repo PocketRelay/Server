@@ -37,7 +37,7 @@ impl Default for LeaderboardEntityGroup {
 
 impl LeaderboardEntityGroup {
     /// Leaderboard contents are cached for 1 hour
-    const LIFETIME: Duration = Duration::from_secs(60 * 60 * 1);
+    const LIFETIME: Duration = Duration::from_secs(60 * 60);
 
     /// Creates a new entity group from the provided values that expires
     /// after the provided duration is elapsed

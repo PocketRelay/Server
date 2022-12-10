@@ -1,6 +1,6 @@
 use log::debug;
 
-use super::game::AttrMap;
+use super::AttrMap;
 
 use super::enums::{Difficulty, EnemyType, GameMap, MatchRule};
 

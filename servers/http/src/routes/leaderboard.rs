@@ -88,7 +88,7 @@ async fn get_leaderboard(
         let end_index = (offset + count).min(group.values.len());
         let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
         if let Some(values) = values {
-            let response = HttpResponse::Ok().json(&values);
+            let response = HttpResponse::Ok().json(values);
             Ok(response)
         } else {
             Err(LeaderboardError::ServerError)

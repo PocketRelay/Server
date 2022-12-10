@@ -395,7 +395,7 @@ impl Session {
             NetAddress::from_ipv4(&value)
         } else {
             // Don't know how to handle IPv6 addresses
-            return NetAddress(0);
+            NetAddress(0)
         }
     }
 

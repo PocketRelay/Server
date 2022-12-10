@@ -68,7 +68,7 @@ async fn get_token(
     let (token, expiry_time): (String, SystemTime) = token_store
         .authenticate(&body.username, &body.password)
         .await
-        .ok_or_else(|| TokenError::InvalidCredentials)?;
+        .ok_or(TokenError::InvalidCredentials)?;
 
     let expiry_time = expiry_time
         .duration_since(UNIX_EPOCH)

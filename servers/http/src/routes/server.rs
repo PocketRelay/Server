@@ -40,7 +40,7 @@ struct ServiceDetails {
 #[allow(unused)]
 enum ServiceType {
     /// HTTP Server
-    HTTP,
+    Http,
     /// Blaze Packet Server
     Blaze,
     /// Blaze SSL Packet Server
@@ -71,7 +71,7 @@ async fn server_details() -> Json<ServerDetails> {
             },
             ServiceDetails {
                 name: "HTTP Server",
-                ty: ServiceType::HTTP,
+                ty: ServiceType::Http,
                 port: http_port,
             },
         ],

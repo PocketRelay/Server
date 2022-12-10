@@ -86,7 +86,7 @@ async fn handle_leaderboard(packet: &Packet) -> HandleResult {
     if let Some(values) = values {
         Ok(packet.respond(LeaderboardResponse { values }))
     } else {
-        return Ok(packet.respond(EmptyLeaderboardResponse));
+        Ok(packet.respond(EmptyLeaderboardResponse))
     }
 }
 
@@ -142,7 +142,7 @@ async fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
     if let Some(values) = values {
         Ok(packet.respond(LeaderboardResponse { values }))
     } else {
-        return Ok(packet.respond(EmptyLeaderboardResponse));
+        Ok(packet.respond(EmptyLeaderboardResponse))
     }
 }
 

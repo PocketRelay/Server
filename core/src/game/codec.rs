@@ -9,10 +9,7 @@ use blaze_pk::{
 use serde::Serialize;
 use utils::types::{GameID, GameSlot, PlayerID};
 
-use super::{
-    game::{AttrMap, GameData},
-    player::GamePlayer,
-};
+use super::{player::GamePlayer, AttrMap, GameData};
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 pub enum GameDetailsType {

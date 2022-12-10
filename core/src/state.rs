@@ -31,8 +31,8 @@ impl GlobalState {
         let (db, retriever) = join!(Self::init_database(), Retriever::new());
 
         let shutdown = Self::hook_shutdown();
-        let games = Games::new();
-        let leaderboard = Leaderboard::default();
+        let games: Games = Games::default();
+        let leaderboard: Leaderboard = Leaderboard::default();
 
         unsafe {
             GLOBAL_STATE = GlobalState::Set {

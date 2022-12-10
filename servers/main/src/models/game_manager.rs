@@ -7,8 +7,8 @@ use blaze_pk::{
 };
 use core::game::{
     codec::{GameState, RemoveReason},
-    game::AttrMap,
     rules::{MatchRules, RuleSet},
+    AttrMap,
 };
 use utils::types::{GameID, PlayerID, SessionID};
 

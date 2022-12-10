@@ -189,8 +189,7 @@ fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
         }
         "ME3_BINI_PC_COMPRESSED" => load_dmap(ME3_COALESCED),
         id => {
-            if id.starts_with("ME3_LIVE_TLK_PC_") {
-                let lang = &id[16..];
+            if let Some(lang) = id.strip_prefix("ME3_LIVE_TLK_PC_") {
                 talk_file(lang)
             } else {
                 TdfMap::default()

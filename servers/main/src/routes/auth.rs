@@ -194,22 +194,17 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
     };
 
     // Lookup the player details to see if the player exists
-    let player: Option<Player> = Player::by_email(&db, &details.email, true)
+    let player: Option<Player> = Player::by_email(db, &details.email, true)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?;
 
     match player {
         Some(player) => Ok(player),
         None => {
-            let player: Player = Player::create(
-                &db,
-                details.email,
-                details.display_name,
-                String::new(),
-                true,
-            )
-            .await
-            .map_err(|_| ServerError::ServerUnavailable)?;
+            let player: Player =
+                Player::create(db, details.email, details.display_name, String::new(), true)
+                    .await
+                    .map_err(|_| ServerError::ServerUnavailable)?;
 
             // Early return created player if origin fetching is disabled
             if !env::from_env(env::ORIGIN_FETCH_DATA) {
@@ -227,7 +222,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
 
             // Update the player settings with those retrieved from origin
             player
-                .update_all(&db, settings.into_iter())
+                .update_all(db, settings.into_iter())
                 .await
                 .map_err(|_| ServerError::ServerUnavailable)
         }
@@ -332,7 +327,7 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
     let player: Player = session
         .player
         .take()
-        .ok_or_else(|| ServerError::FailedNoLoginAction)?;
+        .ok_or(ServerError::FailedNoLoginAction)?;
     let (player, session_token) = player.with_token(GlobalState::database()).await?;
     let player = session.set_player(player);
     let response = PersonaResponse::new(player, session_token);
@@ -517,7 +512,7 @@ async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> Handle
     let player: &Player = session
         .player
         .as_ref()
-        .ok_or_else(|| ServerError::FailedNoLoginAction)?;
+        .ok_or(ServerError::FailedNoLoginAction)?;
     let token = format!("{:X}", player.id);
     let response = GetTokenResponse { token };
     Ok(packet.respond(response))

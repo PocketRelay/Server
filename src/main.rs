@@ -4,10 +4,10 @@ use utils::net::public_address;
 
 use core::{constants, env, state::GlobalState};
 
-use http_server;
-use main_server;
-use mitm_server;
-use redirector_server;
+
+
+
+
 
 use dotenvy::dotenv;
 
@@ -58,19 +58,19 @@ async fn log_connection_urls() {
         }
     }
     if let Some(public_address) = public_address().await {
-        if output.len() > 0 {
+        if !output.is_empty() {
             output.push_str(", ");
         }
 
         output.push_str("WAN: ");
-        output.push_str(&public_address.to_string());
+        output.push_str(&public_address);
         if http_port != 80 {
             output.push(':');
             output.push_str(&http_port.to_string());
         }
     }
 
-    if output.len() > 0 {
+    if !output.is_empty() {
         output.push_str(", ");
     }
 
