@@ -17,7 +17,7 @@ use blaze_pk::types::TdfMap;
 pub fn load_dmap(contents: &str) -> TdfMap<String, String> {
     let mut map = TdfMap::<String, String>::new();
     for line in contents.lines() {
-        let (key, value) = match line.split_once("=") {
+        let (key, value) = match line.split_once('=') {
             Some(v) => v,
             _ => continue,
         };

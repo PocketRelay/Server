@@ -114,9 +114,9 @@ impl PlayerClass {
     fn parse(model: &mut player_classes::ActiveModel, value: &str) -> Option<()> {
         let mut parser = MEStringParser::new(value)?;
         model.name = Set(parser.next_str()?);
-        model.level = Set(parser.next()?);
-        model.exp = Set(parser.next()?);
-        model.promotions = Set(parser.next()?);
+        model.level = Set(parser.parse_next()?);
+        model.exp = Set(parser.parse_next()?);
+        model.promotions = Set(parser.parse_next()?);
         Some(())
     }
 
@@ -152,7 +152,7 @@ impl PlayerClass {
     ) -> Result<(), PlayerClassesError> {
         let index = Self::parse_index(key)?;
         let mut model = Self::find(db, player, index).await?;
-        if let None = Self::parse(&mut model, value) {
+        if Self::parse(&mut model, value).is_none() {
             warn!("Failed to fully parse player class: {key} = {value}");
         }
         model.save(db).await?;

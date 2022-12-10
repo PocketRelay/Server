@@ -80,9 +80,8 @@ pub struct LeaderboardResponse<'a> {
 impl Encodable for LeaderboardResponse<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_list_start(b"LDLS", TdfType::Group, self.values.len());
-        let mut iter = self.values.iter();
-        while let Some(value) = iter.next() {
-            write_leaderboard_entry(writer, value)
+        for value in self.values {
+            write_leaderboard_entry(writer, value);
         }
     }
 }

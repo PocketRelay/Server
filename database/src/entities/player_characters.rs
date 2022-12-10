@@ -5,7 +5,7 @@ use serde::Serialize;
 use utils::types::PlayerID;
 
 /// Structure for a player character model stored in the database
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize)]
 #[sea_orm(table_name = "player_characters")]
 pub struct Model {
     /// The unique ID for this player character

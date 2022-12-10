@@ -152,7 +152,7 @@ impl Player {
     /// item in the completion list.
     pub fn get_challenge_points(&self) -> Option<u32> {
         let list = self.completion.as_ref()?;
-        let part = list.split(",").skip(1).next()?;
+        let part = list.split(',').nth(1)?;
         let value: u32 = part.parse().ok()?;
         Some(value)
     }
@@ -308,12 +308,12 @@ impl Player {
     /// ```
     fn parse_base(model: &mut players::ActiveModel, value: &str) -> Option<()> {
         let mut parser = MEStringParser::new(value)?;
-        model.credits = Set(parser.next()?);
+        model.credits = Set(parser.parse_next()?);
         parser.skip(2); // Skip -1;0
-        model.credits_spent = Set(parser.next()?);
+        model.credits_spent = Set(parser.parse_next()?);
         parser.skip(1)?;
-        model.games_played = Set(parser.next()?);
-        model.seconds_played = Set(parser.next()?);
+        model.games_played = Set(parser.parse_next()?);
+        model.seconds_played = Set(parser.parse_next()?);
         parser.skip(1);
         model.inventory = Set(parser.next_str()?);
         Some(())
@@ -322,7 +322,7 @@ impl Player {
     fn modify(model: &mut players::ActiveModel, key: &str, value: String) {
         match key {
             "Base" => {
-                if let None = Self::parse_base(model, &value) {
+                if Self::parse_base(model, &value).is_none() {
                     warn!("Failed to completely parse player base")
                 };
             }
@@ -364,7 +364,7 @@ impl Player {
                 others.push((key, value));
             }
         }
-        if others.len() > 0 {
+        if !others.is_empty() {
             let mut model = self.into_active_model();
             for (key, value) in others {
                 Self::modify(&mut model, &key, value);

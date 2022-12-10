@@ -6,7 +6,7 @@ use serde::Serialize;
 use utils::types::PlayerID;
 
 /// Structure for a galaxy at war model stored in the database
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize)]
 #[sea_orm(table_name = "galaxy_at_war")]
 pub struct Model {
     /// The unique ID for this galaxy at war data

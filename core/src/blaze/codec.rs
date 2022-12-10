@@ -71,11 +71,11 @@ impl From<String> for InstanceHost {
 
 /// Function for converting an instance type into its address
 /// string value for use in connections
-impl Into<String> for InstanceHost {
-    fn into(self) -> String {
-        match self {
-            Self::Address(value) => value.to_ipv4(),
-            Self::Host(value) => value,
+impl From<InstanceHost> for String {
+    fn from(value: InstanceHost) -> Self {
+        match value {
+            InstanceHost::Address(value) => value.to_ipv4(),
+            InstanceHost::Host(value) => value,
         }
     }
 }
@@ -181,9 +181,9 @@ impl NetworkAddressType {
     }
 }
 
-impl Into<u8> for NetworkAddressType {
-    fn into(self) -> u8 {
-        self.value()
+impl From<NetworkAddressType> for u8 {
+    fn from(value: NetworkAddressType) -> Self {
+        value.value()
     }
 }
 
@@ -429,7 +429,7 @@ impl NetAddress {
     /// NetAddress value. If the value is not a valid IPv4 address
     /// then None will be returned.
     pub fn try_from_ipv4(value: &str) -> Option<NetAddress> {
-        let mut parts = value.split(".");
+        let mut parts = value.split('.');
         let a = Self::next_ip_chunk(&mut parts)?;
         let b = Self::next_ip_chunk(&mut parts)?;
         let c = Self::next_ip_chunk(&mut parts)?;
@@ -441,7 +441,7 @@ impl NetAddress {
 
     /// Obtains the next IPv4 (u8) chunk value from the provided
     /// split iterator
-    fn next_ip_chunk(iter: &mut Split<&str>) -> Option<u32> {
+    fn next_ip_chunk(iter: &mut Split<char>) -> Option<u32> {
         iter.next()?
             .parse::<u32>()
             .ok()

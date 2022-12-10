@@ -4,7 +4,7 @@ use sea_orm::entity::prelude::*;
 use serde::Serialize;
 use utils::types::PlayerID;
 
-#[derive(Serialize, Clone, Debug, PartialEq, DeriveEntityModel)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "players")]
 pub struct Model {
     /// Unique Identifier for the player

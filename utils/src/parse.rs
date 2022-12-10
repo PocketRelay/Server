@@ -8,7 +8,7 @@ use std::str::{FromStr, Split};
 /// # Example
 /// ```20;4;Sentinel;20;0.0000;50```
 pub struct MEStringParser<'a> {
-    split: Split<'a, &'static str>,
+    split: Split<'a, char>,
 }
 
 impl<'a> MEStringParser<'a> {
@@ -16,7 +16,7 @@ impl<'a> MEStringParser<'a> {
         if !value.starts_with("20;4;") {
             return None;
         }
-        let split = value[5..].split(";");
+        let split = value[5..].split(';');
         Some(MEStringParser { split })
     }
 
@@ -32,7 +32,7 @@ impl<'a> MEStringParser<'a> {
         Some(next.to_string())
     }
 
-    pub fn next<F: FromStr>(&mut self) -> Option<F> {
+    pub fn parse_next<F: FromStr>(&mut self) -> Option<F> {
         let next = self.split.next()?;
         next.parse::<F>().ok()
     }
@@ -58,7 +58,7 @@ mod test {
         let value = "20;4;AABB;123;DWADA";
         let mut parser = MEStringParser::new(value).unwrap();
         assert_eq!(parser.next_str().unwrap(), "AABB");
-        assert_eq!(parser.next::<u16>().unwrap(), 123);
+        assert_eq!(parser.parse_next::<u16>().unwrap(), 123);
         assert_eq!(parser.next_str().unwrap(), "DWADA");
     }
 }

@@ -85,19 +85,19 @@ impl PlayerCharacter {
     fn parse(model: &mut player_characters::ActiveModel, value: &str) -> Option<()> {
         let mut parser = MEStringParser::new(value)?;
         model.kit_name = Set(parser.next_str()?);
-        model.name = Set(parser.next()?);
-        model.tint1 = Set(parser.next()?);
-        model.tint2 = Set(parser.next()?);
-        model.pattern = Set(parser.next()?);
-        model.pattern_color = Set(parser.next()?);
-        model.phong = Set(parser.next()?);
-        model.emissive = Set(parser.next()?);
-        model.skin_tone = Set(parser.next()?);
-        model.seconds_played = Set(parser.next()?);
-        model.timestamp_year = Set(parser.next()?);
-        model.timestamp_month = Set(parser.next()?);
-        model.timestamp_day = Set(parser.next()?);
-        model.timestamp_seconds = Set(parser.next()?);
+        model.name = Set(parser.parse_next()?);
+        model.tint1 = Set(parser.parse_next()?);
+        model.tint2 = Set(parser.parse_next()?);
+        model.pattern = Set(parser.parse_next()?);
+        model.pattern_color = Set(parser.parse_next()?);
+        model.phong = Set(parser.parse_next()?);
+        model.emissive = Set(parser.parse_next()?);
+        model.skin_tone = Set(parser.parse_next()?);
+        model.seconds_played = Set(parser.parse_next()?);
+        model.timestamp_year = Set(parser.parse_next()?);
+        model.timestamp_month = Set(parser.parse_next()?);
+        model.timestamp_day = Set(parser.parse_next()?);
+        model.timestamp_seconds = Set(parser.parse_next()?);
         model.powers = Set(parser.next_str()?);
         model.hotkeys = Set(parser.next_str()?);
         model.weapons = Set(parser.next_str()?);
@@ -135,7 +135,7 @@ impl PlayerCharacter {
     ) -> Result<(), PlayerCharactersError> {
         let index = Self::parse_index(key)?;
         let mut model = Self::find(db, player, index).await?;
-        if let None = Self::parse(&mut model, value) {
+        if Self::parse(&mut model, value).is_none() {
             warn!("Failed to fully parse player character: {key} = {value}");
         }
         model.save(db).await?;

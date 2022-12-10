@@ -216,7 +216,7 @@ impl Encodable for PlayerJoining<'_> {
 pub fn encode_game_data(
     writer: &mut TdfWriter,
     id: GameID,
-    players: &Vec<GamePlayer>,
+    players: &[GamePlayer],
     player: &GamePlayer,
     game_data: &GameData,
 ) {

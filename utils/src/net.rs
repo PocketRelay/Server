@@ -19,7 +19,7 @@ pub async fn public_address() -> Option<String> {
         .await
         .ok()?;
     let result = result.trim();
-    let result = result.replace("\n", "");
+    let result = result.replace('\n', "");
     Some(result)
 }
 
@@ -143,13 +143,13 @@ pub async fn accept_stream(
                 Ok(value) => Some(value),
                 Err(err) => {
                     error!("Error occurred while accepting connections: {:?}", err);
-                    return None;
+                    None
                 }
             }
         }
         _ = shutdown.changed() => {
             info!("Stopping server listener from shutdown trigger.");
-            return None;
+            None
         }
     }
 }
@@ -166,7 +166,7 @@ mod test {
             .await
             .expect("Failed to retriever public address");
 
-        let parts = value.split(".").collect::<Vec<_>>();
+        let parts = value.split('.').collect::<Vec<_>>();
 
         assert_eq!(parts.len(), 4);
 
