@@ -192,6 +192,7 @@ on each page. Offset 1 & Count = 20 = Skip first 20 row and return next 20 rows.
 ### Response
 
 The "players" field contains the list of players within the offset and count. The "more" field determines whether there are more players at the next offset value.
+The "offset" field contains the current offset page provided by the query and the "count" is the count expected by the query (The count is NOT the number of players returned)
 
 ```json
 {
@@ -237,6 +238,8 @@ The "players" field contains the list of players within the offset and count. Th
             "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
         },
     ],
+    "offset": 0,
+    "count": 20,
     "more": false
 }
 ```
@@ -672,12 +675,19 @@ are in those games.
 
 ## Games List
 ```http
-GET /api/games
+GET /api/games?offset=0&count=20
 ```
+
+The query paramater offset is the page offset and the count is the number of games to include
+on each page. Offset 1 & Count = 20 = Skip first 20 ga,es and return next 20 games.
+
+> Omitting the count query parameter will default to 20 games
 
 This route allows retrieiving a list of all the currently running games 
 
 ### Response
+The "games" field contains a list of games that are running on the server. The "offset" field contains the current offset page provided by 
+the query and the "count" is the count expected by the query (The count is NOT the number of games returned)
 
 ```json
 
