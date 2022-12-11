@@ -69,9 +69,9 @@ async fn get_games(query: Query<GamesQuery>) -> impl Responder {
 
     let response = GamesResponse {
         games,
-        more,
-        count,
         offset: query.offset,
+        count,
+        more,
     };
     HttpResponse::Ok().json(response)
 }

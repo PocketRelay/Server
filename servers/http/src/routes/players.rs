@@ -77,6 +77,10 @@ struct PlayersQuery {
 struct PlayersResponse {
     /// The list of players retrieved
     players: Vec<Player>,
+    /// The current offset page
+    offset: u16,
+    /// The count expected
+    count: u8,
     /// Whether there is more players left in the database
     more: bool,
 }
@@ -93,11 +97,16 @@ async fn get_players(query: Query<PlayersQuery>) -> PlayersResult<PlayersRespons
 
     let query = query.into_inner();
     let db = GlobalState::database();
-    let count = query.count.unwrap_or(DEFAULT_COUNT) as u64;
-    let offset = query.offset as u64 * count;
-    let (players, more) = Player::all(db, offset, count).await?;
+    let count = query.count.unwrap_or(DEFAULT_COUNT);
+    let offset = query.offset as u64 * count as u64;
+    let (players, more) = Player::all(db, offset, count as u64).await?;
 
-    Ok(Json(PlayersResponse { players, more }))
+    Ok(Json(PlayersResponse {
+        players,
+        offset: query.offset,
+        count,
+        more,
+    }))
 }
 
 /// Route for retrieving a player from the database with an ID that
