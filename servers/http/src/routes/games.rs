@@ -1,16 +1,14 @@
-use core::{
-    game::{manager::GamesSnapshot, GameSnapshot},
-    state::GlobalState,
-};
+use core::{game::GameSnapshot, state::GlobalState};
 use std::fmt::Display;
 
 use actix_web::{
     get,
     http::StatusCode,
-    web::{Json, Path, ServiceConfig},
-    ResponseError,
+    web::{Json, Path, Query, ServiceConfig},
+    HttpResponse, Responder, ResponseError,
 };
 
+use serde::{Deserialize, Serialize};
 use utils::types::GameID;
 
 /// Function for configuring the services in this route
@@ -24,12 +22,58 @@ pub fn configure(cfg: &mut ServiceConfig) {
 #[derive(Debug)]
 struct GameNotFound;
 
+/// The query structure for a players query
+#[derive(Deserialize)]
+struct GamesQuery {
+    /// The page offset (offset = offset * count)
+    #[serde(default)]
+    offset: usize,
+    /// The number of games to return.
+    count: Option<usize>,
+}
+
+/// Response from the players endpoint which contains a list of
+/// players and whether there is more players after
+#[derive(Serialize)]
+struct GamesResponse<'a> {
+    /// The list of players retrieved
+    games: &'a [GameSnapshot],
+    /// The current offset page
+    offset: usize,
+    /// The count expected
+    count: usize,
+    /// Whether there is more players left in the database
+    more: bool,
+}
+
 /// Route for retrieving a list of all the games that are currently running.
 /// Will take a snapshot of all the games.
 #[get("/api/games")]
-async fn get_games() -> Json<GamesSnapshot> {
+async fn get_games(query: Query<GamesQuery>) -> impl Responder {
+    const DEFAULT_OFFSET: usize = 0;
+    let query = query.into_inner();
+
     let games = GlobalState::games().snapshot().await;
-    Json(games)
+
+    let games_length: usize = games.len();
+
+    let count = query.count.unwrap_or(games_length);
+    let offset = query.offset * count;
+
+    let start_index = offset;
+    let end_index = (start_index + count).min(games_length);
+
+    let more = games_length > end_index;
+    let games: Option<&[GameSnapshot]> = games.get(start_index..end_index);
+    let games = games.unwrap_or(&[]);
+
+    let response = GamesResponse {
+        games,
+        more,
+        count,
+        offset: query.offset,
+    };
+    HttpResponse::Ok().json(response)
 }
 
 /// Route for retrieving the details of a game with a specific game ID
