@@ -50,6 +50,7 @@ struct GamesResponse<'a> {
 /// Will take a snapshot of all the games.
 #[get("/api/games")]
 async fn get_games(query: Query<GamesQuery>) -> impl Responder {
+    const DEFAULT_COUNT: usize = 20;
     const DEFAULT_OFFSET: usize = 0;
     let query = query.into_inner();
 
@@ -57,7 +58,7 @@ async fn get_games(query: Query<GamesQuery>) -> impl Responder {
 
     let games_length: usize = games.len();
 
-    let count = query.count.unwrap_or(games_length);
+    let count = query.count.unwrap_or(DEFAULT_COUNT);
     let offset = query.offset * count;
 
     let start_index = offset;
