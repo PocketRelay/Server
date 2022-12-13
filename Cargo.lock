@@ -728,20 +728,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "core"
-version = "0.1.2-pre"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "database",
- "futures",
- "log",
- "serde",
- "tokio",
- "utils",
-]
-
-[[package]]
 name = "core-foundation-sys"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -871,20 +857,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "database"
-version = "0.1.2-pre"
-dependencies = [
- "async-std",
- "chrono",
- "log",
- "sea-orm",
- "sea-orm-migration",
- "serde",
- "tokio",
- "utils",
 ]
 
 [[package]]
@@ -1043,7 +1015,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f82b0f4c27ad9f8bfd1f3208d882da2b09c301bc1c828fd3a00d0216d2fbbff6"
 dependencies = [
  "crc32fast",
- "libz-sys",
  "miniz_oxide",
 ]
 
@@ -1336,23 +1307,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "http-server"
-version = "0.1.2-pre"
-dependencies = [
- "actix-cors",
- "actix-web",
- "core",
- "database",
- "futures-util",
- "log",
- "mime_guess",
- "rust-embed",
- "serde",
- "tokio",
- "utils",
-]
-
-[[package]]
 name = "httparse"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1541,17 +1495,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libz-sys"
-version = "1.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9702761c3935f8cc2f101793272e202c72b99da8f4224a19ddcf1279a6450bbf"
-dependencies = [
- "cc",
- "pkg-config",
- "vcpkg",
-]
-
-[[package]]
 name = "link-cplusplus"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1638,21 +1581,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "main-server"
-version = "0.1.2-pre"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "core",
- "database",
- "log",
- "rust-embed",
- "serde",
- "tokio",
- "utils",
-]
-
-[[package]]
 name = "matchers"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1717,18 +1645,6 @@ dependencies = [
  "log",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.36.1",
-]
-
-[[package]]
-name = "mitm-server"
-version = "0.1.2-pre"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "core",
- "log",
- "tokio",
- "utils",
 ]
 
 [[package]]
@@ -2070,17 +1986,116 @@ checksum = "1df8c4ec4b0627e53bdf214615ad287367e482558cf84b109250b37464dc03ae"
 name = "pocket-relay"
 version = "0.1.2-pre"
 dependencies = [
- "core",
  "dotenvy",
- "http-server",
  "local-ip-address",
  "log",
  "log4rs",
- "main-server",
- "mitm-server",
- "redirector-server",
+ "pocket-relay-core",
+ "pocket-relay-http-server",
+ "pocket-relay-main-server",
+ "pocket-relay-mitm-server",
+ "pocket-relay-redirector-server",
+ "pocket-relay-utils",
  "tokio",
- "utils",
+]
+
+[[package]]
+name = "pocket-relay-core"
+version = "0.1.2-pre"
+dependencies = [
+ "blaze-pk",
+ "blaze-ssl-async",
+ "futures",
+ "log",
+ "pocket-relay-database",
+ "pocket-relay-utils",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "pocket-relay-database"
+version = "0.1.2-pre"
+dependencies = [
+ "async-std",
+ "chrono",
+ "log",
+ "pocket-relay-utils",
+ "sea-orm",
+ "sea-orm-migration",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "pocket-relay-http-server"
+version = "0.1.2-pre"
+dependencies = [
+ "actix-cors",
+ "actix-web",
+ "futures-util",
+ "log",
+ "mime_guess",
+ "pocket-relay-core",
+ "pocket-relay-database",
+ "pocket-relay-utils",
+ "rust-embed",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "pocket-relay-main-server"
+version = "0.1.2-pre"
+dependencies = [
+ "blaze-pk",
+ "blaze-ssl-async",
+ "log",
+ "pocket-relay-core",
+ "pocket-relay-database",
+ "pocket-relay-utils",
+ "rust-embed",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "pocket-relay-mitm-server"
+version = "0.1.2-pre"
+dependencies = [
+ "blaze-pk",
+ "blaze-ssl-async",
+ "log",
+ "pocket-relay-core",
+ "pocket-relay-utils",
+ "tokio",
+]
+
+[[package]]
+name = "pocket-relay-redirector-server"
+version = "0.1.2-pre"
+dependencies = [
+ "blaze-pk",
+ "blaze-ssl-async",
+ "log",
+ "pocket-relay-core",
+ "pocket-relay-utils",
+ "tokio",
+]
+
+[[package]]
+name = "pocket-relay-utils"
+version = "0.1.2-pre"
+dependencies = [
+ "argon2",
+ "blaze-pk",
+ "log",
+ "password-hash",
+ "rand_core 0.6.4",
+ "regex",
+ "reqwest",
+ "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -2254,18 +2269,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "678054eb77286b51581ba43620cc911abf02758c91f93f479767aed0f90458b2"
 dependencies = [
  "rand_core 0.3.1",
-]
-
-[[package]]
-name = "redirector-server"
-version = "0.1.2-pre"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "core",
- "log",
- "tokio",
- "utils",
 ]
 
 [[package]]
@@ -3173,16 +3176,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tools"
-version = "0.1.2-pre"
-dependencies = [
- "base64",
- "blaze-pk",
- "flate2",
- "tokio",
-]
-
-[[package]]
 name = "tower-service"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3326,21 +3319,6 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
-]
-
-[[package]]
-name = "utils"
-version = "0.1.2-pre"
-dependencies = [
- "argon2",
- "blaze-pk",
- "log",
- "password-hash",
- "rand_core 0.6.4",
- "regex",
- "reqwest",
- "serde",
- "tokio",
 ]
 
 [[package]]

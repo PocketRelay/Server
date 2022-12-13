@@ -13,8 +13,8 @@ members = [
     "servers/http",
     "servers/main",
     "servers/redirector",
-    "tools"
 ]
+exclude = ["tools"]
 
 [workspace.dependencies]
 futures = "0.3.25"
@@ -26,9 +26,9 @@ log = "0.4.17"
 
 rust-embed = { version = "6.4.1", features = ["debug-embed"] }
 
-core = { path = "core" }
-utils = { path = "utils" }
-database = { path = "database" }
+core = { path = "core", package="pocket-relay-core" }
+utils = { path = "utils", package="pocket-relay-utils"  }
+database = { path = "database", package="pocket-relay-database" }
 
 blaze-ssl-async = "0.1.1"
 
@@ -61,10 +61,10 @@ utils = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }
 
-http-server = { path = "servers/http" }
-main-server = { path = "servers/main" }
-redirector-server = { path = "servers/redirector" }
-mitm-server = { path = "servers/mitm" }
+http-server = { path = "servers/http", package="pocket-relay-http-server" }
+main-server = { path = "servers/main", package="pocket-relay-main-server" }
+redirector-server = { path = "servers/redirector", package="pocket-relay-redirector-server" }
+mitm-server = { path = "servers/mitm", package="pocket-relay-mitm-server" }
 
 dotenvy = "0.15.5"
 local-ip-address = "0.4.9"
