@@ -3,6 +3,7 @@ name = "pocket-relay-redirector-server"
 description = "Pocket Relay Redirector server used to provided clients the address of the main server"
 version = "1.0.0"
 
+repository.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

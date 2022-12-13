@@ -3,6 +3,7 @@ name = "pocket-relay-tools"
 description = "Tooling for working with, compiling, and converting files used by the Pocket Relay server"
 version = "0.1.0"
 
+repository.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

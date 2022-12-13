@@ -3,6 +3,7 @@ name = "pocket-relay-http-server"
 description = "Pocket Relay HTTP server used to serve content used by Mass Effect"
 version = "0.1.0"
 
+repository.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

@@ -3,6 +3,7 @@ name = "pocket-relay-main-server"
 description = "Pocket Relays Main server which is responsible for most of the client server logic"
 version = "0.1.0"
 
+repository.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

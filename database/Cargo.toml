@@ -3,6 +3,7 @@ name = "pocket-relay-database"
 description = "Module for isolating the database logic from the Pocket Relay servers"
 version = "0.1.0"
 
+repository.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
