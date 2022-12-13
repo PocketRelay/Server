@@ -1,12 +1,11 @@
 [package]
 name = "pocket-relay-mitm-server"
+description = "Pocket Relay Redirector server used to proxy clients to the main server while logging traffic"
+version = "1.0.0"
 
-version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # Async runtime

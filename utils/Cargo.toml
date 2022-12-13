@@ -1,8 +1,8 @@
 [package]
 name = "pocket-relay-utils"
-description = "Utility modules and functions for Pocket Relay"
+description = "Module for utilities used throughout the core, database, and servers for Pocket Relay"
+version = "0.1.0"
 
-version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

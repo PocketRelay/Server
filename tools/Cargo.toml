@@ -1,16 +1,14 @@
 [package]
 name = "pocket-relay-tools"
-description = "Tooling for working creating files used by Pocket Relay"
+description = "Tooling for working with, compiling, and converting files used by the Pocket Relay server"
+version = "0.1.0"
 
-version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
 [dependencies]
-
 tokio = { workspace = true }
 base64 = "0.13.1"
-
 blaze-pk = { workspace = true }
 flate2 = {version = "1.0.24", features = ["zlib"], default-features = false}

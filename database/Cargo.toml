@@ -1,8 +1,8 @@
 [package]
 name = "pocket-relay-database"
-description = "Module for accessing the app database"
+description = "Module for isolating the database logic from the Pocket Relay servers"
+version = "0.1.0"
 
-version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
