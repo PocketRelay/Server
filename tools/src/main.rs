@@ -1,11 +1,9 @@
+use blaze_pk::types::TdfMap;
+use flate2::{write::ZlibEncoder, Compression};
 use std::{
     io::{self, Write},
     path::Path,
 };
-
-use blaze_pk::types::TdfMap;
-
-use flate2::{write::ZlibEncoder, Compression};
 use tokio::fs::{create_dir_all, read, read_dir, write};
 
 #[tokio::main]

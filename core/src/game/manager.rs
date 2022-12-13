@@ -1,20 +1,18 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::atomic::{AtomicU32, Ordering},
-    time::SystemTime,
-};
-
-use blaze_pk::types::TdfMap;
-use log::debug;
-use tokio::sync::{Mutex, RwLock};
-use utils::types::{GameID, PlayerID, SessionID};
-
 use super::{
     codec::{GameState, RemoveReason},
     rules::RuleSet,
     GameSnapshot,
 };
 use super::{player::GamePlayer, AttrMap, Game};
+use blaze_pk::types::TdfMap;
+use log::debug;
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::atomic::{AtomicU32, Ordering},
+    time::SystemTime,
+};
+use tokio::sync::{Mutex, RwLock};
+use utils::types::{GameID, PlayerID, SessionID};
 
 /// Structure for managing games and the matchmaking queue
 pub struct Games {

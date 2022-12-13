@@ -1,8 +1,3 @@
-use std::{
-    fmt::{Debug, Display},
-    str::Split,
-};
-
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeResult,
@@ -12,8 +7,11 @@ use blaze_pk::{
     value_type,
     writer::TdfWriter,
 };
-
 use serde::{ser::SerializeStruct, Serialize};
+use std::{
+    fmt::{Debug, Display},
+    str::Split,
+};
 use utils::types::PlayerID;
 
 /// Networking information for an instance. Contains the

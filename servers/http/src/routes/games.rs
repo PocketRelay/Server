@@ -1,14 +1,12 @@
-use core::{game::GameSnapshot, state::GlobalState};
-use std::fmt::Display;
-
 use actix_web::{
     get,
     http::StatusCode,
     web::{Json, Path, Query, ServiceConfig},
     HttpResponse, Responder, ResponseError,
 };
-
+use core::{game::GameSnapshot, state::GlobalState};
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use utils::types::GameID;
 
 /// Function for configuring the services in this route
@@ -74,7 +72,7 @@ async fn get_games(query: Query<GamesQuery>) -> impl Responder {
         count,
         more,
     };
-    
+
     HttpResponse::Ok().json(response)
 }
 

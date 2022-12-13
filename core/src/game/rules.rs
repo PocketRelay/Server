@@ -1,8 +1,6 @@
-use log::debug;
-
-use super::AttrMap;
-
 use super::enums::{Difficulty, EnemyType, GameMap, MatchRule};
+use super::AttrMap;
+use log::debug;
 
 // DLC Requirement attributes
 // ME3_dlc2300 = required

@@ -1,11 +1,11 @@
 //! Module for leaderboard related logic
 
-pub mod models;
-
 use self::models::{LeaderboardEntityGroup, LeaderboardEntry, LeaderboardType};
 use crate::state::GlobalState;
 use database::{DatabaseConnection, DbResult, Player};
 use tokio::sync::RwLock;
+
+pub mod models;
 
 /// Structure for storing the leaderboard values on the global
 /// state.

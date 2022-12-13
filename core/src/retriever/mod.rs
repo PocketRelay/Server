@@ -1,13 +1,5 @@
 //! Module for retrieving data from the official Mass Effect 3 Servers
 
-use blaze_pk::{
-    codec::{Decodable, Encodable},
-    packet::{Packet, PacketType},
-};
-use blaze_ssl_async::stream::{BlazeStream, StreamMode};
-use log::{debug, error};
-use tokio::net::TcpStream;
-
 use crate::{
     blaze::{
         codec::{InstanceDetails, Port},
@@ -17,7 +9,13 @@ use crate::{
     env,
     retriever::codec::InstanceRequest,
 };
-
+use blaze_pk::{
+    codec::{Decodable, Encodable},
+    packet::{Packet, PacketType},
+};
+use blaze_ssl_async::stream::{BlazeStream, StreamMode};
+use log::{debug, error};
+use tokio::net::TcpStream;
 use utils::net::lookup_host;
 
 mod codec;

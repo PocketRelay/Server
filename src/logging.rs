@@ -1,5 +1,4 @@
 use core::env;
-
 use log::LevelFilter;
 use log4rs::{
     append::{

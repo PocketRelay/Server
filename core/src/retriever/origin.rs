@@ -1,13 +1,10 @@
-use blaze_pk::types::TdfMap;
-
-use log::debug;
-
-use crate::blaze::components::{Authentication, Components, Util};
-
 use super::{
     codec::{OriginLoginRequest, OriginLoginResponse, SettingsResponse},
     RetSession, Retriever,
 };
+use crate::blaze::components::{Authentication, Components, Util};
+use blaze_pk::types::TdfMap;
+use log::debug;
 
 /// Structure for the data return after retrieving the data
 /// from an Origin account using the official servers.

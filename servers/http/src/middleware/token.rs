@@ -1,17 +1,13 @@
+use crate::stores::token::TokenStore;
+use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
+use actix_web::http::StatusCode;
+use actix_web::{Error, ResponseError};
 use std::fmt::Display;
+use std::future::{ready, Future, Ready};
 use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task;
-
-use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
-
-use actix_web::http::StatusCode;
-use actix_web::{Error, ResponseError};
-
-use std::future::{ready, Future, Ready};
-
-use crate::stores::token::TokenStore;
 
 /// Structure for transformer that creates token
 /// authentication middleware

@@ -1,15 +1,8 @@
+use core::{constants, env, state::GlobalState};
+use dotenvy::dotenv;
 use log::info;
 use tokio::join;
 use utils::net::public_address;
-
-use core::{constants, env, state::GlobalState};
-
-
-
-
-
-
-use dotenvy::dotenv;
 
 mod logging;
 

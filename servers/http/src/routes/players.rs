@@ -1,6 +1,3 @@
-use core::state::GlobalState;
-use std::fmt::Display;
-
 use actix_web::{
     delete, get,
     http::StatusCode,
@@ -8,11 +5,13 @@ use actix_web::{
     web::{Json, Path, Query, ServiceConfig},
     HttpResponse, Responder, ResponseError,
 };
+use core::state::GlobalState;
 use database::{
     dto::players::PlayerUpdate, DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter,
     PlayerClass,
 };
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use utils::{hashing::hash_password, types::PlayerID, validate::is_email};
 
 /// Function for configuring the services in this route

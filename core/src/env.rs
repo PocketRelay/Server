@@ -1,8 +1,6 @@
-use std::str::FromStr;
-
-use log::LevelFilter;
-
 use crate::blaze::codec::Port;
+use log::LevelFilter;
+use std::str::FromStr;
 
 pub const REDIRECTOR_PORT: (&str, Port) = ("PR_REDIRECTOR_PORT", 42127);
 pub const MAIN_PORT: (&str, Port) = ("PR_MAIN_PORT", 14219);

@@ -1,12 +1,10 @@
-use core::env;
-use std::sync::Arc;
-
+use crate::{middleware::token::TokenAuth, stores::token::TokenStore};
 use actix_web::{
     web::{Data, ServiceConfig},
     Scope,
 };
-
-use crate::{middleware::token::TokenAuth, stores::token::TokenStore};
+use core::env;
+use std::sync::Arc;
 
 mod games;
 mod gaw;

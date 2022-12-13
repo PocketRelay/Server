@@ -1,7 +1,6 @@
+use crate::session::Session;
 use blaze_pk::packet::Packet;
 use core::blaze::{components::Components, errors::BlazeError};
-
-use crate::session::Session;
 
 mod auth;
 mod game_manager;

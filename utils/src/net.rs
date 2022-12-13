@@ -1,8 +1,7 @@
-use std::net::SocketAddr;
-
 use log::{error, info};
 use reqwest;
 use serde::Deserialize;
+use std::net::SocketAddr;
 use tokio::{
     net::{TcpListener, TcpStream},
     select,

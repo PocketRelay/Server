@@ -1,3 +1,4 @@
+use super::{player::GamePlayer, AttrMap, GameData};
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeResult,
@@ -8,8 +9,6 @@ use blaze_pk::{
 };
 use serde::Serialize;
 use utils::types::{GameID, GameSlot, PlayerID};
-
-use super::{player::GamePlayer, AttrMap, GameData};
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 pub enum GameDetailsType {

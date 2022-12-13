@@ -1,6 +1,5 @@
-use std::time::{Duration, SystemTime};
-
 use serde::{Deserialize, Serialize};
+use std::time::{Duration, SystemTime};
 use utils::types::PlayerID;
 
 /// Structure for an entry in a leaderboard group
