@@ -27,7 +27,7 @@ log = "0.4.17"
 
 rust-embed = { version = "6.4.1", features = ["debug-embed"] }
 
-core = { path = "core", package="pocket-relay-core", version = "0.1.0" }
+core = { path = "core", package="pocket-relay-core", version="0.1.2-alpha" }
 utils = { path = "utils", package="pocket-relay-utils", version = "0.1.0"  }
 database = { path = "database", package="pocket-relay-database", version = "0.1.0" }
 

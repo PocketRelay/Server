@@ -2009,7 +2009,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-relay-core"
-version = "0.1.0"
+version = "0.1.2-alpha"
 dependencies = [
  "blaze-pk",
  "blaze-ssl-async",

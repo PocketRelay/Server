@@ -1,8 +1,8 @@
 [package]
 name = "pocket-relay-core"
 description = "Core module for Pocket Relay which contains shared state as well as game logic"
-version = "0.1.0"
 
+version.workspace = true
 repository.workspace = true
 edition.workspace = true
 license.workspace = true
