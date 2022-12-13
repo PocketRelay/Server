@@ -74,6 +74,7 @@ async fn get_games(query: Query<GamesQuery>) -> impl Responder {
         count,
         more,
     };
+    
     HttpResponse::Ok().json(response)
 }
 
