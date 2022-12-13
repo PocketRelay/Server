@@ -12,10 +12,18 @@ Development on this implementation has made great strides and has surpassed the 
 reliabality, functionality and actual parody to the official server. However as this implementation is still considered to be
 in active development.
 
+# 📖 Setting up a server
+
+For a guide on how to setup a Pocket Relay server see [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_SERVER.md)
+and for connecting to a server see [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_CLIENT.md)
+
+
 # 🎮 Pre Release
 
 You can find pre-release downloads in the [Releases (https://github.com/PocketRelay/ServerRust/releases)](https://github.com/PocketRelay/ServerRust/releases). The most recent pre release is 
 mostly stable but may have unknown bugs or features that are expecting to change 
+
+Latest pre release is available  [Here](https://github.com/PocketRelay/ServerRust/releases/latest)
 
 # ❔ What
 
@@ -39,39 +47,14 @@ configuration documentation [Here (docs/CONFIG.md)](docs/CONFIG.md)
 # 📦 Releases
 
 As this implementation is still under active development there will be no 
-releases until its closer to being considered user ready. However you can
+stable releases until its closer to being considered user ready. However you can
 still use this server early by building manually with the instructions below
+
+The latest available release can be found [Here](https://github.com/PocketRelay/ServerRust/releases/latest)
 
 # 🚀 Building
 
-> Note: There is a Dockerfile included in the root of this repository which can
-> automatically build and run the server if you're willing to run it within Docker
-
-## 📄 Building Requirements
-
-In order to build Pocket relay you must have the following tools installed
-
-- Rust v1.65 or greater with the stable channel installed. ([You can find it here](https://www.rust-lang.org/learn/get-started))
-- Cargo (Should be included with your Rust installation if you installed it through rustup)
-
-To build the release binary run the following command:
-
-```shell
-cargo build --release
-```
-
-After the compiling is complete you will find the server binary at
-```
-target/release/pocket-relay.exe
-```
-
-The produced version will use the SQLite database type if you would instead like
-to build a version of Pocket Relay that supports MySQL databases instead
-you can use the following command
-
-```shell
-cargo build --release --features database-mysql --no-default-features
-```
+Instructions for building the server can be found [Here](https://github.com/PocketRelay/.github/blob/main/manual/BUILDING.md)
 
 # ⚙️ Features
 
