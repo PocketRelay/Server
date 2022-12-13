@@ -5,3 +5,6 @@
 app.db
 .vscode/
 data/
+
+.release
+build-release.nu
