@@ -1,5 +1,5 @@
 [package]
-name = "mitm-server"
+name = "pocket-relay-mitm-server"
 
 version.workspace = true
 edition.workspace = true

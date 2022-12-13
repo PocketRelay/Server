@@ -1,5 +1,5 @@
 [package]
-name = "redirector-server"
+name = "pocket-relay-redirector-server"
 
 version.workspace = true
 edition.workspace = true

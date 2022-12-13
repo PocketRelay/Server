@@ -1,5 +1,5 @@
 [package]
-name = "tools"
+name = "pocket-relay-tools"
 description = "Tooling for working creating files used by Pocket Relay"
 
 version.workspace = true

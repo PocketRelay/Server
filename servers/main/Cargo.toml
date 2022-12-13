@@ -1,5 +1,5 @@
 [package]
-name = "main-server"
+name = "pocket-relay-main-server"
 
 version.workspace = true
 edition.workspace = true

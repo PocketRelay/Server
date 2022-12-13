@@ -1,5 +1,5 @@
 [package]
-name = "utils"
+name = "pocket-relay-utils"
 description = "Utility modules and functions for Pocket Relay"
 
 version.workspace = true

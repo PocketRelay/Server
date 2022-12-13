@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "pocket-relay-core"
 
 version.workspace = true
 edition.workspace = true

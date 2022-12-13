@@ -1,5 +1,5 @@
 [package]
-name = "database"
+name = "pocket-relay-database"
 description = "Module for accessing the app database"
 
 version.workspace = true
