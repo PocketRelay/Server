@@ -1,7 +1,7 @@
 [package]
 name = "pocket-relay-utils"
 description = "Module for utilities used throughout the core, database, and servers for Pocket Relay"
-version = "0.1.0"
+version = "0.1.1"
 
 repository.workspace = true
 edition.workspace = true

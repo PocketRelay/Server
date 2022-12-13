@@ -1,5 +1,5 @@
 [workspace.package]
-version = "0.1.2-alpha"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
@@ -27,9 +27,9 @@ log = "0.4.17"
 
 rust-embed = { version = "6.4.1", features = ["debug-embed"] }
 
-core = { path = "core", package="pocket-relay-core", version="0.1.2-alpha" }
-utils = { path = "utils", package="pocket-relay-utils", version = "0.1.0"  }
-database = { path = "database", package="pocket-relay-database", version = "0.1.0" }
+core = { path = "core", package="pocket-relay-core", version="^0.1" }
+utils = { path = "utils", package="pocket-relay-utils", version = "^0.1"  }
+database = { path = "database", package="pocket-relay-database", version = "^0.1" }
 
 blaze-ssl-async = "0.1.1"
 
@@ -62,8 +62,8 @@ utils = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }
 
-http-server = { path = "servers/http", package="pocket-relay-http-server", version = "0.1.0" }
-main-server = { path = "servers/main", package="pocket-relay-main-server", version = "0.1.0" }
+http-server = { path = "servers/http", package="pocket-relay-http-server", version = "^0.1" }
+main-server = { path = "servers/main", package="pocket-relay-main-server", version = "^0.1" }
 redirector-server = { path = "servers/redirector", package="pocket-relay-redirector-server", version = "^1" }
 mitm-server = { path = "servers/mitm", package="pocket-relay-mitm-server", version = "^1" }
 

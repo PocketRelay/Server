@@ -1992,7 +1992,7 @@ checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
 
 [[package]]
 name = "pocket-relay"
-version = "0.1.2-alpha"
+version = "0.1.2"
 dependencies = [
  "dotenvy",
  "local-ip-address",
@@ -2009,7 +2009,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-relay-core"
-version = "0.1.2-alpha"
+version = "0.1.2"
 dependencies = [
  "blaze-pk",
  "blaze-ssl-async",
@@ -2093,7 +2093,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-relay-utils"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "argon2",
  "blaze-pk",
