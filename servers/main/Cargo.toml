@@ -2,6 +2,7 @@
 name = "pocket-relay-main-server"
 description = "Pocket Relays Main server which is responsible for most of the client server logic"
 version = "0.1.0"
+include = [ "src/**/*" ]
 
 repository.workspace = true
 edition.workspace = true
