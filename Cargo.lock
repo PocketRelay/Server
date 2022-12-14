@@ -380,9 +380,9 @@ dependencies = [
 
 [[package]]
 name = "blaze-ssl-async"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5023c25c237900e314288fba97f86a03a43a43deb8527655957ee66e3570795"
+checksum = "0c1c172d852ab23a343f69f6338777f1d9ea4a813dd58b3a1effc4eae29e99f7"
 dependencies = [
  "der 0.6.1",
  "getrandom",
