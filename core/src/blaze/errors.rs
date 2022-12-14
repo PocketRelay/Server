@@ -5,6 +5,8 @@ use std::{fmt::Display, io};
 pub type BlazeResult<T> = Result<T, BlazeError>;
 pub type ServerResult<T> = Result<T, ServerError>;
 
+/// Error type used for handling a variety of possible errors
+/// that can occur throughout the applications
 #[derive(Debug)]
 pub enum BlazeError {
     Decode(DecodeError),

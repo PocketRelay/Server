@@ -1,3 +1,6 @@
+//! Routes for the Galaxy At War API used by the Mass Effect 3 client in order
+//! to retrieve and increase the Galxay At War values for a player
+
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
 use actix_web::web::{Path, Query, ServiceConfig};
