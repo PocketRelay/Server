@@ -8,8 +8,10 @@ edition = "2021"
 license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
 
+[workspace]
+
 [dependencies]
-tokio = { version = "1", features = ["full"] }
-base64 = "0.13.1"
-blaze-pk = "0.6.0-alpha-6"
+tokio = { version = "1", features = ["fs"] }
+base64 = "0.20.0"
+blaze-pk = "0.6.0"
 flate2 = { version = "1.0.24", features = ["zlib"], default-features = false }
