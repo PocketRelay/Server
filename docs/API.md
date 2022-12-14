@@ -162,7 +162,7 @@ the servers running under Pocket Relay along with their ports and the type of se
         {
             "name": "HTTP Server",
             "port": 80,
-            "type": "HTTP"
+            "type": "Http"
         }
     ]
 }
