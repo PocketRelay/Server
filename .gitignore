@@ -8,3 +8,5 @@ data/
 
 .release
 build-release.nu
+
+tools/target

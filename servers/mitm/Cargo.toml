@@ -9,15 +9,9 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-# Async runtime
 tokio = { workspace = true }
-
-# Serialization and packets
 blaze-pk = { workspace = true }
 blaze-ssl-async = { workspace = true }
-
 core = { workspace = true }
 utils = { workspace = true }
-
-# Logging
 log = { workspace = true }

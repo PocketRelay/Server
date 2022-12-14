@@ -14,8 +14,6 @@ mysql = ["sea-orm/sqlx-mysql", "sea-orm-migration/sqlx-mysql"]
 
 [dependencies]
 tokio = { workspace = true }
-async-std = { version = "^1", features = ["attributes", "tokio1"] }
-
 log = { workspace = true }
 utils = { workspace = true }
 serde = { workspace = true }
