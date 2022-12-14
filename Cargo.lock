@@ -507,12 +507,13 @@ dependencies = [
 
 [[package]]
 name = "blaze-pk"
-version = "0.6.0-alpha-6"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df46f180895300bdb0579ec40ecad80d9280dcff1d03d856f2a0433512d9c03c"
+checksum = "45c7df475def7464902adba8f67c193078ab6618b9dad0eea2440ab3d177b112"
 dependencies = [
  "blaze-ssl-async",
  "bytes",
+ "serde",
  "tokio",
 ]
 
@@ -2013,7 +2014,7 @@ version = "0.1.2"
 dependencies = [
  "blaze-pk",
  "blaze-ssl-async",
- "futures",
+ "futures-util",
  "log",
  "pocket-relay-database",
  "pocket-relay-utils",
@@ -2041,7 +2042,6 @@ version = "0.1.0"
 dependencies = [
  "actix-cors",
  "actix-web",
- "futures-util",
  "log",
  "mime_guess",
  "pocket-relay-core",

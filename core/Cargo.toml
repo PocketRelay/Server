@@ -29,4 +29,5 @@ database = { workspace = true }
 # Logging
 log = { workspace = true }
 
-futures = "0.3.25"
+# Future utils used for waiting for iterables of futures in bulk
+futures-util = "0.3"

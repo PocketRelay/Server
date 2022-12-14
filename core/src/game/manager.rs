@@ -53,7 +53,7 @@ impl Games {
             .iter()
             .map(|value| value.1.snapshot())
             .collect::<Vec<_>>();
-        futures::future::join_all(snapshots).await
+        futures_util::future::join_all(snapshots).await
     }
 
     /// Takes a snapshot of the game with the provided game ID

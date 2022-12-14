@@ -1,8 +1,7 @@
 use crate::{env, game::manager::Games, leaderboard::Leaderboard, retriever::Retriever};
 use database::{self, DatabaseConnection, DatabaseType};
-use futures::join;
 use log::info;
-use tokio::{signal, sync::watch};
+use tokio::{join, signal, sync::watch};
 
 /// Global state that is shared throughout the application this
 /// will be unset until the value is initialized then it will be

@@ -111,7 +111,7 @@ impl Leaderboard {
             .into_iter()
             .map(|player| Self::compute_n7_player(db, player))
             .collect::<Vec<_>>();
-        let results = futures::future::try_join_all(futures).await?;
+        let results = futures_util::future::try_join_all(futures).await?;
         output.extend(results);
         Ok(())
     }

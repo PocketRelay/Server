@@ -120,7 +120,7 @@ impl Game {
             .map(|value| value.push(packet.clone()))
             .collect::<Vec<_>>();
 
-        let _ = futures::future::join_all(futures).await;
+        let _ = futures_util::future::join_all(futures).await;
     }
 
     /// Sends a notification packet to all the connected session
@@ -207,7 +207,7 @@ impl Game {
             .map(|value| value.exchange_update(player))
             .collect::<Vec<_>>();
 
-        let _ = futures::future::join_all(futures).await;
+        let _ = futures_util::future::join_all(futures).await;
     }
 
     /// Retrieves the number of players currently in this game
@@ -597,7 +597,7 @@ impl Game {
             .iter()
             .map(|value| value.set_game(None))
             .collect::<Vec<_>>();
-        let _ = futures::future::join_all(futures).await;
+        let _ = futures_util::future::join_all(futures).await;
         players.clear();
     }
 }

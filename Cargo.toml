@@ -18,26 +18,32 @@ members = [
 exclude = ["tools"]
 
 [workspace.dependencies]
-futures = "0.3.25"
+# Tokio async runtime
 tokio = { version = "1", features = ["full"] }
 
-serde = { version = "1.0", features = ["derive"] }
+# Serde for serialization mostly in the HTTP server but also
+# used elsewhere to do define custom serialization
+serde = { version = "1", features = ["derive"] }
 
-log = "0.4.17"
+# Logging facade
+log = "0.4"
 
-rust-embed = { version = "6.4.1", features = ["debug-embed"] }
+# Blaze packet system 
+blaze-pk = { version = "^0.6" }
 
+# Resource embedding using debug-embed to always resolve relative 
+# to the Cargo.toml file
+rust-embed = { version = "6.4.2", features = ["debug-embed"] }
+
+# Core application logic and shared state crate
 core = { path = "core", package="pocket-relay-core", version="^0.1" }
+# Isolated utilities crate
 utils = { path = "utils", package="pocket-relay-utils", version = "^0.1"  }
+# Isolated database crate
 database = { path = "database", package="pocket-relay-database", version = "^0.1" }
 
-blaze-ssl-async = "0.1.1"
-
-[workspace.dependencies.blaze-pk]
-version = "0.6.0-alpha-6"
-default-features = false
-features = ["async", "blaze-ssl"]
-
+# Blaze SSLv3 async TCPStream implementation
+blaze-ssl-async = "^0.1"
 
 [package]
 name = "pocket-relay"
@@ -62,14 +68,19 @@ utils = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }
 
+# Individual servers
 http-server = { path = "servers/http", package="pocket-relay-http-server", version = "^0.1" }
 main-server = { path = "servers/main", package="pocket-relay-main-server", version = "^0.1" }
 redirector-server = { path = "servers/redirector", package="pocket-relay-redirector-server", version = "^1" }
 mitm-server = { path = "servers/mitm", package="pocket-relay-mitm-server", version = "^1" }
 
+# .env file loader
 dotenvy = "0.15.5"
+
+# Library for obtaining the local IP address of the device
 local-ip-address = "0.4.9"
 
+# Logging provider 
 [dependencies.log4rs]
 version = "1.2.0"
 default-features = false
