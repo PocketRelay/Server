@@ -1,7 +1,3 @@
-use blaze_pk::packet::Packet;
-use tokio::fs::read_to_string;
-use utils::types::PlayerID;
-
 use crate::models::auth::{
     AuthRequest, AuthResponse, CreateAccountRequest, Entitlement, ForgotPasswordRequest,
     GetTokenResponse, LegalContent, LegalDocsInfo, ListEntitlementsRequest,
@@ -9,15 +5,17 @@ use crate::models::auth::{
 };
 use crate::routes::HandleResult;
 use crate::session::Session;
+use blaze_pk::packet::Packet;
 use core::blaze::components::Authentication;
 use core::blaze::errors::{ServerError, ServerResult};
 use core::env;
-
 use core::state::GlobalState;
 use database::{DatabaseConnection, Player};
 use log::{debug, error, warn};
 use std::borrow::Cow;
 use std::path::Path;
+use tokio::fs::read_to_string;
+use utils::types::PlayerID;
 use utils::{
     hashing::{hash_password, verify_password},
     validate::is_email,

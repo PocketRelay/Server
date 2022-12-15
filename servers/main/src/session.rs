@@ -1,8 +1,6 @@
-//! This module contains the storage and additional data for sessions. Sessions
-//! are data attached to streams that can be manipulated. Sessions are stored
-//! behind Arc's and are cloned into Games and other resources. Sesssion must be
-//! removed from all other structs in the release function.
-
+//! Sessions are client connections to the main server with associated
+//! data such as player data for when they become authenticated and
+//! networking data.
 use crate::{
     models::session::{SessionUpdate, SetSession},
     routes,
