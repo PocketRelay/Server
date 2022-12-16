@@ -40,8 +40,9 @@ database-mysql = ["database/mysql"]
 log = { workspace = true }
 serde = { workspace = true }
 
-# Tokio async runtime
+# Tokio async runtime & future utilities
 tokio = { version = "1", features = ["full"] }
+futures-util = "0.3.16"
 
 # Blaze packet system 
 blaze-pk = { version = "^0.6" }
@@ -51,18 +52,13 @@ blaze-ssl-async = "^0.1"
 # Isolated database crate
 database = { path = "database", package = "pocket-relay-database", version = "^0.1" }
 
-futures-util = "0.3"
-
-
 # Actix Web framework and cors library to enable cors
 actix-web = { version = "4", default-features = false, features = ["macros"] }
 actix-cors = "0.6.4"
 
-
 # Resource embedding using debug-embed to always resolve relative 
-# to the Cargo.toml file
+# to the Cargo.toml file and mime guess for guessing file type
 rust-embed = { version = "6.4.2", features = ["debug-embed"] }
-
 mime_guess = "2.0.4"
 
 # Password hashing
