@@ -1,6 +1,6 @@
 use crate::blaze::components::{Components, UserSessions};
+use crate::utils::types::PlayerID;
 use blaze_pk::{codec::Encodable, packet::PacketComponents, tag::TdfType, writer::TdfWriter};
-use utils::types::PlayerID;
 
 /// Structure of the response to a fetch messages request. Which tells
 /// the client how many messages to expect

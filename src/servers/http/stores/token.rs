@@ -1,8 +1,8 @@
 use crate::env;
+use crate::utils::random::generate_random_string;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 use tokio::sync::Mutex;
-use utils::random::generate_random_string;
 
 /// Structure of a store which stores tokens along with
 /// their expiry time used for storing and checking

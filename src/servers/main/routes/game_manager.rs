@@ -8,10 +8,10 @@ use crate::servers::main::models::game_manager::{
 use crate::servers::main::routes::HandleResult;
 use crate::servers::main::session::Session;
 use crate::state::GlobalState;
+use crate::utils::types::GameID;
 use blaze_pk::packet::Packet;
 use database::Player;
 use log::{debug, info, warn};
-use utils::types::GameID;
 
 /// Routing function for handling packets with the `GameManager` component and routing them
 /// to the correct routing function. If no routing function is found then the packet

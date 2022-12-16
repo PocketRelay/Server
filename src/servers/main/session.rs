@@ -5,6 +5,10 @@ use super::{
     models::session::{SessionUpdate, SetSession},
     routes,
 };
+use crate::utils::{
+    net::public_address,
+    types::{GameID, SessionID},
+};
 use crate::{
     blaze::{
         append_packet_decoded,
@@ -27,10 +31,6 @@ use tokio::{
     net::TcpStream,
     select,
     sync::{mpsc, Mutex, Notify},
-};
-use utils::{
-    net::public_address,
-    types::{GameID, SessionID},
 };
 
 /// Structure for storing a client session. This includes the

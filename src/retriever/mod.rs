@@ -1,5 +1,6 @@
 //! Module for retrieving data from the official Mass Effect 3 Servers
 
+use crate::utils::net::lookup_host;
 use crate::{
     blaze::{
         codec::{InstanceDetails, Port},
@@ -16,7 +17,6 @@ use blaze_pk::{
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
 use log::{debug, error};
 use tokio::net::TcpStream;
-use utils::net::lookup_host;
 
 mod codec;
 pub mod origin;

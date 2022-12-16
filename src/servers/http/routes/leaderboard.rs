@@ -1,3 +1,4 @@
+use crate::utils::types::PlayerID;
 use crate::{
     leaderboard::models::{LeaderboardEntityGroup, LeaderboardEntry, LeaderboardType},
     state::GlobalState,
@@ -11,7 +12,6 @@ use actix_web::{
 use database::DbErr;
 use serde::Deserialize;
 use std::fmt::Display;
-use utils::types::PlayerID;
 
 /// Function for configuring the services in this route
 ///

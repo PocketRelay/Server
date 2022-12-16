@@ -5,6 +5,7 @@ use crate::blaze::codec::{InstanceDetails, InstanceNet};
 use crate::blaze::components::{Components, Redirector};
 use crate::blaze::errors::BlazeResult;
 use crate::constants;
+use crate::utils::net::{accept_stream, listener};
 use crate::{env, state::GlobalState};
 use blaze_pk::packet::Packet;
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
@@ -14,7 +15,6 @@ use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::select;
 use tokio::time::sleep;
-use utils::net::{accept_stream, listener};
 
 /// Starts the Redirector server this server is what the Mass Effect 3 game
 /// client initially reaches out to. This server is responsible for telling

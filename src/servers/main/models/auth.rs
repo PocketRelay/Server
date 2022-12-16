@@ -1,3 +1,4 @@
+use crate::utils::types::PlayerID;
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::{DecodeError, DecodeResult},
@@ -7,7 +8,6 @@ use blaze_pk::{
     writer::TdfWriter,
 };
 use database::Player;
-use utils::types::PlayerID;
 
 /// Different possible authentication request types.
 pub enum AuthRequest {

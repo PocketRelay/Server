@@ -1,6 +1,6 @@
 use crate::servers::main::session::Session;
+use crate::utils::types::PlayerID;
 use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
-use utils::types::PlayerID;
 
 /// Encodes the session details for the provided session using
 /// the provided writer

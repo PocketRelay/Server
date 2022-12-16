@@ -5,7 +5,7 @@
 pub mod dmap;
 pub mod hashing;
 pub mod net;
-pub mod parse;
+pub mod parsing;
 pub mod random;
 pub mod types;
 pub mod validate;

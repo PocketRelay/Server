@@ -4,6 +4,7 @@ use super::{
     GameSnapshot,
 };
 use super::{player::GamePlayer, AttrMap, Game};
+use crate::utils::types::{GameID, PlayerID, SessionID};
 use blaze_pk::types::TdfMap;
 use log::debug;
 use std::{
@@ -12,7 +13,6 @@ use std::{
     time::SystemTime,
 };
 use tokio::sync::{Mutex, RwLock};
-use utils::types::{GameID, PlayerID, SessionID};
 
 /// Structure for managing games and the matchmaking queue
 pub struct Games {

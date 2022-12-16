@@ -3,7 +3,6 @@
 use chrono::NaiveDateTime;
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
-use utils::types::PlayerID;
 
 /// Structure for a galaxy at war model stored in the database
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize)]
@@ -15,7 +14,7 @@ pub struct Model {
     pub id: u32,
     /// The ID of the player this galaxy at war data belongs to
     #[serde(skip)]
-    pub player_id: PlayerID,
+    pub player_id: u32,
     /// The time at which this galaxy at war data was last modified. Used
     /// to calculate how many days of decay have passed
     pub last_modified: NaiveDateTime,

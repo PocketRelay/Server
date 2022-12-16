@@ -1,3 +1,4 @@
+use crate::utils::types::GameID;
 use crate::{game::GameSnapshot, state::GlobalState};
 use actix_web::{
     get,
@@ -7,7 +8,6 @@ use actix_web::{
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use utils::types::GameID;
 
 /// Function for configuring the services in this route
 ///

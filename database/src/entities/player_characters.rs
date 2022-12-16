@@ -2,7 +2,6 @@
 
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
-use utils::types::PlayerID;
 
 /// Structure for a player character model stored in the database
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize)]
@@ -14,7 +13,7 @@ pub struct Model {
     pub id: u32,
     /// The ID of the player this character belongs to
     #[serde(skip)]
-    pub player_id: PlayerID,
+    pub player_id: u32,
     /// The character index of this character
     pub index: u16,
     /// The name of the character kit contains the name of the class

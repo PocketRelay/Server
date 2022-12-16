@@ -9,17 +9,18 @@ use crate::servers::main::models::auth::{
 use crate::servers::main::routes::HandleResult;
 use crate::servers::main::session::Session;
 use crate::state::GlobalState;
+use crate::utils::parsing::parse_updates;
+use crate::utils::types::PlayerID;
+use crate::utils::{
+    hashing::{hash_password, verify_password},
+    validate::is_email,
+};
 use blaze_pk::packet::Packet;
 use database::{DatabaseConnection, Player};
 use log::{debug, error, warn};
 use std::borrow::Cow;
 use std::path::Path;
 use tokio::fs::read_to_string;
-use utils::types::PlayerID;
-use utils::{
-    hashing::{hash_password, verify_password},
-    validate::is_email,
-};
 
 /// Routing function for handling packets with the `Authentication` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -218,9 +219,11 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
                 return Ok(player);
             };
 
+            let updates = parse_updates(settings.into_iter());
+
             // Update the player settings with those retrieved from origin
             player
-                .update_all(db, settings.into_iter())
+                .update_all(db, updates)
                 .await
                 .map_err(|_| ServerError::ServerUnavailable)
         }

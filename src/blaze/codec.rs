@@ -1,3 +1,4 @@
+use crate::utils::types::PlayerID;
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeResult,
@@ -12,7 +13,6 @@ use std::{
     fmt::{Debug, Display},
     str::Split,
 };
-use utils::types::PlayerID;
 
 /// Networking information for an instance. Contains the
 /// host address and the port

@@ -1,4 +1,5 @@
 use crate::state::GlobalState;
+use crate::utils::{hashing::hash_password, types::PlayerID, validate::is_email};
 use actix_web::{
     delete, get,
     http::StatusCode,
@@ -12,7 +13,6 @@ use database::{
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use utils::{hashing::hash_password, types::PlayerID, validate::is_email};
 
 /// Function for configuring the services in this route
 ///
@@ -297,8 +297,8 @@ async fn get_player_classes(path: Path<PlayerID>) -> PlayersResult<Vec<PlayerCla
 /// of a class
 #[derive(Deserialize)]
 struct UpdateClassRequest {
-    /// The level to change to
-    level: Option<u32>,
+    /// The level to change to 0 - 20
+    level: Option<u8>,
     /// The promotions to change to
     promotions: Option<u32>,
 }

@@ -1,4 +1,5 @@
 use crate::leaderboard::models::LeaderboardEntry;
+use crate::utils::types::PlayerID;
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::{DecodeError, DecodeResult},
@@ -6,7 +7,6 @@ use blaze_pk::{
     tag::TdfType,
     writer::TdfWriter,
 };
-use utils::types::PlayerID;
 
 /// Structure for the request to retrieve the entity count
 /// of a leaderboard

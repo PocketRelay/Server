@@ -134,7 +134,7 @@ impl Leaderboard {
                 .iter()
                 .any(|char| char.kit_name.contains(&class.name) && char.deployed);
             if is_active {
-                total_level += class.level;
+                total_level += class.level as u32;
             }
             total_promotions += class.promotions;
         }

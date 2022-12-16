@@ -12,6 +12,7 @@ mod logging;
 mod retriever;
 mod servers;
 mod state;
+mod utils;
 
 use servers::{http, main, mitm, redirector};
 

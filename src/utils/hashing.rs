@@ -33,7 +33,7 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::random::generate_random_string;
+    use crate::utils::random::generate_random_string;
 
     use super::{hash_password, verify_password};
 

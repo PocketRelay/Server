@@ -5,12 +5,12 @@ use crate::blaze::append_packet_decoded;
 use crate::blaze::components::Components;
 use crate::blaze::errors::BlazeResult;
 use crate::retriever::Retriever;
+use crate::utils::net::{accept_stream, listener};
 use crate::{env, state::GlobalState};
 use blaze_pk::packet::{Packet, PacketType};
 use log::{debug, error, log_enabled};
 use tokio::net::TcpStream;
 use tokio::select;
-use utils::net::{accept_stream, listener};
 
 /// Starts the MITM server. This server is responsible for creating a sort of
 /// proxy between this server and the official servers. All packets send and

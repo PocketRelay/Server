@@ -10,14 +10,16 @@ use crate::servers::main::models::util::{
 use crate::servers::main::routes::HandleResult;
 use crate::servers::main::session::Session;
 use crate::state::GlobalState;
+use crate::utils::dmap::load_dmap;
+use crate::utils::parsing::parse_update;
+use crate::utils::types::PlayerID;
 use blaze_pk::{packet::Packet, types::TdfMap};
+use database::dto::ParsedUpdate;
 use database::{PlayerCharacter, PlayerClass};
-use log::{debug, warn};
+use log::warn;
 use rust_embed::RustEmbed;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::try_join;
-use utils::dmap::load_dmap;
-use utils::types::PlayerID;
 
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -401,54 +403,44 @@ fn handle_suspend_user_ping(packet: &Packet) -> HandleResult {
 /// ```
 async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: SettingsSaveRequest = packet.decode()?;
-    let key = &req.key;
-    let value = req.value;
-
-    if key.starts_with("class") {
-        debug!("Updating player class data: {key}");
-        let db = GlobalState::database();
-        let player = session
-            .player
-            .as_ref()
-            .ok_or(ServerError::FailedNoLoginAction)?;
-
-        PlayerClass::update(db, player, key, &value)
-            .await
-            .map_err(|err| {
-                warn!("Failed to update player class: {err:?}");
+    let update = parse_update(req.key, req.value).ok_or(ServerError::ServerUnavailable)?;
+    let db = GlobalState::database();
+    match update {
+        ParsedUpdate::Character(index, value) => {
+            let player = session
+                .player
+                .as_ref()
+                .ok_or(ServerError::FailedNoLoginAction)?;
+            PlayerCharacter::update(db, player, index, value)
+                .await
+                .map_err(|err| {
+                    warn!("Failed to update player character: {err:?}");
+                    ServerError::ServerUnavailable
+                })?;
+        }
+        ParsedUpdate::Class(index, value) => {
+            let player = session
+                .player
+                .as_ref()
+                .ok_or(ServerError::FailedNoLoginAction)?;
+            PlayerClass::update(db, player, index, value)
+                .await
+                .map_err(|err| {
+                    warn!("Failed to update player class: {err:?}");
+                    ServerError::ServerUnavailable
+                })?;
+        }
+        ParsedUpdate::Data(value) => {
+            let player = session
+                .player
+                .take()
+                .ok_or(ServerError::FailedNoLoginAction)?;
+            let player = player.update(db, value).await.map_err(|err| {
+                warn!("Failed to update player data: {err:?}");
                 ServerError::ServerUnavailable
             })?;
-
-        debug!("Updating player character data: {key}");
-    } else if key.starts_with("char") {
-        debug!("Updating player character data: {key}");
-        let db = GlobalState::database();
-        let player = session
-            .player
-            .as_ref()
-            .ok_or(ServerError::FailedNoLoginAction)?;
-
-        PlayerCharacter::update(db, player, key, &value)
-            .await
-            .map_err(|err| {
-                warn!("Failed to update player character: {err:?}");
-                ServerError::ServerUnavailable
-            })?;
-
-        debug!("Updated player character data: {key}");
-    } else {
-        debug!("Updating player base data");
-        let player = session
-            .player
-            .take()
-            .ok_or(ServerError::FailedNoLoginAction)?;
-        let db = GlobalState::database();
-        let player = player.update(db, key, value).await.map_err(|err| {
-            warn!("Failed to update player data: {err:?}");
-            ServerError::ServerUnavailable
-        })?;
-        session.player = Some(player);
-        debug!("Updated player base data");
+            session.player = Some(player);
+        }
     }
     Ok(packet.respond_empty())
 }

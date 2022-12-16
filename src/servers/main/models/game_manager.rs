@@ -3,6 +3,7 @@ use crate::game::{
     rules::{MatchRules, RuleSet},
     AttrMap,
 };
+use crate::utils::types::{GameID, PlayerID, SessionID};
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::{DecodeError, DecodeResult},
@@ -10,7 +11,6 @@ use blaze_pk::{
     tag::{Tag, TdfType},
     writer::TdfWriter,
 };
-use utils::types::{GameID, PlayerID, SessionID};
 
 /// Structure of the request for creating new games contains the
 /// initial game attributes and game setting

@@ -1729,6 +1729,7 @@ version = "0.1.2"
 dependencies = [
  "actix-cors",
  "actix-web",
+ "argon2",
  "blaze-pk",
  "blaze-ssl-async",
  "dotenvy",
@@ -1737,8 +1738,11 @@ dependencies = [
  "log",
  "log4rs",
  "mime_guess",
+ "password-hash",
  "pocket-relay-database",
- "pocket-relay-utils",
+ "rand_core 0.6.4",
+ "regex",
+ "reqwest",
  "rust-embed",
  "serde",
  "tokio",
@@ -1750,24 +1754,9 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "log",
- "pocket-relay-utils",
+ "rand_core 0.6.4",
  "sea-orm",
  "sea-orm-migration",
- "serde",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-utils"
-version = "0.1.1"
-dependencies = [
- "argon2",
- "blaze-pk",
- "log",
- "password-hash",
- "rand_core 0.6.4",
- "regex",
- "reqwest",
  "serde",
  "tokio",
 ]
