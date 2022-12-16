@@ -4,7 +4,7 @@
 
 app.db
 .vscode/
-data/
+/data/
 
 .release
 build-release.nu

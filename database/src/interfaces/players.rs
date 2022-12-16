@@ -1,18 +1,17 @@
 use crate::{
-    dto::players::PlayerUpdate,
-    entities::{player_characters, player_classes, players},
-    DbResult, GalaxyAtWar, Player, PlayerCharacter, PlayerClass,
+    dto::{
+        players::{PlayerDataUpdate, PlayerUpdate},
+        ParsedUpdate,
+    },
+    entities::players,
+    DbResult, Player, PlayerCharacter, PlayerClass,
 };
-use log::warn;
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait,
-    QueryFilter,
+    ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
 };
 use std::iter::Iterator;
-use tokio::try_join;
-use utils::{parse::MEStringParser, types::PlayerID};
 
 impl Player {
     /// The length of player session tokens
@@ -157,37 +156,8 @@ impl Player {
     ///
     /// `db` The database instance
     /// `id` The ID of the player to find
-    pub async fn by_id(db: &DatabaseConnection, id: PlayerID) -> DbResult<Option<Self>> {
+    pub async fn by_id(db: &DatabaseConnection, id: u32) -> DbResult<Option<Self>> {
         players::Entity::find_by_id(id).one(db).await
-    }
-
-    /// Collects all the related classes, characters and galaxy at war
-    /// data all at once rturning the loaded result if no errors
-    /// occurred.
-    ///
-    /// `db` The database connection
-    pub async fn collect_relations(
-        &self,
-        db: &DatabaseConnection,
-    ) -> DbResult<(Vec<PlayerClass>, Vec<PlayerCharacter>, GalaxyAtWar)> {
-        let classes = self.find_related(player_classes::Entity).all(db);
-        let characters = self.find_related(player_characters::Entity).all(db);
-        let galaxy_at_war = GalaxyAtWar::find_or_create(db, self, 0.0);
-
-        try_join!(classes, characters, galaxy_at_war)
-    }
-
-    /// Collects all the related classes, characters all at once rturning
-    /// the loaded result if no errors occurred.
-    ///
-    /// `db` The database connection
-    pub async fn collect_relations_partial(
-        &self,
-        db: &DatabaseConnection,
-    ) -> DbResult<(Vec<PlayerClass>, Vec<PlayerCharacter>)> {
-        let classes = self.find_related(player_classes::Entity).all(db);
-        let characters = self.find_related(player_characters::Entity).all(db);
-        try_join!(classes, characters)
     }
 
     /// Attempts to find a player with the provided ID and matching session
@@ -269,10 +239,15 @@ impl Player {
     ///
     /// `db`     The database instance
     /// `player` The player to get the token for
-    pub async fn with_token(self, db: &DatabaseConnection) -> DbResult<(Self, String)> {
+    /// `gen_fn` Function for generating a new token if there is not one
+    pub async fn with_token(
+        self,
+        db: &DatabaseConnection,
+        gen_fn: fn(usize) -> String,
+    ) -> DbResult<(Self, String)> {
         let token = match &self.session_token {
             None => {
-                let token = utils::random::generate_random_string(Self::TOKEN_LENGTH);
+                let token = gen_fn(Self::TOKEN_LENGTH);
                 let out = self.set_token(db, token).await?;
                 return Ok(out);
             }
@@ -292,82 +267,60 @@ impl Player {
         )
     }
 
-    /// Attempts to parse the provided player base data string and update the fields
-    /// on the provided active player model. Will return a None option if parsing
-    /// failed.
-    ///
-    /// # Format
-    /// ```
-    /// 20;4;21474;-1;0;0;0;50;180000;0;fff....(LARGE SEQUENCE OF INVENTORY CHARS)
-    /// 20;4;CREDITS;UNKNOWN;UKNOWN;CREDITS_SPENT;UKNOWN;GAMES_PLAYED;SECONDS_PLAYED;UKNOWN;INVENTORY
-    /// ```
-    fn parse_base(model: &mut players::ActiveModel, value: &str) -> Option<()> {
-        let mut parser = MEStringParser::new(value)?;
-        model.credits = Set(parser.parse_next()?);
-        parser.skip(2); // Skip -1;0
-        model.credits_spent = Set(parser.parse_next()?);
-        parser.skip(1)?;
-        model.games_played = Set(parser.parse_next()?);
-        model.seconds_played = Set(parser.parse_next()?);
-        parser.skip(1);
-        model.inventory = Set(parser.next_str()?);
-        Some(())
-    }
-
-    fn modify(model: &mut players::ActiveModel, key: &str, value: String) {
-        match key {
-            "Base" => {
-                if Self::parse_base(model, &value).is_none() {
-                    warn!("Failed to completely parse player base")
-                };
+    fn apply_update(model: &mut players::ActiveModel, update: PlayerDataUpdate) {
+        match update {
+            PlayerDataUpdate::Base(base) => {
+                model.credits = Set(base.credits);
+                model.credits_spent = Set(base.credits_spent);
+                model.games_played = Set(base.games_played);
+                model.seconds_played = Set(base.seconds_played);
+                model.inventory = Set(base.inventory);
             }
-            "FaceCodes" => model.face_codes = Set(Some(value)),
-            "NewItem" => model.new_item = Set(Some(value)),
-            "csreward" => {
-                let value = value.parse::<u16>().unwrap_or(0);
-                model.csreward = Set(value)
-            }
-            "Completion" => model.completion = Set(Some(value)),
-            "Progress" => model.progress = Set(Some(value)),
-            "cscompletion" => model.cs_completion = Set(Some(value)),
-            "cstimestamps" => model.cs_timestamps1 = Set(Some(value)),
-            "cstimestamps2" => model.cs_timestamps2 = Set(Some(value)),
-            "cstimestamps3" => model.cs_timestamps3 = Set(Some(value)),
-            _ => {}
+            PlayerDataUpdate::FaceCodes(value) => model.face_codes = Set(Some(value)),
+            PlayerDataUpdate::NewItem(value) => model.new_item = Set(Some(value)),
+            PlayerDataUpdate::ChallengeReward(value) => model.csreward = Set(value),
+            PlayerDataUpdate::Completion(value) => model.completion = Set(Some(value)),
+            PlayerDataUpdate::Progress(value) => model.progress = Set(Some(value)),
+            PlayerDataUpdate::Cscompletion(value) => model.cs_completion = Set(Some(value)),
+            PlayerDataUpdate::Cstimestamps(value) => model.cs_timestamps1 = Set(Some(value)),
+            PlayerDataUpdate::Cstimestamps2(value) => model.cs_timestamps2 = Set(Some(value)),
+            PlayerDataUpdate::Cstimestamps3(value) => model.cs_timestamps3 = Set(Some(value)),
         }
     }
 
-    pub async fn update(self, db: &DatabaseConnection, key: &str, value: String) -> DbResult<Self> {
+    pub async fn update(self, db: &DatabaseConnection, update: PlayerDataUpdate) -> DbResult<Self> {
         let mut model = self.into_active_model();
-        Self::modify(&mut model, key, value);
-        let player = model.update(db).await?;
-        Ok(player)
+        Self::apply_update(&mut model, update);
+        model.update(db).await
     }
 
     pub async fn update_all(
         self,
         db: &DatabaseConnection,
-        values: impl Iterator<Item = (String, String)>,
+        updates: Vec<ParsedUpdate>,
     ) -> DbResult<players::Model> {
-        let mut others = Vec::new();
-        for (key, value) in values {
-            if key.starts_with("class") {
-                PlayerClass::update(db, &self, &key, &value).await.ok();
-            } else if key.starts_with("char") {
-                PlayerCharacter::update(db, &self, &key, &value).await.ok();
-            } else {
-                others.push((key, value));
+        let mut data_updates = Vec::new();
+        for update in updates {
+            match update {
+                ParsedUpdate::Character(index, value) => {
+                    PlayerCharacter::update(db, &self, index, value).await?;
+                }
+                ParsedUpdate::Class(index, value) => {
+                    PlayerClass::update(db, &self, index, value).await?;
+                }
+                ParsedUpdate::Data(value) => data_updates.push(value),
             }
         }
-        if !others.is_empty() {
+
+        if !data_updates.is_empty() {
             let mut model = self.into_active_model();
-            for (key, value) in others {
-                Self::modify(&mut model, &key, value);
+            for update in data_updates {
+                Self::apply_update(&mut model, update);
             }
             let model = model.update(db).await?;
-            Ok(model)
-        } else {
-            Ok(self)
+            return Ok(model);
         }
+
+        Ok(self)
     }
 }

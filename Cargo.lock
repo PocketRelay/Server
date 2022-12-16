@@ -26,21 +26,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "actix-cors"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b340e9cfa5b08690aae90fb61beb44e9b06f44fe3d0f93781aaa58cfba86245e"
-dependencies = [
- "actix-utils",
- "actix-web",
- "derive_more",
- "futures-util",
- "log",
- "once_cell",
- "smallvec",
-]
-
-[[package]]
 name = "actix-http"
 version = "3.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -51,7 +36,7 @@ dependencies = [
  "actix-service",
  "actix-utils",
  "ahash",
- "base64",
+ "base64 0.13.1",
  "bitflags",
  "bytes",
  "bytestring",
@@ -344,6 +329,12 @@ name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
+
+[[package]]
+name = "base64"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ea22880d78093b0cbe17c89f64a7d457941e65759157ec6cb31a31d652b05e5"
 
 [[package]]
 name = "base64ct"
@@ -826,6 +817,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8a2db397cb1c8772f31494cb8917e48cd1e64f0fa7efac59fbd741a0a8ce841"
 dependencies = [
  "crc32fast",
+ "libz-sys",
  "miniz_oxide",
 ]
 
@@ -1261,6 +1253,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libz-sys"
+version = "1.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9702761c3935f8cc2f101793272e202c72b99da8f4224a19ddcf1279a6450bbf"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "link-cplusplus"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1614,7 +1617,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03c64931a1a212348ec4f3b4362585eca7159d0d09cbdf4a7f74f02173596fd4"
 dependencies = [
- "base64",
+ "base64 0.13.1",
 ]
 
 [[package]]
@@ -1725,116 +1728,39 @@ checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
 
 [[package]]
 name = "pocket-relay"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
+ "actix-web",
+ "argon2",
+ "base64 0.20.0",
+ "blaze-pk",
+ "blaze-ssl-async",
  "dotenvy",
+ "flate2",
+ "futures-util",
  "local-ip-address",
  "log",
  "log4rs",
- "pocket-relay-core",
- "pocket-relay-http-server",
- "pocket-relay-main-server",
- "pocket-relay-mitm-server",
- "pocket-relay-redirector-server",
- "pocket-relay-utils",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-core"
-version = "0.1.2"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "futures-util",
- "log",
+ "mime_guess",
+ "password-hash",
  "pocket-relay-database",
- "pocket-relay-utils",
+ "rand_core 0.6.4",
+ "regex",
+ "reqwest",
+ "rust-embed",
  "serde",
  "tokio",
 ]
 
 [[package]]
 name = "pocket-relay-database"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "log",
- "pocket-relay-utils",
  "sea-orm",
  "sea-orm-migration",
  "serde",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-http-server"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-web",
- "log",
- "mime_guess",
- "pocket-relay-core",
- "pocket-relay-database",
- "pocket-relay-utils",
- "rust-embed",
- "serde",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-main-server"
-version = "0.1.0"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "log",
- "pocket-relay-core",
- "pocket-relay-database",
- "pocket-relay-utils",
- "rust-embed",
- "serde",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-mitm-server"
-version = "1.0.0"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "log",
- "pocket-relay-core",
- "pocket-relay-utils",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-redirector-server"
-version = "1.0.0"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "log",
- "pocket-relay-core",
- "pocket-relay-utils",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-utils"
-version = "0.1.1"
-dependencies = [
- "argon2",
- "blaze-pk",
- "log",
- "password-hash",
- "rand_core 0.6.4",
- "regex",
- "reqwest",
- "serde",
- "tokio",
 ]
 
 [[package]]
@@ -2041,7 +1967,7 @@ version = "0.11.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68cc60575865c7831548863cc02356512e3f1dc2f3f82cb837d7fc4cc8f3c97c"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "bytes",
  "encoding_rs",
  "futures-core",
@@ -2253,7 +2179,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0864aeff53f8c05aa08d86e5ef839d3dfcf07aeba2db32f12db0ef716e87bd55"
 dependencies = [
- "base64",
+ "base64 0.13.1",
 ]
 
 [[package]]

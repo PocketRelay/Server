@@ -1,8 +1,10 @@
 use log::{debug, info};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::Database as SeaDatabase;
-use std::path::Path;
-use tokio::fs::{create_dir_all, File};
+use std::{
+    fs::{create_dir_all, File},
+    path::Path,
+};
 
 pub mod dto;
 mod entities;
@@ -34,7 +36,7 @@ pub enum DatabaseType {
 /// `ty` The type of database to connect to
 pub async fn connect(ty: DatabaseType) -> DatabaseConnection {
     let url = match ty {
-        DatabaseType::Sqlite(file) => init_sqlite(file).await,
+        DatabaseType::Sqlite(file) => init_sqlite(file),
         DatabaseType::MySQL(url) => url,
     };
     let connection = SeaDatabase::connect(&url)
@@ -58,19 +60,15 @@ pub async fn connect(ty: DatabaseType) -> DatabaseConnection {
 /// to the file to create the sqlite URL.
 ///
 /// `file` The file to initialize
-async fn init_sqlite(file: String) -> String {
+fn init_sqlite(file: String) -> String {
     let path = Path::new(&file);
     if let Some(parent) = path.parent() {
         if !parent.exists() {
-            create_dir_all(parent)
-                .await
-                .expect("Unable to create parent directory for sqlite database");
+            create_dir_all(parent).expect("Unable to create parent directory for sqlite database");
         }
     }
     if !path.exists() {
-        File::create(path)
-            .await
-            .expect("Unable to create sqlite database file");
+        File::create(path).expect("Unable to create sqlite database file");
     }
     format!("sqlite:{file}")
 }

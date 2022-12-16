@@ -1,10 +1,16 @@
-use core::{constants, env, state::GlobalState};
 use dotenvy::dotenv;
 use log::info;
-use tokio::join;
-use utils::net::public_address;
+use servers::*;
+use state::GlobalState;
+use utils::{constants::VERSION, env, logging};
 
-mod logging;
+mod blaze;
+mod game;
+mod leaderboard;
+mod retriever;
+mod servers;
+mod state;
+mod utils;
 
 #[tokio::main]
 async fn main() {
@@ -14,64 +20,23 @@ async fn main() {
     // Initialize logging
     logging::setup();
 
-    info!("Starting Pocket Relay v{}", constants::VERSION);
+    info!("Starting Pocket Relay v{}", VERSION);
 
-    log_connection_urls().await;
+    logging::log_connection_urls().await;
 
     // Initialize global state
     GlobalState::init().await;
 
+    // Spawn redirector in its own task
+    tokio::spawn(redirector::start_server());
+
     if env::from_env(env::MITM_ENABLED) {
-        // MITM Mode only requires the Redirector & MITM servers
-        join!(
-            redirector_server::start_server(),
-            mitm_server::start_server()
-        );
+        // Start the MITM server
+        mitm::start_server().await;
     } else {
-        // Normal mode requires the Redirector, HTTP, and Main servers
-        join!(
-            redirector_server::start_server(),
-            http_server::start_server(),
-            main_server::start_server()
-        );
+        // Spawn the Main server in its own task
+        tokio::spawn(main::start_server());
+        // Start the HTTP server
+        http::start_server().await;
     }
-}
-
-/// Prints a list of possible urls that can be used to connect to
-/// this Pocket relay server
-async fn log_connection_urls() {
-    let http_port = env::from_env(env::HTTP_PORT);
-    let mut output = String::new();
-    if let Ok(local_address) = local_ip_address::local_ip() {
-        output.push_str("LAN: ");
-        output.push_str(&local_address.to_string());
-        if http_port != 80 {
-            output.push(':');
-            output.push_str(&http_port.to_string());
-        }
-    }
-    if let Some(public_address) = public_address().await {
-        if !output.is_empty() {
-            output.push_str(", ");
-        }
-
-        output.push_str("WAN: ");
-        output.push_str(&public_address);
-        if http_port != 80 {
-            output.push(':');
-            output.push_str(&http_port.to_string());
-        }
-    }
-
-    if !output.is_empty() {
-        output.push_str(", ");
-    }
-
-    output.push_str("LOCAL: 127.0.0.1");
-    if http_port != 80 {
-        output.push(':');
-        output.push_str(&http_port.to_string());
-    }
-
-    info!("Connection URLS ({output})");
 }

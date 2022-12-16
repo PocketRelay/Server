@@ -1,14 +1,12 @@
 use crate::{
+    dto::player_characters::PlayerCharacterUpdate,
     entities::{player_characters, players},
     DbResult, PlayerCharacter,
 };
-use log::warn;
 use sea_orm::{
-    ActiveModelTrait,
-    ActiveValue::{NotSet, Set},
-    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, IntoActiveModel, ModelTrait, QueryFilter,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait,
+    IntoActiveModel, ModelTrait, QueryFilter,
 };
-use utils::{parse::MEStringParser, types::PlayerID};
 
 impl PlayerCharacter {
     /// Finds all the player characters for the provided player model
@@ -23,7 +21,7 @@ impl PlayerCharacter {
     ///
     /// `db`        The databse connection
     /// `player_id` The player ID to find classes for
-    pub async fn find_by_pid(db: &DatabaseConnection, player_id: PlayerID) -> DbResult<Vec<Self>> {
+    pub async fn find_by_pid(db: &DatabaseConnection, player_id: u32) -> DbResult<Vec<Self>> {
         player_characters::Entity::find()
             .filter(player_characters::Column::PlayerId.eq(player_id))
             .all(db)
@@ -53,71 +51,36 @@ impl PlayerCharacter {
         }
 
         Ok(player_characters::ActiveModel {
-            id: NotSet,
             player_id: Set(player.id),
             index: Set(index),
-            kit_name: NotSet,
-            name: NotSet,
-            tint1: NotSet,
-            tint2: NotSet,
-            pattern: NotSet,
-            pattern_color: NotSet,
-            phong: NotSet,
-            emissive: NotSet,
-            skin_tone: NotSet,
-            seconds_played: NotSet,
-            timestamp_year: NotSet,
-            timestamp_month: NotSet,
-            timestamp_day: NotSet,
-            timestamp_seconds: NotSet,
-            powers: NotSet,
-            hotkeys: NotSet,
-            weapons: NotSet,
-            weapon_mods: NotSet,
-            deployed: NotSet,
-            leveled_up: NotSet,
+            ..Default::default()
         })
     }
 
     /// Attempts to parse the provided player character data string and update the fields
     /// on the provided active player character model. Will return a None option if parsing
     /// failed.
-    fn parse(model: &mut player_characters::ActiveModel, value: &str) -> Option<()> {
-        let mut parser = MEStringParser::new(value)?;
-        model.kit_name = Set(parser.next_str()?);
-        model.name = Set(parser.parse_next()?);
-        model.tint1 = Set(parser.parse_next()?);
-        model.tint2 = Set(parser.parse_next()?);
-        model.pattern = Set(parser.parse_next()?);
-        model.pattern_color = Set(parser.parse_next()?);
-        model.phong = Set(parser.parse_next()?);
-        model.emissive = Set(parser.parse_next()?);
-        model.skin_tone = Set(parser.parse_next()?);
-        model.seconds_played = Set(parser.parse_next()?);
-        model.timestamp_year = Set(parser.parse_next()?);
-        model.timestamp_month = Set(parser.parse_next()?);
-        model.timestamp_day = Set(parser.parse_next()?);
-        model.timestamp_seconds = Set(parser.parse_next()?);
-        model.powers = Set(parser.next_str()?);
-        model.hotkeys = Set(parser.next_str()?);
-        model.weapons = Set(parser.next_str()?);
-        model.weapon_mods = Set(parser.next_str()?);
-        model.deployed = Set(parser.next_bool()?);
-        model.leveled_up = Set(parser.next_bool()?);
-        Some(())
-    }
-
-    /// Attempts to parse the character index from the provided
-    /// character key. If the key is too short or doesn't contain
-    /// an index then an error is returned
-    fn parse_index(key: &str) -> Result<u16, PlayerCharactersError> {
-        if key.len() <= 4 {
-            return Err(PlayerCharactersError::InvalidKey);
-        }
-        match key[4..].parse() {
-            Ok(value) => Ok(value),
-            Err(_) => Err(PlayerCharactersError::InvalidIndex),
-        }
+    fn apply_update(model: &mut player_characters::ActiveModel, update: PlayerCharacterUpdate) {
+        model.kit_name = Set(update.kit_name);
+        model.name = Set(update.name);
+        model.tint1 = Set(update.tint1);
+        model.tint2 = Set(update.tint2);
+        model.pattern = Set(update.pattern);
+        model.pattern_color = Set(update.pattern_color);
+        model.phong = Set(update.phong);
+        model.emissive = Set(update.emissive);
+        model.skin_tone = Set(update.skin_tone);
+        model.seconds_played = Set(update.seconds_played);
+        model.timestamp_year = Set(update.timestamp_year);
+        model.timestamp_month = Set(update.timestamp_month);
+        model.timestamp_day = Set(update.timestamp_day);
+        model.timestamp_seconds = Set(update.timestamp_seconds);
+        model.powers = Set(update.powers);
+        model.hotkeys = Set(update.hotkeys);
+        model.weapons = Set(update.weapons);
+        model.weapon_mods = Set(update.weapon_mods);
+        model.deployed = Set(update.deployed);
+        model.leveled_up = Set(update.leveled_up);
     }
 
     /// Updates the provided character for the provided player
@@ -130,14 +93,11 @@ impl PlayerCharacter {
     pub async fn update(
         db: &DatabaseConnection,
         player: &players::Model,
-        key: &str,
-        value: &str,
-    ) -> Result<(), PlayerCharactersError> {
-        let index = Self::parse_index(key)?;
+        index: u16,
+        update: PlayerCharacterUpdate,
+    ) -> DbResult<()> {
         let mut model = Self::find(db, player, index).await?;
-        if Self::parse(&mut model, value).is_none() {
-            warn!("Failed to fully parse player character: {key} = {value}");
-        }
+        Self::apply_update(&mut model, update);
         model.save(db).await?;
         Ok(())
     }
@@ -168,18 +128,5 @@ impl PlayerCharacter {
             if self.deployed { "True" } else { "False" },
             if self.leveled_up { "True" } else { "False" },
         )
-    }
-}
-
-#[derive(Debug)]
-pub enum PlayerCharactersError {
-    InvalidKey,
-    InvalidIndex,
-    Database(DbErr),
-}
-
-impl From<DbErr> for PlayerCharactersError {
-    fn from(err: DbErr) -> Self {
-        Self::Database(err)
     }
 }

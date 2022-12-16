@@ -2,7 +2,6 @@
 
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
-use utils::types::PlayerID;
 
 /// Structure for a player class model stored in the database
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
@@ -14,13 +13,13 @@ pub struct Model {
     pub id: u32,
     /// The ID of the player this class belongs to
     #[serde(skip)]
-    pub player_id: PlayerID,
+    pub player_id: u32,
     /// The index of this class
     pub index: u16,
     /// The class name
     pub name: String,
     /// The class level
-    pub level: u32,
+    pub level: u8,
     /// The amount of exp the class has
     pub exp: f32,
     /// The number of promotions the class has
