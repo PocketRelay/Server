@@ -1,5 +1,5 @@
 [workspace.package]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
@@ -98,7 +98,6 @@ features = [
     "fixed_window_roller",
     "size_trigger",
 ]
-
 
 [profile.release]
 strip = true
