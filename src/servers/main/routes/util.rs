@@ -1,15 +1,26 @@
 use crate::{
-    blaze::{codec::Port, components::Util, errors::ServerError},
+    blaze::{
+        codec::Port,
+        components::Util,
+        errors::{ServerError, ServerResult},
+    },
     servers::main::{models::util::*, routes::HandleResult, session::Session},
     state::GlobalState,
     utils::{constants, dmap::load_dmap, env, parsing::parse_update, types::PlayerID},
 };
+use base64;
 use blaze_pk::{packet::Packet, types::TdfMap};
 use database::{dto::ParsedUpdate, PlayerCharacter, PlayerClass};
-use log::warn;
+use flate2::{write::ZlibEncoder, Compression};
+use log::{error, warn};
 use rust_embed::RustEmbed;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::try_join;
+use std::{
+    io::Write,
+    path::Path,
+    str::Chars,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+use tokio::{fs::read, try_join};
 
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -23,7 +34,7 @@ pub async fn route(session: &mut Session, component: Util, packet: &Packet) -> H
         Util::PreAuth => handle_pre_auth(packet),
         Util::PostAuth => handle_post_auth(session, packet),
         Util::Ping => handle_ping(packet),
-        Util::FetchClientConfig => handle_fetch_client_config(packet),
+        Util::FetchClientConfig => handle_fetch_client_config(packet).await,
         Util::SuspendUserPing => handle_suspend_user_ping(packet),
         Util::UserSettingsSave => handle_user_settings_save(session, packet).await,
         Util::GetTelemetryServer => handle_get_telemetry_server(packet),
@@ -139,8 +150,6 @@ fn handle_ping(packet: &Packet) -> HandleResult {
     Ok(packet.respond(response))
 }
 
-/// Contents of the compressed coalesced dmap file
-const ME3_COALESCED: &str = include_str!("../../../resources/data/coalesced.dmap");
 /// Contents of the entitlements dmap file
 const ME3_ENT: &str = include_str!("../../../resources/data/entitlements.dmap");
 /// Contents of the dime.xml file
@@ -162,7 +171,7 @@ const ME3_DIME: &str = include_str!("../../../resources/data/dime.xml");
 ///     "CFID": "ME3_DATA"
 /// }
 /// ```
-fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
+async fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
     let fetch_config: FetchConfigRequest = packet.decode()?;
     let config = match fetch_config.id.as_ref() {
         "ME3_DATA" => data_config(),
@@ -179,10 +188,10 @@ fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
             map.insert("VERSION", "40128");
             map
         }
-        "ME3_BINI_PC_COMPRESSED" => load_dmap(ME3_COALESCED),
+        "ME3_BINI_PC_COMPRESSED" => load_coalesced().await?,
         id => {
             if let Some(lang) = id.strip_prefix("ME3_LIVE_TLK_PC_") {
-                talk_file(lang)
+                talk_file(lang).await?
             } else {
                 TdfMap::default()
             }
@@ -193,23 +202,152 @@ fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
     Ok(packet.respond(response))
 }
 
-/// Contents of the default talk dmap file
-const ME3_TLK_DEFAULT: &str = include_str!("../../../resources/data/tlk/default.tlk.dmap");
+/// Loads the local coalesced if one is present falling back
+/// to the default one on error or if its missing
+async fn load_coalesced() -> ServerResult<ChunkMap> {
+    let local_path = Path::new("data/coalesced.bin");
+    if local_path.is_file() {
+        let bytes = match read(local_path).await {
+            Ok(value) => value,
+            Err(_) => {
+                error!("Unable to load local coalesced from data/coalesced.bin falling back to default.");
+                return default_coalesced();
+            }
+        };
+        match generate_coalesced(&bytes) {
+            Ok(value) => Ok(value),
+            Err(_) => {
+                error!("Unable to compress local coalesced from data/coalesced.bin falling back to default.");
+                default_coalesced()
+            }
+        }
+    } else {
+        default_coalesced()
+    }
+}
 
-/// Talk files imported from the resources folder
-#[derive(RustEmbed)]
-#[folder = "src/resources/data/tlk"]
-struct TLKFiles;
+/// Generates the compressed version of the default coalesced
+/// this default coalesced file is stored at
+///
+/// src/resources/data/coalesced.bin
+fn default_coalesced() -> ServerResult<ChunkMap> {
+    let bytes: &[u8] = include_bytes!("../../../resources/data/coalesced.bin");
+    generate_coalesced(bytes)
+}
+
+/// Generates a compressed caolesced from the provided bytes
+///
+/// `bytes` The coalesced bytes
+fn generate_coalesced(bytes: &[u8]) -> ServerResult<ChunkMap> {
+    let compressed: Vec<u8> = {
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::new(6));
+        encoder.write_all(bytes).map_err(|_| {
+            error!("Failed to encode coalesced with ZLib (write stage)");
+            ServerError::ServerUnavailable
+        })?;
+        encoder.finish().map_err(|_| {
+            error!("Failed to encode coalesced with ZLib (finish stage)");
+            ServerError::ServerUnavailable
+        })?
+    };
+
+    let mut encoded = Vec::with_capacity(16 + compressed.len());
+    encoded.push('N' as u8);
+    encoded.push('I' as u8);
+    encoded.push('B' as u8);
+    encoded.push('C' as u8);
+    encoded.extend_from_slice(&1u32.to_le_bytes());
+    encoded.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
+    encoded.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+    encoded.extend_from_slice(&compressed);
+    Ok(create_base64_map(&encoded))
+}
+
+/// Type of a base64 chunks map
+type ChunkMap = TdfMap<String, String>;
+
+/// Converts to provided slice of bytes into an ordered TdfMap where
+/// the keys are the chunk index and the values are the bytes encoded
+/// as base64 chunks. The map contains a CHUNK_SIZE key which states
+/// how large each chunk is and a DATA_SIZE key indicating the total
+/// length of the chunked value
+///
+/// `bytes` The bytes to convert
+fn create_base64_map(bytes: &[u8]) -> ChunkMap {
+    // The size of the chunks
+    const CHUNK_LENGTH: usize = 255;
+
+    let encoded: String = base64::encode(bytes);
+    let length = encoded.len();
+
+    let mut output: ChunkMap = TdfMap::with_capacity(length / CHUNK_LENGTH);
+
+    let mut chars: Chars = encoded.chars();
+    let mut index = 0;
+
+    loop {
+        let mut value = String::with_capacity(CHUNK_LENGTH);
+        let mut i = 0;
+        while i < CHUNK_LENGTH {
+            let next_char = match chars.next() {
+                Some(value) => value,
+                None => break,
+            };
+            value.push(next_char);
+            i += 1;
+        }
+        output.insert(format!("CHUNK_{}", index), value);
+        if i < CHUNK_LENGTH {
+            break;
+        }
+        index += 1;
+    }
+
+    output.insert("CHUNK_SIZE", CHUNK_LENGTH.to_string());
+    output.insert("DATA_SIZE", length.to_string());
+    output.order();
+    output
+}
 
 /// Retrieves a talk file for the specified language code falling back
 /// to the `ME3_TLK_DEFAULT` default talk file if it could not be found
-fn talk_file(lang: &str) -> TdfMap<String, String> {
-    let file_name = format!("{lang}.dmap");
-    if let Some(file) = TLKFiles::get(&file_name) {
-        let contents = String::from_utf8_lossy(file.data.as_ref());
-        load_dmap(contents.as_ref())
+///
+/// `lang` The talk file language
+async fn talk_file(lang: &str) -> ServerResult<ChunkMap> {
+    let file_name = format!("data/{}.tlk", lang);
+    let local_path = Path::new(&file_name);
+
+    if local_path.is_file() {
+        let bytes = match read(local_path).await {
+            Ok(value) => value,
+            Err(_) => {
+                error!("Unable to load local coalesced from data/coalesced.bin falling back to default.");
+                return default_coalesced();
+            }
+        };
+        Ok(create_base64_map(&bytes))
     } else {
-        load_dmap(ME3_TLK_DEFAULT)
+        Ok(default_talk_file(lang))
+    }
+}
+
+/// Default talk file values
+#[derive(RustEmbed)]
+#[folder = "src/resources/data/tlk"]
+struct DefaultTlkFiles;
+
+/// Generates the base64 map for the default talk file for the
+/// provided langauge. Will default to the default.tlk file if
+/// the language is not found
+///
+/// `lang` The language to get the default for
+fn default_talk_file(lang: &str) -> ChunkMap {
+    let file_name = format!("{}.tlk", lang);
+    if let Some(file) = DefaultTlkFiles::get(&file_name) {
+        create_base64_map(&file.data)
+    } else {
+        let bytes: &[u8] = include_bytes!("../../../resources/data/tlk/default.tlk");
+        create_base64_map(bytes)
     }
 }
 

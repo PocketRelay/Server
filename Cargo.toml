@@ -66,7 +66,8 @@ mime_guess = "2.0.4"
 argon2 = { version = "0.4" }
 password-hash = { version = "0.4.2" }
 rand_core = { version = "0.6", features = ["std"] }
-
+base64 = "0.20.0"
+flate2 = { version = "1.0.24", features = ["zlib"], default-features = false }
 
 # .env file loader
 dotenvy = "0.15.5"

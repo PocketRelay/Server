@@ -463,7 +463,7 @@ async fn load_local<'a>(path: &str, fallback: &'a str) -> Cow<'a, str> {
 /// ```
 async fn handle_tos_content(packet: &Packet) -> HandleResult {
     let content: Cow<'_, str> = load_local(
-        "terms_of_service.html",
+        "data/terms_of_service.html",
         include_str!("../../../resources/defaults/terms_of_service.html"),
     )
     .await;
@@ -490,7 +490,7 @@ async fn handle_tos_content(packet: &Packet) -> HandleResult {
 /// ```
 async fn handle_privacy_content(packet: &Packet) -> HandleResult {
     let content = load_local(
-        "privacy_policy.html",
+        "data/privacy_policy.html",
         include_str!("../../../resources/defaults/privacy_policy.html"),
     )
     .await;
