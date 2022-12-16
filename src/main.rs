@@ -1,10 +1,19 @@
-use core::{constants, env, state::GlobalState};
 use dotenvy::dotenv;
 use log::info;
-use tokio::join;
+use state::GlobalState;
 use utils::net::public_address;
 
+mod blaze;
+mod constants;
+mod env;
+mod game;
+mod leaderboard;
 mod logging;
+mod retriever;
+mod servers;
+mod state;
+
+use servers::{http, main, mitm, redirector};
 
 #[tokio::main]
 async fn main() {
@@ -21,19 +30,17 @@ async fn main() {
     // Initialize global state
     GlobalState::init().await;
 
+    // Spawn redirector in its own task
+    tokio::spawn(redirector::start_server());
+
     if env::from_env(env::MITM_ENABLED) {
-        // MITM Mode only requires the Redirector & MITM servers
-        join!(
-            redirector_server::start_server(),
-            mitm_server::start_server()
-        );
+        // Start the MITM server
+        mitm::start_server().await;
     } else {
-        // Normal mode requires the Redirector, HTTP, and Main servers
-        join!(
-            redirector_server::start_server(),
-            http_server::start_server(),
-            main_server::start_server()
-        );
+        // Spawn the Main server in its own task
+        tokio::spawn(main::start_server());
+        // Start the HTTP server
+        http::start_server().await;
     }
 }
 

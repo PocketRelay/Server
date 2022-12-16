@@ -1727,29 +1727,19 @@ checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
 name = "pocket-relay"
 version = "0.1.2"
 dependencies = [
+ "actix-cors",
+ "actix-web",
+ "blaze-pk",
+ "blaze-ssl-async",
  "dotenvy",
+ "futures-util",
  "local-ip-address",
  "log",
  "log4rs",
- "pocket-relay-core",
- "pocket-relay-http-server",
- "pocket-relay-main-server",
- "pocket-relay-mitm-server",
- "pocket-relay-redirector-server",
- "pocket-relay-utils",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-core"
-version = "0.1.2"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "futures-util",
- "log",
+ "mime_guess",
  "pocket-relay-database",
  "pocket-relay-utils",
+ "rust-embed",
  "serde",
  "tokio",
 ]
@@ -1764,61 +1754,6 @@ dependencies = [
  "sea-orm",
  "sea-orm-migration",
  "serde",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-http-server"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-web",
- "log",
- "mime_guess",
- "pocket-relay-core",
- "pocket-relay-database",
- "pocket-relay-utils",
- "rust-embed",
- "serde",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-main-server"
-version = "0.1.0"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "log",
- "pocket-relay-core",
- "pocket-relay-database",
- "pocket-relay-utils",
- "rust-embed",
- "serde",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-mitm-server"
-version = "1.0.0"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "log",
- "pocket-relay-core",
- "pocket-relay-utils",
- "tokio",
-]
-
-[[package]]
-name = "pocket-relay-redirector-server"
-version = "1.0.0"
-dependencies = [
- "blaze-pk",
- "blaze-ssl-async",
- "log",
- "pocket-relay-core",
- "pocket-relay-utils",
  "tokio",
 ]
 

@@ -1,4 +1,4 @@
-use core::env;
+use crate::env;
 use log::LevelFilter;
 use log4rs::{
     append::{
@@ -22,15 +22,7 @@ const LOGGING_MAX_SIZE: u64 = 1024 * 1024 * 5;
 /// The max number of logging files to keep before deleting
 const LOGGING_MAX_FILES: u32 = 8;
 /// The modules to enable logging for
-const LOGGING_MODULES: [&str; 7] = [
-    "pocket_relay_core",
-    "pocket_relay_database",
-    "pocket_relay_http_server",
-    "pocket_relay_main_server",
-    "pocket_relay_mitm_server",
-    "pocket_relay_redirector_server",
-    "actix_web",
-];
+const LOGGING_MODULES: [&str; 2] = ["pocket_relay", "actix_web"];
 
 /// Setup function for setting up the Log4rs logging configuring it
 /// for all the different modules and and setting up file and stdout logging
@@ -69,13 +61,7 @@ pub fn setup() {
 
     let mut builder = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout_appender)))
-        .appender(Appender::builder().build("file", Box::new(file_appender)))
-        .logger(
-            Logger::builder()
-                .appenders(APPENDERS)
-                .additive(false)
-                .build("pocket_relay", LevelFilter::Info),
-        );
+        .appender(Appender::builder().build("file", Box::new(file_appender)));
 
     for module in LOGGING_MODULES {
         builder = builder.logger(

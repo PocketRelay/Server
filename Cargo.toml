@@ -6,15 +6,7 @@ authors = ["Jacobtread <jacobtread@gmail.com>"]
 repository = "https://github.com/PocketRelay/ServerRust"
 
 [workspace]
-members = [
-    ".",
-    "core",
-    "utils",
-    "database",
-    "servers/http",
-    "servers/main",
-    "servers/redirector",
-]
+members = [".", "utils", "database"]
 exclude = ["tools"]
 
 [workspace.dependencies]
@@ -35,12 +27,10 @@ blaze-pk = { version = "^0.6" }
 # to the Cargo.toml file
 rust-embed = { version = "6.4.2", features = ["debug-embed"] }
 
-# Core application logic and shared state crate
-core = { path = "core", package="pocket-relay-core", version="^0.1" }
 # Isolated utilities crate
-utils = { path = "utils", package="pocket-relay-utils", version = "^0.1"  }
+utils = { path = "utils", package = "pocket-relay-utils", version = "^0.1" }
 # Isolated database crate
-database = { path = "database", package="pocket-relay-database", version = "^0.1" }
+database = { path = "database", package = "pocket-relay-database", version = "^0.1" }
 
 # Blaze SSLv3 async TCPStream implementation
 blaze-ssl-async = "^0.1"
@@ -59,20 +49,22 @@ authors.workspace = true
 
 [features]
 default = ["database-sqlite"]
-database-sqlite = ["core/database-sqlite"]
-database-mysql = ["core/database-mysql"]
+database-sqlite = []
+database-mysql = []
 
 [dependencies]
-core = { workspace = true }
-utils = { workspace = true }
 tokio = { workspace = true }
+utils = { workspace = true }
 log = { workspace = true }
-
-# Individual servers
-http-server = { path = "servers/http", package="pocket-relay-http-server", version = "^0.1" }
-main-server = { path = "servers/main", package="pocket-relay-main-server", version = "^0.1" }
-redirector-server = { path = "servers/redirector", package="pocket-relay-redirector-server", version = "^1" }
-mitm-server = { path = "servers/mitm", package="pocket-relay-mitm-server", version = "^1" }
+blaze-pk = { workspace = true }
+blaze-ssl-async = { workspace = true }
+serde = { workspace = true }
+database = { workspace = true }
+futures-util = "0.3"
+actix-web = { version = "4", default-features = false, features = ["macros"] }
+actix-cors = "0.6.4"
+rust-embed = { workspace = true }
+mime_guess = "2.0.4"
 
 # .env file loader
 dotenvy = "0.15.5"
