@@ -35,6 +35,7 @@ pub enum GameSetting {}
 
 /// States that can be matched from the ME3gameState attribute
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[allow(unused)]
 pub enum GameStateAttr {
     /// Game has no state attribute
     None,
@@ -58,6 +59,7 @@ pub enum GameStateAttr {
     Unknown(String),
 }
 
+#[allow(unused)]
 impl GameStateAttr {
     const ATTR_KEY: &str = "ME3gameState";
 
@@ -133,6 +135,7 @@ impl Decodable for GameState {
 value_type!(GameState, TdfType::VarInt);
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[allow(unused)]
 pub enum PlayerState {
     Disconnected,
     Connecting,
@@ -589,4 +592,5 @@ impl Encodable for HostMigrateFinished {
 ///  "USID": 0x1,
 ///}
 /// ```
+#[allow(unused)]
 pub struct AsyncMatchmakingStatus;

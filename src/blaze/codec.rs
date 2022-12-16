@@ -72,7 +72,7 @@ impl From<String> for InstanceHost {
 impl From<InstanceHost> for String {
     fn from(value: InstanceHost) -> Self {
         match value {
-            InstanceHost::Address(value) => value.to_ipv4(),
+            InstanceHost::Address(value) => value.to_string(),
             InstanceHost::Host(value) => value,
         }
     }
@@ -388,9 +388,13 @@ impl Debug for NetAddress {
 /// Display trait implementation for NetAddress. If the value is valid
 /// the value is translated into the IPv4 representation
 impl Display for NetAddress {
+    /// Converts the value stored in this NetAddress to an IPv4 string
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let value = self.to_ipv4();
-        f.write_str(&value)
+        let a: u8 = ((self.0 >> 24) & 0xFF) as u8;
+        let b: u8 = ((self.0 >> 16) & 0xFF) as u8;
+        let c: u8 = ((self.0 >> 8) & 0xFF) as u8;
+        let d: u8 = (self.0 & 0xFF) as u8;
+        write!(f, "{a}.{b}.{c}.{d}")
     }
 }
 
@@ -444,14 +448,5 @@ impl NetAddress {
             .parse::<u32>()
             .ok()
             .filter(|value| 255.ge(value))
-    }
-
-    /// Converts the value stored in this NetAddress to an IPv4 string
-    pub fn to_ipv4(&self) -> String {
-        let a = ((self.0 >> 24) & 0xFF) as u8;
-        let b = ((self.0 >> 16) & 0xFF) as u8;
-        let c = ((self.0 >> 8) & 0xFF) as u8;
-        let d = (self.0 & 0xFF) as u8;
-        format!("{a}.{b}.{c}.{d}")
     }
 }

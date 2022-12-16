@@ -11,7 +11,6 @@ pub type ServerResult<T> = Result<T, ServerError>;
 pub enum BlazeError {
     Decode(DecodeError),
     IO(io::Error),
-    Other(&'static str),
     Database(DbErr),
     Server(ServerError),
 }
@@ -21,7 +20,6 @@ impl Display for BlazeError {
         match self {
             Self::Decode(value) => write!(f, "Decode error occurred: {value:?}"),
             Self::IO(value) => write!(f, "IO error: {value:?}"),
-            Self::Other(value) => write!(f, "Other: {value}"),
             Self::Database(value) => write!(f, "Database error: {value}"),
             Self::Server(value) => write!(f, "Server error: {value:?}"),
         }

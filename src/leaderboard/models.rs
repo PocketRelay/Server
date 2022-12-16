@@ -38,16 +38,6 @@ impl LeaderboardEntityGroup {
     /// Leaderboard contents are cached for 1 hour
     const LIFETIME: Duration = Duration::from_secs(60 * 60);
 
-    /// Creates a new entity group from the provided values that expires
-    /// after the provided duration is elapsed
-    ///
-    /// `values`   The leaderboard values
-    /// `duration` The duration the entity will be used for
-    pub fn new(values: Vec<LeaderboardEntry>, duration: Duration) -> Self {
-        let expires = SystemTime::now() + duration;
-        Self { values, expires }
-    }
-
     pub fn is_valid(&self) -> bool {
         let now = SystemTime::now();
         now.lt(&self.expires)
