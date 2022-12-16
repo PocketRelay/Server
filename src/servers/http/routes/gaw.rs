@@ -1,7 +1,7 @@
 //! Routes for the Galaxy At War API used by the Mass Effect 3 client in order
 //! to retrieve and increase the Galxay At War values for a player
 
-use crate::{env, state::GlobalState};
+use crate::{env, state::GlobalState, utils::random::generate_random_string};
 use actix_web::{
     get,
     http::{header::ContentType, StatusCode},
@@ -60,7 +60,7 @@ struct AuthQuery {
 async fn shared_token_login(query: Query<AuthQuery>) -> GAWResult<impl Responder> {
     let db = GlobalState::database();
     let player = get_player(db, &query.auth).await?;
-    let (player, token) = player.with_token(db).await?;
+    let (player, token) = player.with_token(db, generate_random_string).await?;
 
     let id = player.id;
     let sess = format!("{:x}", id);

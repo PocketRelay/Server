@@ -6,6 +6,7 @@ use crate::{
         session::Session,
     },
     state::GlobalState,
+    utils::random::generate_random_string,
 };
 use blaze_pk::packet::Packet;
 use database::Player;
@@ -47,7 +48,7 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
         .await?
         .ok_or(ServerError::InvalidSession)?;
 
-    let (player, session_token) = player.with_token(db).await?;
+    let (player, session_token) = player.with_token(db, generate_random_string).await?;
     let player = session.set_player(player);
     let response = AuthResponse::new(player, session_token, true);
     Ok(packet.respond(response))

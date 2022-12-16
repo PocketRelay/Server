@@ -16,7 +16,6 @@ mysql = ["sea-orm/sqlx-mysql", "sea-orm-migration/sqlx-mysql"]
 tokio = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
-rand_core = { workspace = true }
 chrono = "0.4"
 
 [dependencies.sea-orm]

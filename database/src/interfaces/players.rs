@@ -6,7 +6,6 @@ use crate::{
     entities::{player_characters, player_classes, players},
     DbResult, GalaxyAtWar, Player, PlayerCharacter, PlayerClass,
 };
-use rand_core::{OsRng, RngCore};
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
@@ -271,40 +270,21 @@ impl Player {
     ///
     /// `db`     The database instance
     /// `player` The player to get the token for
-    pub async fn with_token(self, db: &DatabaseConnection) -> DbResult<(Self, String)> {
+    /// `gen_fn` Function for generating a new token if there is not one
+    pub async fn with_token(
+        self,
+        db: &DatabaseConnection,
+        gen_fn: fn(usize) -> String,
+    ) -> DbResult<(Self, String)> {
         let token = match &self.session_token {
             None => {
-                let token = Self::generate_random_string(Self::TOKEN_LENGTH);
+                let token = gen_fn(Self::TOKEN_LENGTH);
                 let out = self.set_token(db, token).await?;
                 return Ok(out);
             }
             Some(value) => value.clone(),
         };
         Ok((self, token))
-    }
-
-    fn generate_random_string(len: usize) -> String {
-        const RANGE: u32 = 26 + 26 + 10;
-        const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
-                    abcdefghijklmnopqrstuvwxyz\
-                    0123456789";
-
-        let mut rand = OsRng;
-        let mut output = String::with_capacity(len);
-
-        // Loop until the string length is finished
-        for _ in 0..len {
-            // Loop until a valid random is found
-            loop {
-                let var = rand.next_u32() >> (32 - 6);
-                if var < RANGE {
-                    output.push(char::from(CHARSET[var as usize]));
-                    break;
-                }
-            }
-        }
-
-        output
     }
 
     pub fn encode_base(&self) -> String {

@@ -9,6 +9,7 @@ use crate::{
         env,
         hashing::{hash_password, verify_password},
         parsing::parse_updates,
+        random::generate_random_string,
         types::PlayerID,
         validate::is_email,
     },
@@ -107,7 +108,7 @@ async fn handle_auth_request(session: &mut Session, packet: &Packet) -> HandleRe
         AuthRequest::Login { email, password } => handle_login_email(db, email, password).await,
         AuthRequest::Origin { token } => handle_login_origin(db, token).await,
     }?;
-    let (player, session_token) = player.with_token(db).await?;
+    let (player, session_token) = player.with_token(db, generate_random_string).await?;
     let player = session.set_player(player);
     let response = AuthResponse::new(player, session_token, silent);
     Ok(packet.respond(response))
@@ -327,7 +328,9 @@ async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleR
         .player
         .take()
         .ok_or(ServerError::FailedNoLoginAction)?;
-    let (player, session_token) = player.with_token(GlobalState::database()).await?;
+    let (player, session_token) = player
+        .with_token(GlobalState::database(), generate_random_string)
+        .await?;
     let player = session.set_player(player);
     let response = PersonaResponse::new(player, session_token);
     Ok(packet.respond(response))
@@ -409,7 +412,7 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
 
     let display_name = email.chars().take(99).collect::<String>();
     let player: Player = Player::create(db, email, display_name, hashed_password, false).await?;
-    let (player, session_token) = player.with_token(db).await?;
+    let (player, session_token) = player.with_token(db, generate_random_string).await?;
     let player = session.set_player(player);
     let response = AuthResponse::new(player, session_token, false);
     Ok(packet.respond(response))
