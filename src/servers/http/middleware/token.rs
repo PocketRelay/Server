@@ -1,7 +1,9 @@
 use crate::servers::http::stores::token::TokenStore;
-use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
-use actix_web::http::StatusCode;
-use actix_web::{Error, ResponseError};
+use actix_web::{
+    dev::{Service, ServiceRequest, ServiceResponse, Transform},
+    http::StatusCode,
+    Error, ResponseError,
+};
 use std::fmt::Display;
 use std::future::{ready, Future, Ready};
 use std::pin::Pin;

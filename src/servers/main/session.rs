@@ -5,10 +5,6 @@ use super::{
     models::session::{SessionUpdate, SetSession},
     routes,
 };
-use crate::utils::{
-    net::public_address,
-    types::{GameID, SessionID},
-};
 use crate::{
     blaze::{
         append_packet_decoded,
@@ -18,6 +14,10 @@ use crate::{
     },
     game::player::{GamePlayer, SessionMessage},
     state::GlobalState,
+    utils::{
+        net::public_address,
+        types::{GameID, SessionID},
+    },
 };
 use blaze_pk::packet::{Packet, PacketComponents, PacketType};
 use database::Player;

@@ -2,10 +2,12 @@
 //! to retrieve and increase the Galxay At War values for a player
 
 use crate::{env, state::GlobalState};
-use actix_web::http::header::ContentType;
-use actix_web::http::StatusCode;
-use actix_web::web::{Path, Query, ServiceConfig};
-use actix_web::{get, HttpResponse, Responder, ResponseError};
+use actix_web::{
+    get,
+    http::{header::ContentType, StatusCode},
+    web::{Path, Query, ServiceConfig},
+    HttpResponse, Responder, ResponseError,
+};
 use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player};
 use serde::Deserialize;
 use std::fmt::Display;

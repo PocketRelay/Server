@@ -1,13 +1,12 @@
-use crate::blaze::errors::ServerError;
-use crate::servers::main::routes::HandleResult;
-use crate::servers::main::{
-    models::{
-        auth::AuthResponse,
-        user_sessions::{HardwareFlagRequest, ResumeSessionRequest, UpdateNetworkRequest},
+use crate::{
+    blaze::{components::UserSessions, errors::ServerError},
+    servers::main::{
+        models::{auth::AuthResponse, user_sessions::*},
+        routes::HandleResult,
+        session::Session,
     },
-    session::Session,
+    state::GlobalState,
 };
-use crate::{blaze::components::UserSessions, state::GlobalState};
 use blaze_pk::packet::Packet;
 use database::Player;
 

@@ -1,7 +1,6 @@
 //! Modules contains the component definitions for the servers used throughout
 //! this application.
 
-use blaze_pk;
 use blaze_pk::define_components;
 
 define_components! {

@@ -1,5 +1,4 @@
-use crate::utils::types::GameID;
-use crate::{game::GameSnapshot, state::GlobalState};
+use crate::{game::GameSnapshot, state::GlobalState, utils::types::GameID};
 use actix_web::{
     get,
     http::StatusCode,

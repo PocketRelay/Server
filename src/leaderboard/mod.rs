@@ -1,6 +1,6 @@
 //! Module for leaderboard related logic
 
-use self::models::{LeaderboardEntityGroup, LeaderboardEntry, LeaderboardType};
+use self::models::*;
 use crate::state::GlobalState;
 use database::{DatabaseConnection, DbResult, Player};
 use tokio::sync::RwLock;

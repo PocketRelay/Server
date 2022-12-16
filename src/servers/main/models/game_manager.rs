@@ -1,9 +1,11 @@
-use crate::game::{
-    codec::{GameState, RemoveReason},
-    rules::{MatchRules, RuleSet},
-    AttrMap,
+use crate::{
+    game::{
+        codec::{GameState, RemoveReason},
+        rules::{MatchRules, RuleSet},
+        AttrMap,
+    },
+    utils::types::{GameID, PlayerID, SessionID},
 };
-use crate::utils::types::{GameID, PlayerID, SessionID};
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::{DecodeError, DecodeResult},

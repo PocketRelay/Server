@@ -1,5 +1,4 @@
-use crate::leaderboard::models::LeaderboardEntry;
-use crate::utils::types::PlayerID;
+use crate::{leaderboard::models::LeaderboardEntry, utils::types::PlayerID};
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::{DecodeError, DecodeResult},

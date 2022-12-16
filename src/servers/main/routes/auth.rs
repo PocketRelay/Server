@@ -1,19 +1,17 @@
-use crate::blaze::components::Authentication;
-use crate::blaze::errors::{ServerError, ServerResult};
-use crate::env;
-use crate::servers::main::models::auth::{
-    AuthRequest, AuthResponse, CreateAccountRequest, Entitlement, ForgotPasswordRequest,
-    GetTokenResponse, LegalContent, LegalDocsInfo, ListEntitlementsRequest,
-    ListEntitlementsResponse, PersonaResponse,
-};
-use crate::servers::main::routes::HandleResult;
-use crate::servers::main::session::Session;
-use crate::state::GlobalState;
-use crate::utils::parsing::parse_updates;
-use crate::utils::types::PlayerID;
-use crate::utils::{
-    hashing::{hash_password, verify_password},
-    validate::is_email,
+use crate::{
+    blaze::{
+        components::Authentication,
+        errors::{ServerError, ServerResult},
+    },
+    servers::main::{models::auth::*, routes::HandleResult, session::Session},
+    state::GlobalState,
+    utils::{
+        env,
+        hashing::{hash_password, verify_password},
+        parsing::parse_updates,
+        types::PlayerID,
+        validate::is_email,
+    },
 };
 use blaze_pk::packet::Packet;
 use database::{DatabaseConnection, Player};

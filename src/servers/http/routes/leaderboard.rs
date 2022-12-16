@@ -1,8 +1,4 @@
-use crate::utils::types::PlayerID;
-use crate::{
-    leaderboard::models::{LeaderboardEntityGroup, LeaderboardEntry, LeaderboardType},
-    state::GlobalState,
-};
+use crate::{leaderboard::models::*, state::GlobalState, utils::types::PlayerID};
 use actix_web::{
     get,
     http::StatusCode,

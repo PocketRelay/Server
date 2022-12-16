@@ -1,5 +1,7 @@
-use super::enums::{Difficulty, EnemyType, GameMap, MatchRule};
-use super::AttrMap;
+use super::{
+    enums::{Difficulty, EnemyType, GameMap, MatchRule},
+    AttrMap,
+};
 use log::debug;
 
 // DLC Requirement attributes

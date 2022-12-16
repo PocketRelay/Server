@@ -1,5 +1,8 @@
-use actix_web::web::ServiceConfig;
-use actix_web::{get, web, HttpResponse, Responder};
+use actix_web::{
+    get,
+    web::{self, ServiceConfig},
+    HttpResponse, Responder,
+};
 use rust_embed::RustEmbed;
 
 /// Public resource content folder

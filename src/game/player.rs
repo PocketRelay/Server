@@ -1,9 +1,11 @@
 use super::codec::PlayerState;
-use crate::blaze::{
-    codec::{NetData, UpdateExtDataAttr},
-    components::{Components, UserSessions},
+use crate::{
+    blaze::{
+        codec::{NetData, UpdateExtDataAttr},
+        components::{Components, UserSessions},
+    },
+    utils::types::{GameID, PlayerID, SessionID},
 };
-use crate::utils::types::{GameID, PlayerID, SessionID};
 use blaze_pk::{codec::Encodable, packet::Packet, tag::TdfType, writer::TdfWriter};
 use serde::Serialize;
 use tokio::{join, sync::mpsc};

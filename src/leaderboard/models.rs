@@ -1,6 +1,6 @@
+use crate::utils::types::PlayerID;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime};
-use crate::utils::types::PlayerID;
 
 /// Structure for an entry in a leaderboard group
 #[derive(Serialize, Deserialize, Clone)]

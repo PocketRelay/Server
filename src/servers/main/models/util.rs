@@ -1,5 +1,7 @@
-use crate::utils::types::PlayerID;
-use crate::{blaze::codec::Port, constants};
+use crate::{
+    blaze::codec::Port,
+    utils::{constants, types::PlayerID},
+};
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeResult,

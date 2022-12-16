@@ -1,21 +1,11 @@
-use crate::blaze::codec::Port;
-use crate::blaze::components::Util;
-use crate::blaze::errors::ServerError;
-use crate::constants::{self, VERSION};
-use crate::env;
-use crate::servers::main::models::util::{
-    FetchConfigRequest, FetchConfigResponse, PingResponse, PostAuthResponse, PreAuthResponse,
-    SettingsResponse, SettingsSaveRequest, SuspendPingRequest, TelemetryServer, TickerServer,
+use crate::{
+    blaze::{codec::Port, components::Util, errors::ServerError},
+    servers::main::{models::util::*, routes::HandleResult, session::Session},
+    state::GlobalState,
+    utils::{constants, dmap::load_dmap, env, parsing::parse_update, types::PlayerID},
 };
-use crate::servers::main::routes::HandleResult;
-use crate::servers::main::session::Session;
-use crate::state::GlobalState;
-use crate::utils::dmap::load_dmap;
-use crate::utils::parsing::parse_update;
-use crate::utils::types::PlayerID;
 use blaze_pk::{packet::Packet, types::TdfMap};
-use database::dto::ParsedUpdate;
-use database::{PlayerCharacter, PlayerClass};
+use database::{dto::ParsedUpdate, PlayerCharacter, PlayerClass};
 use log::warn;
 use rust_embed::RustEmbed;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -232,7 +222,7 @@ fn messages() -> TdfMap<String, String> {
         title: Some("Pocket Relay".to_owned()),
         message: format!(
             "You are connected to Pocket Relay <font color='#FFFF66'>(v{})</font>",
-            VERSION,
+            constants::VERSION,
         ),
         priority: 1,
         tracking_id: None,

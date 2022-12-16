@@ -1,9 +1,8 @@
-//! Utilties module for Pocket Relay. Isolates functionality such as
-//! password hashing, DNS resolving and other functionality from the
-//! core project.
-
+pub mod constants;
 pub mod dmap;
+pub mod env;
 pub mod hashing;
+pub mod logging;
 pub mod net;
 pub mod parsing;
 pub mod random;

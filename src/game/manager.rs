@@ -1,9 +1,9 @@
 use super::{
     codec::{GameState, RemoveReason},
+    player::GamePlayer,
     rules::RuleSet,
-    GameSnapshot,
+    AttrMap, Game, GameSnapshot,
 };
-use super::{player::GamePlayer, AttrMap, Game};
 use crate::utils::types::{GameID, PlayerID, SessionID};
 use blaze_pk::types::TdfMap;
 use log::debug;

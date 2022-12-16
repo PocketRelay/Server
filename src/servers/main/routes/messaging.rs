@@ -1,10 +1,8 @@
-use crate::blaze::components::{Components, Messaging};
-use crate::servers::main::routes::HandleResult;
-use crate::servers::main::{
-    models::messaging::{FetchMessageResponse, MessageNotify},
-    session::Session,
+use crate::{
+    blaze::components::{Components, Messaging},
+    servers::main::{models::messaging::*, routes::HandleResult, session::Session},
+    utils::{constants, env},
 };
-use crate::{constants::VERSION, env};
 use blaze_pk::packet::Packet;
 
 /// Routing function for handling packets with the `Stats` component and routing them
@@ -71,7 +69,7 @@ fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult
 fn get_menu_message(session: &Session, player_name: &str) -> String {
     let mut message = env::env(env::MENU_MESSAGE);
     if message.contains("{v}") {
-        message = message.replace("{v}", VERSION);
+        message = message.replace("{v}", constants::VERSION);
     }
     if message.contains("{n}") {
         message = message.replace("{n}", player_name);

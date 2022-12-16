@@ -1,5 +1,7 @@
-use crate::state::GlobalState;
-use crate::utils::{hashing::hash_password, types::PlayerID, validate::is_email};
+use crate::{
+    state::GlobalState,
+    utils::{hashing::hash_password, types::PlayerID, validate::is_email},
+};
 use actix_web::{
     delete, get,
     http::StatusCode,

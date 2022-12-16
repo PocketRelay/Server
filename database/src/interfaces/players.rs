@@ -6,6 +6,7 @@ use crate::{
     entities::{player_characters, player_classes, players},
     DbResult, GalaxyAtWar, Player, PlayerCharacter, PlayerClass,
 };
+use rand_core::{OsRng, RngCore};
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
@@ -14,7 +15,6 @@ use sea_orm::{
 };
 use std::iter::Iterator;
 use tokio::try_join;
-use rand_core::{OsRng, RngCore};
 
 impl Player {
     /// The length of player session tokens

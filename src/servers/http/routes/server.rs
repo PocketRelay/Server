@@ -1,9 +1,11 @@
 //! This modules contains routes that handle serving information
 //! about the server such as the version and services running
 
-use actix_web::get;
-use actix_web::web::{Json, ServiceConfig};
-use crate::{constants, env};
+use crate::utils::{constants, env};
+use actix_web::{
+    get,
+    web::{Json, ServiceConfig},
+};
 use serde::Serialize;
 
 /// Function for configuring the services in this route

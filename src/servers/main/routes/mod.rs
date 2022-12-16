@@ -1,5 +1,7 @@
-use super::session::Session;
-use crate::blaze::{components::Components, errors::BlazeError};
+use crate::{
+    blaze::{components::Components, errors::BlazeError},
+    servers::main::session::Session,
+};
 use blaze_pk::packet::Packet;
 
 mod auth;

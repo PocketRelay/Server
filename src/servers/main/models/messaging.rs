@@ -1,5 +1,7 @@
-use crate::blaze::components::{Components, UserSessions};
-use crate::utils::types::PlayerID;
+use crate::{
+    blaze::components::{Components, UserSessions},
+    utils::types::PlayerID,
+};
 use blaze_pk::{codec::Encodable, packet::PacketComponents, tag::TdfType, writer::TdfWriter};
 
 /// Structure of the response to a fetch messages request. Which tells

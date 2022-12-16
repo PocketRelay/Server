@@ -1,5 +1,8 @@
-use crate::utils::net::{accept_stream, listener};
-use crate::{env, state::GlobalState};
+use crate::{
+    env,
+    state::GlobalState,
+    utils::net::{accept_stream, listener},
+};
 use session::Session;
 use tokio::sync::mpsc;
 

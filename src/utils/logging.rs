@@ -1,5 +1,5 @@
-use crate::env;
-use log::LevelFilter;
+use crate::{env, utils::net::public_address};
+use log::{info, LevelFilter};
 use log4rs::{
     append::{
         console::ConsoleAppender,
@@ -81,4 +81,43 @@ pub fn setup() {
         .expect("Failed to create logging config");
 
     init_config(config).expect("Unable to initialize logger");
+}
+
+/// Prints a list of possible urls that can be used to connect to
+/// this Pocket relay server
+pub async fn log_connection_urls() {
+    let http_port = env::from_env(env::HTTP_PORT);
+    let mut output = String::new();
+    if let Ok(local_address) = local_ip_address::local_ip() {
+        output.push_str("LAN: ");
+        output.push_str(&local_address.to_string());
+        if http_port != 80 {
+            output.push(':');
+            output.push_str(&http_port.to_string());
+        }
+    }
+    if let Some(public_address) = public_address().await {
+        if !output.is_empty() {
+            output.push_str(", ");
+        }
+
+        output.push_str("WAN: ");
+        output.push_str(&public_address);
+        if http_port != 80 {
+            output.push(':');
+            output.push_str(&http_port.to_string());
+        }
+    }
+
+    if !output.is_empty() {
+        output.push_str(", ");
+    }
+
+    output.push_str("LOCAL: 127.0.0.1");
+    if http_port != 80 {
+        output.push(':');
+        output.push_str(&http_port.to_string());
+    }
+
+    info!("Connection URLS ({output})");
 }

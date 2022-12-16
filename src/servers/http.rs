@@ -1,7 +1,6 @@
 use crate::env;
 use actix_cors::Cors;
-use actix_web::middleware::Logger;
-use actix_web::{App, HttpServer};
+use actix_web::{middleware::Logger, App, HttpServer};
 use log::{error, info};
 use std::sync::Arc;
 use stores::token::TokenStore;

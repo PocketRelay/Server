@@ -1,5 +1,5 @@
 use super::{
-    codec::{OriginLoginRequest, OriginLoginResponse, SettingsResponse},
+    models::{OriginLoginRequest, OriginLoginResponse, SettingsResponse},
     RetSession, Retriever,
 };
 use crate::blaze::components::{Authentication, Components, Util};

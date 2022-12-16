@@ -1,7 +1,7 @@
-use crate::blaze::components::{AssociationLists, Components, GameReporting};
-use crate::servers::main::models::other::{AssocListResponse, GameReportResponse};
-use crate::servers::main::routes::HandleResult;
-use crate::servers::main::session::Session;
+use crate::{
+    blaze::components::{AssociationLists, Components, GameReporting},
+    servers::main::{models::other::*, routes::HandleResult, session::Session},
+};
 use blaze_pk::packet::Packet;
 
 /// Routing function for handling packets with the `GameReporting` component and routing them
