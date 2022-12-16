@@ -23,12 +23,12 @@ const LOGGING_MAX_SIZE: u64 = 1024 * 1024 * 5;
 const LOGGING_MAX_FILES: u32 = 8;
 /// The modules to enable logging for
 const LOGGING_MODULES: [&str; 7] = [
-    "core",
-    "database",
-    "http_server",
-    "main_server",
-    "mitm_server",
-    "redirector_server",
+    "pocket_relay_core",
+    "pocket_relay_database",
+    "pocket_relay_http_server",
+    "pocket_relay_main_server",
+    "pocket_relay_mitm_server",
+    "pocket_relay_redirector_server",
     "actix_web",
 ];
 
