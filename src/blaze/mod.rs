@@ -1,6 +1,7 @@
 use blaze_pk::{packet::Packet, reader::TdfReader};
 
 pub mod codec;
+#[allow(clippy::enum_variant_names)]
 pub mod components;
 pub mod errors;
 
