@@ -7,7 +7,6 @@ repository = "https://github.com/PocketRelay/ServerRust"
 
 [workspace]
 members = [".", "database"]
-exclude = ["tools"]
 
 [workspace.dependencies]
 # Tokio async runtime

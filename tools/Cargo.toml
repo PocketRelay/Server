@@ -11,7 +11,13 @@ authors = ["Jacobtread <jacobtread@gmail.com>"]
 [workspace]
 
 [dependencies]
-tokio = { version = "1", features = ["fs"] }
 base64 = "0.20.0"
 blaze-pk = "0.6.0"
 flate2 = { version = "1.0.24", features = ["zlib"], default-features = false }
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "coalesced"
+harness = false

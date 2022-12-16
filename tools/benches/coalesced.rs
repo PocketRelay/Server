@@ -1,20 +1,11 @@
 use blaze_pk::types::TdfMap;
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use flate2::{write::ZlibEncoder, Compression};
 use std::{
     fs::{create_dir_all, read, read_dir, write},
     io::{self, Write},
     path::Path,
 };
-
-fn main() {
-    let root = Path::new("tools/input/tlk");
-    let out_root = Path::new("tools/output/tlk");
-    process_language_files(root, out_root).unwrap();
-
-    let coal_path = Path::new("tools/input/coalesced.bin");
-    let out_path = Path::new("tools/output/coalesced.dmap");
-    process_coalesced(coal_path, out_path).unwrap();
-}
 
 pub fn process_coalesced(path: &Path, out: &Path) -> io::Result<()> {
     let bytes = read(path)?;
@@ -47,7 +38,7 @@ pub fn compress_coalesced(bytes: &[u8]) -> io::Result<Vec<u8>> {
 }
 
 pub fn process_language_files(root: &Path, out_root: &Path) -> io::Result<()> {
-    let mut files = read_dir(root)?;
+    let files = read_dir(root)?;
     for file in files {
         let file = file?;
         let file_name = file.file_name();
@@ -118,3 +109,16 @@ pub fn base64_chunk_map(bytes: Vec<u8>) -> TdfMap<String, String> {
     output.order();
     output
 }
+
+fn criterion_benchmark(c: &mut Criterion) {
+    c.bench_function("process coalesced", |b| {
+        b.iter(|| {
+            let coal_path = Path::new("tools/input/coalesced.bin");
+            let out_path = Path::new("tools/output/coalesced.dmap");
+            process_coalesced(black_box(coal_path), black_box(out_path))
+        })
+    });
+}
+
+criterion_group!(benches, criterion_benchmark);
+criterion_main!(benches);
