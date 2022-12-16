@@ -26,21 +26,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "actix-cors"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b340e9cfa5b08690aae90fb61beb44e9b06f44fe3d0f93781aaa58cfba86245e"
-dependencies = [
- "actix-utils",
- "actix-web",
- "derive_more",
- "futures-util",
- "log",
- "once_cell",
- "smallvec",
-]
-
-[[package]]
 name = "actix-http"
 version = "3.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1745,7 +1730,6 @@ checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
 name = "pocket-relay"
 version = "0.1.3"
 dependencies = [
- "actix-cors",
  "actix-web",
  "argon2",
  "base64 0.20.0",

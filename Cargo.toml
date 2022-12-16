@@ -54,7 +54,6 @@ database = { path = "database", package = "pocket-relay-database", version = "^0
 
 # Actix Web framework and cors library to enable cors
 actix-web = { version = "4", default-features = false, features = ["macros"] }
-actix-cors = "0.6.4"
 
 # Resource embedding using debug-embed to always resolve relative 
 # to the Cargo.toml file and mime guess for guessing file type
