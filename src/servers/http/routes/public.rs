@@ -4,7 +4,7 @@ use rust_embed::RustEmbed;
 
 /// Public resource content folder
 #[derive(RustEmbed)]
-#[folder = "src/servers/http/public"]
+#[folder = "src/resources/public"]
 struct PublicContent;
 
 /// Function for configuring the services in this route

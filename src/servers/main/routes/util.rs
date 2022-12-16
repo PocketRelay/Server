@@ -150,11 +150,11 @@ fn handle_ping(packet: &Packet) -> HandleResult {
 }
 
 /// Contents of the compressed coalesced dmap file
-const ME3_COALESCED: &str = include_str!("../resources/data/coalesced.dmap");
+const ME3_COALESCED: &str = include_str!("../../../resources/data/coalesced.dmap");
 /// Contents of the entitlements dmap file
-const ME3_ENT: &str = include_str!("../resources/data/entitlements.dmap");
+const ME3_ENT: &str = include_str!("../../../resources/data/entitlements.dmap");
 /// Contents of the dime.xml file
-const ME3_DIME: &str = include_str!("../resources/data/dime.xml");
+const ME3_DIME: &str = include_str!("../../../resources/data/dime.xml");
 
 /// Handles the client requesting to fetch a configuration from the server. The different
 /// types of configuration are as follows:
@@ -204,11 +204,11 @@ fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
 }
 
 /// Contents of the default talk dmap file
-const ME3_TLK_DEFAULT: &str = include_str!("../resources/data/tlk/default.tlk.dmap");
+const ME3_TLK_DEFAULT: &str = include_str!("../../../resources/data/tlk/default.tlk.dmap");
 
 /// Talk files imported from the resources folder
 #[derive(RustEmbed)]
-#[folder = "src/servers/main/resources/data/tlk"]
+#[folder = "src/resources/data/tlk"]
 struct TLKFiles;
 
 /// Retrieves a talk file for the specified language code falling back

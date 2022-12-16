@@ -42,6 +42,8 @@ description = "Pocket Relay Server"
 repository = "https://github.com/PocketRelay/ServerRust"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
+# Glob to ensure resources is included 
+include = ["src/**/*"]
 
 version.workspace = true
 edition.workspace = true
