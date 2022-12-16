@@ -50,7 +50,7 @@ blaze-pk = { version = "^0.6" }
 blaze-ssl-async = "^0.1"
 
 # Isolated database crate
-database = { path = "database", package = "pocket-relay-database", version = "^0.1" }
+database = { path = "database", package = "pocket-relay-database", version = "^0.2" }
 
 # Actix Web framework and cors library to enable cors
 actix-web = { version = "4", default-features = false, features = ["macros"] }
