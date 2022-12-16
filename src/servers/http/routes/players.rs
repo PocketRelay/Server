@@ -13,6 +13,7 @@ use database::{
     dto::players::PlayerUpdate, DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter,
     PlayerClass,
 };
+use futures_util::try_join;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
@@ -274,7 +275,13 @@ struct FullPlayerResponse {
 async fn get_player_full(path: Path<PlayerID>) -> PlayersResult<FullPlayerResponse> {
     let db = GlobalState::database();
     let player: Player = find_player(db, path.into_inner()).await?;
-    let (classes, characters, galaxy_at_war) = player.collect_relations(db).await?;
+
+    let (classes, characters, galaxy_at_war) = try_join!(
+        PlayerClass::find_all(db, &player),
+        PlayerCharacter::find_all(db, &player),
+        GalaxyAtWar::find_or_create(db, &player, 0.0),
+    )?;
+
     Ok(Json(FullPlayerResponse {
         player,
         classes,

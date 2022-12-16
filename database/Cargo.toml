@@ -13,7 +13,6 @@ sqlite = ["sea-orm/sqlx-sqlite", "sea-orm-migration/sqlx-sqlite"]
 mysql = ["sea-orm/sqlx-mysql", "sea-orm-migration/sqlx-mysql"]
 
 [dependencies]
-tokio = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 chrono = "0.4"

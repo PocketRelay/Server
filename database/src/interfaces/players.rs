@@ -3,17 +3,15 @@ use crate::{
         players::{PlayerDataUpdate, PlayerUpdate},
         ParsedUpdate,
     },
-    entities::{player_characters, player_classes, players},
-    DbResult, GalaxyAtWar, Player, PlayerCharacter, PlayerClass,
+    entities::players,
+    DbResult, Player, PlayerCharacter, PlayerClass,
 };
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait,
-    QueryFilter,
+    ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
 };
 use std::iter::Iterator;
-use tokio::try_join;
 
 impl Player {
     /// The length of player session tokens
@@ -160,35 +158,6 @@ impl Player {
     /// `id` The ID of the player to find
     pub async fn by_id(db: &DatabaseConnection, id: u32) -> DbResult<Option<Self>> {
         players::Entity::find_by_id(id).one(db).await
-    }
-
-    /// Collects all the related classes, characters and galaxy at war
-    /// data all at once rturning the loaded result if no errors
-    /// occurred.
-    ///
-    /// `db` The database connection
-    pub async fn collect_relations(
-        &self,
-        db: &DatabaseConnection,
-    ) -> DbResult<(Vec<PlayerClass>, Vec<PlayerCharacter>, GalaxyAtWar)> {
-        let classes = self.find_related(player_classes::Entity).all(db);
-        let characters = self.find_related(player_characters::Entity).all(db);
-        let galaxy_at_war = GalaxyAtWar::find_or_create(db, self, 0.0);
-
-        try_join!(classes, characters, galaxy_at_war)
-    }
-
-    /// Collects all the related classes, characters all at once rturning
-    /// the loaded result if no errors occurred.
-    ///
-    /// `db` The database connection
-    pub async fn collect_relations_partial(
-        &self,
-        db: &DatabaseConnection,
-    ) -> DbResult<(Vec<PlayerClass>, Vec<PlayerCharacter>)> {
-        let classes = self.find_related(player_classes::Entity).all(db);
-        let characters = self.find_related(player_characters::Entity).all(db);
-        try_join!(classes, characters)
     }
 
     /// Attempts to find a player with the provided ID and matching session

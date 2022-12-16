@@ -9,28 +9,12 @@ repository = "https://github.com/PocketRelay/ServerRust"
 members = [".", "database"]
 
 [workspace.dependencies]
-# Tokio async runtime
-tokio = { version = "1", features = ["full"] }
-
 # Serde for serialization mostly in the HTTP server but also
 # used elsewhere to do define custom serialization
 serde = { version = "1", features = ["derive"] }
 
 # Logging facade
 log = "0.4"
-
-# Blaze packet system 
-blaze-pk = { version = "^0.6" }
-
-# Resource embedding using debug-embed to always resolve relative 
-# to the Cargo.toml file
-rust-embed = { version = "6.4.2", features = ["debug-embed"] }
-
-# Isolated database crate
-database = { path = "database", package = "pocket-relay-database", version = "^0.1" }
-
-# Blaze SSLv3 async TCPStream implementation
-blaze-ssl-async = "^0.1"
 
 [package]
 name = "pocket-relay"
@@ -52,20 +36,41 @@ database-sqlite = ["database/sqlite"]
 database-mysql = ["database/mysql"]
 
 [dependencies]
-tokio = { workspace = true }
+
 log = { workspace = true }
-blaze-pk = { workspace = true }
-blaze-ssl-async = { workspace = true }
 serde = { workspace = true }
-database = { workspace = true }
+
+# Tokio async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Blaze packet system 
+blaze-pk = { version = "^0.6" }
+# Blaze SSLv3 async TCPStream implementation
+blaze-ssl-async = "^0.1"
+
+# Isolated database crate
+database = { path = "database", package = "pocket-relay-database", version = "^0.1" }
+
 futures-util = "0.3"
+
+
+# Actix Web framework and cors library to enable cors
 actix-web = { version = "4", default-features = false, features = ["macros"] }
 actix-cors = "0.6.4"
-rust-embed = { workspace = true }
+
+
+# Resource embedding using debug-embed to always resolve relative 
+# to the Cargo.toml file
+rust-embed = { version = "6.4.2", features = ["debug-embed"] }
+
 mime_guess = "2.0.4"
+
+# Password hashing
 argon2 = { version = "0.4" }
 password-hash = { version = "0.4.2" }
+
 rand_core = { version = "0.6", features = ["std"] }
+
 base64 = "0.20.0"
 flate2 = { version = "1.0.24", features = ["zlib"], default-features = false }
 

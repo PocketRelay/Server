@@ -2,7 +2,8 @@
 
 use self::models::*;
 use crate::state::GlobalState;
-use database::{DatabaseConnection, DbResult, Player};
+use database::{DatabaseConnection, DbResult, Player, PlayerCharacter, PlayerClass};
+use futures_util::try_join;
 use tokio::sync::RwLock;
 
 pub mod models;
@@ -127,7 +128,10 @@ impl Leaderboard {
     ) -> DbResult<LeaderboardEntry> {
         let mut total_promotions = 0;
         let mut total_level: u32 = 0;
-        let (classes, characters) = player.collect_relations_partial(db).await?;
+        let (classes, characters) = try_join!(
+            PlayerClass::find_all(db, &player),
+            PlayerCharacter::find_all(db, &player),
+        )?;
         for class in classes {
             // Classes are active if atleast one character from the class is deployed
             let is_active = characters
