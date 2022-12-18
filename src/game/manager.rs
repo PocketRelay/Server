@@ -1,15 +1,19 @@
 use super::{
-    player::GamePlayer, rules::RuleSet, Game, GameModifyAction, GameSnapshot, RemovePlayerType,
+    player::GamePlayer, rules::RuleSet, Game, GameJoinableState, GameModifyAction, GameSnapshot,
+    RemovePlayerType,
 };
 use crate::utils::types::{GameID, SessionID};
 use blaze_pk::types::TdfMap;
 use log::debug;
 use std::{
     collections::{HashMap, VecDeque},
-    sync::atomic::{AtomicU32, Ordering},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
     time::SystemTime,
 };
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{oneshot, Mutex, RwLock};
 
 /// Structure for managing games and the matchmaking queue
 pub struct Games {
@@ -27,7 +31,7 @@ struct QueueEntry {
     player: GamePlayer,
     /// The rules that games must meet for this
     /// queue entry to join.
-    rules: RuleSet,
+    rules: Arc<RuleSet>,
     /// The time that the queue entry was created at
     time: SystemTime,
 }
@@ -47,10 +51,18 @@ impl Games {
     pub async fn snapshot(&self) -> Vec<GameSnapshot> {
         let games = &*self.games.read().await;
         let snapshots = games
-            .iter()
-            .map(|value| value.1.snapshot())
+            .values()
+            .map(|game| async {
+                let (sender, reciever) = oneshot::channel();
+                game.handle_action(GameModifyAction::Snapshot(sender)).await;
+                reciever.await.ok()
+            })
             .collect::<Vec<_>>();
-        futures_util::future::join_all(snapshots).await
+        futures_util::future::join_all(snapshots)
+            .await
+            .into_iter()
+            .filter_map(|value| value)
+            .collect()
     }
 
     /// Takes a snapshot of the game with the provided game ID
@@ -59,7 +71,10 @@ impl Games {
     pub async fn snapshot_id(&self, game_id: GameID) -> Option<GameSnapshot> {
         let games = &*self.games.read().await;
         let game = games.get(&game_id)?;
-        Some(game.snapshot().await)
+
+        let (sender, reciever) = oneshot::channel();
+        game.handle_action(GameModifyAction::Snapshot(sender)).await;
+        reciever.await.ok()
     }
 
     /// Creates a new game from the initial attributes and
@@ -82,7 +97,8 @@ impl Games {
     pub async fn add_host(&self, game_id: GameID, player: GamePlayer) {
         let games = &*self.games.read().await;
         let Some(game) = games.get(&game_id) else { return; };
-        game.add_player(player).await;
+        game.handle_action(GameModifyAction::AddPlayer(player))
+            .await;
         self.update_queue(game).await;
     }
 
@@ -92,36 +108,42 @@ impl Games {
     ///
     /// `game` The game to update to queue with
     async fn update_queue(&self, game: &Game) {
-        let game_data = game.data.read().await;
-        let attributes = &game_data.attributes;
-
         let queue = &mut *self.queue.lock().await;
-
         if !queue.is_empty() {
             let mut unmatched = VecDeque::new();
             while let Some(entry) = queue.pop_front() {
-                // If the game is not joinable push the entry back to the
-                // front of the queue and early return
-                if !game.is_joinable().await {
-                    queue.push_front(entry);
-                    return;
-                }
-
-                if entry.rules.matches(attributes) {
-                    debug!(
-                        "Found player from queue adding them to the game (GID: {})",
-                        game.id
-                    );
-                    let time = SystemTime::now();
-                    let elapsed = time.duration_since(entry.time);
-                    if let Ok(elapsed) = elapsed {
-                        debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
+                let (sender, reciever) = oneshot::channel();
+                game.handle_action(GameModifyAction::CheckJoinable(
+                    Some(entry.rules.clone()),
+                    sender,
+                ))
+                .await;
+                let join_state = reciever.await.unwrap_or(GameJoinableState::Full);
+                match join_state {
+                    GameJoinableState::Full => {
+                        // If the game is not joinable push the entry back to the
+                        // front of the queue and early return
+                        queue.push_front(entry);
+                        return;
                     }
-                    game.add_player(entry.player).await;
-                } else {
-                    // TODO: Check started time and timeout
-                    // player if they've been waiting too long
-                    unmatched.push_back(entry);
+                    GameJoinableState::NotMatch => {
+                        // TODO: Check started time and timeout
+                        // player if they've been waiting too long
+                        unmatched.push_back(entry);
+                    }
+                    GameJoinableState::Joinable => {
+                        debug!(
+                            "Found player from queue adding them to the game (GID: {})",
+                            game.id
+                        );
+                        let time = SystemTime::now();
+                        let elapsed = time.duration_since(entry.time);
+                        if let Ok(elapsed) = elapsed {
+                            debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
+                        }
+                        game.handle_action(GameModifyAction::AddPlayer(entry.player))
+                            .await;
+                    }
                 }
             }
             *queue = unmatched;
@@ -136,16 +158,21 @@ impl Games {
     /// `session` The session to get the game for
     /// `rules`   The rules the game must match to be valid
     pub async fn add_or_queue(&self, player: GamePlayer, rules: RuleSet) -> bool {
+        let rules = Arc::new(rules);
         let games = &*self.games.read().await;
         for game in games.values() {
-            if !game.is_joinable().await {
-                continue;
-            }
-            let game_data = game.data.read().await;
-            if rules.matches(&game_data.attributes) {
-                debug!("Found matching game (GID: {})", game.id);
-                game.add_player(player).await;
-                return true;
+            let (sender, reciever) = oneshot::channel();
+            game.handle_action(GameModifyAction::CheckJoinable(Some(rules.clone()), sender))
+                .await;
+            let join_state = reciever.await.unwrap_or(GameJoinableState::Full);
+            match join_state {
+                GameJoinableState::Joinable => {
+                    debug!("Found matching game (GID: {})", game.id);
+                    game.handle_action(GameModifyAction::AddPlayer(player))
+                        .await;
+                    return true;
+                }
+                _ => {}
             }
         }
 
@@ -171,14 +198,17 @@ impl Games {
     pub async fn modify_game(&self, game_id: GameID, action: GameModifyAction) {
         let games = self.games.read().await;
         if let Some(game) = games.get(&game_id) {
-            game.modify(action).await;
+            game.handle_action(action).await;
         }
     }
 
     pub async fn remove_player(&self, game_id: GameID, ty: RemovePlayerType) {
         let games = self.games.read().await;
         if let Some(game) = games.get(&game_id) {
-            let is_empty = game.remove_player(ty).await;
+            let (sender, reciever) = oneshot::channel();
+            game.handle_action(GameModifyAction::RemovePlayer(ty, sender))
+                .await;
+            let is_empty = reciever.await.unwrap_or(true);
             if is_empty {
                 drop(games);
 

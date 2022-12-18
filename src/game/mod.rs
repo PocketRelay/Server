@@ -7,8 +7,10 @@ use codec::*;
 use log::debug;
 use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{oneshot, RwLock};
+
+use self::rules::RuleSet;
 
 pub mod codec;
 pub mod enums;
@@ -61,6 +63,8 @@ impl GameData {
 }
 
 pub enum GameModifyAction {
+    /// Adds a new player to the game
+    AddPlayer(GamePlayer),
     /// Modify the state of the game
     SetState(GameState),
     /// Modify the setting of the game
@@ -75,6 +79,22 @@ pub enum GameModifyAction {
     /// Remove a player with a sender for responding with
     /// whether the game is empty now or not
     RemovePlayer(RemovePlayerType, oneshot::Sender<bool>),
+
+    /// Request for checking if the game is joinable optionally with
+    /// a ruleset for checking attributes against
+    CheckJoinable(Option<Arc<RuleSet>>, oneshot::Sender<GameJoinableState>),
+
+    /// Requests a snapshot of the current game state
+    Snapshot(oneshot::Sender<GameSnapshot>),
+}
+
+pub enum GameJoinableState {
+    /// Game is currenlty joinable
+    Joinable,
+    /// Game is full
+    Full,
+    /// The game doesn't match the provided rules
+    NotMatch,
 }
 
 impl Game {
@@ -96,29 +116,51 @@ impl Game {
         }
     }
 
-    pub async fn remove_player(&self, ty: RemovePlayerType) -> bool {
-        let (sender, reciever) = oneshot::channel();
-        Self::modify(self, GameModifyAction::RemovePlayer(ty, sender)).await;
-        reciever.await.unwrap_or(true)
-    }
-
     /// Modifies the game using the provided game modify value
     ///
     /// `action` The modify action
-    pub async fn modify(&self, action: GameModifyAction) {
+    pub async fn handle_action(&self, action: GameModifyAction) {
         match action {
+            GameModifyAction::AddPlayer(player) => self.add_player(player).await,
             GameModifyAction::SetState(state) => self.set_state(state).await,
             GameModifyAction::SetSetting(setting) => self.set_setting(setting).await,
             GameModifyAction::SetAttributes(attributes) => self.set_attributes(attributes).await,
             GameModifyAction::UpdateMeshConnection { session, target } => {
                 self.update_mesh_connection(session, target).await
             }
-            GameModifyAction::RemovePlayer(ty, sender) => self.remove_player_impl(ty, sender).await,
+            GameModifyAction::RemovePlayer(ty, sender) => {
+                let is_empty = self.remove_player_impl(ty).await;
+                sender.send(is_empty).ok();
+            }
+            GameModifyAction::CheckJoinable(rules, sender) => {
+                let join_state = self.check_joinable(rules).await;
+                sender.send(join_state).ok();
+            }
+            GameModifyAction::Snapshot(sender) => {
+                let snapshot = self.snapshot_impl().await;
+                sender.send(snapshot).ok();
+            }
+        }
+    }
+
+    async fn check_joinable(&self, rules: Option<Arc<RuleSet>>) -> GameJoinableState {
+        let next_slot = *self.next_slot.read().await;
+        let is_joinable = next_slot < Self::MAX_PLAYERS;
+        if let Some(rules) = rules {
+            let data = &*self.data.read().await;
+            if !rules.matches(&data.attributes) {
+                return GameJoinableState::NotMatch;
+            }
+        }
+        if is_joinable {
+            GameJoinableState::Joinable
+        } else {
+            GameJoinableState::Full
         }
     }
 
     /// Takes a snapshot of the current game state for serialization
-    pub async fn snapshot(&self) -> GameSnapshot {
+    pub async fn snapshot_impl(&self) -> GameSnapshot {
         let data = &*self.data.read().await;
         let old_attributes = &data.attributes;
         let mut attributes = HashMap::with_capacity(old_attributes.len());
@@ -232,13 +274,6 @@ impl Game {
         });
     }
 
-    /// Checks whether the game is full or not by checking
-    /// the next slot value is less than the maximum players
-    pub async fn is_joinable(&self) -> bool {
-        let next_slot = *self.next_slot.read().await;
-        next_slot < Self::MAX_PLAYERS
-    }
-
     /// Checks whether the provided session is a player in this game
     ///
     /// `session` The session to check for
@@ -271,7 +306,7 @@ impl Game {
     /// Adds the provided player to this game
     ///
     /// `session` The session to add
-    pub async fn add_player(&self, mut player: GamePlayer) {
+    async fn add_player(&self, mut player: GamePlayer) {
         let slot = self.aquire_slot().await;
         player.game_id = self.id;
 
@@ -427,7 +462,7 @@ impl Game {
             .await;
     }
 
-    async fn remove_player_impl(&self, ty: RemovePlayerType, sender: oneshot::Sender<bool>) {
+    async fn remove_player_impl(&self, ty: RemovePlayerType) -> bool {
         let (player, slot, reason, remaining) = {
             let players = &mut *self.players.write().await;
             let (index, reason) = match ty {
@@ -447,7 +482,7 @@ impl Game {
 
             let (player, index) = match index {
                 Some(index) => (players.remove(index), index),
-                None => return, /* Ignore if the player has already been removed */
+                None => return players.len() <= 0, /* Ignore if the player has already been removed */
             };
             (player, index, reason, players.len())
         };
@@ -467,8 +502,7 @@ impl Game {
         }
         self.release_slot().await;
 
-        // Respond to the sender with whether there are remaining players
-        sender.send(remaining <= 0).ok();
+        remaining <= 0
     }
 
     /// Notifies all the session and the removed session that a
