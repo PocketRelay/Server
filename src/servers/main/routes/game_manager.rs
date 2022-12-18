@@ -1,6 +1,6 @@
 use crate::{
     blaze::{components::GameManager, errors::ServerError},
-    game::player::GamePlayer,
+    game::{player::GamePlayer, GameModifyAction, RemovePlayerType},
     servers::main::{models::game_manager::*, routes::HandleResult, session::Session},
     state::GlobalState,
     utils::types::GameID,
@@ -21,8 +21,8 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
         GameManager::CreateGame => handle_create_game(session, packet).await,
         GameManager::AdvanceGameState
         | GameManager::SetGameSettings
-        | GameManager::SetGameAttributes => handle_game_modify(session, packet).await,
-        GameManager::RemovePlayer => handle_remove_player(session, packet).await,
+        | GameManager::SetGameAttributes => handle_game_modify(packet).await,
+        GameManager::RemovePlayer => handle_remove_player(packet).await,
         GameManager::UpdateMeshConnection => handle_update_mesh_connection(session, packet).await,
         GameManager::StartMatchmaking => handle_start_matchmaking(session, packet).await,
         GameManager::CancelMatchmaking => handle_cancel_matchmaking(session, packet).await,
@@ -138,17 +138,10 @@ async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleRes
 ///     "GID": 1
 /// }
 /// ```
-async fn handle_game_modify(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_game_modify(packet: &Packet) -> HandleResult {
     let req: GameModifyRequest = packet.decode()?;
     let games = GlobalState::games();
-    if !games.modify_game(req.game_id, req.action).await {
-        warn!(
-            "Client requested to modify the state of an unknown game (GID: {}, SID: {})",
-            req.game_id, session.id
-        );
-        return Err(ServerError::InvalidInformation.into());
-    }
-
+    games.modify_game(req.game_id, req.action).await;
     Ok(packet.respond_empty())
 }
 
@@ -165,20 +158,15 @@ async fn handle_game_modify(session: &mut Session, packet: &Packet) -> HandleRes
 ///     "REAS": 6
 /// }
 /// ```
-async fn handle_remove_player(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_remove_player(packet: &Packet) -> HandleResult {
     let req: RemovePlayerRequest = packet.decode()?;
     let games = GlobalState::games();
-    if !games
-        .remove_player_pid(req.game_id, req.player_id, req.reason)
-        .await
-    {
-        warn!(
-            "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
-            req.game_id, session.id
-        );
-        return Err(ServerError::InvalidInformation.into());
-    }
-
+    games
+        .remove_player(
+            req.game_id,
+            RemovePlayerType::Player(req.player_id, req.reason),
+        )
+        .await;
     Ok(packet.respond_empty())
 }
 
@@ -206,16 +194,15 @@ async fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -
     };
 
     let games = GlobalState::games();
-    if !games
-        .update_mesh_connection(req.game_id, session.id, target)
-        .await
-    {
-        warn!(
-            "Client requested to advance the game state of an unknown game (GID: {}, SID: {})",
-            req.game_id, session.id
-        );
-    }
-
+    games
+        .modify_game(
+            req.game_id,
+            GameModifyAction::UpdateMeshConnection {
+                session: session.id,
+                target,
+            },
+        )
+        .await;
     Ok(packet.respond_empty())
 }
 
@@ -376,8 +363,10 @@ async fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> Ha
     info!("Player {} cancelled matchmaking", player.display_name);
 
     let games = GlobalState::games();
-    if let Some(game) = session.game.as_ref() {
-        games.remove_player_sid(*game, session.id).await;
+    if let Some(game_id) = session.game.take() {
+        games
+            .remove_player(game_id, RemovePlayerType::Session(session.id))
+            .await;
     } else {
         games.unqueue_session(session.id).await;
     }

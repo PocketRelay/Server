@@ -401,6 +401,7 @@ pub struct PlayerRemoved {
     pub reason: RemoveReason,
 }
 
+#[derive(Debug)]
 #[repr(u8)]
 pub enum RemoveReason {
     // 0x0

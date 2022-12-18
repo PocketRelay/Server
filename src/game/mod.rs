@@ -64,6 +64,10 @@ pub enum GameModifyAction {
     SetState(GameState),
     SetSetting(u16),
     SetAttributes(AttrMap),
+    UpdateMeshConnection {
+        session: SessionID,
+        target: PlayerID,
+    },
 }
 
 impl Game {
@@ -93,6 +97,9 @@ impl Game {
             GameModifyAction::SetState(state) => self.set_state(state).await,
             GameModifyAction::SetSetting(setting) => self.set_setting(setting).await,
             GameModifyAction::SetAttributes(attributes) => self.set_attributes(attributes).await,
+            GameModifyAction::UpdateMeshConnection { session, target } => {
+                self.update_mesh_connection(session, target).await
+            }
         }
     }
 
@@ -239,29 +246,6 @@ impl Game {
     async fn is_player_pid(&self, pid: PlayerID) -> bool {
         let players = &*self.players.read().await;
         players.iter().any(|value| value.player_id == pid)
-    }
-
-    /// Attempts to find a player matching the provided session id then
-    /// removing it from the players list returning the index of the
-    /// value and the value itself
-    ///
-    /// `sid` The session ID of the player to take
-    async fn take_player_sid(&self, sid: SessionID) -> Option<(usize, GamePlayer)> {
-        let players = &mut *self.players.write().await;
-        let index = players.iter().position(|value| value.session_id == sid)?;
-        Some((index, players.remove(index)))
-    }
-
-    /// Attempts to find a player matching the provided player id then
-    /// removing it from the players list returning the index of the value
-    /// and the value itself
-    ///
-    /// `pid` The player ID of the player to take
-    async fn take_player_pid(&self, pid: PlayerID) -> Option<(usize, GamePlayer)> {
-        let players = &mut *self.players.write().await;
-        let index = players.iter().position(|value| value.player_id == pid)?;
-        let player = players.remove(index);
-        Some((index, player))
     }
 
     pub async fn aquire_slot(&self) -> usize {
@@ -435,37 +419,31 @@ impl Game {
             .await;
     }
 
-    /// Attempts to remove a player by its player ID
-    /// this function is used to remove players through
-    /// the packet system.
-    ///
-    /// `pid` The player id of the player to remove
-    pub async fn remove_by_pid(&self, pid: PlayerID, reason: RemoveReason) {
-        let Some((slot, player)) = self.take_player_pid(pid).await else {
-            warn!(
-                "Attempted to remove player that wasn't in game (PID: {}, GID: {})",
-                pid, self.id
-            );
-            return;
+    pub async fn remove_player(&self, ty: RemovePlayerType) {
+        let (player, slot, reason) = {
+            let players = &mut *self.players.write().await;
+            let (index, reason) = match ty {
+                RemovePlayerType::Player(player_id, reason) => (
+                    players
+                        .iter()
+                        .position(|value| value.player_id == player_id),
+                    reason,
+                ),
+                RemovePlayerType::Session(session_id) => (
+                    players
+                        .iter()
+                        .position(|value| value.session_id == session_id),
+                    RemoveReason::Generic,
+                ),
+            };
+
+            let (player, index) = match index {
+                Some(index) => (players.remove(index), index),
+                None => return, /* Ignore if the player has already been removed */
+            };
+            (player, index, reason)
         };
         self.on_player_removed(player, slot, reason).await;
-    }
-
-    /// Attempts to remove a player by its session ID
-    /// this function is used to remove players that
-    /// have been released or otherwise no longer exist
-    ///
-    /// `sid` The session ID of the player to remove
-    pub async fn remove_by_sid(&self, sid: SessionID) {
-        let Some((slot, player)) = self.take_player_sid(sid).await else {
-            warn!(
-                "Attempted to remove session that wasn't in game (SID: {}, GID: {})",
-                sid, self.id
-            );
-            return;
-        };
-        self.on_player_removed(player, slot, RemoveReason::Generic)
-            .await;
     }
 
     /// Runs the actions after a player was removed takes the
@@ -593,4 +571,10 @@ impl Game {
         }
         debug!("Game has been released (GID: {})", self.id)
     }
+}
+
+#[derive(Debug)]
+pub enum RemovePlayerType {
+    Session(SessionID),
+    Player(PlayerID, RemoveReason),
 }

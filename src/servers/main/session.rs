@@ -12,7 +12,7 @@ use crate::{
         components::{self, Components, UserSessions},
         errors::{BlazeError, ServerError},
     },
-    game::player::GamePlayer,
+    game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
     utils::{
         net::public_address,
@@ -458,8 +458,10 @@ impl Session {
     pub async fn release(&mut self) {
         let game = self.game.take();
         let games = GlobalState::games();
-        if let Some(game) = game {
-            games.remove_player_sid(game, self.id).await;
+        if let Some(game_id) = game {
+            games
+                .remove_player(game_id, RemovePlayerType::Session(self.id))
+                .await;
         } else {
             games.unqueue_session(self.id).await;
         }

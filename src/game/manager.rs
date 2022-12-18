@@ -1,7 +1,7 @@
 use super::{
-    codec::RemoveReason, player::GamePlayer, rules::RuleSet, Game, GameModifyAction, GameSnapshot,
+    player::GamePlayer, rules::RuleSet, Game, GameModifyAction, GameSnapshot, RemovePlayerType,
 };
-use crate::utils::types::{GameID, PlayerID, SessionID};
+use crate::utils::types::{GameID, SessionID};
 use blaze_pk::types::TdfMap;
 use log::debug;
 use std::{
@@ -168,72 +168,22 @@ impl Games {
         queue.retain(|value| value.player.session_id != sid);
     }
 
-    /// Updates the mesh connection in the game with the provied game
-    /// ID for the provied session with the provided target
-    ///
-    /// `game_id` The ID of the game to update the mesh connection in
-    /// `session` The session to update the connection for
-    /// `target`  The mesh connection update target
-    pub async fn update_mesh_connection(
-        &self,
-        game_id: GameID,
-        session: SessionID,
-        target: PlayerID,
-    ) -> bool {
+    pub async fn modify_game(&self, game_id: GameID, action: GameModifyAction) {
         let games = self.games.read().await;
-        let Some(game) = games.get(&game_id) else { return false; };
-        game.update_mesh_connection(session, target).await;
-        true
+        if let Some(game) = games.get(&game_id) {
+            game.modify(action).await;
+        }
     }
 
-    pub async fn modify_game(&self, game_id: GameID, action: GameModifyAction) -> bool {
+    pub async fn remove_player(&self, game_id: GameID, ty: RemovePlayerType) {
         let games = self.games.read().await;
-        let Some(game) = games.get(&game_id) else { return false; };
-        game.modify(action).await;
-        true
-    }
-
-    /// Removes a player by their player ID from the game with the provided
-    /// game ID. Will remove the game itself if the game is empty after the
-    /// player has been removed.
-    ///
-    /// `game_id` The game to remove the player from
-    /// `pid`     The id of the player to remove
-    pub async fn remove_player_pid(
-        &self,
-        game_id: GameID,
-        pid: PlayerID,
-        reason: RemoveReason,
-    ) -> bool {
-        {
-            let games = self.games.read().await;
-            let Some(game) = games.get(&game_id) else { return false; };
-            game.remove_by_pid(pid, reason).await;
-            if !game.is_empty().await {
-                return true;
+        if let Some(game) = games.get(&game_id) {
+            game.remove_player(ty).await;
+            if game.is_empty().await {
+                drop(games);
+                self.remove_game(game_id).await;
             }
         }
-        self.remove_game(game_id).await;
-        true
-    }
-
-    /// Removes a player by their session ID from the game with the provided
-    /// game ID. Will remove the game itself if the game is empty after the
-    /// player has been removed.
-    ///
-    /// `game_id` The game to remove the player from
-    /// `sid`     The session id of the player to remove
-    pub async fn remove_player_sid(&self, game_id: GameID, sid: SessionID) -> bool {
-        {
-            let games = &*self.games.read().await;
-            let Some(game) = games.get(&game_id) else { return false; };
-            game.remove_by_sid(sid).await;
-            if !game.is_empty().await {
-                return true;
-            }
-        }
-        self.remove_game(game_id).await;
-        true
     }
 
     /// Removes any games with the provided game id
