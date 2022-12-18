@@ -146,6 +146,13 @@ impl GamePlayer {
     }
 }
 
+impl Drop for GamePlayer {
+    fn drop(&mut self) {
+        /// Clear player game when game player is dropped
+        self.set_game(None)
+    }
+}
+
 pub struct PlayerUpdate<'a> {
     pub player: &'a GamePlayer,
 }

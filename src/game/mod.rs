@@ -68,13 +68,14 @@ pub enum GameModifyAction {
         session: SessionID,
         target: PlayerID,
     },
+    RemovePlayer(RemovePlayerType),
 }
 
 impl Game {
     /// Constant for the maximum number of players allowed in
     /// a game at one time. Used to determine a games full state
-
     const MAX_PLAYERS: usize = 4;
+
     /// Creates a new game with the provided details
     ///
     /// `id`         The unique game ID
@@ -100,6 +101,7 @@ impl Game {
             GameModifyAction::UpdateMeshConnection { session, target } => {
                 self.update_mesh_connection(session, target).await
             }
+            GameModifyAction::RemovePlayer(ty) => self.remove_player(ty).await,
         }
     }
 
@@ -149,7 +151,7 @@ impl Game {
     /// notifying them of the changed state
     ///
     /// `state` The new state value
-    pub async fn set_state(&self, state: GameState) {
+    async fn set_state(&self, state: GameState) {
         debug!("Updating game state (Value: {state:?})");
         {
             let data = &mut *self.data.write().await;
@@ -168,7 +170,7 @@ impl Game {
     /// notifying them of the changed setting
     ///
     /// `setting` The new setting value
-    pub async fn set_setting(&self, setting: u16) {
+    async fn set_setting(&self, setting: u16) {
         debug!("Updating game setting (Value: {setting})");
         {
             let data = &mut *self.data.write().await;
@@ -190,7 +192,7 @@ impl Game {
     /// notifying them of the changed attributes
     ///
     /// `attributes` The new attributes
-    pub async fn set_attributes(&self, attributes: AttrMap) {
+    async fn set_attributes(&self, attributes: AttrMap) {
         debug!("Updating game attributes");
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameAttribChange),
@@ -248,14 +250,14 @@ impl Game {
         players.iter().any(|value| value.player_id == pid)
     }
 
-    pub async fn aquire_slot(&self) -> usize {
+    async fn aquire_slot(&self) -> usize {
         let next_slot = &mut *self.next_slot.write().await;
         let slot = *next_slot;
         *next_slot += 1;
         slot
     }
 
-    pub async fn release_slot(&self) {
+    async fn release_slot(&self) {
         let next_slot = &mut *self.next_slot.write().await;
         *next_slot -= 1;
     }
@@ -384,7 +386,7 @@ impl Game {
     ///
     /// `session` The session updating its mesh connection
     /// `target`  The pid of the connected target
-    pub async fn update_mesh_connection(&self, session: SessionID, target: PlayerID) {
+    async fn update_mesh_connection(&self, session: SessionID, target: PlayerID) {
         debug!("Updating mesh connection");
         if self.is_player_sid(session).await && self.is_player_pid(target).await {
             self.set_player_state(session, PlayerState::Connected).await;
@@ -419,7 +421,7 @@ impl Game {
             .await;
     }
 
-    pub async fn remove_player(&self, ty: RemovePlayerType) {
+    async fn remove_player(&self, ty: RemovePlayerType) {
         let (player, slot, reason) = {
             let players = &mut *self.players.write().await;
             let (index, reason) = match ty {
@@ -443,16 +445,7 @@ impl Game {
             };
             (player, index, reason)
         };
-        self.on_player_removed(player, slot, reason).await;
-    }
 
-    /// Runs the actions after a player was removed takes the
-    /// player itself and the slot the player was in before
-    /// it was removed.
-    ///
-    /// `player` The player that was removed
-    /// `slot`   The slot the player used to be in
-    async fn on_player_removed(&self, player: GamePlayer, slot: GameSlot, reason: RemoveReason) {
         player.set_game(None);
         self.notify_player_removed(&player, reason).await;
         self.notify_fetch_data(&player).await;
@@ -559,17 +552,11 @@ impl Game {
     pub async fn is_empty(&self) -> bool {
         self.player_count().await == 0
     }
+}
 
-    /// Releases all the players connected to this game
-    /// setting their game state to null and clearing
-    /// the players list. This releases any stored
-    /// player references.
-    pub fn release(self) {
-        let mut players = self.players.into_inner();
-        while let Some(player) = players.pop() {
-            player.set_game(None)
-        }
-        debug!("Game has been released (GID: {})", self.id)
+impl Drop for Game {
+    fn drop(&mut self) {
+        debug!("Game has been dropped (GID: {})", self.id)
     }
 }
 
