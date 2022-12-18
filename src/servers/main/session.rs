@@ -27,11 +27,7 @@ use std::{
     io,
     net::{IpAddr, SocketAddr},
 };
-use tokio::{
-    net::TcpStream,
-    select,
-    sync::{mpsc, Mutex},
-};
+use tokio::{net::TcpStream, select, sync::mpsc};
 
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
@@ -41,7 +37,8 @@ pub struct Session {
     pub id: SessionID,
 
     /// Underlying connection stream to client
-    pub stream: Mutex<TcpStream>,
+    pub stream: TcpStream,
+
     /// The socket connection address of the client
     pub addr: SocketAddr,
 
@@ -83,7 +80,7 @@ pub enum SessionMessage {
 impl Session {
     pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr)) {
         let (sender, receiver) = mpsc::unbounded_channel();
-        let session = Session::new(id, values, sender);
+        let session = Session::new(id, values.0, values.1, sender);
         tokio::spawn(session.process(receiver));
     }
 
@@ -94,13 +91,14 @@ impl Session {
     /// `message_sender` The message sender for session messages
     pub fn new(
         id: SessionID,
-        values: (TcpStream, SocketAddr),
+        stream: TcpStream,
+        addr: SocketAddr,
         sender: mpsc::UnboundedSender<SessionMessage>,
     ) -> Self {
         Self {
             id,
-            stream: Mutex::new(values.0),
-            addr: values.1,
+            stream,
+            addr,
             queue: VecDeque::new(),
             sender,
             player: None,
@@ -127,9 +125,7 @@ impl Session {
                 }
                 // Handle packet reads
                 result = self.read() => {
-                    if let Ok((component, packet)) = result {
-                        self.handle_packet(component, &packet).await;
-                    } else {
+                    if result.is_err() {
                         break;
                     }
                 }
@@ -175,7 +171,7 @@ impl Session {
     /// Handles a message recieved for the session
     ///
     /// `message` The message that was recieved
-    pub async fn handle_message(&mut self, message: SessionMessage) {
+    async fn handle_message(&mut self, message: SessionMessage) {
         match message {
             SessionMessage::SetGame(game) => self.set_game(game),
             SessionMessage::Write(packet) => self.push(packet),
@@ -283,11 +279,9 @@ impl Session {
         }
         // Counter for the number of items written
         let mut write_count = 0usize;
-
-        let stream = &mut *self.stream.lock().await;
         while let Some(item) = self.queue.pop_front() {
             self.debug_log_packet("Wrote", &item);
-            match item.write_async(stream).await {
+            match item.write_async(&mut self.stream).await {
                 Ok(_) => {
                     write_count += 1;
                 }
@@ -307,17 +301,19 @@ impl Session {
     /// rather than pushing to the buffer. Only use when handling
     /// responses will cause long blocks because will wait for all
     /// the data to be written.
-    async fn write(&self, packet: Packet) -> io::Result<()> {
-        let stream = &mut *self.stream.lock().await;
-        packet.write_async(stream).await?;
+    async fn write(&mut self, packet: Packet) -> io::Result<()> {
+        packet.write_async(&mut self.stream).await?;
         self.debug_log_packet("Wrote", &packet);
         Ok(())
     }
 
-    /// Attempts to read a packet from the client stream.
-    async fn read(&self) -> io::Result<(Components, Packet)> {
-        let stream = &mut *self.stream.lock().await;
-        Packet::read_async_typed(stream).await
+    /// Reads a packet from the stream and then passes the packet
+    /// onto `handle_packet` awaiting the result of that
+    async fn read(&mut self) -> io::Result<()> {
+        let (component, packet): (Components, Packet) =
+            Packet::read_async_typed(&mut self.stream).await?;
+        self.handle_packet(component, &packet).await;
+        Ok(())
     }
 
     /// Sets the player thats attached to this session. Will log information
