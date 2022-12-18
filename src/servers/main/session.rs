@@ -8,25 +8,18 @@ use super::{
 use crate::{
     blaze::{
         append_packet_decoded,
-        codec::{NetAddress, NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
+        codec::{NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
         components::{self, Components, UserSessions},
         errors::{BlazeError, ServerError},
     },
     game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
-    utils::{
-        net::public_address,
-        types::{GameID, SessionID},
-    },
+    utils::types::{GameID, SessionID},
 };
 use blaze_pk::packet::{Packet, PacketComponents, PacketType};
 use database::Player;
 use log::{debug, error, log_enabled};
-use std::{
-    collections::VecDeque,
-    io,
-    net::{IpAddr, SocketAddr},
-};
+use std::{collections::VecDeque, io, net::SocketAddr};
 use tokio::{net::TcpStream, select, sync::mpsc};
 
 /// Structure for storing a client session. This includes the
@@ -133,7 +126,6 @@ impl Session {
                 _ = shutdown.changed() => { break; }
             };
         }
-        self.release().await;
     }
 
     /// Handles processing a recieved packet from the `process` function. This includes a
@@ -354,7 +346,7 @@ impl Session {
     ///
     /// `game` The game the player has joined.
     /// `slot` The slot in the game the player is in.
-    pub fn set_game(&mut self, game: Option<GameID>) {
+    fn set_game(&mut self, game: Option<GameID>) {
         self.game = game;
         self.update_client();
     }
@@ -365,50 +357,12 @@ impl Session {
     ///
     /// `groups` The networking groups
     /// `ext`    The networking ext
-    pub async fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
+    pub fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
         let net = &mut &mut self.net;
         net.is_set = true;
         net.qos = ext;
         net.groups = groups;
-        self.update_missing_external().await;
         self.update_client();
-    }
-
-    /// Updates the external address field if its invalid or missing
-    /// on the provided network group. Uses the session stored
-    /// address information.
-    ///
-    /// `groups` The groups to modify
-    async fn update_missing_external(&mut self) {
-        let groups = &mut self.net.groups;
-        let external = &mut groups.external;
-        if external.0.is_invalid() || external.1 == 0 {
-            // Match port with internal address
-            external.1 = groups.internal.1;
-            external.0 = Self::get_network_address(&self.addr).await;
-        }
-    }
-
-    /// Obtains the networking address from the provided SocketAddr
-    /// if the address is a loopback or private address then the
-    /// public IP address of the network is used instead.
-    ///
-    /// `value` The socket address
-    async fn get_network_address(addr: &SocketAddr) -> NetAddress {
-        let ip = addr.ip();
-        if let IpAddr::V4(value) = ip {
-            // Value is local or private
-            if value.is_loopback() || value.is_private() {
-                if let Some(public_addr) = public_address().await {
-                    return NetAddress::from_ipv4(&public_addr);
-                }
-            }
-            let value = format!("{}", value);
-            NetAddress::from_ipv4(&value)
-        } else {
-            // Don't know how to handle IPv6 addresses
-            NetAddress(0)
-        }
     }
 
     /// Updates the hardware flag for this session and
@@ -455,28 +409,22 @@ impl Session {
         self.push(b);
     }
 
-    pub async fn release(&mut self) {
-        self.remove_games().await;
-        debug!("Finished releasing up session (SID: {})", self.id)
-    }
-
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    pub async fn remove_games(&mut self) {
+    pub fn remove_games(&mut self) {
         let game = self.game.take();
         let games = GlobalState::games();
         if let Some(game_id) = game {
-            games
-                .remove_player(game_id, RemovePlayerType::Session(self.id))
-                .await;
+            games.remove_player(game_id, RemovePlayerType::Session(self.id));
         } else {
-            games.unqueue_session(self.id).await;
+            games.unqueue_session(self.id);
         }
     }
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
+        self.remove_games();
         debug!("Session dropped (SID: {})", self.id);
     }
 }

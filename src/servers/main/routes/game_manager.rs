@@ -21,10 +21,10 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
         GameManager::AdvanceGameState
         | GameManager::SetGameSettings
         | GameManager::SetGameAttributes => handle_game_modify(packet).await,
-        GameManager::RemovePlayer => handle_remove_player(packet).await,
+        GameManager::RemovePlayer => handle_remove_player(packet),
         GameManager::UpdateMeshConnection => handle_update_mesh_connection(session, packet).await,
         GameManager::StartMatchmaking => handle_start_matchmaking(session, packet).await,
-        GameManager::CancelMatchmaking => handle_cancel_matchmaking(session, packet).await,
+        GameManager::CancelMatchmaking => handle_cancel_matchmaking(session, packet),
         _ => Ok(packet.respond_empty()),
     }
 }
@@ -157,15 +157,13 @@ async fn handle_game_modify(packet: &Packet) -> HandleResult {
 ///     "REAS": 6
 /// }
 /// ```
-async fn handle_remove_player(packet: &Packet) -> HandleResult {
+fn handle_remove_player(packet: &Packet) -> HandleResult {
     let req: RemovePlayerRequest = packet.decode()?;
     let games = GlobalState::games();
-    games
-        .remove_player(
-            req.game_id,
-            RemovePlayerType::Player(req.player_id, req.reason),
-        )
-        .await;
+    games.remove_player(
+        req.game_id,
+        RemovePlayerType::Player(req.player_id, req.reason),
+    );
     Ok(packet.respond_empty())
 }
 
@@ -354,7 +352,7 @@ async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> Han
 ///     "MSID": 1
 /// }
 /// ```
-async fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.remove_games().await;
+fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
+    session.remove_games();
     Ok(packet.respond_empty())
 }

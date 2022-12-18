@@ -186,15 +186,6 @@ impl Games {
         false
     }
 
-    /// Removes any sessions that have the ID provided from the
-    /// matchmaking queue
-    ///
-    /// `sid` The session ID to remove
-    pub async fn unqueue_session(&self, sid: SessionID) {
-        let queue = &mut self.queue.lock().await;
-        queue.retain(|value| value.player.session_id != sid);
-    }
-
     pub async fn modify_game(&self, game_id: GameID, action: GameModifyAction) {
         let games = self.games.read().await;
         if let Some(game) = games.get(&game_id) {
@@ -202,20 +193,33 @@ impl Games {
         }
     }
 
-    pub async fn remove_player(&self, game_id: GameID, ty: RemovePlayerType) {
-        let games = self.games.read().await;
-        if let Some(game) = games.get(&game_id) {
-            let (sender, reciever) = oneshot::channel();
-            game.handle_action(GameModifyAction::RemovePlayer(ty, sender))
-                .await;
-            let is_empty = reciever.await.unwrap_or(true);
-            if is_empty {
-                drop(games);
+    /// Removes any sessions that have the ID provided from the
+    /// matchmaking queue
+    ///
+    /// `sid` The session ID to remove
+    pub fn unqueue_session(&'static self, sid: SessionID) {
+        tokio::spawn(async move {
+            let queue = &mut self.queue.lock().await;
+            queue.retain(|value| value.player.session_id != sid);
+        });
+    }
 
-                // Remove the empty game
-                let games = &mut *self.games.write().await;
-                games.remove(&game_id);
+    pub fn remove_player(&'static self, game_id: GameID, ty: RemovePlayerType) {
+        tokio::spawn(async move {
+            let games = self.games.read().await;
+            if let Some(game) = games.get(&game_id) {
+                let (sender, reciever) = oneshot::channel();
+                game.handle_action(GameModifyAction::RemovePlayer(ty, sender))
+                    .await;
+                let is_empty = reciever.await.unwrap_or(true);
+                if is_empty {
+                    drop(games);
+
+                    // Remove the empty game
+                    let games = &mut *self.games.write().await;
+                    games.remove(&game_id);
+                }
             }
-        }
+        });
     }
 }

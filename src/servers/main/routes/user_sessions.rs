@@ -1,12 +1,14 @@
+use std::net::{IpAddr, SocketAddr};
+
 use crate::{
-    blaze::{components::UserSessions, errors::ServerError},
+    blaze::{codec::NetAddress, components::UserSessions, errors::ServerError},
     servers::main::{
         models::{auth::AuthResponse, user_sessions::*},
         routes::HandleResult,
         session::Session,
     },
     state::GlobalState,
-    utils::random::generate_random_string,
+    utils::{net::public_address, random::generate_random_string},
 };
 use blaze_pk::packet::Packet;
 use database::Player;
@@ -85,8 +87,38 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
 /// ```
 async fn handle_update_network_info(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: UpdateNetworkRequest = packet.decode()?;
-    session.set_network_info(req.address, req.qos).await;
+    let mut groups = req.address;
+    let external = &mut groups.external;
+    if external.0.is_invalid() || external.1 == 0 {
+        // Match port with internal address
+        external.1 = groups.internal.1;
+        external.0 = get_network_address(&session.addr).await;
+    }
+
+    session.set_network_info(groups, req.qos);
     Ok(packet.respond_empty())
+}
+
+/// Obtains the networking address from the provided SocketAddr
+/// if the address is a loopback or private address then the
+/// public IP address of the network is used instead.
+///
+/// `value` The socket address
+async fn get_network_address(addr: &SocketAddr) -> NetAddress {
+    let ip = addr.ip();
+    if let IpAddr::V4(value) = ip {
+        // Value is local or private
+        if value.is_loopback() || value.is_private() {
+            if let Some(public_addr) = public_address().await {
+                return NetAddress::from_ipv4(&public_addr);
+            }
+        }
+        let value = format!("{}", value);
+        NetAddress::from_ipv4(&value)
+    } else {
+        // Don't know how to handle IPv6 addresses
+        NetAddress(0)
+    }
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
