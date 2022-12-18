@@ -4,7 +4,7 @@ use crate::{
 };
 use blaze_pk::{codec::Encodable, packet::Packet, types::TdfMap};
 use codec::*;
-use log::{debug, warn};
+use log::debug;
 use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
 use std::collections::HashMap;

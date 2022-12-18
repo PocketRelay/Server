@@ -456,6 +456,13 @@ impl Session {
     }
 
     pub async fn release(&mut self) {
+        self.remove_games().await;
+        debug!("Finished releasing up session (SID: {})", self.id)
+    }
+
+    /// Removes the session from any connected games and the
+    /// matchmaking queue
+    pub async fn remove_games(&mut self) {
         let game = self.game.take();
         let games = GlobalState::games();
         if let Some(game_id) = game {
@@ -465,7 +472,6 @@ impl Session {
         } else {
             games.unqueue_session(self.id).await;
         }
-        debug!("Finished releasing up session (SID: {})", self.id)
     }
 }
 

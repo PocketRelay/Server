@@ -7,7 +7,7 @@ use crate::{
 };
 use blaze_pk::packet::Packet;
 use database::Player;
-use log::{debug, info, warn};
+use log::{debug, info};
 
 /// Routing function for handling packets with the `GameManager` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -356,20 +356,6 @@ async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> Han
 /// }
 /// ```
 async fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
-    let player: &Player = session
-        .player
-        .as_ref()
-        .ok_or(ServerError::FailedNoLoginAction)?;
-    info!("Player {} cancelled matchmaking", player.display_name);
-
-    let games = GlobalState::games();
-    if let Some(game_id) = session.game.take() {
-        games
-            .remove_player(game_id, RemovePlayerType::Session(session.id))
-            .await;
-    } else {
-        games.unqueue_session(session.id).await;
-    }
-
+    session.remove_games().await;
     Ok(packet.respond_empty())
 }
