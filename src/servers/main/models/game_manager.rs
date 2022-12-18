@@ -2,7 +2,7 @@ use crate::{
     game::{
         codec::{GameState, RemoveReason},
         rules::{MatchRules, RuleSet},
-        AttrMap,
+        AttrMap, GameModifyAction,
     },
     utils::types::{GameID, PlayerID, SessionID},
 };
@@ -70,16 +70,13 @@ impl Decodable for RemovePlayerRequest {
     }
 }
 
-/// Structure of a request to modify some aspect of a game.
-/// This includes the state, setting, and attributes
-pub enum GameModifyRequest {
-    /// The game state
-    State(GameID, GameState),
-    /// The game setting
-    Setting(GameID, u16),
-    /// The game attributes
-    Attributes(GameID, AttrMap),
+pub struct GameModifyRequest {
+    /// The ID of the game to modify
+    pub game_id: GameID,
+    /// The modification action
+    pub action: GameModifyAction
 }
+
 
 impl Decodable for GameModifyRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
@@ -89,23 +86,30 @@ impl Decodable for GameModifyRequest {
             "ATTR" => {
                 let attributes: AttrMap = AttrMap::decode(reader)?;
                 let game_id: GameID = reader.tag("GID")?;
-                return Ok(Self::Attributes(game_id, attributes));
+                return Ok(GameModifyRequest {
+                    game_id,
+                    action: GameModifyAction::SetAttributes(attributes),
+                })
             }
             "GID" => GameID::decode(reader)?,
             _ => return Err(DecodeError::Other("Unknown game modify attribute")),
         };
         let value_tag: Tag = reader.read_tag()?;
         let tag: &str = &value_tag.0;
-        Ok(match tag {
+        let action = match tag {
             "GSTA" => {
                 let state: GameState = GameState::decode(reader)?;
-                Self::State(game_id, state)
+                GameModifyAction::SetState(state)
             }
             "GSET" => {
                 let setting: u16 = reader.read_u16()?;
-                Self::Setting(game_id, setting)
+                GameModifyAction::SetSetting(setting)
             }
             _ => return Err(DecodeError::Other("Missing modify contents")),
+        };
+        Ok(GameModifyRequest {
+            game_id,
+            action
         })
     }
 }

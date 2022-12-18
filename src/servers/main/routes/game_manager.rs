@@ -141,23 +141,10 @@ async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleRes
 async fn handle_game_modify(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: GameModifyRequest = packet.decode()?;
     let games = GlobalState::games();
-    let (game_id, result) = match req {
-        GameModifyRequest::State(game_id, state) => {
-            (game_id, games.set_game_state(game_id, state).await)
-        }
-        GameModifyRequest::Setting(game_id, setting) => {
-            (game_id, games.set_game_setting(game_id, setting).await)
-        }
-        GameModifyRequest::Attributes(game_id, attributes) => (
-            game_id,
-            games.set_game_attributes(game_id, attributes).await,
-        ),
-    };
-
-    if !result {
+    if !games.modify_game(req.game_id, req.action).await {
         warn!(
             "Client requested to modify the state of an unknown game (GID: {}, SID: {})",
-            game_id, session.id
+            req.game_id, session.id
         );
         return Err(ServerError::InvalidInformation.into());
     }

@@ -1,8 +1,5 @@
 use super::{
-    codec::{GameState, RemoveReason},
-    player::GamePlayer,
-    rules::RuleSet,
-    AttrMap, Game, GameSnapshot,
+    codec::RemoveReason, player::GamePlayer, rules::RuleSet, Game, GameModifyAction, GameSnapshot,
 };
 use crate::utils::types::{GameID, PlayerID, SessionID};
 use blaze_pk::types::TdfMap;
@@ -189,39 +186,10 @@ impl Games {
         true
     }
 
-    /// Updates the state of the game with the provided id with
-    /// the provided state
-    ///
-    /// `game_id` The ID of the game to update the state of
-    /// `state`   The new game state
-    pub async fn set_game_state(&self, game_id: GameID, state: GameState) -> bool {
+    pub async fn modify_game(&self, game_id: GameID, action: GameModifyAction) -> bool {
         let games = self.games.read().await;
         let Some(game) = games.get(&game_id) else { return false; };
-        game.set_state(state).await;
-        true
-    }
-
-    /// Updates the game setting of the game with the provided id with the
-    /// provided setting value
-    ///
-    /// `game_id` The ID of the game to update the setting of
-    /// `setting` The new setting value
-    pub async fn set_game_setting(&self, game_id: GameID, setting: u16) -> bool {
-        let games = self.games.read().await;
-        let Some(game) = games.get(&game_id) else { return false; };
-        game.set_setting(setting).await;
-        true
-    }
-
-    /// Updates the attributes of the game with the provided id with the
-    /// provided attributes map value
-    ///
-    /// `game_id` The ID of the game to update the setting of
-    /// `attributes` The new attributes value
-    pub async fn set_game_attributes(&self, game_id: GameID, attributes: AttrMap) -> bool {
-        let games = self.games.read().await;
-        let Some(game) = games.get(&game_id) else { return false; };
-        game.set_attributes(attributes).await;
+        game.modify(action).await;
         true
     }
 

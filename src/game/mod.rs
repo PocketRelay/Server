@@ -66,11 +66,17 @@ impl GameData {
     }
 }
 
+pub enum GameModifyAction {
+    SetState(GameState),
+    SetSetting(u16),
+    SetAttributes(AttrMap),
+}
+
 impl Game {
     /// Constant for the maximum number of players allowed in
     /// a game at one time. Used to determine a games full state
-    const MAX_PLAYERS: usize = 4;
 
+    const MAX_PLAYERS: usize = 4;
     /// Creates a new game with the provided details
     ///
     /// `id`         The unique game ID
@@ -82,6 +88,17 @@ impl Game {
             data: RwLock::new(GameData::new(setting, attributes)),
             players: RwLock::new(Vec::new()),
             next_slot: RwLock::new(0),
+        }
+    }
+    
+    /// Modifies the game using the provided game modify value
+    ///
+    /// `action` The modify action
+    pub async fn modify(&self, action: GameModifyAction) {
+        match action {
+            GameModifyAction::SetState(state) => self.set_state(state).await,
+            GameModifyAction::SetSetting(setting) => self.set_setting(setting).await,
+            GameModifyAction::SetAttributes(attributes) => self.set_attributes(attributes).await
         }
     }
 
