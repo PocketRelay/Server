@@ -8,7 +8,7 @@ use log::debug;
 use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
 use std::collections::HashMap;
-use tokio::sync::RwLock;
+use tokio::sync::{oneshot, RwLock};
 
 pub mod codec;
 pub mod enums;
@@ -61,14 +61,20 @@ impl GameData {
 }
 
 pub enum GameModifyAction {
+    /// Modify the state of the game
     SetState(GameState),
+    /// Modify the setting of the game
     SetSetting(u16),
+    /// Modify the attributes of the game
     SetAttributes(AttrMap),
+    /// Trigger a mesh connection update
     UpdateMeshConnection {
         session: SessionID,
         target: PlayerID,
     },
-    RemovePlayer(RemovePlayerType),
+    /// Remove a player with a sender for responding with
+    /// whether the game is empty now or not
+    RemovePlayer(RemovePlayerType, oneshot::Sender<bool>),
 }
 
 impl Game {
@@ -90,6 +96,12 @@ impl Game {
         }
     }
 
+    pub async fn remove_player(&self, ty: RemovePlayerType) -> bool {
+        let (sender, reciever) = oneshot::channel();
+        Self::modify(self, GameModifyAction::RemovePlayer(ty, sender)).await;
+        reciever.await.unwrap_or(true)
+    }
+
     /// Modifies the game using the provided game modify value
     ///
     /// `action` The modify action
@@ -101,7 +113,7 @@ impl Game {
             GameModifyAction::UpdateMeshConnection { session, target } => {
                 self.update_mesh_connection(session, target).await
             }
-            GameModifyAction::RemovePlayer(ty) => self.remove_player(ty).await,
+            GameModifyAction::RemovePlayer(ty, sender) => self.remove_player_impl(ty, sender).await,
         }
     }
 
@@ -218,12 +230,6 @@ impl Game {
             value.write_updates(player);
             player.write_updates(value);
         });
-    }
-
-    /// Retrieves the number of players currently in this game
-    async fn player_count(&self) -> usize {
-        let players = &*self.players.read().await;
-        players.len()
     }
 
     /// Checks whether the game is full or not by checking
@@ -421,8 +427,8 @@ impl Game {
             .await;
     }
 
-    async fn remove_player(&self, ty: RemovePlayerType) {
-        let (player, slot, reason) = {
+    async fn remove_player_impl(&self, ty: RemovePlayerType, sender: oneshot::Sender<bool>) {
+        let (player, slot, reason, remaining) = {
             let players = &mut *self.players.write().await;
             let (index, reason) = match ty {
                 RemovePlayerType::Player(player_id, reason) => (
@@ -443,7 +449,7 @@ impl Game {
                 Some(index) => (players.remove(index), index),
                 None => return, /* Ignore if the player has already been removed */
             };
-            (player, index, reason)
+            (player, index, reason, players.len())
         };
 
         player.set_game(None);
@@ -460,6 +466,9 @@ impl Game {
             self.try_migrate_host().await;
         }
         self.release_slot().await;
+
+        // Respond to the sender with whether there are remaining players
+        sender.send(remaining <= 0).ok();
     }
 
     /// Notifies all the session and the removed session that a
@@ -546,11 +555,6 @@ impl Game {
             HostMigrateFinished { game_id: self.id },
         );
         self.push_all(&packet).await;
-    }
-
-    /// Checks if the game has no players in it
-    pub async fn is_empty(&self) -> bool {
-        self.player_count().await == 0
     }
 }
 

@@ -178,8 +178,8 @@ impl Games {
     pub async fn remove_player(&self, game_id: GameID, ty: RemovePlayerType) {
         let games = self.games.read().await;
         if let Some(game) = games.get(&game_id) {
-            game.modify(GameModifyAction::RemovePlayer(ty)).await;
-            if game.is_empty().await {
+            let is_empty = game.remove_player(ty).await;
+            if is_empty {
                 drop(games);
 
                 // Remove the empty game
