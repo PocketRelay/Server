@@ -12,7 +12,7 @@ use crate::{
         components::{self, Components, UserSessions},
         errors::{BlazeError, ServerError},
     },
-    game::player::{GamePlayer, SessionMessage},
+    game::player::GamePlayer,
     state::GlobalState,
     utils::{
         net::public_address,
@@ -30,7 +30,7 @@ use std::{
 use tokio::{
     net::TcpStream,
     select,
-    sync::{mpsc, Mutex, Notify},
+    sync::{mpsc, Mutex},
 };
 
 /// Structure for storing a client session. This includes the
@@ -57,13 +57,36 @@ pub struct Session {
 
     /// The queue of packets that need to be written
     queue: VecDeque<Packet>,
-    /// Sender for flushing packets
-    flush: Notify,
+
+    /// State determining whether the session has a flush message
+    /// already queued in the reciever
+    flush_queued: bool,
+
     /// Sender for session messages
-    message_sender: mpsc::Sender<SessionMessage>,
+    sender: mpsc::UnboundedSender<SessionMessage>,
+}
+
+/// Enum of different messages that can be sent to this
+/// session in order to change it in different ways
+#[derive(Debug)]
+pub enum SessionMessage {
+    /// Changes the active game value
+    SetGame(Option<GameID>),
+
+    /// Writes a new packet to the outbound queue
+    Write(Packet),
+
+    /// Flushes the outbound queue
+    Flush,
 }
 
 impl Session {
+    pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr)) {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        let session = Session::new(id, values, sender);
+        tokio::spawn(session.process(receiver));
+    }
+
     /// Creates a new session with the provided values.
     ///
     /// `id`             The unique session ID
@@ -72,18 +95,18 @@ impl Session {
     pub fn new(
         id: SessionID,
         values: (TcpStream, SocketAddr),
-        message_sender: mpsc::Sender<SessionMessage>,
+        sender: mpsc::UnboundedSender<SessionMessage>,
     ) -> Self {
         Self {
             id,
             stream: Mutex::new(values.0),
             addr: values.1,
             queue: VecDeque::new(),
-            flush: Notify::new(),
-            message_sender,
+            sender,
             player: None,
             net: NetData::default(),
             game: None,
+            flush_queued: false,
         }
     }
 
@@ -92,18 +115,16 @@ impl Session {
     /// owns the session.
     ///
     /// `message` The receiver for receiving session messages
-    pub async fn process(mut self, mut message: mpsc::Receiver<SessionMessage>) {
+    pub async fn process(mut self, mut receiver: mpsc::UnboundedReceiver<SessionMessage>) {
         let mut shutdown = GlobalState::shutdown();
         loop {
             select! {
                 // Recieve session instruction messages
-                message = message.recv() => {
+                message = receiver.recv() => {
                     if let Some(message) = message {
                         self.handle_message(message).await;
                     }
                 }
-                // Handle flush notifications and flush the session
-                _ = self.flush.notified() => { self.flush().await; }
                 // Handle packet reads
                 result = self.read() => {
                     if let Ok((component, packet)) = result {
@@ -116,6 +137,7 @@ impl Session {
                 _ = shutdown.changed() => { break; }
             };
         }
+        self.release().await;
     }
 
     /// Handles processing a recieved packet from the `process` function. This includes a
@@ -156,8 +178,8 @@ impl Session {
     pub async fn handle_message(&mut self, message: SessionMessage) {
         match message {
             SessionMessage::SetGame(game) => self.set_game(game),
-            SessionMessage::Packet(packet) => self.push(packet),
-            SessionMessage::Packets(packets) => self.push_all(packets),
+            SessionMessage::Write(packet) => self.push(packet),
+            SessionMessage::Flush => self.flush().await,
         }
     }
 
@@ -167,20 +189,7 @@ impl Session {
     /// `packet` The packet to push to the buffer
     pub fn push(&mut self, packet: Packet) {
         self.queue.push_back(packet);
-        self.flush.notify_one();
-    }
-
-    /// Pushes all the provided packets to the packet buffer
-    /// and sends a flush notification after all the packets
-    /// are pushed.
-    ///
-    /// `packets` The packets to push to the buffer
-    pub fn push_all(&mut self, packets: Vec<Packet>) {
-        self.queue.reserve(packets.len());
-        for packet in packets {
-            self.queue.push_back(packet);
-        }
-        self.flush.notify_one();
+        self.queue_flush();
     }
 
     /// Logs the contents of the provided packet to the debug output along with
@@ -258,8 +267,17 @@ impl Session {
             || Components::Util(components::Util::UserSettingsLoadAll).eq(component)
     }
 
+    /// Queues a new flush if there is not already one queued
+    pub fn queue_flush(&mut self) {
+        if !self.flush_queued {
+            self.flush_queued = true;
+            self.sender.send(SessionMessage::Flush).ok();
+        }
+    }
+
     /// Flushes the output buffer
     pub async fn flush(&mut self) {
+        self.flush_queued = false;
         if self.queue.is_empty() {
             return;
         }
@@ -331,7 +349,7 @@ impl Session {
             player.id,
             player.display_name.clone(),
             self.net,
-            self.message_sender.clone(),
+            self.sender.clone(),
         ))
     }
 
@@ -422,42 +440,39 @@ impl Session {
 
     pub fn update_self(&mut self) {
         let Some(player) = self.player.as_ref() else {return;};
-        let packets = vec![
-            Packet::notify(
-                Components::UserSessions(UserSessions::SessionDetails),
-                SessionUpdate {
-                    session: self,
-                    player_id: player.id,
-                    display_name: &player.display_name,
-                },
-            ),
-            Packet::notify(
-                Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
-                UpdateExtDataAttr {
-                    flags: 0x3,
-                    player_id: player.id,
-                },
-            ),
-        ];
-        self.push_all(packets);
+        let a = Packet::notify(
+            Components::UserSessions(UserSessions::SessionDetails),
+            SessionUpdate {
+                session: self,
+                player_id: player.id,
+                display_name: &player.display_name,
+            },
+        );
+        let b = Packet::notify(
+            Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
+            UpdateExtDataAttr {
+                flags: 0x3,
+                player_id: player.id,
+            },
+        );
+        self.push(a);
+        self.push(b);
+    }
+
+    pub async fn release(&mut self) {
+        let game = self.game.take();
+        let games = GlobalState::games();
+        if let Some(game) = game {
+            games.remove_player_sid(game, self.id).await;
+        } else {
+            games.unqueue_session(self.id).await;
+        }
+        debug!("Finished releasing up session (SID: {})", self.id)
     }
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
         debug!("Session dropped (SID: {})", self.id);
-        let game = self.game.take();
-        let session_id = self.id;
-
-        tokio::spawn(async move {
-            debug!("Cleaning up dropped session (SID: {})", session_id);
-            let games = GlobalState::games();
-            if let Some(game) = game {
-                games.remove_player_sid(game, session_id).await;
-            } else {
-                games.unqueue_session(session_id).await;
-            }
-            debug!("Finished cleaning up dropped session (SID: {})", session_id)
-        });
     }
 }

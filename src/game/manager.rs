@@ -209,9 +209,7 @@ impl Games {
             let games = self.games.read().await;
             let Some(game) = games.get(&game_id) else { return false; };
             game.remove_by_pid(pid, reason).await;
-            if game.is_empty().await {
-                game.release().await;
-            } else {
+            if !game.is_empty().await {
                 return true;
             }
         }
@@ -230,9 +228,7 @@ impl Games {
             let games = &*self.games.read().await;
             let Some(game) = games.get(&game_id) else { return false; };
             game.remove_by_sid(sid).await;
-            if game.is_empty().await {
-                game.release().await;
-            } else {
+            if !game.is_empty().await {
                 return true;
             }
         }
@@ -245,6 +241,8 @@ impl Games {
     /// `game_id` The ID of the game to remove
     async fn remove_game(&self, game_id: GameID) {
         let games = &mut *self.games.write().await;
-        games.remove(&game_id);
+        if let Some(game) = games.remove(&game_id) {
+            game.release()
+        }
     }
 }

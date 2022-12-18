@@ -4,11 +4,10 @@ use crate::{
     utils::net::{accept_stream, listener},
 };
 use session::Session;
-use tokio::sync::mpsc;
 
 mod models;
 mod routes;
-mod session;
+pub mod session;
 
 /// Starts the main server which is responsible for a majority of the
 /// game logic such as games, sessions, etc.
@@ -17,9 +16,7 @@ pub async fn start_server() {
     let mut shutdown = GlobalState::shutdown();
     let mut session_id = 1;
     while let Some(values) = accept_stream(&listener, &mut shutdown).await {
-        let (message_sender, message_recv) = mpsc::channel(20);
-        let session = Session::new(session_id, values, message_sender);
-        tokio::spawn(session.process(message_recv));
+        Session::spawn(session_id, values);
         session_id += 1;
     }
 }

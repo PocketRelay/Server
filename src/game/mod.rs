@@ -8,7 +8,7 @@ use log::{debug, warn};
 use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
 use std::collections::HashMap;
-use tokio::{join, sync::RwLock};
+use tokio::sync::RwLock;
 
 pub mod codec;
 pub mod enums;
@@ -25,12 +25,6 @@ pub struct Game {
     pub players: RwLock<Vec<GamePlayer>>,
     /// The number of the next available slot
     pub next_slot: RwLock<GameSlot>,
-}
-
-impl Drop for Game {
-    fn drop(&mut self) {
-        debug!("Game has been dropped (GID: {})", self.id)
-    }
 }
 
 #[derive(Serialize)]
@@ -90,7 +84,7 @@ impl Game {
             next_slot: RwLock::new(0),
         }
     }
-    
+
     /// Modifies the game using the provided game modify value
     ///
     /// `action` The modify action
@@ -98,7 +92,7 @@ impl Game {
         match action {
             GameModifyAction::SetState(state) => self.set_state(state).await,
             GameModifyAction::SetSetting(setting) => self.set_setting(setting).await,
-            GameModifyAction::SetAttributes(attributes) => self.set_attributes(attributes).await
+            GameModifyAction::SetAttributes(attributes) => self.set_attributes(attributes).await,
         }
     }
 
@@ -130,12 +124,7 @@ impl Game {
     /// `packet` The packet to write
     async fn push_all(&self, packet: &Packet) {
         let players = &*self.players.read().await;
-        let futures = players
-            .iter()
-            .map(|value| value.push(packet.clone()))
-            .collect::<Vec<_>>();
-
-        let _ = futures_util::future::join_all(futures).await;
+        players.iter().for_each(|value| value.push(packet.clone()));
     }
 
     /// Sends a notification packet to all the connected session
@@ -216,13 +205,10 @@ impl Game {
     async fn update_clients(&self, player: &GamePlayer) {
         debug!("Updating clients with new session details");
         let players = &*self.players.read().await;
-
-        let futures = players
-            .iter()
-            .map(|value| value.exchange_update(player))
-            .collect::<Vec<_>>();
-
-        let _ = futures_util::future::join_all(futures).await;
+        players.iter().for_each(|value| {
+            value.write_updates(player);
+            player.write_updates(value);
+        });
     }
 
     /// Retrieves the number of players currently in this game
@@ -301,7 +287,7 @@ impl Game {
         self.update_clients(&player).await;
         self.notify_game_setup(&player, slot).await;
 
-        player.set_game(Some(self.id)).await;
+        player.set_game(Some(self.id));
 
         let packet = player.create_set_session();
         self.push_all(&packet).await;
@@ -325,7 +311,7 @@ impl Game {
             PlayerJoining { slot, player },
         );
         self.push_all(&packet).await;
-        player.push(packet).await;
+        player.push(packet);
     }
 
     /// Notifies the provided player that the game has been setup and
@@ -353,7 +339,7 @@ impl Game {
             },
         );
 
-        player.push(packet).await;
+        player.push(packet);
     }
 
     /// Sets the state for the provided session notifying all
@@ -489,7 +475,7 @@ impl Game {
     /// `player` The player that was removed
     /// `slot`   The slot the player used to be in
     async fn on_player_removed(&self, player: GamePlayer, slot: GameSlot, reason: RemoveReason) {
-        player.set_game(None).await;
+        player.set_game(None);
         self.notify_player_removed(&player, reason).await;
         self.notify_fetch_data(&player).await;
         self.modify_admin_list(player.player_id, AdminListOperation::Remove)
@@ -520,7 +506,7 @@ impl Game {
             },
         );
         self.push_all(&packet).await;
-        player.push(packet).await;
+        player.push(packet);
     }
 
     /// Notifies all the sessions in the game to fetch the player data
@@ -531,30 +517,24 @@ impl Game {
     /// `session`   The session to update with the other clients
     /// `player_id` The player id of the session to update
     async fn notify_fetch_data(&self, player: &GamePlayer) {
-        let players = &*self.players.read().await;
         let removed_packet = Packet::notify(
             Components::UserSessions(UserSessions::FetchExtendedData),
             FetchExtendedData {
                 player_id: player.player_id,
             },
         );
+        self.push_all(&removed_packet).await;
 
-        let player_packets = players
-            .iter()
-            .map(|value| {
-                Packet::notify(
-                    Components::UserSessions(UserSessions::FetchExtendedData),
-                    FetchExtendedData {
-                        player_id: value.player_id,
-                    },
-                )
-            })
-            .collect::<Vec<_>>();
-
-        join!(
-            self.push_all(&removed_packet),
-            player.push_all(player_packets)
-        );
+        let players = &*self.players.read().await;
+        for other_player in players {
+            let packet = Packet::notify(
+                Components::UserSessions(UserSessions::FetchExtendedData),
+                FetchExtendedData {
+                    player_id: other_player.player_id,
+                },
+            );
+            player.push(packet)
+        }
     }
 
     /// Attempts to migrate the host of this game if there are still players
@@ -606,13 +586,11 @@ impl Game {
     /// setting their game state to null and clearing
     /// the players list. This releases any stored
     /// player references.
-    pub async fn release(&self) {
-        let players = &mut *self.players.write().await;
-        let futures = players
-            .iter()
-            .map(|value| value.set_game(None))
-            .collect::<Vec<_>>();
-        let _ = futures_util::future::join_all(futures).await;
-        players.clear();
+    pub fn release(self) {
+        let mut players = self.players.into_inner();
+        while let Some(player) = players.pop() {
+            player.set_game(None)
+        }
+        debug!("Game has been released (GID: {})", self.id)
     }
 }

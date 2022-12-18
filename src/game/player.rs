@@ -4,11 +4,12 @@ use crate::{
         codec::{NetData, UpdateExtDataAttr},
         components::{Components, UserSessions},
     },
+    servers::main::session::SessionMessage,
     utils::types::{GameID, PlayerID, SessionID},
 };
 use blaze_pk::{codec::Encodable, packet::Packet, tag::TdfType, writer::TdfWriter};
 use serde::Serialize;
-use tokio::{join, sync::mpsc};
+use tokio::sync::mpsc;
 
 pub struct GamePlayer {
     pub game_id: GameID,
@@ -23,7 +24,7 @@ pub struct GamePlayer {
     /// State of the game player
     pub state: PlayerState,
     /// Sender for sending messages to the session
-    pub message_sender: mpsc::Sender<SessionMessage>,
+    sender: mpsc::UnboundedSender<SessionMessage>,
 }
 
 /// Structure for taking a snapshot of the players current
@@ -51,7 +52,7 @@ impl GamePlayer {
         player_id: PlayerID,
         display_name: String,
         net: NetData,
-        message_sender: mpsc::Sender<SessionMessage>,
+        sender: mpsc::UnboundedSender<SessionMessage>,
     ) -> Self {
         Self {
             session_id,
@@ -60,7 +61,7 @@ impl GamePlayer {
             net,
             game_id: 1,
             state: PlayerState::Connecting,
-            message_sender,
+            sender,
         }
     }
 
@@ -75,46 +76,26 @@ impl GamePlayer {
         }
     }
 
-    pub async fn push(&self, packet: Packet) {
-        self.message_sender
-            .send(SessionMessage::Packet(packet))
-            .await
-            .ok();
+    pub fn push(&self, packet: Packet) {
+        self.sender.send(SessionMessage::Write(packet)).ok();
     }
 
-    pub async fn push_all(&self, packets: Vec<Packet>) {
-        self.message_sender
-            .send(SessionMessage::Packets(packets))
-            .await
-            .ok();
+    pub fn write_updates(&self, other: &GamePlayer) {
+        other.push(Packet::notify(
+            Components::UserSessions(UserSessions::SessionDetails),
+            PlayerUpdate { player: self },
+        ));
+        other.push(Packet::notify(
+            Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
+            UpdateExtDataAttr {
+                flags: 0x3,
+                player_id: self.player_id,
+            },
+        ));
     }
 
-    pub async fn exchange_update(&self, other: &GamePlayer) {
-        join!(self.write_updates(other), other.write_updates(self));
-    }
-
-    pub async fn write_updates(&self, other: &GamePlayer) {
-        let packets = vec![
-            Packet::notify(
-                Components::UserSessions(UserSessions::SessionDetails),
-                PlayerUpdate { player: self },
-            ),
-            Packet::notify(
-                Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
-                UpdateExtDataAttr {
-                    flags: 0x3,
-                    player_id: self.player_id,
-                },
-            ),
-        ];
-        other.push_all(packets).await;
-    }
-
-    pub async fn set_game(&self, game: Option<GameID>) {
-        self.message_sender
-            .send(SessionMessage::SetGame(game))
-            .await
-            .ok();
+    pub fn set_game(&self, game: Option<GameID>) {
+        self.sender.send(SessionMessage::SetGame(game)).ok();
     }
 
     pub fn create_set_session(&self) -> Packet {
@@ -163,14 +144,6 @@ impl GamePlayer {
         (4, 1, self.game_id).encode(writer);
         writer.tag_group_end();
     }
-}
-
-/// Describes messages that can be sent to a session
-#[derive(Debug)]
-pub enum SessionMessage {
-    SetGame(Option<GameID>),
-    Packet(Packet),
-    Packets(Vec<Packet>),
 }
 
 pub struct PlayerUpdate<'a> {
