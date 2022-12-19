@@ -5,6 +5,7 @@ use axum::Server;
 use log::{error, info};
 use tokio::select;
 
+mod ext;
 mod middleware;
 mod routes;
 mod stores;

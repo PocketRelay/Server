@@ -1,10 +1,12 @@
 //! Routes for the Galaxy At War API used by the Mass Effect 3 client in order
 //! to retrieve and increase the Galxay At War values for a player
 
-use crate::{env, state::GlobalState, utils::random::generate_random_string};
+use crate::{
+    env, servers::http::ext::Xml, state::GlobalState, utils::random::generate_random_string,
+};
 use axum::{
     extract::{Path, Query},
-    http::{header, HeaderValue, StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
     Router,
@@ -65,7 +67,7 @@ struct AuthQuery {
     auth: String,
 }
 
-async fn shared_token_login(Query(query): Query<AuthQuery>) -> GAWResult<Response> {
+async fn shared_token_login(Query(query): Query<AuthQuery>) -> GAWResult<Xml> {
     let db = GlobalState::database();
     let player = get_player(db, &query.auth).await?;
     let (player, token) = player.with_token(db, generate_random_string).await?;
@@ -104,12 +106,7 @@ async fn shared_token_login(Query(query): Query<AuthQuery>) -> GAWResult<Respons
     <tosuri/>
 </fulllogin>"#
     );
-    let mut res = response.into_response();
-    res.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static(mime::TEXT_XML.as_ref()),
-    );
-    Ok(res)
+    Ok(Xml(response))
 }
 
 /// Retrieves the galaxy at war data and promotions count for
@@ -136,7 +133,7 @@ async fn get_player_gaw_data(db: &DatabaseConnection, id: &str) -> GAWResult<(Ga
 /// with the provied ID
 ///
 /// `id` The hex encoded ID of the player
-async fn get_ratings(Path(id): Path<String>) -> GAWResult<Response> {
+async fn get_ratings(Path(id): Path<String>) -> GAWResult<Xml> {
     let db = GlobalState::database();
     let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
     ratings_response(gaw_data, promotions)
@@ -171,7 +168,7 @@ struct IncreaseQuery {
 async fn increase_ratings(
     Path(id): Path<String>,
     Query(query): Query<IncreaseQuery>,
-) -> GAWResult<Response> {
+) -> GAWResult<Xml> {
     let db = GlobalState::database();
     let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
     let gaw_data = gaw_data
@@ -185,7 +182,7 @@ async fn increase_ratings(
 ///
 /// `ratings`    The galaxy at war ratings value
 /// `promotions` The promotions value
-fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> GAWResult<Response> {
+fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> GAWResult<Xml> {
     let a = ratings.group_a;
     let b = ratings.group_b;
     let c = ratings.group_c;
@@ -218,13 +215,7 @@ fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> GAWResult<Response
 </galaxyatwargetratings>
 "#
     );
-    let mut res = response.into_response();
-    res.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static(mime::TEXT_XML.as_ref()),
-    );
-
-    Ok(res)
+    Ok(Xml(response))
 }
 
 impl Display for GAWError {

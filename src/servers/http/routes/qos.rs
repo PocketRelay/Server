@@ -1,14 +1,8 @@
 //! Routes for the Quality of Service server. Unknown whether any of the
 //! response address and ports are correct however this request must succeed
 //! or the client doesn't seem to know its external IP
-use crate::{blaze::codec::NetAddress, env};
-use axum::{
-    extract::Query,
-    http::{header, HeaderValue},
-    response::{IntoResponse, Response},
-    routing::get,
-    Router,
-};
+use crate::{blaze::codec::NetAddress, env, servers::http::ext::Xml};
+use axum::{extract::Query, routing::get, Router};
 use log::debug;
 use serde::Deserialize;
 
@@ -32,7 +26,7 @@ pub struct QosQuery {
 /// port here are just replaced with that of the Main server.
 ///
 /// `query` The query string from the client
-async fn qos(Query(query): Query<QosQuery>) -> Response {
+async fn qos(Query(query): Query<QosQuery>) -> Xml {
     debug!("Recieved QOS query: (Port: {})", query.port);
 
     let ip = NetAddress::from_ipv4("127.0.0.1");
@@ -48,10 +42,5 @@ async fn qos(Query(query): Query<QosQuery>) -> Response {
 </qos>",
         port, ip.0
     );
-    let mut res = response.into_response();
-    res.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static(mime::TEXT_XML.as_ref()),
-    );
-    res
+    Xml(response)
 }
