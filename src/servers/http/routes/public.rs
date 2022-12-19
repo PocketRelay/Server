@@ -1,6 +1,6 @@
 use axum::{
     extract::Path,
-    http::{header, StatusCode},
+    http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Router,
@@ -16,8 +16,8 @@ struct PublicContent;
 /// the provided router
 ///
 /// `router` The route to add to
-pub fn route(router: &mut Router) {
-    router.route("/content/*filename", get(content));
+pub fn route(router: Router) -> Router {
+    router.route("/content/*filename", get(content))
 }
 
 /// Function for serving content from the embedded public
@@ -28,10 +28,14 @@ pub fn route(router: &mut Router) {
 async fn content(Path(path): Path<String>) -> Response {
     if let Some(file) = PublicContent::get(&path) {
         let mut response = file.data.into_response();
-        response.headers_mut().insert(
-            header::CONTENT_TYPE,
-            mime_guess::from_path(&path).first_or_text_plain(),
-        );
+        if let Ok(header_value) =
+            HeaderValue::from_str(mime_guess::from_path(&path).first_or_text_plain().as_ref())
+        {
+            response
+                .headers_mut()
+                .insert(header::CONTENT_TYPE, header_value);
+        }
+
         response
     } else {
         (StatusCode::NOT_FOUND, "Not Found").into_response()

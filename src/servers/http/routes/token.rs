@@ -3,15 +3,16 @@
 
 use crate::servers::http::stores::token::TokenStore;
 use axum::{
-    extract::{Query, State},
+    extract::Query,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{delete, get, post},
-    Json, Router,
+    Extension, Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
+    sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -19,7 +20,7 @@ use std::{
 /// the provided router
 ///
 /// `router` The route to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: Router) -> Router {
     router
         .route("/api/token", post(get_token))
         .route("/api/token", delete(delete_token))
@@ -63,8 +64,8 @@ struct GetTokenResponse {
 /// `body`        The username and password request body
 /// `token_store` The token store to create the token with
 async fn get_token(
+    Extension(token_store): Extension<Arc<TokenStore>>,
     Json(body): Json<GetTokenRequest>,
-    State(token_store): State<TokenStore>,
 ) -> TokenResult<GetTokenResponse> {
     let (token, expiry_time): (String, SystemTime) = token_store
         .authenticate(&body.username, &body.password)
@@ -92,12 +93,12 @@ struct DeleteTokenRequest {
 /// `body`        The token request body
 /// `token_store` The token store to remove the token from
 async fn delete_token(
+    Extension(token_store): Extension<Arc<TokenStore>>,
     Json(body): Json<DeleteTokenRequest>,
-    State(token_store): State<TokenStore>,
-) -> Response {
+) -> Json<()> {
     token_store.remove_token(&body.token).await;
 
-    Json(()).into_response()
+    Json(())
 }
 
 #[derive(Deserialize)]
@@ -122,8 +123,8 @@ struct ValidateTokenResponse {
 /// `token`       The token query containing the token
 /// `token_store` The token store to validate with
 async fn validate_token(
+    Extension(token_store): Extension<Arc<TokenStore>>,
     Query(token): Query<ValidateTokenQuery>,
-    State(token_store): State<TokenStore>,
 ) -> Json<ValidateTokenResponse> {
     let expiry = token_store.get_token_expiry(&token.token).await;
 

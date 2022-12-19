@@ -13,10 +13,10 @@ use std::fmt::Display;
 /// the provided router
 ///
 /// `router` The route to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: Router) -> Router {
     router
         .route("/api/games", get(get_games))
-        .route("/api/games/:id", get(get_game));
+        .route("/api/games/:id", get(get_game))
 }
 
 /// Error type for a game that couldn't be located

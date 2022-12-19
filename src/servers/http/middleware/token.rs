@@ -1,43 +1,38 @@
 use std::{fmt::Display, sync::Arc};
 
 use axum::{
-    body::{boxed, BoxBody, HttpBody},
+    body::boxed,
     http::Request,
+    middleware::Next,
     response::{IntoResponse, Response},
 };
-use futures_util::future::BoxFuture;
-use reqwest::StatusCode;
-use tower::{Layer, Service};
 
 use crate::servers::http::stores::token::TokenStore;
+use reqwest::StatusCode;
 
-/// Layer for providing token based authentication middleware
-pub struct TokenAuthLayer {
-    /// The token store for authenticating
-    store: Arc<TokenStore>,
-}
+pub async fn guard_token_auth<T>(req: Request<T>, next: Next<T>) -> Result<Response, Response> {
+    let Some(store)= req.extensions().get::<Arc<TokenStore>>() else {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR
+            .into_response())
+    };
 
-impl<S> Layer<S> for TokenAuthLayer {
-    type Service = TokenAuthService<S>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        TokenAuthService {
-            store: self.store.clone(),
-            inner,
-        }
-    }
-}
-
-/// Service for providing token authentication wrapping
-/// over the inner service
-pub struct TokenAuthService<S> {
-    store: Arc<TokenStore>,
-    inner: S,
-}
-
-impl<S> TokenAuthService<S> {
     /// The HTTP header that authentication tokens are stored in
     const TOKEN_HEADER: &str = "X-Token";
+
+    // Obtain the token from the headers and convert to owned value
+    let token = req
+        .headers()
+        .get(TOKEN_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.to_owned())
+        .ok_or(TokenAuthError::MissingToken.into_response())?;
+
+    let is_valid = store.is_valid_token(&token).await;
+    if is_valid {
+        Ok(next.run(req).await)
+    } else {
+        Err(TokenAuthError::InvalidToken.into_response())
+    }
 }
 
 /// Error tyoe for
@@ -45,56 +40,6 @@ impl<S> TokenAuthService<S> {
 enum TokenAuthError {
     MissingToken,
     InvalidToken,
-}
-
-impl<S, B, R> Service<Request<B>> for TokenAuthService<S>
-where
-    S: Service<Request<B>, Response = Response<R>>,
-    R: HttpBody + Send + 'static,
-{
-    type Response = Response<BoxBody>;
-    type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    #[inline]
-    fn poll_ready(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request<B>) -> Self::Future {
-        // Obtain the token from the headers and convert to owned value
-        let token = req
-            .headers()
-            .get(Self::TOKEN_HEADER)
-            .and_then(|value| value.to_str().ok())
-            .map(|value| value.to_owned());
-
-        // Create the future for the underlying result using the service
-        let res = self.inner.call(req);
-
-        // Obtain arc clone of the store for use in the pin box
-        let store = self.store.clone();
-
-        Box::pin(async move {
-            if let Some(token) = token {
-                let is_valid = store.is_valid_token(&token).await;
-                if is_valid {
-                    // Valid tokens continue the request
-                    let res = res.await?;
-                    let res = res.map(|value| boxed(value));
-                    Ok(res)
-                } else {
-                    // Invalid tokens throw an error
-                    Ok(TokenAuthError::InvalidToken.into_response())
-                }
-            } else {
-                Ok(TokenAuthError::MissingToken.into_response())
-            }
-        })
-    }
 }
 
 /// Display implementation for the Token Auth Error this will be displayed

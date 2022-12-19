@@ -2,7 +2,6 @@ use crate::{
     state::GlobalState,
     utils::{hashing::hash_password, types::PlayerID, validate::is_email},
 };
-
 use axum::{
     extract::{Path, Query},
     response::{IntoResponse, Response},
@@ -22,7 +21,7 @@ use std::fmt::Display;
 /// the provided router
 ///
 /// `router` The route to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: Router) -> Router {
     router
         .route("/api/players", get(get_players))
         .route("/api/players/:id", get(get_player))
@@ -34,7 +33,7 @@ pub fn route(router: &mut Router) {
         .route("/api/players/:id", put(modify_player))
         .route("/api/players/:id", delete(delete_player))
         .route("/api/players", post(create_player))
-        .route("/api/players/:id/classes/:index", put(update_player_class));
+        .route("/api/players/:id/classes/:index", put(update_player_class))
 }
 
 /// Enum for errors that could occur when accessing any of
@@ -152,7 +151,6 @@ async fn modify_player(
     Path(player_id): Path<PlayerID>,
     Json(req): Json<ModifyPlayerRequest>,
 ) -> PlayersResult<Player> {
-    let req = req.into_inner();
     let db = GlobalState::database();
     let player: Player = find_player(db, player_id).await?;
 
@@ -224,7 +222,6 @@ struct CreatePlayerRequest {
 ///
 /// `req` The request containing the player details
 async fn create_player(Json(req): Json<CreatePlayerRequest>) -> PlayersResult<Player> {
-    let req = req.into_inner();
     let db = GlobalState::database();
     let email = req.email;
     if !is_email(&email) {

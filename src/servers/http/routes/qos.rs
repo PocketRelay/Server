@@ -2,8 +2,13 @@
 //! response address and ports are correct however this request must succeed
 //! or the client doesn't seem to know its external IP
 use crate::{blaze::codec::NetAddress, env};
-
-use axum::{extract::Query, http::header, response::Response, routing::get, Router};
+use axum::{
+    extract::Query,
+    http::{header, HeaderValue},
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
+};
 use log::debug;
 use serde::Deserialize;
 
@@ -11,7 +16,7 @@ use serde::Deserialize;
 /// the provided router
 ///
 /// `router` The route to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: Router) -> Router {
     router.route("/qos/qos", get(qos))
 }
 
@@ -44,7 +49,9 @@ async fn qos(Query(query): Query<QosQuery>) -> Response {
         port, ip.0
     );
     let mut res = response.into_response();
-    res.headers_mut()
-        .insert(header::CONTENT_TYPE, mime::TEXT_XML);
+    res.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(mime::TEXT_XML.as_ref()),
+    );
     res
 }

@@ -1,8 +1,9 @@
-use crate::{env, servers::http::middleware::cors::Cors};
-use actix_web::{middleware::Logger, App, HttpServer};
+use std::net::SocketAddr;
+
+use crate::{env, state::GlobalState};
+use axum::Server;
 use log::{error, info};
-use std::sync::Arc;
-use stores::token::TokenStore;
+use tokio::select;
 
 mod middleware;
 mod routes;
@@ -13,23 +14,18 @@ pub async fn start_server() {
     let port = env::from_env(env::HTTP_PORT);
     info!("Starting HTTP Server on (Port: {port})");
 
-    let result = HttpServer::new(move || {
-        App::new()
-            .wrap(Logger::default())
-            .wrap(Cors)
-            .configure(|cfg| routes::route(cfg, token_store.clone()))
-    })
-    .bind(("0.0.0.0", port));
-    match result {
-        Ok(value) => {
-            if let Err(err) = value.run().await {
-                error!("Error while running HTTP server: {:?}", err);
+    let mut shutdown = GlobalState::shutdown();
+    let router = routes::router();
+    let addr: SocketAddr = ([0, 0, 0, 0], port).into();
+    let future = Server::bind(&addr).serve(router.into_make_service());
+    select! {
+        result = future => {
+            if let Err(err) = result {
+                error!("Failed to bind HTTP server (Port: {}): {:?}", port, err);
                 panic!();
             }
         }
-        Err(err) => {
-            error!("Failed to bind HTTP server (Port: {}): {:?}", port, err);
-            panic!();
-        }
-    }
+        // Shutdown hook to ensure we don't keep trying to process after shutdown
+        _ = shutdown.changed() => { }
+    };
 }

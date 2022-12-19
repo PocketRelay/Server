@@ -4,7 +4,7 @@
 use crate::{env, state::GlobalState, utils::random::generate_random_string};
 use axum::{
     extract::{Path, Query},
-    http::{header, StatusCode},
+    http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Router,
@@ -18,17 +18,17 @@ use tokio::try_join;
 /// the provided router
 ///
 /// `router` The route to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: Router) -> Router {
     router
         .route(
             "/gaw/authentication/sharedTokenLogin",
             get(shared_token_login),
         )
-        .route("gaw/galaxyatwar/getRatings/:id", get(get_ratings))
+        .route("/gaw/galaxyatwar/getRatings/:id", get(get_ratings))
         .route(
             "/gaw/galaxyatwar/increaseRatings/:id",
             get(increase_ratings),
-        );
+        )
 }
 
 #[derive(Debug)]
@@ -105,8 +105,10 @@ async fn shared_token_login(Query(query): Query<AuthQuery>) -> GAWResult<Respons
 </fulllogin>"#
     );
     let mut res = response.into_response();
-    res.headers_mut()
-        .insert(header::CONTENT_TYPE, mime::TEXT_XML);
+    res.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(mime::TEXT_XML.as_ref()),
+    );
     Ok(res)
 }
 
@@ -217,8 +219,10 @@ fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> GAWResult<Response
 "#
     );
     let mut res = response.into_response();
-    res.headers_mut()
-        .insert(header::CONTENT_TYPE, mime::TEXT_XML);
+    res.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(mime::TEXT_XML.as_ref()),
+    );
 
     Ok(res)
 }

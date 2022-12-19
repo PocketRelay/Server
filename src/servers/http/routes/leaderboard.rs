@@ -14,10 +14,10 @@ use std::fmt::Display;
 /// the provided router
 ///
 /// `router` The route to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: Router) -> Router {
     router
         .route("/api/leaderboard/n7", get(get_n7))
-        .route("/api/leaderboard/cp", get(get_cp));
+        .route("/api/leaderboard/cp", get(get_cp))
 }
 
 /// The default number of entries to return in a leaderboard response
