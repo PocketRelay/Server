@@ -27,6 +27,10 @@ const LOGGING_MAX_FILES: u32 = 8;
 pub fn setup() {
     // Configuration from environment
     let logging_level = env::from_env(env::LOGGING_LEVEL);
+    if logging_level == LevelFilter::Off {
+        // Don't initialize logger at all if logging is disabled
+        return;
+    }
     let logging_path = env::env(env::LOGGING_DIR);
     let compression = env::from_env(env::LOG_COMPRESSION);
 

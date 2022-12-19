@@ -36,7 +36,6 @@ database-sqlite = ["database/sqlite"]
 database-mysql = ["database/mysql"]
 
 [dependencies]
-
 log = { workspace = true }
 serde = { workspace = true }
 
@@ -51,7 +50,6 @@ blaze-ssl-async = "^0.1"
 
 # Isolated database crate
 database = { path = "database", package = "pocket-relay-database", version = "^0.2" }
-
 
 # Resource embedding using debug-embed to always resolve relative 
 # to the Cargo.toml file and mime guess for guessing file type
@@ -78,8 +76,7 @@ mime = "0.3.16"
 [dependencies.axum]
 version = "0.6.1"
 default-features = false
-features = ["http1", "json", "matched-path", "query", "tokio", "tower-log"]
-
+features = ["http1", "json", "query", "tokio"]
 
 # HTTP Client
 [dependencies.reqwest]
