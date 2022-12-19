@@ -1573,7 +1573,6 @@ dependencies = [
  "dotenvy",
  "flate2",
  "futures-util",
- "hyper",
  "local-ip-address",
  "log",
  "log4rs",
@@ -1587,7 +1586,6 @@ dependencies = [
  "rust-embed",
  "serde",
  "tokio",
- "tower",
 ]
 
 [[package]]

@@ -1,10 +1,8 @@
 use axum::{
-    http::{header, HeaderValue, Method, Request},
+    http::{header, HeaderValue, Method, Request, StatusCode},
     middleware::Next,
     response::Response,
 };
-
-use hyper::StatusCode;
 
 pub async fn cors_layer<T>(req: Request<T>, next: Next<T>) -> Result<Response, StatusCode> {
     if req.method() == Method::OPTIONS {
