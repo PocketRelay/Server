@@ -34,7 +34,7 @@ pub async fn route(
     packet: &Packet,
 ) -> HandleResult {
     match component {
-        Authentication::Logout => handle_logout(session, packet).await,
+        Authentication::Logout => handle_logout(session, packet),
         Authentication::SilentLogin | Authentication::OriginLogin | Authentication::Login => {
             handle_auth_request(session, packet).await
         }
@@ -45,7 +45,7 @@ pub async fn route(
         Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(packet),
         Authentication::GetTermsOfServiceConent => handle_tos_content(packet).await,
         Authentication::GetPrivacyPolicyContent => handle_privacy_content(packet).await,
-        Authentication::GetAuthToken => handle_get_auth_token(session, packet).await,
+        Authentication::GetAuthToken => handle_get_auth_token(session, packet),
         _ => Ok(packet.respond_empty()),
     }
 }
@@ -237,7 +237,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
 /// ID: 8
 /// Content: {}
 /// ```
-async fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
     session.clear_player();
     Ok(packet.respond_empty())
 }
@@ -510,7 +510,7 @@ async fn handle_privacy_content(packet: &Packet) -> HandleResult {
 /// ID: 35
 /// Content: {}
 /// ```
-async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> HandleResult {
     let player: &Player = session
         .player
         .as_ref()

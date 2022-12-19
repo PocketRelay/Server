@@ -79,27 +79,32 @@ impl Games {
 
     /// Creates a new game from the initial attributes and
     /// settings provided returning the Game ID of the created
-    /// game
-    pub async fn create_game(&self, attributes: TdfMap<String, String>, setting: u16) -> u32 {
+    /// game. This also spawns a task to add the provided host
+    /// player to the game then update the games queue
+    ///
+    /// `attributes` The initial game attributes
+    /// `setting`    The initital game setting
+    /// `host`       The host player
+    pub async fn create_game(
+        &'static self,
+        attributes: TdfMap<String, String>,
+        setting: u16,
+        host: GamePlayer,
+    ) -> u32 {
         let games = &mut *self.games.write().await;
         let id = self.id.fetch_add(1, Ordering::AcqRel);
         let game = Game::new(id, attributes, setting);
         games.insert(id, game);
-        id
-    }
 
-    /// Adds the host session to the game with the provided game
-    /// ID. The game will be compared against any players waiting
-    /// in the matchmaking queue.
-    ///
-    /// `game_id` The ID of the game to add the session to
-    /// `session` The session to add as the host
-    pub async fn add_host(&self, game_id: GameID, player: GamePlayer) {
-        let games = &*self.games.read().await;
-        let Some(game) = games.get(&game_id) else { return; };
-        game.handle_action(GameModifyAction::AddPlayer(player))
-            .await;
-        self.update_queue(game).await;
+        tokio::spawn(async move {
+            let game_id = id;
+            let games = &*self.games.read().await;
+            let Some(game) = games.get(&game_id) else { return; };
+            game.handle_action(GameModifyAction::AddPlayer(host)).await;
+            self.update_queue(game).await;
+        });
+
+        id
     }
 
     /// Updates the matchmaking queue for the provided game. Will look through
@@ -152,45 +157,52 @@ impl Games {
 
     /// Attempts to find a game matching the rules provided by the session and
     /// add that player to the game or if there are no matching games to instead
-    /// push the player to the matchmaking queue. Will return true if a game was
-    /// joined and false if queued.
+    /// push the player to the matchmaking queue.
     ///
     /// `session` The session to get the game for
     /// `rules`   The rules the game must match to be valid
-    pub async fn add_or_queue(&self, player: GamePlayer, rules: RuleSet) -> bool {
-        let rules = Arc::new(rules);
-        let games = &*self.games.read().await;
-        for game in games.values() {
-            let (sender, reciever) = oneshot::channel();
-            game.handle_action(GameModifyAction::CheckJoinable(Some(rules.clone()), sender))
-                .await;
-            let join_state = reciever.await.unwrap_or(GameJoinableState::Full);
-            match join_state {
-                GameJoinableState::Joinable => {
-                    debug!("Found matching game (GID: {})", game.id);
-                    game.handle_action(GameModifyAction::AddPlayer(player))
-                        .await;
-                    return true;
+    pub fn add_or_queue(&'static self, player: GamePlayer, rules: RuleSet) {
+        tokio::spawn(async move {
+            let rules = Arc::new(rules);
+            let games = &*self.games.read().await;
+            for game in games.values() {
+                let (sender, reciever) = oneshot::channel();
+                game.handle_action(GameModifyAction::CheckJoinable(Some(rules.clone()), sender))
+                    .await;
+                let join_state = reciever.await.unwrap_or(GameJoinableState::Full);
+                match join_state {
+                    GameJoinableState::Joinable => {
+                        debug!("Found matching game (GID: {})", game.id);
+                        game.handle_action(GameModifyAction::AddPlayer(player))
+                            .await;
+                        return;
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
-        }
 
-        let queue = &mut self.queue.lock().await;
-        queue.push_back(QueueEntry {
-            player,
-            rules,
-            time: SystemTime::now(),
+            let queue = &mut self.queue.lock().await;
+            queue.push_back(QueueEntry {
+                player,
+                rules,
+                time: SystemTime::now(),
+            });
         });
-
-        false
     }
 
-    pub async fn modify_game(&self, game_id: GameID, action: GameModifyAction) {
-        let games = self.games.read().await;
-        if let Some(game) = games.get(&game_id) {
-            game.handle_action(action).await;
-        }
+    /// Spawns a new task that will execute the modify action on the game
+    /// with the provided `game_id` once a read lock on games has been
+    /// aquired
+    ///
+    /// `game_id` The ID of the game to modify
+    /// `action`  The action to exectue
+    pub fn modify_game(&'static self, game_id: GameID, action: GameModifyAction) {
+        tokio::spawn(async move {
+            let games = self.games.read().await;
+            if let Some(game) = games.get(&game_id) {
+                game.handle_action(action).await;
+            }
+        });
     }
 
     /// Removes any sessions that have the ID provided from the

@@ -28,7 +28,7 @@ pub async fn route(
     match component {
         UserSessions::ResumeSession => handle_resume_session(session, packet).await,
         UserSessions::UpdateNetworkInfo => handle_update_network_info(session, packet).await,
-        UserSessions::UpdateHardwareFlags => handle_update_hardware_flag(session, packet).await,
+        UserSessions::UpdateHardwareFlags => handle_update_hardware_flag(session, packet),
         _ => Ok(packet.respond_empty()),
     }
 }
@@ -87,6 +87,10 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
 /// ```
 async fn handle_update_network_info(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: UpdateNetworkRequest = packet.decode()?;
+
+    // TODO: Possibly spawn this off into a task and have a session
+    // message update the networking information when this is complete?
+
     let mut groups = req.address;
     let external = &mut groups.external;
     if external.0.is_invalid() || external.1 == 0 {
@@ -130,7 +134,7 @@ async fn get_network_address(addr: &SocketAddr) -> NetAddress {
 ///     "HWFG": 0
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_update_hardware_flag(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: HardwareFlagRequest = packet.decode()?;
     session.set_hardware_flag(req.hardware_flag);
     Ok(packet.respond_empty())

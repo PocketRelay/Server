@@ -12,7 +12,7 @@ use blaze_pk::packet::Packet;
 /// `session`   The session that the packet was recieved by
 /// `component` The component of the packet recieved
 /// `packet`    The recieved packet
-pub async fn route(session: &mut Session, component: Messaging, packet: &Packet) -> HandleResult {
+pub fn route(session: &mut Session, component: Messaging, packet: &Packet) -> HandleResult {
     match component {
         Messaging::FetchMessages => handle_fetch_messages(session, packet),
         _ => Ok(packet.respond_empty()),
@@ -32,7 +32,7 @@ pub async fn route(session: &mut Session, component: Messaging, packet: &Packet)
 ///     "PSIZ": 0,
 ///     "SMSK": 0,
 ///     "SORT": 0,
-///     "SRCE": (0, 0, 0),
+///     " (0, 0, 0),
 ///     "STAT": 0,
 ///     "TARG": (0, 0, 0),
 ///     "TYPE": 0

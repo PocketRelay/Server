@@ -6,7 +6,7 @@ use crate::{
     utils::types::GameID,
 };
 use blaze_pk::packet::Packet;
-use log::{debug, info};
+use log::info;
 
 /// Routing function for handling packets with the `GameManager` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -20,10 +20,10 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
         GameManager::CreateGame => handle_create_game(session, packet).await,
         GameManager::AdvanceGameState
         | GameManager::SetGameSettings
-        | GameManager::SetGameAttributes => handle_game_modify(packet).await,
+        | GameManager::SetGameAttributes => handle_game_modify(packet),
         GameManager::RemovePlayer => handle_remove_player(packet),
-        GameManager::UpdateMeshConnection => handle_update_mesh_connection(session, packet).await,
-        GameManager::StartMatchmaking => handle_start_matchmaking(session, packet).await,
+        GameManager::UpdateMeshConnection => handle_update_mesh_connection(session, packet),
+        GameManager::StartMatchmaking => handle_start_matchmaking(session, packet),
         GameManager::CancelMatchmaking => handle_cancel_matchmaking(session, packet),
         _ => Ok(packet.respond_empty()),
     }
@@ -88,10 +88,7 @@ async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleRes
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let games = GlobalState::games();
-    let game_id: GameID = games.create_game(req.attributes, req.setting).await;
-
-    games.add_host(game_id, player).await;
-
+    let game_id: GameID = games.create_game(req.attributes, req.setting, player).await;
     let response = CreateGameResponse { game_id };
     Ok(packet.respond(response))
 }
@@ -137,10 +134,10 @@ async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleRes
 ///     "GID": 1
 /// }
 /// ```
-async fn handle_game_modify(packet: &Packet) -> HandleResult {
+fn handle_game_modify(packet: &Packet) -> HandleResult {
     let req: GameModifyRequest = packet.decode()?;
     let games = GlobalState::games();
-    games.modify_game(req.game_id, req.action).await;
+    games.modify_game(req.game_id, req.action);
     Ok(packet.respond_empty())
 }
 
@@ -183,7 +180,7 @@ fn handle_remove_player(packet: &Packet) -> HandleResult {
 ///     ]
 /// }
 /// ```
-async fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: UpdateMeshRequest = packet.decode()?;
     let target = match req.targets.first() {
         Some(value) => *value,
@@ -191,15 +188,13 @@ async fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -
     };
 
     let games = GlobalState::games();
-    games
-        .modify_game(
-            req.game_id,
-            GameModifyAction::UpdateMeshConnection {
-                session: session.id,
-                target,
-            },
-        )
-        .await;
+    games.modify_game(
+        req.game_id,
+        GameModifyAction::UpdateMeshConnection {
+            session: session.id,
+            target,
+        },
+    );
     Ok(packet.respond_empty())
 }
 
@@ -324,7 +319,7 @@ async fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -
 ///     "VOIP": 2
 /// }
 /// ```
-async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: MatchmakingRequest = packet.decode()?;
 
     let player: GamePlayer = session
@@ -334,9 +329,7 @@ async fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> Han
     info!("Player {} started matchmaking", player.display_name);
 
     let games = GlobalState::games();
-    if games.add_or_queue(player, req.rules).await {
-        debug!("Matchmaking Ended")
-    }
+    games.add_or_queue(player, req.rules);
 
     let response = MatchmakingResponse { id: session.id };
     Ok(packet.respond(response))
