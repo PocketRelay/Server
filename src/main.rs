@@ -35,8 +35,8 @@ async fn main() {
         mitm::start_server().await;
     } else {
         // Spawn the Main server in its own task
-        tokio::spawn(main::start_server());
+        tokio::spawn(http::start_server());
         // Start the HTTP server
-        http::start_server().await;
+        main::start_server().await;
     }
 }

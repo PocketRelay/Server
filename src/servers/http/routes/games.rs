@@ -1,18 +1,22 @@
 use crate::{game::GameSnapshot, state::GlobalState, utils::types::GameID};
-use actix_web::{
-    get,
-    http::StatusCode,
-    web::{Json, Path, Query, ServiceConfig},
-    HttpResponse, Responder, ResponseError,
+use axum::{
+    extract::{Path, Query},
+    response::{IntoResponse, Response},
+    routing::get,
+    Json, Router,
 };
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-/// Function for configuring the services in this route
+/// Function for adding all the routes in this file to
+/// the provided router
 ///
-/// `cfg` Service config to configure
-pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(get_games).service(get_game);
+/// `router` The route to add to
+pub fn route(router: Router) -> Router {
+    router
+        .route("/api/games", get(get_games))
+        .route("/api/games/:id", get(get_game))
 }
 
 /// Error type for a game that couldn't be located
@@ -45,11 +49,9 @@ struct GamesResponse<'a> {
 
 /// Route for retrieving a list of all the games that are currently running.
 /// Will take a snapshot of all the games.
-#[get("/api/games")]
-async fn get_games(query: Query<GamesQuery>) -> impl Responder {
+async fn get_games(Query(query): Query<GamesQuery>) -> Response {
     const DEFAULT_COUNT: usize = 20;
     const DEFAULT_OFFSET: usize = 0;
-    let query = query.into_inner();
 
     let games = GlobalState::games().snapshot().await;
 
@@ -62,6 +64,7 @@ async fn get_games(query: Query<GamesQuery>) -> impl Responder {
     let end_index = (start_index + count).min(games_length);
 
     let more = games_length > end_index;
+
     let games: Option<&[GameSnapshot]> = games.get(start_index..end_index);
     let games = games.unwrap_or(&[]);
 
@@ -72,16 +75,15 @@ async fn get_games(query: Query<GamesQuery>) -> impl Responder {
         more,
     };
 
-    HttpResponse::Ok().json(response)
+    Json(response).into_response()
 }
 
 /// Route for retrieving the details of a game with a specific game ID
 ///
 /// `game_id` The ID of the game
-#[get("/api/games/{id}")]
-async fn get_game(game_id: Path<GameID>) -> Result<Json<GameSnapshot>, GameNotFound> {
+async fn get_game(Path(game_id): Path<GameID>) -> Result<Json<GameSnapshot>, GameNotFound> {
     let games = GlobalState::games()
-        .snapshot_id(game_id.into_inner())
+        .snapshot_id(game_id)
         .await
         .ok_or(GameNotFound)?;
     Ok(Json(games))
@@ -95,9 +97,8 @@ impl Display for GameNotFound {
     }
 }
 
-/// Game not found responses are always 404 errors
-impl ResponseError for GameNotFound {
-    fn status_code(&self) -> StatusCode {
-        StatusCode::NOT_FOUND
+impl IntoResponse for GameNotFound {
+    fn into_response(self) -> Response {
+        (StatusCode::NOT_FOUND, self.to_string()).into_response()
     }
 }

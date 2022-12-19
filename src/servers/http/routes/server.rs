@@ -2,17 +2,15 @@
 //! about the server such as the version and services running
 
 use crate::utils::{constants, env};
-use actix_web::{
-    get,
-    web::{Json, ServiceConfig},
-};
+use axum::{routing::get, Json, Router};
 use serde::Serialize;
 
-/// Function for configuring the services in this route
+/// Function for adding all the routes in this file to
+/// the provided router
 ///
-/// `cfg` Service config to configure
-pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(server_details);
+/// `router` The route to add to
+pub fn route(router: Router) -> Router {
+    router.route("/api/server", get(server_details))
 }
 
 /// Response detailing the information about this Pocket Relay server
@@ -53,7 +51,6 @@ enum ServiceType {
 
 /// Route for retrieving the server details responds with
 /// the list of servers and server version.
-#[get("/api/server")]
 async fn server_details() -> Json<ServerDetails> {
     let redirector_port = env::from_env(env::REDIRECTOR_PORT);
     let main_port = env::from_env(env::MAIN_PORT);

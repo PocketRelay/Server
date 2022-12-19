@@ -21,8 +21,6 @@ const LOGGING_PATTERN: &str = "[{d} {h({l})} {M}] {m}{n}";
 const LOGGING_MAX_SIZE: u64 = 1024 * 1024 * 5;
 /// The max number of logging files to keep before deleting
 const LOGGING_MAX_FILES: u32 = 8;
-/// The modules to enable logging for
-const LOGGING_MODULES: [&str; 2] = ["pocket_relay", "actix_web"];
 
 /// Setup function for setting up the Log4rs logging configuring it
 /// for all the different modules and and setting up file and stdout logging
@@ -59,20 +57,15 @@ pub fn setup() {
 
     const APPENDERS: [&str; 2] = ["stdout", "file"];
 
-    let mut builder = Config::builder()
+    let config = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout_appender)))
-        .appender(Appender::builder().build("file", Box::new(file_appender)));
-
-    for module in LOGGING_MODULES {
-        builder = builder.logger(
+        .appender(Appender::builder().build("file", Box::new(file_appender)))
+        .logger(
             Logger::builder()
                 .appenders(APPENDERS)
                 .additive(false)
-                .build(module, logging_level),
+                .build("pocket_relay", logging_level),
         )
-    }
-
-    let config = builder
         .build(
             Root::builder()
                 .appenders(APPENDERS)

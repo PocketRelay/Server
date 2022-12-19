@@ -52,8 +52,6 @@ blaze-ssl-async = "^0.1"
 # Isolated database crate
 database = { path = "database", package = "pocket-relay-database", version = "^0.2" }
 
-# Actix Web framework and cors library to enable cors
-actix-web = { version = "4", default-features = false, features = ["macros"] }
 
 # Resource embedding using debug-embed to always resolve relative 
 # to the Cargo.toml file and mime guess for guessing file type
@@ -74,6 +72,14 @@ dotenvy = "0.15.5"
 
 # Library for obtaining the local IP address of the device
 local-ip-address = "0.4.9"
+mime = "0.3.16"
+
+# Axum web framework
+[dependencies.axum]
+version = "0.6.1"
+default-features = false
+features = ["http1", "json", "matched-path", "query", "tokio", "tower-log"]
+
 
 # HTTP Client
 [dependencies.reqwest]

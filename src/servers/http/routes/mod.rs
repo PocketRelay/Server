@@ -1,9 +1,9 @@
-use super::{middleware::token::TokenAuth, stores::token::TokenStore};
-use crate::env;
-use actix_web::{
-    web::{Data, ServiceConfig},
-    Scope,
+use super::{
+    middleware::{cors::cors_layer, token::guard_token_auth},
+    stores::token::TokenStore,
 };
+use crate::env;
+use axum::{middleware, Extension, Router};
 use std::sync::Arc;
 
 mod games;
@@ -20,25 +20,42 @@ mod token;
 ///
 /// `cfg`         Service config to configure
 /// `token_store` The token store for token authentication
-pub fn configure(cfg: &mut ServiceConfig, token_store: Arc<TokenStore>) {
-    server::configure(cfg);
-    public::configure(cfg);
-    gaw::configure(cfg);
-    qos::configure(cfg);
+pub fn router() -> Router {
+    let mut router = Router::new();
+
+    router = server::route(router);
+    router = public::route(router);
+    router = gaw::route(router);
+    router = qos::route(router);
 
     // If the API is enabled
     if env::from_env(env::API) {
-        cfg.app_data(Data::from(token_store.clone()));
-        token::configure(cfg);
-        leaderboard::configure(cfg);
+        let token_store = Arc::new(TokenStore::default());
+
+        // Non protected API routes
+        {
+            router = leaderboard::route(router);
+            router = token::route(router);
+        }
 
         // Auth protected routes
-        let middleware = TokenAuth::new(token_store);
-        cfg.service(
-            Scope::new("")
-                .wrap(middleware)
-                .configure(games::configure)
-                .configure(players::configure),
-        );
+        {
+            let mut auth_router = Router::new();
+
+            // Apply the underlying routes
+            auth_router = games::route(auth_router);
+            auth_router = players::route(auth_router);
+
+            // Apply the token auth middleware
+            auth_router = auth_router.layer(middleware::from_fn(guard_token_auth));
+
+            // Merge the protected routes into the main router
+            router = router.merge(auth_router);
+        }
+
+        // Token store is provided to all routes
+        router = router.layer(Extension(token_store));
     }
+
+    router.layer(middleware::from_fn(cors_layer))
 }
