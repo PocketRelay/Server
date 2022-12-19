@@ -2,20 +2,17 @@
 //! response address and ports are correct however this request must succeed
 //! or the client doesn't seem to know its external IP
 use crate::{blaze::codec::NetAddress, env};
-use actix_web::{
-    get,
-    http::header::ContentType,
-    web::{Query, ServiceConfig},
-    HttpResponse, Responder,
-};
+
+use axum::{extract::Query, http::header, response::Response, routing::get, Router};
 use log::debug;
 use serde::Deserialize;
 
-/// Function for configuring the services in this route
+/// Function for adding all the routes in this file to
+/// the provided router
 ///
-/// `cfg` Service config to configure
-pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(qos);
+/// `router` The route to add to
+pub fn route(router: &mut Router) {
+    router.route("/qos/qos", get(qos))
 }
 
 /// Query for the Qualitu Of Service route
@@ -30,8 +27,7 @@ pub struct QosQuery {
 /// port here are just replaced with that of the Main server.
 ///
 /// `query` The query string from the client
-#[get("/qos/qos")]
-async fn qos(query: Query<QosQuery>) -> impl Responder {
+async fn qos(Query(query): Query<QosQuery>) -> Response {
     debug!("Recieved QOS query: (Port: {})", query.port);
 
     let ip = NetAddress::from_ipv4("127.0.0.1");
@@ -47,8 +43,8 @@ async fn qos(query: Query<QosQuery>) -> impl Responder {
 </qos>",
         port, ip.0
     );
-
-    HttpResponse::Ok()
-        .content_type(ContentType::xml())
-        .body(response)
+    let mut res = response.into_response();
+    res.headers_mut()
+        .insert(header::CONTENT_TYPE, mime::TEXT_XML);
+    res
 }

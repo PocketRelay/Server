@@ -1,7 +1,9 @@
-use actix_web::{
-    get,
-    web::{self, ServiceConfig},
-    HttpResponse, Responder,
+use axum::{
+    extract::Path,
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
 };
 use rust_embed::RustEmbed;
 
@@ -10,11 +12,12 @@ use rust_embed::RustEmbed;
 #[folder = "src/resources/public"]
 struct PublicContent;
 
-/// Function for configuring the services in this route
+/// Function for adding all the routes in this file to
+/// the provided router
 ///
-/// `cfg` Service config to configure
-pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(content);
+/// `router` The route to add to
+pub fn route(router: &mut Router) {
+    router.route("/content/*filename", get(content));
 }
 
 /// Function for serving content from the embedded public
@@ -22,14 +25,15 @@ pub fn configure(cfg: &mut ServiceConfig) {
 /// in this url.
 ///
 /// `path` The path of the content to serve
-#[get("/content/{filename:.*}")]
-async fn content(path: web::Path<String>) -> impl Responder {
-    let path = path.into_inner();
+async fn content(Path(path): Path<String>) -> Response {
     if let Some(file) = PublicContent::get(&path) {
-        HttpResponse::Ok()
-            .content_type(mime_guess::from_path(&path).first_or_text_plain().as_ref())
-            .body(file.data.into_owned())
+        let mut response = file.data.into_response();
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            mime_guess::from_path(&path).first_or_text_plain(),
+        );
+        response
     } else {
-        HttpResponse::NotFound().body("Not Found")
+        (StatusCode::NOT_FOUND, "Not Found").into_response()
     }
 }

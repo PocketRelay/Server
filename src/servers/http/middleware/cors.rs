@@ -1,72 +1,64 @@
-use actix_web::{
-    body::EitherBody,
-    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    http::{
-        header::{self, HeaderValue},
-        Method,
-    },
-    Error, HttpResponse,
+use axum::{
+    http::{header, HeaderValue, Method, Request, Response},
+    response::IntoResponse,
 };
-use futures_util::future::LocalBoxFuture;
-use std::future::{ready, Ready};
+use futures_util::future::{ready, BoxFuture};
 
-pub struct Cors;
+use tower::{Layer, Service};
 
-impl<S, B> Transform<S, ServiceRequest> for Cors
-where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-    S::Future: 'static,
+pub struct CorsLayer;
 
-    B: 'static,
-{
-    type Response = ServiceResponse<EitherBody<B>>;
-    type Error = Error;
-    type InitError = ();
-    type Transform = CorsMiddleware<S>;
-    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+impl<S> Layer<S> for CorsLayer {
+    type Service = CorsService<S>;
 
-    fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(CorsMiddleware { service }))
+    fn layer(&self, inner: S) -> Self::Service {
+        CorsService { inner }
     }
 }
 
-pub struct CorsMiddleware<S> {
-    service: S,
+pub struct CorsService<S> {
+    inner: S,
 }
 
-impl<S, B> Service<ServiceRequest> for CorsMiddleware<S>
+impl<S, B, R> Service<Request<B>> for CorsService<S>
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-    S::Future: 'static,
-
-    B: 'static,
+    S: Service<Request<B>, Response = Response<R>>,
 {
-    type Response = ServiceResponse<EitherBody<B>>;
-    type Error = Error;
-    type Future = LocalBoxFuture<'static, Result<ServiceResponse<EitherBody<B>>, Error>>;
+    type Response = EitherResponse<R>;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    forward_ready!(service);
+    #[inline]
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
 
-    fn call(&self, req: ServiceRequest) -> Self::Future {
+    fn call(&mut self, req: Request<B>) -> Self::Future {
         if req.method() == Method::OPTIONS {
-            let res = HttpResponse::Ok()
-                .insert_header((
-                    header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                    HeaderValue::from_static("*"),
-                ))
-                .finish();
-            let res = req.into_response(res);
-            return Box::pin(ready(Ok(res.map_into_right_body())));
-        }
-        let fut = self.service.call(req);
-        Box::pin(async move {
-            let mut res = fut.await?;
-            let headers = res.headers_mut();
-            headers.insert(
+            let mut res = Response::new("");
+            res.headers_mut().insert(
                 header::ACCESS_CONTROL_ALLOW_ORIGIN,
                 HeaderValue::from_static("*"),
             );
-            Ok(res.map_into_left_body())
+            return Box::pin(async move { Ok(EitherResponse::Options(res)) });
+        }
+
+        let res = self.inner.call(req);
+        Box::pin(async move {
+            let mut res = res.await;
+            res.headers_mut().insert(
+                header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                HeaderValue::from_static("*"),
+            );
+            Ok(EitherResponse::Normal(res))
         })
     }
+}
+
+pub enum EitherResponse<R> {
+    Normal(R),
+    Options(Response<&'static str>),
 }

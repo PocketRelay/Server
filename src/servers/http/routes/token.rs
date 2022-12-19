@@ -2,12 +2,12 @@
 //! for dealing with the server API
 
 use crate::servers::http::stores::token::TokenStore;
-use actix_web::{
-    delete, get,
-    http::{header::ContentType, StatusCode},
-    post,
-    web::{Data, Json, Query, ServiceConfig},
-    HttpResponse, Responder, ResponseError,
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{delete, get, post},
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -15,13 +15,15 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-/// Function for configuring the services in this route
+/// Function for adding all the routes in this file to
+/// the provided router
 ///
-/// `cfg` Service config to configure
-pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(get_token)
-        .service(delete_token)
-        .service(validate_token);
+/// `router` The route to add to
+pub fn route(router: &mut Router) {
+    router
+        .route("/api/token", post(get_token))
+        .route("/api/token", delete(delete_token))
+        .route("/api/token", get(validate_token))
 }
 
 /// Structure for possible errors that could happen
@@ -60,10 +62,9 @@ struct GetTokenResponse {
 ///
 /// `body`        The username and password request body
 /// `token_store` The token store to create the token with
-#[post("api/token")]
 async fn get_token(
-    body: Json<GetTokenRequest>,
-    token_store: Data<TokenStore>,
+    Json(body): Json<GetTokenRequest>,
+    State(token_store): State<TokenStore>,
 ) -> TokenResult<GetTokenResponse> {
     let (token, expiry_time): (String, SystemTime) = token_store
         .authenticate(&body.username, &body.password)
@@ -90,15 +91,13 @@ struct DeleteTokenRequest {
 ///
 /// `body`        The token request body
 /// `token_store` The token store to remove the token from
-#[delete("api/token")]
 async fn delete_token(
-    body: Json<DeleteTokenRequest>,
-    token_store: Data<TokenStore>,
-) -> impl Responder {
+    Json(body): Json<DeleteTokenRequest>,
+    State(token_store): State<TokenStore>,
+) -> Response {
     token_store.remove_token(&body.token).await;
-    HttpResponse::Ok()
-        .content_type(ContentType::json())
-        .finish()
+
+    Json(()).into_response()
 }
 
 #[derive(Deserialize)]
@@ -122,10 +121,9 @@ struct ValidateTokenResponse {
 ///
 /// `token`       The token query containing the token
 /// `token_store` The token store to validate with
-#[get("api/token")]
 async fn validate_token(
-    token: Query<ValidateTokenQuery>,
-    token_store: Data<TokenStore>,
+    Query(token): Query<ValidateTokenQuery>,
+    State(token_store): State<TokenStore>,
 ) -> Json<ValidateTokenResponse> {
     let expiry = token_store.get_token_expiry(&token.token).await;
 
@@ -151,10 +149,16 @@ impl Display for TokenError {
     }
 }
 
-impl ResponseError for TokenError {
+impl TokenError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
         }
+    }
+}
+
+impl IntoResponse for TokenError {
+    fn into_response(self) -> Response {
+        (self.status_code(), self.to_string()).into_response()
     }
 }

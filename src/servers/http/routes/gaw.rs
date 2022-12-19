@@ -2,24 +2,33 @@
 //! to retrieve and increase the Galxay At War values for a player
 
 use crate::{env, state::GlobalState, utils::random::generate_random_string};
-use actix_web::{
-    get,
-    http::{header::ContentType, StatusCode},
-    web::{Path, Query, ServiceConfig},
-    HttpResponse, Responder, ResponseError,
+use axum::{
+    extract::{Path, Query},
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
 };
 use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player};
 use serde::Deserialize;
 use std::fmt::Display;
 use tokio::try_join;
 
-/// Function for configuring the services in this route
+/// Function for adding all the routes in this file to
+/// the provided router
 ///
-/// `cfg` Service config to configure
-pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(shared_token_login)
-        .service(get_ratings)
-        .service(increase_ratings);
+/// `router` The route to add to
+pub fn route(router: &mut Router) {
+    router
+        .route(
+            "/gaw/authentication/sharedTokenLogin",
+            get(shared_token_login),
+        )
+        .route("gaw/galaxyatwar/getRatings/:id", get(get_ratings))
+        .route(
+            "/gaw/galaxyatwar/increaseRatings/:id",
+            get(increase_ratings),
+        );
 }
 
 #[derive(Debug)]
@@ -56,8 +65,7 @@ struct AuthQuery {
     auth: String,
 }
 
-#[get("gaw/authentication/sharedTokenLogin")]
-async fn shared_token_login(query: Query<AuthQuery>) -> GAWResult<impl Responder> {
+async fn shared_token_login(Query(query): Query<AuthQuery>) -> GAWResult<Response> {
     let db = GlobalState::database();
     let player = get_player(db, &query.auth).await?;
     let (player, token) = player.with_token(db, generate_random_string).await?;
@@ -96,10 +104,10 @@ async fn shared_token_login(query: Query<AuthQuery>) -> GAWResult<impl Responder
     <tosuri/>
 </fulllogin>"#
     );
-
-    Ok(HttpResponse::build(StatusCode::OK)
-        .content_type(ContentType::xml())
-        .body(response))
+    let mut res = response.into_response();
+    res.headers_mut()
+        .insert(header::CONTENT_TYPE, mime::TEXT_XML);
+    Ok(res)
 }
 
 /// Retrieves the galaxy at war data and promotions count for
@@ -126,10 +134,8 @@ async fn get_player_gaw_data(db: &DatabaseConnection, id: &str) -> GAWResult<(Ga
 /// with the provied ID
 ///
 /// `id` The hex encoded ID of the player
-#[get("gaw/galaxyatwar/getRatings/{id}")]
-async fn get_ratings(id: Path<String>) -> GAWResult<impl Responder> {
+async fn get_ratings(Path(id): Path<String>) -> GAWResult<Response> {
     let db = GlobalState::database();
-    let id = id.into_inner();
     let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
     ratings_response(gaw_data, promotions)
 }
@@ -160,13 +166,11 @@ struct IncreaseQuery {
 ///
 /// `id`    The hex encoded ID of the player
 /// `query` The query data containing the increase values
-#[get("gaw/galaxyatwar/increaseRatings/{id}")]
 async fn increase_ratings(
-    id: Path<String>,
-    query: Query<IncreaseQuery>,
-) -> GAWResult<impl Responder> {
+    Path(id): Path<String>,
+    Query(query): Query<IncreaseQuery>,
+) -> GAWResult<Response> {
     let db = GlobalState::database();
-    let id = id.into_inner();
     let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
     let gaw_data = gaw_data
         .increase(db, (query.a, query.b, query.c, query.d, query.e))
@@ -179,7 +183,7 @@ async fn increase_ratings(
 ///
 /// `ratings`    The galaxy at war ratings value
 /// `promotions` The promotions value
-fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> GAWResult<impl Responder> {
+fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> GAWResult<Response> {
     let a = ratings.group_a;
     let b = ratings.group_b;
     let c = ratings.group_c;
@@ -212,9 +216,11 @@ fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> GAWResult<impl Res
 </galaxyatwargetratings>
 "#
     );
-    Ok(HttpResponse::build(StatusCode::OK)
-        .content_type(ContentType::xml())
-        .body(response))
+    let mut res = response.into_response();
+    res.headers_mut()
+        .insert(header::CONTENT_TYPE, mime::TEXT_XML);
+
+    Ok(res)
 }
 
 impl Display for GAWError {
@@ -233,11 +239,19 @@ impl From<DbErr> for GAWError {
     }
 }
 
-impl ResponseError for GAWError {
+impl GAWError {
     fn status_code(&self) -> StatusCode {
         match self {
             GAWError::InvalidID | GAWError::UnknownID => StatusCode::BAD_REQUEST,
             GAWError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
+    }
+}
+
+impl IntoResponse for GAWError {
+    fn into_response(self) -> Response {
+        let mut response = self.to_string().into_response();
+        *response.status_mut() = self.status_code();
+        response
     }
 }

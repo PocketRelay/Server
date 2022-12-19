@@ -1,31 +1,43 @@
-use crate::servers::http::stores::token::TokenStore;
-use actix_web::{
-    dev::{Service, ServiceRequest, ServiceResponse, Transform},
-    http::StatusCode,
-    Error, ResponseError,
-};
-use std::fmt::Display;
-use std::future::{ready, Future, Ready};
-use std::pin::Pin;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::task;
+use std::{fmt::Display, sync::Arc};
 
-/// Structure for transformer that creates token
-/// authentication middleware
-pub struct TokenAuth {
-    /// The token store
+use axum::{
+    body::{boxed, BoxBody, HttpBody},
+    http::Request,
+    response::{IntoResponse, Response},
+};
+use futures_util::future::BoxFuture;
+use reqwest::StatusCode;
+use tower::{Layer, Service};
+
+use crate::servers::http::stores::token::TokenStore;
+
+/// Layer for providing token based authentication middleware
+pub struct TokenAuthLayer {
+    /// The token store for authenticating
     store: Arc<TokenStore>,
 }
 
-impl TokenAuth {
-    /// creates a new token auth transform with the provided
-    /// token store.
-    ///
-    /// `store` The token store
-    pub fn new(store: Arc<TokenStore>) -> Self {
-        Self { store }
+impl<S> Layer<S> for TokenAuthLayer {
+    type Service = TokenAuthService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        TokenAuthService {
+            store: self.store.clone(),
+            inner,
+        }
     }
+}
+
+/// Service for providing token authentication wrapping
+/// over the inner service
+pub struct TokenAuthService<S> {
+    store: Arc<TokenStore>,
+    inner: S,
+}
+
+impl<S> TokenAuthService<S> {
+    /// The HTTP header that authentication tokens are stored in
+    const TOKEN_HEADER: &str = "X-Token";
 }
 
 /// Error tyoe for
@@ -33,86 +45,54 @@ impl TokenAuth {
 enum TokenAuthError {
     MissingToken,
     InvalidToken,
-    BadRequest,
 }
 
-impl<S, B> Transform<S, ServiceRequest> for TokenAuth
+impl<S, B, R> Service<Request<B>> for TokenAuthService<S>
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
-    S::Future: 'static,
-    B: 'static,
+    S: Service<Request<B>, Response = Response<R>>,
+    R: HttpBody + Send + 'static,
 {
-    type Response = ServiceResponse<B>;
-    type Error = Error;
-    type Transform = TokenAuthMiddleware<S>;
-    type InitError = ();
-    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+    type Response = Response<BoxBody>;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(TokenAuthMiddleware {
-            service: Rc::new(service),
-            store: self.store.clone(),
-        }))
-    }
-}
-
-/// Middleware structure for token authentication. Contains the service
-/// behind a reference counter and the token store
-pub struct TokenAuthMiddleware<S> {
-    /// The service
-    service: Rc<S>,
-    /// The token store
-    store: Arc<TokenStore>,
-}
-
-impl<S> TokenAuthMiddleware<S> {
-    /// The HTTP header that authentication tokens are stored in
-    const TOKEN_HEADER: &str = "X-Token";
-}
-
-/// Service implementation for the Token Auth Middleware which checks the header
-///
-impl<S, B> Service<ServiceRequest> for TokenAuthMiddleware<S>
-where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
-    S::Future: 'static,
-    B: 'static,
-{
-    type Response = ServiceResponse<B>;
-    type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + 'static>>;
-
-    /// Function for polling the readiness of the service. This is forwarded
-    /// onto the underlying service readyness
     #[inline]
-    fn poll_ready(&self, ctx: &mut task::Context<'_>) -> task::Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(ctx)
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
     }
 
-    /// Handles the actual middleware action of checking the header token and
-    /// returning Errors or completing the underlying request for the response.
-    ///
-    /// `req` The service request
-    fn call(&self, req: ServiceRequest) -> Self::Future {
-        let service = self.service.clone();
+    fn call(&mut self, req: Request<B>) -> Self::Future {
+        // Obtain the token from the headers and convert to owned value
+        let token = req
+            .headers()
+            .get(Self::TOKEN_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.to_owned());
+
+        // Create the future for the underlying result using the service
+        let res = self.inner.call(req);
+
+        // Obtain arc clone of the store for use in the pin box
         let store = self.store.clone();
+
         Box::pin(async move {
-            let headers = req.headers();
-            // Obtain the token from the headers
-            let token_header = headers
-                .get(Self::TOKEN_HEADER)
-                .ok_or(TokenAuthError::MissingToken)?;
-            let token = token_header
-                .to_str()
-                .map_err(|_| TokenAuthError::BadRequest)?;
-
-            // Invalid tokens throw an error
-            if !store.is_valid_token(token).await {
-                return Err(TokenAuthError::InvalidToken.into());
+            if let Some(token) = token {
+                let is_valid = store.is_valid_token(&token).await;
+                if is_valid {
+                    // Valid tokens continue the request
+                    let res = res.await?;
+                    let res = res.map(|value| boxed(value));
+                    Ok(res)
+                } else {
+                    // Invalid tokens throw an error
+                    Ok(TokenAuthError::InvalidToken.into_response())
+                }
+            } else {
+                Ok(TokenAuthError::MissingToken.into_response())
             }
-
-            // Valid tokens continue the request
-            service.call(req).await
         })
     }
 }
@@ -124,22 +104,21 @@ impl Display for TokenAuthError {
         f.write_str(match self {
             Self::MissingToken => "Missing token",
             Self::InvalidToken => "Invalid token",
-            Self::BadRequest => "Bad request",
         })
     }
 }
 
-/// Response error implementation to allow the TokenAuthError to be used
-/// as error responses. The status codes for the different request codes
-/// are implemented here to.
-///
-/// Missing token & Bad Request are both (400 Bad Request)
-/// Invalid Token is (401 Unauthorized)
-impl ResponseError for TokenAuthError {
-    fn status_code(&self) -> actix_web::http::StatusCode {
+impl TokenAuthError {
+    fn status_code(&self) -> StatusCode {
         match self {
-            Self::MissingToken | Self::BadRequest => StatusCode::BAD_REQUEST,
+            Self::MissingToken => StatusCode::BAD_REQUEST,
             Self::InvalidToken => StatusCode::UNAUTHORIZED,
         }
+    }
+}
+
+impl IntoResponse for TokenAuthError {
+    fn into_response(self) -> Response {
+        (self.status_code(), boxed(self.to_string())).into_response()
     }
 }

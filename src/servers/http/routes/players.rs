@@ -2,36 +2,39 @@ use crate::{
     state::GlobalState,
     utils::{hashing::hash_password, types::PlayerID, validate::is_email},
 };
-use actix_web::{
-    delete, get,
-    http::StatusCode,
-    post, put,
-    web::{Json, Path, Query, ServiceConfig},
-    HttpResponse, Responder, ResponseError,
+
+use axum::{
+    extract::{Path, Query},
+    response::{IntoResponse, Response},
+    routing::{delete, get, post, put},
+    Json, Router,
 };
 use database::{
     dto::players::PlayerUpdate, DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter,
     PlayerClass,
 };
 use futures_util::try_join;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-/// Function for configuring the services in this route
+/// Function for adding all the routes in this file to
+/// the provided router
 ///
-/// `cfg` Service config to configure
-pub fn configure(cfg: &mut ServiceConfig) {
-    cfg.service(get_players)
-        .service(get_player)
-        .service(get_player_full)
-        .service(get_player_classes)
-        .service(get_player_characters)
-        .service(get_player_gaw)
-        .service(modify_player)
-        .service(delete_player)
-        .service(create_player)
-        .service(get_player_class)
-        .service(update_player_class);
+/// `router` The route to add to
+pub fn route(router: &mut Router) {
+    router
+        .route("/api/players", get(get_players))
+        .route("/api/players/:id", get(get_player))
+        .route("/api/players/:id/full", get(get_player_full))
+        .route("/api/players/:id/classes/:index", get(get_player_class))
+        .route("/api/players/:id/classes", get(get_player_classes))
+        .route("/api/players/:id/characters", get(get_player_characters))
+        .route("/api/players/:id/galaxy_at_war", get(get_player_gaw))
+        .route("/api/players/:id", put(modify_player))
+        .route("/api/players/:id", delete(delete_player))
+        .route("/api/players", post(create_player))
+        .route("/api/players/:id/classes/:index", put(update_player_class));
 }
 
 /// Enum for errors that could occur when accessing any of
@@ -92,12 +95,10 @@ struct PlayersResponse {
 /// is the number of rows to collect. Offset = offset * count
 ///
 /// `query` The query containing the offset and count values
-#[get("/api/players")]
-async fn get_players(query: Query<PlayersQuery>) -> PlayersResult<PlayersResponse> {
+async fn get_players(Query(query): Query<PlayersQuery>) -> PlayersResult<PlayersResponse> {
     const DEFAULT_COUNT: u8 = 20;
     const DEFAULT_OFFSET: u16 = 0;
 
-    let query = query.into_inner();
     let db = GlobalState::database();
     let count = query.count.unwrap_or(DEFAULT_COUNT);
     let offset = query.offset as u64 * count as u64;
@@ -115,10 +116,9 @@ async fn get_players(query: Query<PlayersQuery>) -> PlayersResult<PlayersRespons
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find
-#[get("/api/players/{id}")]
-async fn get_player(path: Path<PlayerID>) -> PlayersResult<Player> {
+async fn get_player(Path(player_id): Path<PlayerID>) -> PlayersResult<Player> {
     let db = GlobalState::database();
-    let player = find_player(db, path.into_inner()).await?;
+    let player = find_player(db, player_id).await?;
     Ok(Json(player))
 }
 
@@ -148,14 +148,13 @@ struct ModifyPlayerRequest {
 ///
 /// `path` The route path with the ID for the player to find
 /// `req`  The request body
-#[put("/api/players/{id}")]
 async fn modify_player(
-    path: Path<PlayerID>,
-    req: Json<ModifyPlayerRequest>,
+    Path(player_id): Path<PlayerID>,
+    Json(req): Json<ModifyPlayerRequest>,
 ) -> PlayersResult<Player> {
     let req = req.into_inner();
     let db = GlobalState::database();
-    let player: Player = find_player(db, path.into_inner()).await?;
+    let player: Player = find_player(db, player_id).await?;
 
     let email = if let Some(email) = req.email {
         // Ensure the email is valid email format
@@ -224,8 +223,7 @@ struct CreatePlayerRequest {
 /// request.
 ///
 /// `req` The request containing the player details
-#[post("/api/players")]
-async fn create_player(req: Json<CreatePlayerRequest>) -> PlayersResult<Player> {
+async fn create_player(Json(req): Json<CreatePlayerRequest>) -> PlayersResult<Player> {
     let req = req.into_inner();
     let db = GlobalState::database();
     let email = req.email;
@@ -244,12 +242,11 @@ async fn create_player(req: Json<CreatePlayerRequest>) -> PlayersResult<Player> 
 /// Route for deleting a player using its Player ID
 ///
 /// `path` The route path with the ID for the player to find
-#[delete("/api/players/{id}")]
-async fn delete_player(path: Path<PlayerID>) -> Result<impl Responder, PlayersError> {
+async fn delete_player(Path(player_id): Path<PlayerID>) -> Result<Response, PlayersError> {
     let db = GlobalState::database();
-    let player: Player = find_player(db, path.into_inner()).await?;
+    let player: Player = find_player(db, player_id).await?;
     player.delete(db).await?;
-    Ok(HttpResponse::Ok().finish())
+    Ok(StatusCode::OK.into_response())
 }
 
 /// Response structure for a response from the full player route
@@ -271,10 +268,9 @@ struct FullPlayerResponse {
 /// classes, characters, and galaxy at war data for the player
 ///
 /// `path` The route path with the ID for the player to find
-#[get("/api/players/{id}/full")]
-async fn get_player_full(path: Path<PlayerID>) -> PlayersResult<FullPlayerResponse> {
+async fn get_player_full(Path(player_id): Path<PlayerID>) -> PlayersResult<FullPlayerResponse> {
     let db = GlobalState::database();
-    let player: Player = find_player(db, path.into_inner()).await?;
+    let player: Player = find_player(db, player_id).await?;
 
     let (classes, characters, galaxy_at_war) = try_join!(
         PlayerClass::find_all(db, &player),
@@ -294,10 +290,9 @@ async fn get_player_full(path: Path<PlayerID>) -> PlayersResult<FullPlayerRespon
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find the classes for
-#[get("/api/players/{id}/classes")]
-async fn get_player_classes(path: Path<PlayerID>) -> PlayersResult<Vec<PlayerClass>> {
+async fn get_player_classes(Path(player_id): Path<PlayerID>) -> PlayersResult<Vec<PlayerClass>> {
     let db = GlobalState::database();
-    let player: Player = find_player(db, path.into_inner()).await?;
+    let player: Player = find_player(db, player_id).await?;
     let classes = PlayerClass::find_all(db, &player).await?;
     Ok(Json(classes))
 }
@@ -316,9 +311,9 @@ struct UpdateClassRequest {
 /// matches the provided {id} with the provided {index}
 ///
 /// `path` The route path with the ID for the player to find the classes for
-#[get("/api/players/{id}/classes/{index}")]
-async fn get_player_class(path: Path<(PlayerID, u16)>) -> PlayersResult<PlayerClass> {
-    let (player_id, index) = path.into_inner();
+async fn get_player_class(
+    Path((player_id, index)): Path<(PlayerID, u16)>,
+) -> PlayersResult<PlayerClass> {
     let db = GlobalState::database();
     let player: Player = find_player(db, player_id).await?;
     let class: PlayerClass = PlayerClass::find_index(db, &player, index)
@@ -332,12 +327,10 @@ async fn get_player_class(path: Path<(PlayerID, u16)>) -> PlayersResult<PlayerCl
 ///
 /// `path` The route path with the ID for the player to find the classes for and class index
 /// `req`  The update class request
-#[put("/api/players/{id}/classes/{index}")]
 async fn update_player_class(
-    path: Path<(PlayerID, u16)>,
-    req: Json<UpdateClassRequest>,
+    Path((player_id, index)): Path<(PlayerID, u16)>,
+    Json(req): Json<UpdateClassRequest>,
 ) -> PlayersResult<PlayerClass> {
-    let (player_id, index) = path.into_inner();
     let db = GlobalState::database();
     let player: Player = find_player(db, player_id).await?;
     let class: PlayerClass = PlayerClass::find_index(db, &player, index)
@@ -351,10 +344,11 @@ async fn update_player_class(
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find the characters for
-#[get("/api/players/{id}/characters")]
-async fn get_player_characters(path: Path<PlayerID>) -> PlayersResult<Vec<PlayerCharacter>> {
+async fn get_player_characters(
+    Path(player_id): Path<PlayerID>,
+) -> PlayersResult<Vec<PlayerCharacter>> {
     let db = GlobalState::database();
-    let player: Player = find_player(db, path.into_inner()).await?;
+    let player: Player = find_player(db, player_id).await?;
     let characters = PlayerCharacter::find_all(db, &player).await?;
     Ok(Json(characters))
 }
@@ -363,10 +357,9 @@ async fn get_player_characters(path: Path<PlayerID>) -> PlayersResult<Vec<Player
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find the characters for
-#[get("/api/players/{id}/galaxy_at_war")]
-async fn get_player_gaw(path: Path<PlayerID>) -> PlayersResult<GalaxyAtWar> {
+async fn get_player_gaw(Path(player_id): Path<PlayerID>) -> PlayersResult<GalaxyAtWar> {
     let db = GlobalState::database();
-    let player = find_player(db, path.into_inner()).await?;
+    let player = find_player(db, player_id).await?;
     let galax_at_war = GalaxyAtWar::find_or_create(db, &player, 0.0).await?;
     Ok(Json(galax_at_war))
 }
@@ -388,8 +381,8 @@ impl Display for PlayersError {
 /// Response code implementation for PlayersError. The PlayerNotFound
 /// implementation uses the NOT_FOUND status code and all other errors
 /// use INTERNAL_SERVER_ERROR
-impl ResponseError for PlayersError {
-    fn status_code(&self) -> actix_web::http::StatusCode {
+impl PlayersError {
+    fn status_code(&self) -> StatusCode {
         match self {
             Self::ClassNotFound => StatusCode::NOT_FOUND,
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
@@ -404,5 +397,11 @@ impl ResponseError for PlayersError {
 impl From<DbErr> for PlayersError {
     fn from(_: DbErr) -> Self {
         PlayersError::ServerError
+    }
+}
+
+impl IntoResponse for PlayersError {
+    fn into_response(self) -> Response {
+        (self.status_code(), self.to_string()).into_response()
     }
 }

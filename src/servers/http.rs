@@ -13,13 +13,11 @@ pub async fn start_server() {
     let port = env::from_env(env::HTTP_PORT);
     info!("Starting HTTP Server on (Port: {port})");
 
-    let token_store = Arc::new(TokenStore::default());
-
     let result = HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
             .wrap(Cors)
-            .configure(|cfg| routes::configure(cfg, token_store.clone()))
+            .configure(|cfg| routes::route(cfg, token_store.clone()))
     })
     .bind(("0.0.0.0", port));
     match result {
