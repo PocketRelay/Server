@@ -7,7 +7,6 @@ use axum::{
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
 
 /// Function for adding all the routes in this file to
 /// the provided router
@@ -18,10 +17,6 @@ pub fn route(router: Router) -> Router {
         .route("/api/games", get(get_games))
         .route("/api/games/:id", get(get_game))
 }
-
-/// Error type for a game that couldn't be located
-#[derive(Debug)]
-struct GameNotFound;
 
 /// The query structure for a players query
 #[derive(Deserialize)]
@@ -49,6 +44,8 @@ struct GamesResponse<'a> {
 
 /// Route for retrieving a list of all the games that are currently running.
 /// Will take a snapshot of all the games.
+///
+/// `query` The query containing the offset and count
 async fn get_games(Query(query): Query<GamesQuery>) -> Response {
     const DEFAULT_COUNT: usize = 20;
     const DEFAULT_OFFSET: usize = 0;
@@ -78,6 +75,10 @@ async fn get_games(Query(query): Query<GamesQuery>) -> Response {
     Json(response).into_response()
 }
 
+/// Error type used when a game with a specific ID was requested
+/// but was not found when attempting to take a snapshot
+struct GameNotFound;
+
 /// Route for retrieving the details of a game with a specific game ID
 ///
 /// `game_id` The ID of the game
@@ -89,16 +90,10 @@ async fn get_game(Path(game_id): Path<GameID>) -> Result<Json<GameSnapshot>, Gam
     Ok(Json(games))
 }
 
-/// Display for game not found just an error message saying it couldn't
-/// find any games with that ID
-impl Display for GameNotFound {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Game with that ID not found")
-    }
-}
-
+/// IntoResponse implementation for GameNotFound to allow it to be
+/// used within the result type as a error response
 impl IntoResponse for GameNotFound {
     fn into_response(self) -> Response {
-        (StatusCode::NOT_FOUND, self.to_string()).into_response()
+        (StatusCode::NOT_FOUND, "Game with that ID not found").into_response()
     }
 }
