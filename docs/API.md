@@ -15,6 +15,11 @@ you see these icons next to a route they have the following meanings
 | 🟠    | Semi Stable / Internal feature. Route is used for internal purposes and may change but changes will be reflected in the internal tooling |
 | 🔴    | Unstable could change at any time                                                                                                        |
 
+# Dynamic Paths
+
+Certain ruotes contain dynamically matched paths such as /api/players/:player_id matched portions of paths start with `:` when you see part of a path starting with `:` you should
+replace this part of the URL with a specific value
+
 
 # Token API 🟢
 
@@ -300,10 +305,10 @@ POST /api/players
 ## Get Specific Player
 
 ```
-GET /api/players/{PLAYER_ID}
+GET /api/players/:player_id
 ```
 
-Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
 a specific ID. This only includes the basic player data and not the classes or characters
 
 ### Response
@@ -341,7 +346,7 @@ a specific ID. This only includes the basic player data and not the classes or c
 ## Update Player
 
 ```
-PUT /api/players/{PLAYER_ID}
+PUT /api/players/:player_id
 ```
 
 ```json 
@@ -357,7 +362,7 @@ PUT /api/players/{PLAYER_ID}
 ```
 
 
-Replacing {PLAYER_ID} with the ID of the player 
+Replacing :player_id with the ID of the player 
 
 You can omit any of the fields within this JSON to only update specific values
 however if you specific "origin" as false the "password" field must be present
@@ -403,10 +408,10 @@ The response is the player structure but with the new values updated
 ## Get Specific Player Full
 
 ```
-GET /api/players/{PLAYER_ID}/full
+GET /api/players/:player_id/full
 ```
 
-Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
 a specific ID. This includes all the player data, classes, characters and galaxy at war data.
 
 ### Response
@@ -491,10 +496,10 @@ a specific ID. This includes all the player data, classes, characters and galaxy
 ## Get Specific Player Classes
 
 ```
-GET /api/players/{PLAYER_ID}/classes
+GET /api/players/:player_id/classes
 ```
 
-Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
 a specific ID. This only includes the classes for the player
 
 ### Response
@@ -522,11 +527,11 @@ a specific ID. This only includes the classes for the player
 ## Get Specific Player Class
 
 ```
-GET /api/players/{PLAYER_ID}/classes/{INDEX}
+GET /api/players/:player_id}/classes/:index
 ```
 
-Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
-a specific ID. This only includes the classes for the player. Replacing {INDEX} with the class index
+Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
+a specific ID. This only includes the classes for the player. Replacing :index with the class index
 
 ### Response
 
@@ -552,10 +557,10 @@ a specific ID. This only includes the classes for the player. Replacing {INDEX} 
 ## Update Player Class
 
 ```
-PUT /api/players/{PLAYER_ID}/classes/{INDEX}
+PUT /api/players/:player_id/classes/:index
 ```
 
-Replacing {PLAYER_ID} with the ID. Replacing {INDEX} with the class index
+Replacing :player_id with the ID. Replacing :index with the class index
 
 ```json
 {
@@ -588,10 +593,10 @@ Replacing {PLAYER_ID} with the ID. Replacing {INDEX} with the class index
 ## Get Specific Player Characters
 
 ```
-GET /api/players/{PLAYER_ID}/characters
+GET /api/players/:player_id/characters
 ```
 
-Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
 a specific ID. This only includes the characters for the player
 
 ### Response
@@ -636,10 +641,10 @@ a specific ID. This only includes the characters for the player
 ## Get Specific Player Galaxy At War
 
 ```
-GET /api/players/{PLAYER_ID}/galaxy_at_war
+GET /api/players/:player_id/galaxy_at_war
 ```
 
-Replacing {PLAYER_ID} with the ID of the player this route allows you to get only the player data for a player with
+Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
 a specific ID. This only includes the galaxy at war data for the player
 
 ### Response
@@ -748,10 +753,10 @@ The "games" field contains a list of games that are running on the server. The "
 ## Get Game Specific
 
 ```http
-GET /api/games/{GAME_ID}
+GET /api/games/:game_id
 ```
 
-This route allows retrieving a specific game based on its game ID. Replace {GAME_ID} with the ID of
+This route allows retrieving a specific game based on its game ID. Replace :game_id with the ID of
 the game to retrieve
 
 ### Response
