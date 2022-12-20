@@ -89,7 +89,7 @@ async fn get_leaderboard(
 
     // Calculate the start and ending indexes
     let start_index: usize = query.offset * (count as usize);
-    let end_index: usize = (start_index + (count as usize)).min(group.values.len());
+    let end_index: usize = (start_index + (count as usize)).min(values.len());
 
     // Calculate if there are more entries after the current offset
     let more: bool = group.values.len() > end_index;
