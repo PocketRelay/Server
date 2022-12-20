@@ -48,7 +48,7 @@ pub enum TokenError {
     InvalidToken,
 }
 
-/// Display implementation for the Token Auth Error this will be displayed
+/// Display implementation for the TokenError this will be displayed
 /// as the error response message.
 impl Display for TokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

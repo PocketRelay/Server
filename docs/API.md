@@ -290,11 +290,11 @@ POST /api/players
 ```
 ### Error Responses 
 
-| Status Code               | Body                                            | Meaning                                                          |
-| ------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
-| 400 Bad Request           | Email address is already taken                          | The provided email address is already in use                     |
-| 400 Bad Request           | Email address is not valid                      | The provided email address is not a valid email address          |
-| 500 Internal Server Error | Internal Server Error                           | Database or other server error occurred                          |
+| Status Code               | Body                           | Meaning                                                 |
+| ------------------------- | ------------------------------ | ------------------------------------------------------- |
+| 400 Bad Request           | Email address is already taken | The provided email address is already in use            |
+| 400 Bad Request           | Email address is not valid     | The provided email address is not a valid email address |
+| 500 Internal Server Error | Internal Server Error          | Database or other server error occurred                 |
 
 
 ## Get Specific Player
@@ -394,7 +394,7 @@ The response is the player structure but with the new values updated
 | Status Code               | Body                                            | Meaning                                                          |
 | ------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
 | 404 Not Found             | Couldn't find any players with that ID          | Player with matching ID could not be found                       |
-| 400 Bad Request           | Email address is already taken                          | The provided email address is already in use                     |
+| 400 Bad Request           | Email address is already taken                  | The provided email address is already in use                     |
 | 400 Bad Request           | Email address is not valid                      | The provided email address is not a valid email address          |
 | 400 Bad Request           | Origin was set to false so password is required | The "origin" field was set to false without the "password" field |
 | 500 Internal Server Error | Internal Server Error                           | Database or other server error occurred                          |
@@ -810,56 +810,99 @@ the game to retrieve
 
 # Leaderboard API 🟢
 
-## N7 Rating Leaderboard
+API for accessing the leaderboards stored within the server. (Leaderboards are cached internally for 1 hour both for the API and for the in game leaderboard)
+
+## Leaderboard Keys
+
+The following table is the available leaderboard keys that can be used as the :name route path to decide
+which leaderboard to obtain entires from
+
+| Name | Description                                                 |
+| ---- | ----------------------------------------------------------- |
+| n7   | Leaderboard ranked on the N7 Rating of each player          |
+| cp   | Leaderboard ranked on Challenge point count  of each player |
+
+These keys are used by both of the leaderboard endpoints
+
+## List Leaderboard
 
 ```http
-GET /api/leaderboard/n7?count=20&offset=0
+GET /api/leaderboard/:name?count=20&offset=0
 ```
+This route allows you to retrieve a specific leaderboard. Responses are paginated
 
-This route allows you to retrieve the N7 ratings leaderboard. The `count` query parameter is the
-number of leaderboard entries to retrieve; Omitting this will default to 20. The `offset` query
-parameter is the number of entries to skip from the top. There is another optional query parameter
-`player` which when specified will only respond with that entry instead of multiple
+### Query Paramaters
 
-### List Response
+| Key    | Optional | Description                                                                   |
+| ------ | -------- | ----------------------------------------------------------------------------- |
+| offset | Yes      | Optional offset parameter to offset the current page (start = offset * count) |
+| count  | Yes      | Optional count value to change how many entries are returned                  |
+
+> The default count value is 40 entries to prevent and the maximum count value is 255 to prevent the server from having to serialize massive lists you should use this
+> in a paginated way instead of querying all 255 entries
+
+### Response
+
+The "entries" field contains all the leaderboard entries at the current offset which is at most the provided
+count. The "more" field contains whether there are more entires at the next offset value which can be used to 
+determine whether a next page is available for pagination
 
 ```json
-[
-    {
-        "player_id": 3,
-        "player_name": "Jacobtread",
-        "rank": 1,
-        "value": 45980
-    },
-    {
-        "player_id": 1,
-        "player_name": "test@test.com",
-        "rank": 2,
-        "value": 61
-    },
-    {
-        "player_id": 4,
-        "player_name": "test1@test.com",
-        "rank": 3,
-        "value": 1
-    },
-    {
-        "player_id": 5,
-        "player_name": "test2@test.com",
-        "rank": 4,
-        "value": 1
-    },
-    {
-        "player_id": 6,
-        "player_name": "test3@test.com",
-        "rank": 5,
-        "value": 1
-    }
-]
+{
+    "entries": [
+        {
+            "player_id": 3,
+            "player_name": "Jacobtread",
+            "rank": 1,
+            "value": 45980
+        },
+        {
+            "player_id": 1,
+            "player_name": "test@test.com",
+            "rank": 2,
+            "value": 61
+        },
+        {
+            "player_id": 4,
+            "player_name": "test1@test.com",
+            "rank": 3,
+            "value": 1
+        },
+        {
+            "player_id": 5,
+            "player_name": "test2@test.com",
+            "rank": 4,
+            "value": 1
+        },
+        {
+            "player_id": 6,
+            "player_name": "test3@test.com",
+            "rank": 5,
+            "value": 1
+        }
+    ],
+    "more": true
+}
 
 ```
 
-### Single Player Response
+### Error Responses 
+
+| Status Code               | Body                  | Meaning                                                                        |
+| ------------------------- | --------------------- | ------------------------------------------------------------------------------ |
+| 500 Internal Server Error | Server Error Occurred | An error occurred on the server likely a failure when updating the leaderboard |
+| 404 Not Found             | Leaderboard not found | The leaderboard key you used was not valid                                     |
+
+
+## Specific player ranking
+
+```http
+GET /api/leaderboard/:name/:player_id
+```
+
+This route allows you to retrieve the leader board entry of a specific player using the players ID.
+
+### Response
 
 ```json
 {
@@ -875,72 +918,5 @@ parameter is the number of entries to skip from the top. There is another option
 | Status Code               | Body                  | Meaning                                                                                                                      |
 | ------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | 404 Not Found             | Player not found      | The specific player you queried for could not be found its possible the leaderboard hasnt updated to include this player yet |
+| 404 Not Found             | Leaderboard not found | The leaderboard key you used was not valid                                                                                   |
 | 500 Internal Server Error | Server Error Occurred | An error occurred on the server likely a failure when updating the leaderboard                                               |
-
-## Challenge Points Leaderboard
-
-```http
-GET /api/leaderboard/cp?count=20&offset=0
-```
-
-This route allows you to retrieve the N7 ratings leaderboard. The `count` query parameter is the
-number of leaderboard entries to retrieve; Omitting this will default to 20. The `offset` query
-parameter is the number of entries to skip from the top. There is another optional query parameter
-`player` which when specified will only respond with that entry instead of multiple
-
-### List Response
-
-```json
-[
-    {
-        "player_id": 3,
-        "player_name": "Jacobtread",
-        "rank": 1,
-        "value": 45980
-    },
-    {
-        "player_id": 1,
-        "player_name": "test@test.com",
-        "rank": 2,
-        "value": 61
-    },
-    {
-        "player_id": 4,
-        "player_name": "test1@test.com",
-        "rank": 3,
-        "value": 1
-    },
-    {
-        "player_id": 5,
-        "player_name": "test2@test.com",
-        "rank": 4,
-        "value": 1
-    },
-    {
-        "player_id": 6,
-        "player_name": "test3@test.com",
-        "rank": 5,
-        "value": 1
-    }
-]
-
-```
-
-### Single Player Response
-
-```json
-{
-    "player_id": 3,
-    "player_name": "Jacobtread",
-    "rank": 1,
-    "value": 45980
-}
-```
-
-### Error Responses 
-
-| Status Code               | Body                  | Meaning                                                                                                                      |
-| ------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 404 Not Found             | Player not found      | The specific player you queried for could not be found its possible the leaderboard hasnt updated to include this player yet |
-| 500 Internal Server Error | Server Error Occurred | An error occurred on the server likely a failure when updating the leaderboard                                               |
-
