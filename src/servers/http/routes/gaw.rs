@@ -1,8 +1,13 @@
 //! Routes for the Galaxy At War API used by the Mass Effect 3 client in order
-//! to retrieve and increase the Galxay At War values for a player
+//! to retrieve and increase the Galxay At War values for a player.
+//!
+//! This API is not documented as it is not intended to be used by anyone
+//! other than the Mass Effect 3 client itself.
 
 use crate::{
-    env, servers::http::ext::Xml, state::GlobalState, utils::random::generate_random_string,
+    env,
+    servers::http::ext::{ErrorStatusCode, Xml},
+    state::GlobalState,
 };
 use axum::{
     extract::{Path, Query},
@@ -33,81 +38,64 @@ pub fn route(router: Router) -> Router {
         )
 }
 
-#[derive(Debug)]
+/// Error type used in gaw routes to handle errors such
+/// as being unable to parse player IDs, find players
+/// or Database errors
 enum GAWError {
+    /// The provided player ID was not a valid hex value
     InvalidID,
-    UnknownID,
-    DatabaseError(DbErr),
+    /// The player could not be found
+    PlayerNotFound,
+    /// There was a server error
+    ServerError,
 }
 
-type GAWResult<T> = Result<T, GAWError>;
-
-/// Attempts to find a player in the database with a matching player ID
-/// to the provided ID that is hex encoded.
-///
-/// `db` The database connection
-/// `id` The hex encoded player ID
-async fn get_player(db: &DatabaseConnection, id: &str) -> GAWResult<Player> {
-    let id = match u32::from_str_radix(id, 16) {
-        Ok(value) => value,
-        Err(_) => return Err(GAWError::InvalidID),
-    };
-    let player = match Player::by_id(db, id).await? {
-        Some(value) => value,
-        None => return Err(GAWError::UnknownID),
-    };
-    Ok(player)
-}
-
-/// Query for authenticating with a shared login token. In this case
-/// the shared login token is simply the hex encoded ID of the player
+/// Query for authenticating with a shared login token.
 #[derive(Deserialize)]
 struct AuthQuery {
-    /// The authentication token
+    /// The authentication token (This is just a hex encoded player ID)
     auth: String,
 }
 
-async fn shared_token_login(Query(query): Query<AuthQuery>) -> GAWResult<Xml> {
-    let db = GlobalState::database();
-    let player = get_player(db, &query.auth).await?;
-    let (player, token) = player.with_token(db, generate_random_string).await?;
-
-    let id = player.id;
-    let sess = format!("{:x}", id);
-    let display_name = player.display_name;
-    let email = player.email;
-
+/// Route for handling shared token login. In the official implementation this
+/// would login the client using the shared token provided by the Main server.
+/// But this implementation just responds with the bare minimum response directly
+/// passing the auth key as the session token for further requests
+///
+/// `query` The query containing the auth token (In this case the hex player ID)
+async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
     let response = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <fulllogin>
     <canageup>0</canageup>
     <legaldochost/>
     <needslegaldoc>0</needslegaldoc>
-    <pclogintoken>{token}</pclogintoken>
+    <pclogintoken></pclogintoken>
     <privacypolicyuri/>
     <sessioninfo>
-        <blazeuserid>{id}</blazeuserid>
+        <blazeuserid></blazeuserid>
         <isfirstlogin>0</isfirstlogin>
-        <sessionkey>{sess}</sessionkey>
-        <lastlogindatetime>1422639771</lastlogindatetime>
-        <email>{email}</email>
+        <sessionkey>{}</sessionkey>
+        <lastlogindatetime></lastlogindatetime>
+        <email></email>
         <personadetails>
-            <displayname>{display_name}</displayname>
-            <lastauthenticated>1422639540</lastauthenticated>
-            <personaid>{id}</personaid>
+            <displayname></displayname>
+            <lastauthenticated></lastauthenticated>
+            <personaid></personaid>
             <status>UNKNOWN</status>
             <extid>0</extid>
             <exttype>BLAZE_EXTERNAL_REF_TYPE_UNKNOWN</exttype>
         </personadetails>
-        <userid>{id}</userid>
+        <userid></userid>
     </sessioninfo>
     <isoflegalcontactage>0</isoflegalcontactage>
     <toshost/>
     <termsofserviceuri/>
     <tosuri/>
-</fulllogin>"#
+</fulllogin>"#,
+        query.auth
     );
-    Ok(Xml(response))
+    Xml(response)
 }
 
 /// Retrieves the galaxy at war data and promotions count for
@@ -115,8 +103,14 @@ async fn shared_token_login(Query(query): Query<AuthQuery>) -> GAWResult<Xml> {
 ///
 /// `db` The dataabse connection
 /// `id` The hex ID of the player
-async fn get_player_gaw_data(db: &DatabaseConnection, id: &str) -> GAWResult<(GalaxyAtWar, u32)> {
-    let player = get_player(db, id).await?;
+async fn get_player_gaw_data(
+    db: &DatabaseConnection,
+    id: &str,
+) -> Result<(GalaxyAtWar, u32), GAWError> {
+    let id = u32::from_str_radix(id, 16).map_err(|_| GAWError::InvalidID)?;
+    let player = Player::by_id(db, id)
+        .await?
+        .ok_or(GAWError::PlayerNotFound)?;
     let gaw_task = GalaxyAtWar::find_or_create(db, &player, env::from_env(env::GAW_DAILY_DECAY));
     let promotions_task = async {
         Ok(if env::from_env(env::GAW_PROMOTIONS) {
@@ -134,13 +128,14 @@ async fn get_player_gaw_data(db: &DatabaseConnection, id: &str) -> GAWResult<(Ga
 /// with the provied ID
 ///
 /// `id` The hex encoded ID of the player
-async fn get_ratings(Path(id): Path<String>) -> GAWResult<Xml> {
+async fn get_ratings(Path(id): Path<String>) -> Result<Xml, GAWError> {
     let db = GlobalState::database();
     let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
-    ratings_response(gaw_data, promotions)
+    Ok(ratings_response(gaw_data, promotions))
 }
 
-/// The query structure for increasing the
+/// The query structure for increasing the galaxy at war values
+/// for a player
 #[derive(Deserialize)]
 struct IncreaseQuery {
     /// The increase amount for the first region
@@ -169,13 +164,13 @@ struct IncreaseQuery {
 async fn increase_ratings(
     Path(id): Path<String>,
     Query(query): Query<IncreaseQuery>,
-) -> GAWResult<Xml> {
+) -> Result<Xml, GAWError> {
     let db = GlobalState::database();
     let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
     let gaw_data = gaw_data
         .increase(db, (query.a, query.b, query.c, query.d, query.e))
         .await?;
-    ratings_response(gaw_data, promotions)
+    Ok(ratings_response(gaw_data, promotions))
 }
 
 /// Generates a ratings XML response from the provided ratings struct and
@@ -183,13 +178,16 @@ async fn increase_ratings(
 ///
 /// `ratings`    The galaxy at war ratings value
 /// `promotions` The promotions value
-fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> GAWResult<Xml> {
+fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> Xml {
     let a = ratings.group_a;
     let b = ratings.group_b;
     let c = ratings.group_c;
     let d = ratings.group_d;
     let e = ratings.group_e;
+
+    // Calculate the average value for the level
     let level = (a + b + c + d + e) / 5;
+
     let response = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <galaxyatwargetratings>
@@ -213,37 +211,45 @@ fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> GAWResult<Xml> {
         <assets>0</assets>
         <assets>0</assets>
     </assets>
-</galaxyatwargetratings>
-"#
+</galaxyatwargetratings>"#
     );
-    Ok(Xml(response))
+    Xml(response)
 }
 
+/// Display implementation for the GAWError this will be displayed
+/// as the error response message.
 impl Display for GAWError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidID => f.write_str("Invalid ID"),
-            Self::UnknownID => f.write_str("Unknown ID"),
-            Self::DatabaseError(_) => f.write_str("Database Error"),
+            Self::PlayerNotFound => f.write_str("Player not found"),
+            Self::ServerError => f.write_str("Database Error"),
         }
     }
 }
 
+/// From implementation to allow the conversion between the
+/// two error types
 impl From<DbErr> for GAWError {
-    fn from(err: DbErr) -> Self {
-        GAWError::DatabaseError(err)
+    fn from(_: DbErr) -> Self {
+        Self::ServerError
     }
 }
 
-impl GAWError {
+/// Error status code implementation for the different error
+/// status codes of each error
+impl ErrorStatusCode for GAWError {
     fn status_code(&self) -> StatusCode {
         match self {
-            GAWError::InvalidID | GAWError::UnknownID => StatusCode::BAD_REQUEST,
-            GAWError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            GAWError::InvalidID => StatusCode::BAD_REQUEST,
+            GAWError::PlayerNotFound => StatusCode::NOT_FOUND,
+            GAWError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
 
+/// IntoResponse implementation for GAWError to allow it to be
+/// used within the result type as a error response
 impl IntoResponse for GAWError {
     fn into_response(self) -> Response {
         let mut response = self.to_string().into_response();

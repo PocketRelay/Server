@@ -8,7 +8,7 @@ use crate::{
         session::Session,
     },
     state::GlobalState,
-    utils::{net::public_address, random::generate_random_string},
+    utils::net::public_address,
 };
 use blaze_pk::packet::Packet;
 use database::Player;
