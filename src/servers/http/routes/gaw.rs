@@ -75,6 +75,7 @@ async fn shared_token_login(Query(query): Query<AuthQuery>) -> GAWResult<Xml> {
     let id = player.id;
     let sess = format!("{:x}", id);
     let display_name = player.display_name;
+    let email = player.email;
 
     let response = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -89,7 +90,7 @@ async fn shared_token_login(Query(query): Query<AuthQuery>) -> GAWResult<Xml> {
         <isfirstlogin>0</isfirstlogin>
         <sessionkey>{sess}</sessionkey>
         <lastlogindatetime>1422639771</lastlogindatetime>
-        <email>test@test.com</email>
+        <email>{email}</email>
         <personadetails>
             <displayname>{display_name}</displayname>
             <lastauthenticated>1422639540</lastauthenticated>
