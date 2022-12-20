@@ -11,7 +11,7 @@ use crate::{
 };
 use axum::{
     extract::{Path, Query},
-    http::StatusCode,
+    http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Router,
@@ -218,12 +218,33 @@ fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> Xml {
 
 /// Display implementation for the GAWError this will be displayed
 /// as the error response message.
+///
+/// Messages match the server error messages as closely as possible.
 impl Display for GAWError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidID => f.write_str("Invalid ID"),
-            Self::PlayerNotFound => f.write_str("Player not found"),
-            Self::ServerError => f.write_str("Database Error"),
+            Self::InvalidID => f.write_str(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+                <error>
+                    <errorcode>401</errorcode>
+                    <errormessage>Session key format invalid</errormessage>
+                </error>"#,
+            ),
+            Self::PlayerNotFound => f.write_str(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+                <error>
+                    <component>2049</component>
+                    <errorCode>1074003968</errorCode>
+                    <errorName>ERR_AUTHENTICATION_REQUIRED</errorName>
+                </error>"#,
+            ),
+            Self::ServerError => f.write_str(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+                <error>
+                    <errorcode>500</errorcode>
+                    <errormessage>Internal server error</errormessage>
+                </error>"#,
+            ),
         }
     }
 }
@@ -237,12 +258,14 @@ impl From<DbErr> for GAWError {
 }
 
 /// Error status code implementation for the different error
-/// status codes of each error
+/// status codes of each error.
+///
+/// These response codes match that of the official servers
 impl ErrorStatusCode for GAWError {
     fn status_code(&self) -> StatusCode {
         match self {
-            GAWError::InvalidID => StatusCode::BAD_REQUEST,
-            GAWError::PlayerNotFound => StatusCode::NOT_FOUND,
+            GAWError::InvalidID => StatusCode::UNAUTHORIZED,
+            GAWError::PlayerNotFound => StatusCode::OK,
             GAWError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -254,6 +277,10 @@ impl IntoResponse for GAWError {
     fn into_response(self) -> Response {
         let mut response = self.to_string().into_response();
         *response.status_mut() = self.status_code();
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static(mime::TEXT_XML.as_ref()),
+        );
         response
     }
 }
