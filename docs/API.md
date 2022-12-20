@@ -677,18 +677,20 @@ are in those games.
 ```http
 GET /api/games?offset=0&count=20
 ```
+This route allows you to retrieve a list of games form the server. Responses are paginated
 
-The query paramater offset is the page offset and the count is the number of games to include
-on each page. Offset 1 & Count = 20 = Skip first 20 ga,es and return next 20 games.
+### Query Paramaters
 
-> Omitting the count query parameter will default to 20 games
+| Key    | Optional | Description                                                                   |
+| ------ | -------- | ----------------------------------------------------------------------------- |
+| offset | Yes      | Optional offset parameter to offset the current page (start = offset * count) |
+| count  | Yes      | Optional count value to change how many games are returned                    |
 
-This route allows retrieiving a list of all the currently running games 
+> The default count value is 20 games to prevent and the maximum count value is 255 to prevent the server from having to serialize massive lists you should use this in a paginated way instead of querying all 255 games
+
 
 ### Response
-The "games" field contains a list of games that are running on the server. The "offset" field contains the current offset page provided by 
-the query and the "count" is the count expected by the query (The count is NOT the number of games returned)
-
+The "games" field contains a list of games that are running on the server. The "more" field contains whether there are more games at the next offset value which can be used to determine whether a next page is available for pagination
 ```json
 
 {
@@ -736,7 +738,8 @@ the query and the "count" is the count expected by the query (The count is NOT t
                 }
             ]
         }
-    ]
+    ],
+    "more": false,
 }
 
 ```

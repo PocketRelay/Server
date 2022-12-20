@@ -13,7 +13,10 @@ use std::{
     },
     time::SystemTime,
 };
-use tokio::sync::{oneshot, Mutex, RwLock};
+use tokio::{
+    sync::{oneshot, Mutex, RwLock},
+    task::JoinSet,
+};
 
 /// Structure for managing games and the matchmaking queue
 pub struct Games {
@@ -47,22 +50,48 @@ impl Default for Games {
 }
 
 impl Games {
-    /// Takes a snapshot of all the current games for serialization
-    pub async fn snapshot(&self) -> Vec<GameSnapshot> {
-        let games = &*self.games.read().await;
-        let snapshots = games
-            .values()
-            .map(|game| async {
+    /// Takes a snapshot of all the current games for serialization. Returns the list
+    /// of snapshots obtained (May not equal the count) and a boolean value indicating
+    /// if there are more snapshots in the next offset (For pagination).
+    ///
+    /// `offset` The number of games to skip from the start of the list
+    /// `count`  The number of games to obtain snapshots of
+    pub async fn snapshot(&'static self, offset: usize, count: usize) -> (Vec<GameSnapshot>, bool) {
+        // Obtained an order set of the keys from the games map
+        let keys = {
+            let games = &*self.games.read().await;
+            let mut keys: Vec<GameID> = games.keys().map(|value| *value).collect();
+            keys.sort();
+            keys
+        };
+
+        // Whether there is more keys that what was requested
+        let more = keys.len() > offset + count;
+
+        // Collect the keys we will be using
+        let keys: Vec<GameID> = keys.into_iter().skip(offset).take(count).collect();
+        let keys_count = keys.len();
+
+        let mut join_set = JoinSet::new();
+        for key in keys {
+            join_set.spawn(async move {
+                let games = &*self.games.read().await;
+                let game = games.get(&key)?;
                 let (sender, reciever) = oneshot::channel();
                 game.handle_action(GameModifyAction::Snapshot(sender)).await;
                 reciever.await.ok()
-            })
-            .collect::<Vec<_>>();
-        futures_util::future::join_all(snapshots)
-            .await
-            .into_iter()
-            .filter_map(|value| value)
-            .collect()
+            });
+        }
+
+        // Start awaiting the snapshots that are being obtained
+        let mut snapshots = Vec::with_capacity(keys_count);
+        while let Some(result) = join_set.join_next().await {
+            if let Ok(Some(snapshot)) = result {
+                snapshots.push(snapshot);
+            }
+        }
+
+        (snapshots, more)
     }
 
     /// Takes a snapshot of the game with the provided game ID
