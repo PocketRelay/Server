@@ -168,7 +168,7 @@ impl Player {
     pub async fn by_id_with_token(
         db: &DatabaseConnection,
         id: u32,
-        token: String,
+        token: &str,
     ) -> DbResult<Option<Self>> {
         players::Entity::find_by_id(id)
             .filter(players::Column::SessionToken.eq(token))

@@ -50,8 +50,7 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
         .await?
         .ok_or(ServerError::InvalidSession)?;
 
-    let (player, session_token) = player.with_token(db, generate_random_string).await?;
-    let player = session.set_player(player);
+    let (player, session_token) = session.set_player(db, player).await?;
     let response = AuthResponse::new(player, session_token, true);
     Ok(packet.respond(response))
 }

@@ -10,14 +10,17 @@ use crate::{
         append_packet_decoded,
         codec::{NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
         components::{self, Components, UserSessions},
-        errors::{BlazeError, ServerError},
+        errors::{BlazeError, BlazeResult, ServerError},
     },
     game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
-    utils::types::{GameID, SessionID},
+    utils::{
+        random::generate_random_string,
+        types::{GameID, SessionID},
+    },
 };
 use blaze_pk::packet::{Packet, PacketComponents, PacketType};
-use database::Player;
+use database::{DatabaseConnection, Player};
 use log::{debug, error, log_enabled};
 use std::{collections::VecDeque, io, net::SocketAddr};
 use tokio::{net::TcpStream, select, sync::mpsc};
@@ -308,19 +311,21 @@ impl Session {
         Ok(())
     }
 
-    /// Sets the player thats attached to this session. Will log information
-    /// about the previous player if there was one. Returns a mutable reference
-    /// to the player that was inserted
+    /// Sets the player thats attached to this session. Returns a mutable reference
+    /// to the player that was inserted and obtains the session token for the player
     ///
     /// `player` The player to set the state to or None to clear the player
-    pub fn set_player(&mut self, player: Player) -> &mut Player {
-        if let Some(existing) = self.player.take() {
-            debug!(
-                "Swapped authentication from:\nPrevious (ID: {}, Username: {}, Email: {})",
-                existing.id, existing.display_name, existing.email,
-            );
-        }
-        self.player.insert(player)
+    pub async fn set_player(
+        &mut self,
+        db: &DatabaseConnection,
+        player: Player,
+    ) -> BlazeResult<(&mut Player, String)> {
+        let (player, token) = player
+            .with_token(db, generate_random_string)
+            .await
+            .map_err(|_| ServerError::ServerUnavailable)?;
+        let player = self.player.insert(player);
+        Ok((player, token))
     }
 
     /// Clears the current player value

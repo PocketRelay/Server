@@ -9,7 +9,6 @@ use crate::{
         env,
         hashing::{hash_password, verify_password},
         parsing::parse_updates,
-        random::generate_random_string,
         types::PlayerID,
         validate::is_email,
     },
@@ -45,7 +44,7 @@ pub async fn route(
         Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(packet),
         Authentication::GetTermsOfServiceConent => handle_tos_content(packet).await,
         Authentication::GetPrivacyPolicyContent => handle_privacy_content(packet).await,
-        Authentication::GetAuthToken => handle_get_auth_token(session, packet),
+        Authentication::GetAuthToken => handle_get_auth_token(session, packet).await,
         _ => Ok(packet.respond_empty()),
     }
 }
@@ -108,8 +107,7 @@ async fn handle_auth_request(session: &mut Session, packet: &Packet) -> HandleRe
         AuthRequest::Login { email, password } => handle_login_email(db, email, password).await,
         AuthRequest::Origin { token } => handle_login_origin(db, token).await,
     }?;
-    let (player, session_token) = player.with_token(db, generate_random_string).await?;
-    let player = session.set_player(player);
+    let (player, session_token) = session.set_player(db, player).await?;
     let response = AuthResponse::new(player, session_token, silent);
     Ok(packet.respond(response))
 }
@@ -125,7 +123,7 @@ async fn handle_login_token(
     token: String,
     player_id: PlayerID,
 ) -> ServerResult<Player> {
-    Player::by_id_with_token(db, player_id, token)
+    Player::by_id_with_token(db, player_id, &token)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::InvalidSession)
@@ -324,14 +322,14 @@ fn handle_list_entitlements(packet: &Packet) -> HandleResult {
 /// }
 /// ```
 async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleResult {
-    let player: Player = session
+    let player: &Player = session
         .player
-        .take()
+        .as_ref()
         .ok_or(ServerError::FailedNoLoginAction)?;
-    let (player, session_token) = player
-        .with_token(GlobalState::database(), generate_random_string)
-        .await?;
-    let player = session.set_player(player);
+    let session_token = player
+        .session_token
+        .clone()
+        .ok_or(ServerError::FailedNoLoginAction)?;
     let response = PersonaResponse::new(player, session_token);
     Ok(packet.respond(response))
 }
@@ -412,8 +410,7 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
 
     let display_name = email.chars().take(99).collect::<String>();
     let player: Player = Player::create(db, email, display_name, hashed_password, false).await?;
-    let (player, session_token) = player.with_token(db, generate_random_string).await?;
-    let player = session.set_player(player);
+    let (player, session_token) = session.set_player(db, player).await?;
     let response = AuthResponse::new(player, session_token, false);
     Ok(packet.respond(response))
 }
@@ -502,15 +499,15 @@ async fn handle_privacy_content(packet: &Packet) -> HandleResult {
     Ok(packet.respond(response))
 }
 
-/// Handles retrieving an authentication token for use with the Galaxy At War HTTP service
-/// however in this case we are just using the player ID in hex format as the token.
+/// Handles retrieving an authentication token for use with the Galaxy At War HTTP service.
+/// This implementation uses the session token for the player
 ///
 /// ```
 /// Route: Authentication(GetAuthToken),
 /// ID: 35
 /// Content: {}
 /// ```
-fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> HandleResult {
     let player: &Player = session
         .player
         .as_ref()
