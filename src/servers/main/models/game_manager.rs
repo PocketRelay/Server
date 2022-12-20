@@ -1,6 +1,6 @@
 use crate::{
     game::{
-        codec::{GameState, RemoveReason},
+        codec::{GameState, PlayerState, RemoveReason},
         rules::{MatchRules, RuleSet},
         AttrMap, GameModifyAction,
     },
@@ -74,9 +74,8 @@ pub struct GameModifyRequest {
     /// The ID of the game to modify
     pub game_id: GameID,
     /// The modification action
-    pub action: GameModifyAction
+    pub action: GameModifyAction,
 }
-
 
 impl Decodable for GameModifyRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
@@ -89,7 +88,7 @@ impl Decodable for GameModifyRequest {
                 return Ok(GameModifyRequest {
                     game_id,
                     action: GameModifyAction::SetAttributes(attributes),
-                })
+                });
             }
             "GID" => GameID::decode(reader)?,
             _ => return Err(DecodeError::Other("Unknown game modify attribute")),
@@ -107,10 +106,7 @@ impl Decodable for GameModifyRequest {
             }
             _ => return Err(DecodeError::Other("Missing modify contents")),
         };
-        Ok(GameModifyRequest {
-            game_id,
-            action
-        })
+        Ok(GameModifyRequest { game_id, action })
     }
 }
 
@@ -118,20 +114,29 @@ impl Decodable for GameModifyRequest {
 /// payers.
 pub struct UpdateMeshRequest {
     pub game_id: GameID,
-    pub targets: Vec<PlayerID>,
+    pub target: Option<MeshTarget>,
+}
+
+pub struct MeshTarget {
+    pub player_id: PlayerID,
+    pub state: PlayerState,
 }
 
 impl Decodable for UpdateMeshRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
         let game_id: GameID = reader.tag("GID")?;
         let count: usize = reader.until_list("TARG", TdfType::Group)?;
-        let mut targets: Vec<PlayerID> = Vec::with_capacity(count);
-        for _ in 0..count {
+
+        let target = if count > 0 {
             let player_id: PlayerID = reader.tag("PID")?;
-            targets.push(player_id);
-            reader.skip_group()?;
-        }
-        Ok(Self { game_id, targets })
+            let state: PlayerState = reader.tag("STAT")?;
+            let target = MeshTarget { player_id, state };
+            Some(target)
+        } else {
+            None
+        };
+
+        Ok(Self { game_id, target })
     }
 }
 

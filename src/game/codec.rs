@@ -140,6 +140,7 @@ pub enum PlayerState {
     Disconnected,
     Connecting,
     Connected,
+    Unknown(u8),
 }
 
 impl PlayerState {
@@ -148,6 +149,16 @@ impl PlayerState {
             Self::Disconnected => 0x0,
             Self::Connecting => 0x2,
             Self::Connected => 0x4,
+            Self::Unknown(value) => *value,
+        }
+    }
+
+    pub fn from_value(value: u8) -> Self {
+        match value {
+            0x0 => Self::Disconnected,
+            0x2 => Self::Connecting,
+            0x4 => Self::Connected,
+            value => Self::Unknown(value),
         }
     }
 }
@@ -155,6 +166,12 @@ impl PlayerState {
 impl Encodable for PlayerState {
     fn encode(&self, output: &mut TdfWriter) {
         output.write_u8(self.value())
+    }
+}
+
+impl Decodable for PlayerState {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        Ok(PlayerState::from_value(reader.read_u8()?))
     }
 }
 

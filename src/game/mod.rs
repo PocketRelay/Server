@@ -75,6 +75,7 @@ pub enum GameModifyAction {
     UpdateMeshConnection {
         session: SessionID,
         target: PlayerID,
+        state: PlayerState,
     },
     /// Remove a player with a sender for responding with
     /// whether the game is empty now or not
@@ -125,9 +126,11 @@ impl Game {
             GameModifyAction::SetState(state) => self.set_state(state).await,
             GameModifyAction::SetSetting(setting) => self.set_setting(setting).await,
             GameModifyAction::SetAttributes(attributes) => self.set_attributes(attributes).await,
-            GameModifyAction::UpdateMeshConnection { session, target } => {
-                self.update_mesh_connection(session, target).await
-            }
+            GameModifyAction::UpdateMeshConnection {
+                session,
+                target,
+                state,
+            } => self.update_mesh_connection(session, target, state).await,
             GameModifyAction::RemovePlayer(ty, sender) => {
                 let is_empty = self.remove_player_impl(ty).await;
                 sender.send(is_empty).ok();
@@ -374,14 +377,19 @@ impl Game {
     ///
     /// `session` The session to change the state of
     /// `state`   The new state value
-    async fn set_player_state(&self, session: SessionID, state: PlayerState) {
-        let player_id = {
+    async fn set_player_state(
+        &self,
+        session: SessionID,
+        state: PlayerState,
+    ) -> Option<PlayerState> {
+        let (player_id, old_state) = {
             let players = &mut *self.players.write().await;
-            let Some(player) = players.iter_mut().find(|value| value.session_id == session) else {
-                return;
-            };
+            let player = players
+                .iter_mut()
+                .find(|value| value.session_id == session)?;
+            let old_state = player.state;
             player.state = state;
-            player.player_id
+            (player.player_id, old_state)
         };
 
         let packet = Packet::notify(
@@ -393,6 +401,7 @@ impl Game {
             },
         );
         self.push_all(&packet).await;
+        Some(old_state)
     }
 
     /// Modifies the psudo admin list this list doesn't actually exist in
@@ -427,16 +436,28 @@ impl Game {
     ///
     /// `session` The session updating its mesh connection
     /// `target`  The pid of the connected target
-    async fn update_mesh_connection(&self, session: SessionID, target: PlayerID) {
+    async fn update_mesh_connection(
+        &self,
+        session: SessionID,
+        target: PlayerID,
+        state: PlayerState,
+    ) {
         debug!("Updating mesh connection");
-        if self.is_player_sid(session).await && self.is_player_pid(target).await {
-            self.set_player_state(session, PlayerState::Connected).await;
-            self.on_join_complete(session).await;
-            debug!("Connected player to game")
-        } else {
-            self.set_player_state(session, PlayerState::Connecting)
-                .await;
-            debug!("Disconnected mesh")
+        match state {
+            PlayerState::Disconnected => {
+                debug!("Disconnected mesh")
+            }
+            PlayerState::Connecting => {
+                if self.is_player_sid(session).await && self.is_player_pid(target).await {
+                    self.set_player_state(session, PlayerState::Connected).await;
+                    self.on_join_complete(session).await;
+                    debug!("Connected player to game")
+                } else {
+                    debug!("Connected player mesh")
+                }
+            }
+            PlayerState::Connected => {}
+            _ => {}
         }
     }
 
@@ -492,6 +513,10 @@ impl Game {
         self.notify_fetch_data(&player).await;
         self.modify_admin_list(player.player_id, AdminListOperation::Remove)
             .await;
+
+        // Possibly not needed
+        // let packet = player.create_set_session();
+        // self.push_all(&packet).await;
         debug!(
             "Removed player from game (PID: {}, GID: {})",
             player.player_id, self.id

@@ -182,8 +182,8 @@ fn handle_remove_player(packet: &Packet) -> HandleResult {
 /// ```
 fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: UpdateMeshRequest = packet.decode()?;
-    let target = match req.targets.first() {
-        Some(value) => *value,
+    let target = match req.target {
+        Some(value) => value,
         None => return Ok(packet.respond_empty()),
     };
 
@@ -192,7 +192,8 @@ fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -> Hand
         req.game_id,
         GameModifyAction::UpdateMeshConnection {
             session: session.id,
-            target,
+            target: target.player_id,
+            state: target.state,
         },
     );
     Ok(packet.respond_empty())
