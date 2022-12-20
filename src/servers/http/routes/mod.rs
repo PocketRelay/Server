@@ -32,30 +32,34 @@ pub fn router() -> Router {
     if env::from_env(env::API) {
         let token_store = Arc::new(TokenStore::default());
 
+        let mut api_router = Router::new();
+
+        {
+            // Auth protected routes
+            {
+                api_router = games::route(api_router);
+                api_router = players::route(api_router);
+                // Apply the token auth middleware
+                api_router = api_router.layer(middleware::from_fn(token_auth_layer));
+            }
+
+            // Routes that require token store access but arent protected
+            {
+                api_router = token::route(api_router);
+            }
+
+            // Provide token store to API routes
+            api_router = api_router.layer(Extension(token_store));
+        }
+
         // Non protected API routes
         {
-            router = leaderboard::route(router);
-            router = token::route(router);
+            api_router = leaderboard::route(api_router);
         }
 
-        // Auth protected routes
-        {
-            let mut auth_router = Router::new();
-
-            // Apply the underlying routes
-            auth_router = games::route(auth_router);
-            auth_router = players::route(auth_router);
-
-            // Apply the token auth middleware
-            auth_router = auth_router.layer(middleware::from_fn(token_auth_layer));
-
-            // Merge the protected routes into the main router
-            router = router.merge(auth_router);
-        }
-
-        // Token store is provided to all routes
-        router = router.layer(Extension(token_store));
+        router = router.merge(api_router);
     }
 
+    // CORS middleware is applied to all routes to allow browser access
     router.layer(middleware::from_fn(cors_layer))
 }
