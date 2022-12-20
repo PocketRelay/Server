@@ -1,5 +1,8 @@
 use axum::{
-    http::header::{self, HeaderValue},
+    http::{
+        header::{self, HeaderValue},
+        StatusCode,
+    },
     response::{IntoResponse, Response},
 };
 
@@ -16,4 +19,12 @@ impl IntoResponse for Xml {
         );
         response
     }
+}
+
+/// Trait implemented by error response types that have
+/// different possible status codes
+pub trait ErrorStatusCode {
+    /// Function for retrieving the status code of
+    /// the specific error
+    fn status_code(&self) -> StatusCode;
 }

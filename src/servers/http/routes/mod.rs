@@ -1,5 +1,5 @@
 use super::{
-    middleware::{cors::cors_layer, token::guard_token_auth},
+    middleware::{cors::cors_layer, token::token_auth_layer},
     stores::token::TokenStore,
 };
 use crate::env;
@@ -47,7 +47,7 @@ pub fn router() -> Router {
             auth_router = players::route(auth_router);
 
             // Apply the token auth middleware
-            auth_router = auth_router.layer(middleware::from_fn(guard_token_auth));
+            auth_router = auth_router.layer(middleware::from_fn(token_auth_layer));
 
             // Merge the protected routes into the main router
             router = router.merge(auth_router);
