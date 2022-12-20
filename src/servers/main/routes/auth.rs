@@ -281,8 +281,8 @@ fn handle_list_entitlements(packet: &Packet) -> HandleResult {
         Entitlement::new_pc(0xec508db6ff,"303107",2,"DR:229644400","ONLINE_ACCESS",1),
         Entitlement::new_pc(0xec3e5393bf,"300241",2,"OFB-EAST:46112","ONLINE_ACCESS",1),
         Entitlement::new_pc(0xec3e50867f,"304141",2,"DR:230773600","ONLINE_ACCESS",1),
-        Entitlement::new_gen(0xec4495bfff, "303107", 0, "", "ONLINE_ACCESS_GAW_PC", 1),
-        Entitlement::new_gen(0xea234c3e7f, "303107", 2, "", "ONLINE_ACCESS_GAW_XBL2", 1),
+        Entitlement::new_gen(0xec4495bfff,"303107", 0,"","ONLINE_ACCESS_GAW_PC",1),
+        Entitlement::new_gen(0xea234c3e7f,"303107", 2,"","ONLINE_ACCESS_GAW_XBL2",1),
         // Singleplayer DLC
         Entitlement::new_pc(0xec3e62d5ff,"300241",2,"OFB-MASS:51074","ME3_PRC_EXTENDEDCUT",5),
         Entitlement::new_pc(0xec50b5633f,"300241",2,"OFB-MASS:44370","ME3_PRC_PROTHEAN",5),
@@ -290,6 +290,7 @@ fn handle_list_entitlements(packet: &Packet) -> HandleResult {
         Entitlement::new_pc(0xec50b8707f,"300241",2,"OFB-MASS:52001","ME3_PRC_LEVIATHAN",5),
         Entitlement::new_pc(0xec50ac3b7f,"300241",2,"OFB-MASS:55146","ME3_PRC_OMEGA",5),
         Entitlement::new_pc(0xec5093d17f,"300241",2,"OFB-EAST:58040","MET_BONUS_CONTENT_DW",5),
+        Entitlement::new_pc(0xec50af48bf,"300241",2,"OFB-EAST:57550","ME3_PRC_CITADEL",5),
         // Singleplayer Packs
         Entitlement::new_pc(0xec50bb7dbf,"300241",2,"OFB-MASS:56984","ME3_MTX_APP01",5),
         Entitlement::new_pc(0xec5099ebff,"300241",2,"OFB-MASS:49032","ME3_MTX_GUN01",5),
@@ -300,6 +301,14 @@ fn handle_list_entitlements(packet: &Packet) -> HandleResult {
         Entitlement::new_pc(0xec5096debf,"300241",2,"OFB-MASS:51073","ME3_PRC_EARTH",5),
         Entitlement::new_pc(0xec509cf93f,"300241",2,"OFB-MASS:52000","ME3_PRC_GOBIG",5),
         Entitlement::new_pc(0xec50a313bf,"300241",2,"OFB-MASS:59712","ME3_PRC_MP5",5),
+        // Other
+        Entitlement::new_pc(0xec81ae023f,"300241",2,"OFB-MASS:46111","ME3_PRO_M90_INDRA",5),
+        Entitlement::new_pc(0xec81aaf4ff,"300241",2,"OFB-MASS:46110","ME3_PRO_AT12_RAIDER_PACK",5),
+        Entitlement::new_pc(0xec81a7e7bf,"300241",2,"OFB-MASS:46033","ME3_PRO_M55_ARGUS",5),
+        Entitlement::new_pc(0xec81a4da7f,"300241",2,"OFB-MASS:46032","ME3_PRO_N7_WARFARE_PACK",5),
+        Entitlement::new_pc(0xec81a1cd3f,"300241",2,"OFB-MASS:46489","ME3_PRO_N7_WARFARE_PACK",5),
+
+        
         // Collectors Edition
         Entitlement::new_pc(0xec3e5fc8bf,"300241",2,"OFB-MASS:46484","ME3_MTX_COLLECTORS_EDITION",5),
         Entitlement::new_pc(0xec3e5cbb7f,"300241",2,"OFB-MASS:46483","ME3_MTX_DIGITAL_ART_BOOKS",5),

@@ -36,7 +36,7 @@ pub struct TelemetryServer {
 impl Encodable for TelemetryServer {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_group(b"TELE");
-        // Last known telemetry address: 159.153.235.32
+        // Last known telemetry addresses: 159.153.235.32, gostelemetry.blaze3.ea.com
         writer.tag_str(b"ADRS", constants::EXTERNAL_HOST);
         writer.tag_zero(b"ANON");
         writer.tag_str(b"DISA", TELEMTRY_DISA);
@@ -70,7 +70,7 @@ pub struct TickerServer {
 impl Encodable for TickerServer {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_group(b"TICK");
-        // Last known ticker address: 10.23.15.2
+        // Last known ticker addresses: 10.23.15.2, 10.10.78.150
         writer.tag_str(b"ADRS", constants::EXTERNAL_HOST);
         // Last known ticker port: 8999
         writer.tag_u16(b"PORT", self.port);
