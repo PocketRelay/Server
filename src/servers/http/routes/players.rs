@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
+    routing::get,
     Json, Router,
 };
 use database::{
@@ -24,17 +24,19 @@ use tokio::try_join;
 /// `router` The route to add to
 pub fn route(router: Router) -> Router {
     router
-        .route("/api/players", get(get_players))
-        .route("/api/players/:id", get(get_player))
+        .route("/api/players", get(get_players).post(create_player))
+        .route(
+            "/api/players/:id",
+            get(get_player).put(modify_player).delete(delete_player),
+        )
         .route("/api/players/:id/full", get(get_player_full))
         .route("/api/players/:id/classes", get(get_player_classes))
-        .route("/api/players/:id/classes/:index", get(get_player_class))
-        .route("/api/players/:id/classes/:index", put(update_player_class))
+        .route(
+            "/api/players/:id/classes/:index",
+            get(get_player_class).put(update_player_class),
+        )
         .route("/api/players/:id/characters", get(get_player_characters))
         .route("/api/players/:id/galaxy_at_war", get(get_player_gaw))
-        .route("/api/players/:id", put(modify_player))
-        .route("/api/players/:id", delete(delete_player))
-        .route("/api/players", post(create_player))
 }
 
 /// Enum for errors that could occur when accessing any of

@@ -6,7 +6,7 @@ use axum::{
     extract::Query,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::get,
     Extension, Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -20,10 +20,10 @@ use std::{
 ///
 /// `router` The route to add to
 pub fn route(router: Router) -> Router {
-    router
-        .route("/api/token", post(get_token))
-        .route("/api/token", delete(delete_token))
-        .route("/api/token", get(validate_token))
+    router.route(
+        "/api/token",
+        get(validate_token).post(get_token).delete(delete_token),
+    )
 }
 
 /// Error type for invalid credentials being provided to the
