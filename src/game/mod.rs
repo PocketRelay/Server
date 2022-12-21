@@ -132,7 +132,7 @@ impl Game {
                 state,
             } => self.update_mesh_connection(session, target, state).await,
             GameModifyAction::RemovePlayer(ty, sender) => {
-                let is_empty = self.remove_player_impl(ty).await;
+                let is_empty = self.remove_player(ty).await;
                 sender.send(is_empty).ok();
             }
             GameModifyAction::CheckJoinable(rules, sender) => {
@@ -140,7 +140,7 @@ impl Game {
                 sender.send(join_state).ok();
             }
             GameModifyAction::Snapshot(sender) => {
-                let snapshot = self.snapshot_impl().await;
+                let snapshot = self.snapshot().await;
                 sender.send(snapshot).ok();
             }
         }
@@ -163,7 +163,7 @@ impl Game {
     }
 
     /// Takes a snapshot of the current game state for serialization
-    pub async fn snapshot_impl(&self) -> GameSnapshot {
+    async fn snapshot(&self) -> GameSnapshot {
         let data = &*self.data.read().await;
         let old_attributes = &data.attributes;
         let mut attributes = HashMap::with_capacity(old_attributes.len());
@@ -483,9 +483,12 @@ impl Game {
             .await;
     }
 
-    async fn remove_player_impl(&self, ty: RemovePlayerType) -> bool {
-        let (player, slot, reason, remaining) = {
+    async fn remove_player(&self, ty: RemovePlayerType) -> bool {
+        let (player, slot, reason, is_empty) = {
             let players = &mut *self.players.write().await;
+            if players.is_empty() {
+                return true;
+            }
             let (index, reason) = match ty {
                 RemovePlayerType::Player(player_id, reason) => (
                     players
@@ -503,9 +506,9 @@ impl Game {
 
             let (player, index) = match index {
                 Some(index) => (players.remove(index), index),
-                None => return players.len() <= 0, /* Ignore if the player has already been removed */
+                None => return false,
             };
-            (player, index, reason, players.len())
+            (player, index, reason, players.is_empty())
         };
 
         player.set_game(None);
@@ -527,7 +530,7 @@ impl Game {
         }
         self.release_slot().await;
 
-        remaining <= 0
+        is_empty
     }
 
     /// Notifies all the session and the removed session that a
