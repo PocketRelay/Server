@@ -77,6 +77,7 @@ async fn get_game(Path(game_id): Path<GameID>) -> Result<Json<GameSnapshot>, Gam
 /// IntoResponse implementation for GameNotFound to allow it to be
 /// used within the result type as a error response
 impl IntoResponse for GameNotFound {
+    #[inline]
     fn into_response(self) -> Response {
         (StatusCode::NOT_FOUND, "Game with that ID not found").into_response()
     }

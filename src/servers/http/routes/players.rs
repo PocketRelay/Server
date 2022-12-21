@@ -1,9 +1,11 @@
 use crate::{
+    servers::http::ext::ErrorStatusCode,
     state::GlobalState,
     utils::{hashing::hash_password, types::PlayerID, validate::is_email},
 };
 use axum::{
     extract::{Path, Query},
+    http::StatusCode,
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
     Json, Router,
@@ -13,7 +15,6 @@ use database::{
     PlayerClass,
 };
 use futures_util::try_join;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
@@ -26,24 +27,29 @@ pub fn route(router: Router) -> Router {
         .route("/api/players", get(get_players))
         .route("/api/players/:id", get(get_player))
         .route("/api/players/:id/full", get(get_player_full))
-        .route("/api/players/:id/classes/:index", get(get_player_class))
         .route("/api/players/:id/classes", get(get_player_classes))
+        .route("/api/players/:id/classes/:index", get(get_player_class))
+        .route("/api/players/:id/classes/:index", put(update_player_class))
         .route("/api/players/:id/characters", get(get_player_characters))
         .route("/api/players/:id/galaxy_at_war", get(get_player_gaw))
         .route("/api/players/:id", put(modify_player))
         .route("/api/players/:id", delete(delete_player))
         .route("/api/players", post(create_player))
-        .route("/api/players/:id/classes/:index", put(update_player_class))
 }
 
 /// Enum for errors that could occur when accessing any of
 /// the players routes
-#[derive(Debug)]
 enum PlayersError {
+    /// The player with the requested ID was not found
     PlayerNotFound,
+    /// The provided email address was already in use
     EmailTaken,
+    /// The provided email was not a valid email
     InvalidEmail,
+    /// Server error occurred such as failing to hash a password
+    /// or a database error
     ServerError,
+    /// Requested class could not be found
     ClassNotFound,
 }
 
@@ -68,7 +74,7 @@ async fn find_player(db: &DatabaseConnection, player_id: PlayerID) -> Result<Pla
 struct PlayersQuery {
     /// The offset in the database (offset = offset * count)
     #[serde(default)]
-    offset: u16,
+    offset: u32,
     /// The number of players to return. This is restricted to
     /// 255 to prevent the database having to do any larger
     /// queries
@@ -81,10 +87,6 @@ struct PlayersQuery {
 struct PlayersResponse {
     /// The list of players retrieved
     players: Vec<Player>,
-    /// The current offset page
-    offset: u16,
-    /// The count expected
-    count: u8,
     /// Whether there is more players left in the database
     more: bool,
 }
@@ -103,12 +105,7 @@ async fn get_players(Query(query): Query<PlayersQuery>) -> PlayersResult<Players
     let offset = query.offset as u64 * count as u64;
     let (players, more) = Player::all(db, offset, count as u64).await?;
 
-    Ok(Json(PlayersResponse {
-        players,
-        offset: query.offset,
-        count,
-        more,
-    }))
+    Ok(Json(PlayersResponse { players, more }))
 }
 
 /// Route for retrieving a player from the database with an ID that
@@ -375,10 +372,9 @@ impl Display for PlayersError {
     }
 }
 
-/// Response code implementation for PlayersError. The PlayerNotFound
-/// implementation uses the NOT_FOUND status code and all other errors
-/// use INTERNAL_SERVER_ERROR
-impl PlayersError {
+/// Error status code implementation for the different error
+/// status codes of each error
+impl ErrorStatusCode for PlayersError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::ClassNotFound => StatusCode::NOT_FOUND,
@@ -397,7 +393,10 @@ impl From<DbErr> for PlayersError {
     }
 }
 
+/// IntoResponse implementation for PlayersError to allow it to be
+/// used within the result type as a error response
 impl IntoResponse for PlayersError {
+    #[inline]
     fn into_response(self) -> Response {
         (self.status_code(), self.to_string()).into_response()
     }
