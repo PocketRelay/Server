@@ -277,10 +277,9 @@ impl IntoResponse for GAWError {
     fn into_response(self) -> Response {
         let mut response = self.to_string().into_response();
         *response.status_mut() = self.status_code();
-        response.headers_mut().insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static(mime::TEXT_XML.as_ref()),
-        );
+        response
+            .headers_mut()
+            .insert(header::CONTENT_TYPE, HeaderValue::from_static("text/xml"));
         response
     }
 }

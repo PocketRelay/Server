@@ -1566,7 +1566,6 @@ dependencies = [
  "local-ip-address",
  "log",
  "log4rs",
- "mime",
  "password-hash",
  "pocket-relay-database",
  "rand_core 0.6.4",
