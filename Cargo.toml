@@ -51,10 +51,8 @@ blaze-ssl-async = "^0.1"
 # Isolated database crate
 database = { path = "database", package = "pocket-relay-database", version = "^0.2" }
 
-# Resource embedding using debug-embed to always resolve relative 
-# to the Cargo.toml file and mime guess for guessing file type
+# Resource embedding using debug-embed to always resolve relative to the Cargo.toml file
 rust-embed = { version = "6.4.2", features = ["debug-embed"] }
-mime_guess = "2.0.4"
 
 # Password hashing
 argon2 = { version = "0.4" }
