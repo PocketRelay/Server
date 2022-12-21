@@ -60,7 +60,7 @@ impl Games {
         // Obtained an order set of the keys from the games map
         let keys = {
             let games = &*self.games.read().await;
-            let mut keys: Vec<GameID> = games.keys().map(|value| *value).collect();
+            let mut keys: Vec<GameID> = games.keys().copied().collect();
             keys.sort();
             keys
         };
@@ -199,14 +199,11 @@ impl Games {
                 game.handle_action(GameModifyAction::CheckJoinable(Some(rules.clone()), sender))
                     .await;
                 let join_state = reciever.await.unwrap_or(GameJoinableState::Full);
-                match join_state {
-                    GameJoinableState::Joinable => {
-                        debug!("Found matching game (GID: {})", game.id);
-                        game.handle_action(GameModifyAction::AddPlayer(player))
-                            .await;
-                        return;
-                    }
-                    _ => {}
+                if let GameJoinableState::Joinable = join_state {
+                    debug!("Found matching game (GID: {})", game.id);
+                    game.handle_action(GameModifyAction::AddPlayer(player))
+                        .await;
+                    return;
                 }
             }
 

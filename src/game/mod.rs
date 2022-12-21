@@ -7,7 +7,7 @@ use codec::*;
 use log::debug;
 use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::{oneshot, RwLock};
 
 use self::rules::RuleSet;
@@ -34,7 +34,7 @@ pub struct GameSnapshot {
     pub id: GameID,
     pub state: GameState,
     pub setting: u16,
-    pub attributes: HashMap<String, String>,
+    pub attributes: AttrMap,
     pub players: Vec<GamePlayerSnapshot>,
 }
 
@@ -164,21 +164,14 @@ impl Game {
 
     /// Takes a snapshot of the current game state for serialization
     async fn snapshot(&self) -> GameSnapshot {
-        let data = &*self.data.read().await;
-        let old_attributes = &data.attributes;
-        let mut attributes = HashMap::with_capacity(old_attributes.len());
-        for (key, value) in old_attributes.iter() {
-            attributes.insert(key.to_owned(), value.to_owned());
-        }
-
         let players = &*self.players.read().await;
         let players = players.iter().map(|value| value.snapshot()).collect();
-
+        let data = &*self.data.read().await;
         GameSnapshot {
             id: self.id,
             state: data.state,
             setting: data.setting,
-            attributes,
+            attributes: data.attributes.clone(),
             players,
         }
     }

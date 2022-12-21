@@ -1,13 +1,11 @@
 use axum::{
     extract::Path,
-    http::{header, HeaderValue, StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
     Router,
 };
 use rust_embed::{EmbeddedFile, RustEmbed};
-
-use std::{ffi::OsStr, path::Path as StdPath};
 
 /// Public resource content folder
 #[derive(RustEmbed)]
