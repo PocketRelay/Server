@@ -39,8 +39,6 @@ database-mysql = ["database/mysql"]
 log = { workspace = true }
 serde = { workspace = true }
 
-# Tokio async runtime & future utilities
-tokio = { version = "1", features = ["full"] }
 futures-util = "0.3.16"
 
 # Blaze packet system 
@@ -69,6 +67,22 @@ dotenvy = "0.15.5"
 # Library for obtaining the local IP address of the device
 local-ip-address = "0.4.9"
 
+# Logging implementation
+flexi_logger = { version = "0.24", default-features = false }
+
+# Tokio async runtime# Logging framework
+[dependencies.tokio]
+version = "1"
+features = [
+    "fs",
+    "macros",
+    "net",
+    "parking_lot",
+    "rt-multi-thread",
+    "signal",
+    "sync",
+]
+
 # Axum web framework
 [dependencies.axum]
 version = "0.6.1"
@@ -85,19 +99,6 @@ features = ["json", "rustls-tls"]
 version = "1"
 default-features = false
 features = ["std"]
-
-# Logging provider 
-[dependencies.log4rs]
-version = "1.2.0"
-default-features = false
-features = [
-    "gzip",
-    "console_appender",
-    "rolling_file_appender",
-    "compound_policy",
-    "fixed_window_roller",
-    "size_trigger",
-]
 
 [profile.release]
 strip = true

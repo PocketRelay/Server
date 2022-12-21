@@ -26,7 +26,6 @@ pub const MITM_ENABLED: (&str, bool) = ("PR_MITM_ENABLED", false);
 
 pub const LOGGING_LEVEL: (&str, LevelFilter) = ("PR_LOG_LEVEL", LevelFilter::Info);
 pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
-pub const LOG_COMPRESSION: (&str, bool) = ("PR_LOG_COMPRESSION", true);
 
 pub const API: (&str, bool) = ("PR_API", false);
 pub const API_USERNAME: (&str, &str) = ("PR_API_USERNAME", "admin");
