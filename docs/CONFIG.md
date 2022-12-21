@@ -84,11 +84,11 @@ and there are variables you can use to insert information about the session
 
 ### Variables
 
-| Variable | Description                  |
-| -------- | ---------------------------- |
-| {v}      | The server verison number    |
-| {n}      | The player name              |
-| {ip}     | The IP address of the player |
+| Variable | Description               |
+| -------- | ------------------------- |
+| {v}      | The server verison number |
+| {n}      | The player name           |
+| {ip}     | The IP address of the player
 
 # Galaxy at War 
 
@@ -145,11 +145,23 @@ in order from lowest to highest.
 - error *Only shows error logs*
 - off *Doesn't show any logs at all*
 
-## Log File
+## Log Compression
+```
+ENV     : PR_LOG_COMPRESSION
+TYPE    : BOOLEAN
+DEFAULT : true
+```
+
+This environment variable determines whether old logs should be compressed using Gzip 
+to save space on the drive 
+> Log files are not allowed to exceed 5mb before rolling over to the next file so this 
+> won't make a very large difference
+
+## Logging Directory
 ```
 ENV     : PR_LOGGING_DIR
 TYPE    : TEXT
-DEFAULT : data/logs/
+DEFAULT : data/logs
 ```
 
 This is the path to the folder where server log files should be stored. 
