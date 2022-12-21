@@ -1,11 +1,11 @@
 use crate::{game::GameSnapshot, state::GlobalState, utils::types::GameID};
 use axum::{
     extract::{Path, Query},
+    http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
 };
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 /// Function for adding all the routes in this file to

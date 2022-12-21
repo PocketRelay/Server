@@ -14,9 +14,9 @@ use database::{
     dto::players::PlayerUpdate, DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter,
     PlayerClass,
 };
-use futures_util::try_join;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use tokio::try_join;
 
 /// Function for adding all the routes in this file to
 /// the provided router
