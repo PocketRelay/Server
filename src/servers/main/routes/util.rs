@@ -252,10 +252,7 @@ fn generate_coalesced(bytes: &[u8]) -> ServerResult<ChunkMap> {
     };
 
     let mut encoded = Vec::with_capacity(16 + compressed.len());
-    encoded.push('N' as u8);
-    encoded.push('I' as u8);
-    encoded.push('B' as u8);
-    encoded.push('C' as u8);
+    encoded.extend_from_slice(b"NIBC");
     encoded.extend_from_slice(&1u32.to_le_bytes());
     encoded.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
     encoded.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
