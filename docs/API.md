@@ -243,8 +243,6 @@ The "offset" field contains the current offset page provided by the query and th
             "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
         },
     ],
-    "offset": 0,
-    "count": 20,
     "more": false
 }
 ```
