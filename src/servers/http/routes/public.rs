@@ -5,7 +5,9 @@ use axum::{
     routing::get,
     Router,
 };
-use rust_embed::RustEmbed;
+use rust_embed::{EmbeddedFile, RustEmbed};
+
+use std::{ffi::OsStr, path::Path as StdPath};
 
 /// Public resource content folder
 #[derive(RustEmbed)]
@@ -25,19 +27,10 @@ pub fn route(router: Router) -> Router {
 /// in this url.
 ///
 /// `path` The path of the content to serve
-async fn content(Path(path): Path<String>) -> Response {
-    if let Some(file) = PublicContent::get(&path) {
-        let mut response = file.data.into_response();
-        if let Ok(header_value) =
-            HeaderValue::from_str(mime_guess::from_path(&path).first_or_text_plain().as_ref())
-        {
-            response
-                .headers_mut()
-                .insert(header::CONTENT_TYPE, header_value);
-        }
-
-        response
-    } else {
-        (StatusCode::NOT_FOUND, "Not Found").into_response()
-    }
+async fn content(Path(path): Path<String>) -> Result<Response, StatusCode> {
+    // Obtain the embedded file
+    let file: EmbeddedFile = PublicContent::get(&path).ok_or(StatusCode::NOT_FOUND)?;
+    // Create the response from the raw binary data
+    let res: Response = file.data.into_response();
+    Ok(res)
 }
