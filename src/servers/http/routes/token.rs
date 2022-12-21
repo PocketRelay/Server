@@ -11,7 +11,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    fmt::Display,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -27,16 +26,9 @@ pub fn route(router: Router) -> Router {
         .route("/api/token", get(validate_token))
 }
 
-/// Structure for possible errors that could happen
-/// while attempting to access token routes
-#[derive(Debug)]
-enum TokenError {
-    /// The provided username or password was invalid
-    InvalidCredentials,
-}
-
-/// Result type alias for Json responses that could be a TokenError
-type TokenResult<T> = Result<Json<T>, TokenError>;
+/// Error type for invalid credentials being provided to the
+/// get_token route
+struct InvalidCredentails;
 
 /// Request structure for requesting a new token to be
 /// generated for the session.
@@ -66,11 +58,11 @@ struct GetTokenResponse {
 async fn get_token(
     Extension(token_store): Extension<Arc<TokenStore>>,
     Json(body): Json<GetTokenRequest>,
-) -> TokenResult<GetTokenResponse> {
+) -> Result<Json<GetTokenResponse>, InvalidCredentails> {
     let (token, expiry_time): (String, SystemTime) = token_store
         .authenticate(&body.username, &body.password)
         .await
-        .ok_or(TokenError::InvalidCredentials)?;
+        .ok_or(InvalidCredentails)?;
 
     let expiry_time = expiry_time
         .duration_since(UNIX_EPOCH)
@@ -95,12 +87,12 @@ struct DeleteTokenRequest {
 async fn delete_token(
     Extension(token_store): Extension<Arc<TokenStore>>,
     Json(body): Json<DeleteTokenRequest>,
-) -> Json<()> {
+) -> Response {
     token_store.remove_token(&body.token).await;
-
-    Json(())
+    StatusCode::OK.into_response()
 }
 
+/// Query structure for a query to validate a token
 #[derive(Deserialize)]
 struct ValidateTokenQuery {
     /// The token to validate
@@ -142,24 +134,10 @@ async fn validate_token(
     Json(ValidateTokenResponse { valid, expiry_time })
 }
 
-impl Display for TokenError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::InvalidCredentials => f.write_str("invalid credentials"),
-        }
-    }
-}
-
-impl TokenError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
-        }
-    }
-}
-
-impl IntoResponse for TokenError {
+/// IntoResponse implementation for InvalidCredentails to allow it to be
+/// used within the result type as a error response
+impl IntoResponse for InvalidCredentails {
     fn into_response(self) -> Response {
-        (self.status_code(), self.to_string()).into_response()
+        (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response()
     }
 }
