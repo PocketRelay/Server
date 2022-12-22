@@ -1,6 +1,6 @@
 use super::{
-    player::GamePlayer, rules::RuleSet, Game, GameJoinableState, GameModifyAction, GameSnapshot,
-    RemovePlayerType,
+    player::GamePlayer, rules::RuleSet, Game, GameAddr, GameJoinableState, GameModifyAction,
+    GameSnapshot, RemovePlayerType,
 };
 use crate::utils::types::{GameID, SessionID};
 use blaze_pk::types::TdfMap;
@@ -14,14 +14,14 @@ use std::{
     time::SystemTime,
 };
 use tokio::{
-    sync::{oneshot, Mutex, RwLock},
+    sync::{Mutex, RwLock},
     task::JoinSet,
 };
 
 /// Structure for managing games and the matchmaking queue
 pub struct Games {
     /// Map of Game IDs to the actual games.
-    games: RwLock<HashMap<GameID, Game>>,
+    games: RwLock<HashMap<GameID, GameAddr>>,
     /// Queue of players wanting to join games
     queue: Mutex<VecDeque<QueueEntry>>,
     /// ID for the next game to create
@@ -57,9 +57,9 @@ impl Games {
     /// `offset` The number of games to skip from the start of the list
     /// `count`  The number of games to obtain snapshots of
     pub async fn snapshot(&'static self, offset: usize, count: usize) -> (Vec<GameSnapshot>, bool) {
+        let games = &*self.games.read().await;
         // Obtained an order set of the keys from the games map
         let keys = {
-            let games = &*self.games.read().await;
             let mut keys: Vec<GameID> = games.keys().copied().collect();
             keys.sort();
             keys
@@ -74,14 +74,15 @@ impl Games {
 
         let mut join_set = JoinSet::new();
         for key in keys {
-            join_set.spawn(async move {
-                let games = &*self.games.read().await;
-                let game = games.get(&key)?;
-                let (sender, reciever) = oneshot::channel();
-                game.handle_action(GameModifyAction::Snapshot(sender)).await;
-                reciever.await.ok()
-            });
+            let game = games.get(&key).cloned();
+            if let Some(game) = game {
+                join_set.spawn(async move {
+                    let game = game;
+                    game.snapshot().await
+                });
+            }
         }
+        drop(games);
 
         // Start awaiting the snapshots that are being obtained
         let mut snapshots = Vec::with_capacity(keys_count);
@@ -100,10 +101,7 @@ impl Games {
     pub async fn snapshot_id(&self, game_id: GameID) -> Option<GameSnapshot> {
         let games = &*self.games.read().await;
         let game = games.get(&game_id)?;
-
-        let (sender, reciever) = oneshot::channel();
-        game.handle_action(GameModifyAction::Snapshot(sender)).await;
-        reciever.await.ok()
+        game.snapshot().await
     }
 
     /// Creates a new game from the initial attributes and
@@ -122,17 +120,10 @@ impl Games {
     ) -> u32 {
         let games = &mut *self.games.write().await;
         let id = self.id.fetch_add(1, Ordering::AcqRel);
-        let game = Game::new(id, attributes, setting);
-        games.insert(id, game);
-
-        tokio::spawn(async move {
-            let game_id = id;
-            let games = &*self.games.read().await;
-            let Some(game) = games.get(&game_id) else { return; };
-            game.handle_action(GameModifyAction::AddPlayer(host)).await;
-            self.update_queue(game).await;
-        });
-
+        let game = Game::spawn(id, attributes, setting);
+        games.insert(id, game.clone());
+        game.send(GameModifyAction::AddPlayer(host));
+        tokio::spawn(self.update_queue(game));
         id
     }
 
@@ -141,18 +132,12 @@ impl Games {
     /// they do then add them to the game.
     ///
     /// `game` The game to update to queue with
-    async fn update_queue(&self, game: &Game) {
+    async fn update_queue(&self, game: GameAddr) {
         let queue = &mut *self.queue.lock().await;
         if !queue.is_empty() {
             let mut unmatched = VecDeque::new();
             while let Some(entry) = queue.pop_front() {
-                let (sender, reciever) = oneshot::channel();
-                game.handle_action(GameModifyAction::CheckJoinable(
-                    Some(entry.rules.clone()),
-                    sender,
-                ))
-                .await;
-                let join_state = reciever.await.unwrap_or(GameJoinableState::Full);
+                let join_state = game.check_joinable(Some(entry.rules.clone())).await;
                 match join_state {
                     GameJoinableState::Full => {
                         // If the game is not joinable push the entry back to the
@@ -175,8 +160,7 @@ impl Games {
                         if let Ok(elapsed) = elapsed {
                             debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
                         }
-                        game.handle_action(GameModifyAction::AddPlayer(entry.player))
-                            .await;
+                        game.send(GameModifyAction::AddPlayer(entry.player));
                     }
                 }
             }
@@ -194,15 +178,11 @@ impl Games {
         tokio::spawn(async move {
             let rules = Arc::new(rules);
             let games = &*self.games.read().await;
-            for game in games.values() {
-                let (sender, reciever) = oneshot::channel();
-                game.handle_action(GameModifyAction::CheckJoinable(Some(rules.clone()), sender))
-                    .await;
-                let join_state = reciever.await.unwrap_or(GameJoinableState::Full);
+            for (id, game) in games.iter() {
+                let join_state = game.check_joinable(Some(rules.clone())).await;
                 if let GameJoinableState::Joinable = join_state {
-                    debug!("Found matching game (GID: {})", game.id);
-                    game.handle_action(GameModifyAction::AddPlayer(player))
-                        .await;
+                    debug!("Found matching game (GID: {})", id);
+                    game.send(GameModifyAction::AddPlayer(player));
                     return;
                 }
             }
@@ -226,7 +206,7 @@ impl Games {
         tokio::spawn(async move {
             let games = self.games.read().await;
             if let Some(game) = games.get(&game_id) {
-                game.handle_action(action).await;
+                game.send(action);
             }
         });
     }
@@ -246,10 +226,7 @@ impl Games {
         tokio::spawn(async move {
             let games = self.games.read().await;
             if let Some(game) = games.get(&game_id) {
-                let (sender, reciever) = oneshot::channel();
-                game.handle_action(GameModifyAction::RemovePlayer(ty, sender))
-                    .await;
-                let is_empty = reciever.await.unwrap_or(true);
+                let is_empty = game.remove_player(ty).await;
                 if is_empty {
                     drop(games);
 

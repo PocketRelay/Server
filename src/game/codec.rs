@@ -1,4 +1,4 @@
-use super::{player::GamePlayer, AttrMap, GameData};
+use super::{player::GamePlayer, AttrMap, Game};
 use crate::utils::types::{GameID, GameSlot, PlayerID};
 use blaze_pk::{
     codec::{Decodable, Encodable},
@@ -232,39 +232,34 @@ impl Encodable for PlayerJoining<'_> {
     }
 }
 
-pub fn encode_game_data(
-    writer: &mut TdfWriter,
-    id: GameID,
-    players: &[GamePlayer],
-    player: &GamePlayer,
-    game_data: &GameData,
-) {
-    let mut player_ids = players
+pub fn encode_game_data(writer: &mut TdfWriter, game: &Game, player: &GamePlayer) {
+    let mut player_ids = game
+        .players
         .iter()
         .map(|value| value.player_id)
         .collect::<Vec<_>>();
     player_ids.push(player.player_id);
-    let host_player = players.first().unwrap_or(player);
+    let host_player = game.players.first().unwrap_or(player);
 
     writer.tag_group(b"GAME");
 
     let game_name = &host_player.display_name;
 
     writer.tag_value(b"ADMN", &player_ids);
-    writer.tag_value(b"ATTR", &game_data.attributes);
+    writer.tag_value(b"ATTR", &game.attributes);
     {
         writer.tag_list_start(b"CAP", TdfType::VarInt, 2);
         writer.write_u8(4);
         writer.write_u8(0);
     }
 
-    writer.tag_u32(b"GID", id);
+    writer.tag_u32(b"GID", game.id);
     writer.tag_str(b"GNAM", game_name);
 
     writer.tag_u64(b"GPVH", 0x5a4f2b378b715c6);
-    writer.tag_u16(b"GSET", game_data.setting);
+    writer.tag_u16(b"GSET", game.setting);
     writer.tag_u64(b"GSID", 0x4000000a76b645);
-    writer.tag_value(b"GSTA", &game_data.state);
+    writer.tag_value(b"GSTA", &game.state);
 
     writer.tag_str_empty(b"GTYP");
     {
@@ -321,17 +316,15 @@ pub fn encode_players_list(writer: &mut TdfWriter, players: &Vec<GamePlayer>, pl
 }
 
 pub struct GameDetails<'a> {
-    pub id: GameID,
-    pub players: &'a Vec<GamePlayer>,
-    pub game_data: &'a GameData,
+    pub game: &'a Game,
     pub player: &'a GamePlayer,
     pub ty: GameDetailsType,
 }
 
 impl Encodable for GameDetails<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
-        encode_game_data(writer, self.id, self.players, self.player, self.game_data);
-        encode_players_list(writer, self.players, self.player);
+        encode_game_data(writer, self.game, self.player);
+        encode_players_list(writer, &self.game.players, self.player);
         let union_value = self.ty.value();
         writer.tag_union_start(b"REAS", union_value);
         writer.tag_group(b"VALU");
