@@ -20,13 +20,6 @@ impl<'a> MEStringParser<'a> {
         Some(MEStringParser { split })
     }
 
-    pub fn skip(&mut self, count: usize) -> Option<()> {
-        for _ in 0..count {
-            self.split.next()?;
-        }
-        Some(())
-    }
-
     pub fn next_str(&mut self) -> Option<String> {
         let next = self.split.next()?;
         Some(next.to_string())
