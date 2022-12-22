@@ -6,8 +6,7 @@ use crate::{
     utils::parsing::{parse_player_character, parse_player_class},
 };
 use database::{DatabaseConnection, DbResult, Player};
-use futures_util::try_join;
-use tokio::{sync::RwLock, task::JoinSet};
+use tokio::{sync::RwLock, task::JoinSet, try_join};
 
 pub mod models;
 
