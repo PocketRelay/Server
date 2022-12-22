@@ -207,40 +207,12 @@ The "offset" field contains the current offset page provided by the query and th
             "email": "test@test.com",
             "display_name": "test@test.com",
             "origin": false,
-            "credits": 1666449040,
-            "credits_spent": 1668442722,
-            "games_played": 16,
-            "seconds_played": 3384,
-            "inventory": "01010000030000010...LONG VALUE OMMITTED FROM EXAMPLE",
-            "csreward": 0,
-            "face_codes": "20;",
-            "new_item": "20;4;13 223 584,10 75 131,8 98 95 529 93 517 528,9 79 111 84",
-            "completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-            "progress": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-            "cs_completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-            "cs_timestamps1": "0,... LONG LIST OMMITTED FROM EXAMPLE",
-            "cs_timestamps2": "0,... LONG LIST OMMITTED FROM EXAMPLE",
-            "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
         },
         {
             "id": 2,
             "email": "test1@test.com",
             "display_name": "test1@test.com",
             "origin": false,
-            "credits": 1666449040,
-            "credits_spent": 1668442722,
-            "games_played": 16,
-            "seconds_played": 3384,
-            "inventory": "01010000030000010...LONG VALUE OMMITTED FROM EXAMPLE",
-            "csreward": 0,
-            "face_codes": "20;",
-            "new_item": "20;4;13 223 584,10 75 131,8 98 95 529 93 517 528,9 79 111 84",
-            "completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-            "progress": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-            "cs_completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-            "cs_timestamps1": "0,... LONG LIST OMMITTED FROM EXAMPLE",
-            "cs_timestamps2": "0,... LONG LIST OMMITTED FROM EXAMPLE",
-            "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
         },
     ],
     "more": false
@@ -249,9 +221,9 @@ The "offset" field contains the current offset page provided by the query and th
 
 ### Error Responses 
 
-| Status Code               | Body                  | Meaning                                 |
-| ------------------------- | --------------------- | --------------------------------------- |
-| 500 Internal Server Error | Internal Server Error | Database or other server error occurred |
+| Status Code               | Body        | Meaning                                 |
+| ------------------------- | ----------- | --------------------------------------- |
+| 500 Internal Server Error | ServerError | Database or other server error occurred |
 
 
 ## Create Player
@@ -275,29 +247,15 @@ POST /api/players
 	"email": "test12@test.com",
 	"display_name": "Test 12",
 	"origin": false,
-	"credits": 0,
-	"credits_spent": 0,
-	"games_played": 0,
-	"seconds_played": 0,
-	"inventory": "",
-	"csreward": 0,
-	"face_codes": null,
-	"new_item": null,
-	"completion": null,
-	"progress": null,
-	"cs_completion": null,
-	"cs_timestamps1": null,
-	"cs_timestamps2": null,
-	"cs_timestamps3": null
 }
 ```
 ### Error Responses 
 
-| Status Code               | Body                           | Meaning                                                 |
-| ------------------------- | ------------------------------ | ------------------------------------------------------- |
-| 400 Bad Request           | Email address is already taken | The provided email address is already in use            |
-| 400 Bad Request           | Email address is not valid     | The provided email address is not a valid email address |
-| 500 Internal Server Error | Internal Server Error          | Database or other server error occurred                 |
+| Status Code               | Body         | Meaning                                                 |
+| ------------------------- | ------------ | ------------------------------------------------------- |
+| 400 Bad Request           | EmailTaken   | The provided email address is already in use            |
+| 400 Bad Request           | InvalidEmail | The provided email address is not a valid email address |
+| 500 Internal Server Error | ServerError  | Database or other server error occurred                 |
 
 
 ## Get Specific Player
@@ -317,31 +275,18 @@ a specific ID. This only includes the basic player data and not the classes or c
     "email": "test@test.com",
     "display_name": "test@test.com",
     "origin": false,
-    "credits": 1666449040,
-    "credits_spent": 1668442722,
-    "games_played": 16,
-    "seconds_played": 3384,
-    "inventory": "01010000030000010...LONG VALUE OMMITTED FROM EXAMPLE",
-    "csreward": 0,
-    "face_codes": "20;",
-    "new_item": "20;4;13 223 584,10 75 131,8 98 95 529 93 517 528,9 79 111 84",
-    "completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-    "progress": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-    "cs_completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-    "cs_timestamps1": "0,... LONG LIST OMMITTED FROM EXAMPLE",
-    "cs_timestamps2": "0,... LONG LIST OMMITTED FROM EXAMPLE",
-    "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
 }
 ```
 
 ### Error Responses 
 
-| Status Code               | Body                                   | Meaning                                    |
-| ------------------------- | -------------------------------------- | ------------------------------------------ |
-| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
-| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
+| Status Code               | Body           | Meaning                                    |
+| ------------------------- | -------------- | ------------------------------------------ |
+| 404 Not Found             | PlayerNotFound | Player with matching ID could not be found |
+| 500 Internal Server Error | ServerError    | Database or other server error occurred    |
 
-## Update Player
+
+## Modify Player
 
 ```
 PUT /api/players/:player_id
@@ -352,20 +297,23 @@ PUT /api/players/:player_id
     "email": "test@test.com",
     "display_name": "Test 1",
     "origin": false,
-    "password": "test123",
-    "credits": 1020,
-    "inventory": "00123010230102301302102030000",
-    "csreward": 0,
+    "password": "Some example field
 }
 ```
 
+### Fields
+
+Below is a table of fields that you can include within your JSON
+request
+
+| Key          | Optional | Description                                                                 |
+| ------------ | -------- | --------------------------------------------------------------------------- |
+| email        | Yes      | The new email address for this player (Will give an error if already taken) |
+| display_name | Yes      | The new display name for this player                                        |
+| origin       | Yes      | Whether this account is an origin account                                   |
+| password     | Yes      | A new plaintext password to be hashed for the player                        |
 
 Replacing :player_id with the ID of the player 
-
-You can omit any of the fields within this JSON to only update specific values
-however if you specific "origin" as false the "password" field must be present
-in order to set the account password
-
 
 ### Response
 
@@ -377,263 +325,16 @@ The response is the player structure but with the new values updated
     "email": "test@test.com",
     "display_name": "Test 1",
     "origin": false,
-    "credits": 1020,
-    "credits_spent": 1668442722,
-    "games_played": 16,
-    "seconds_played": 3384,
-    "inventory": "00123010230102301302102030000",
-    "csreward": 0,
-    "face_codes": "20;",
-    "new_item": "20;4;13 223 584,10 75 131,8 98 95 529 93 517 528,9 79 111 84",
-    "completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-    "progress": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-    "cs_completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-    "cs_timestamps1": "0,... LONG LIST OMMITTED FROM EXAMPLE",
-    "cs_timestamps2": "0,... LONG LIST OMMITTED FROM EXAMPLE",
-    "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
 }
 ```
 
-| Status Code               | Body                                            | Meaning                                                          |
-| ------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
-| 404 Not Found             | Couldn't find any players with that ID          | Player with matching ID could not be found                       |
-| 400 Bad Request           | Email address is already taken                  | The provided email address is already in use                     |
-| 400 Bad Request           | Email address is not valid                      | The provided email address is not a valid email address          |
-| 400 Bad Request           | Origin was set to false so password is required | The "origin" field was set to false without the "password" field |
-| 500 Internal Server Error | Internal Server Error                           | Database or other server error occurred                          |
+| Status Code               | Body           | Meaning                                                 |
+| ------------------------- | -------------- | ------------------------------------------------------- |
+| 404 Not Found             | PlayerNotFound | Player with matching ID could not be found              |
+| 400 Bad Request           | EmailTaken     | The provided email address is already in use            |
+| 400 Bad Request           | InvalidEmail   | The provided email address is not a valid email address |
+| 500 Internal Server Error | ServerError    | Database or other server error occurred                 |
 
-
-## Get Specific Player Full
-
-```
-GET /api/players/:player_id/full
-```
-
-Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
-a specific ID. This includes all the player data, classes, characters and galaxy at war data.
-
-### Response
-
-```json
-{
-    "player": {
-        "id": 1,
-        "email": "test@test.com",
-        "display_name": "test@test.com",
-        "origin": false,
-        "credits": 1666449040,
-        "credits_spent": 1668442722,
-        "games_played": 16,
-        "seconds_played": 3384,
-        "inventory": "01010000030000010...LONG VALUE OMMITTED FROM EXAMPLE",
-        "csreward": 0,
-        "face_codes": "20;",
-        "new_item": "20;4;13 223 584,10 75 131,8 98 95 529 93 517 528,9 79 111 84",
-        "completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-        "progress": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-        "cs_completion": "22,... LONG LIST OMMITTED FROM EXAMPLE",
-        "cs_timestamps1": "0,... LONG LIST OMMITTED FROM EXAMPLE",
-        "cs_timestamps2": "0,... LONG LIST OMMITTED FROM EXAMPLE",
-        "cs_timestamps3": "0,... LONG LIST OMMITTED FROM EXAMPLE"
-    },
-    "classes": [
-        {
-            "index": 1,
-            "name": "Adept",
-            "level": 1,
-            "exp": 0.0,
-            "promotions": 0
-        },
-        ... Remaining classes ommitted for documentation
-    ],
-    "characters": [
-        {
-            "index": 0,
-            "kit_name": "AdeptHumanMale",
-            "name": "Test",
-            "tint1": 0,
-            "tint2": 26,
-            "pattern": 0,
-            "pattern_color": 47,
-            "phong": 45,
-            "emissive": 9,
-            "skin_tone": 9,
-            "seconds_played": 0,
-            "timestamp_year": 0,
-            "timestamp_month": 0,
-            "timestamp_day": 0,
-            "timestamp_seconds": 0,
-            "powers": "Singularity 179 1.000_Shield 89 1.0000 0 0 0 0 0 0 0...Remaining ommited",
-            "hotkeys": "",
-            "weapons": "0,25",
-            "weapon_mods": "",
-            "deployed": true,
-            "leveled_up": false
-        },
-        ... Remaining characters ommitted for documentation
-    ],
-    "galaxy_at_war": {
-        "last_modified": "2022-10-29T15:29:22.515609800",
-        "group_a": 5300,
-        "group_b": 5300,
-        "group_c": 5300,
-        "group_d": 5300,
-        "group_e": 6000
-    }
-}
-```
-
-### Error Responses 
-
-| Status Code               | Body                                   | Meaning                                    |
-| ------------------------- | -------------------------------------- | ------------------------------------------ |
-| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
-| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
-
-
-## Get Specific Player Classes
-
-```
-GET /api/players/:player_id/classes
-```
-
-Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
-a specific ID. This only includes the classes for the player
-
-### Response
-
-```json
-[
-    {
-        "index": 1,
-        "name": "Adept",
-        "level": 1,
-        "exp": 0.0,
-        "promotions": 0
-    },
-    ... Remaining classes ommitted for documentation
-]
-```
-
-### Error Responses 
-
-| Status Code               | Body                                   | Meaning                                    |
-| ------------------------- | -------------------------------------- | ------------------------------------------ |
-| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
-| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
-
-## Get Specific Player Class
-
-```
-GET /api/players/:player_id}/classes/:index
-```
-
-Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
-a specific ID. This only includes the classes for the player. Replacing :index with the class index
-
-### Response
-
-```json
-{
-    "index": 1,
-    "name": "Adept",
-    "level": 1,
-    "exp": 0.0,
-    "promotions": 0
-}
-```
-
-### Error Responses 
-
-| Status Code               | Body                                   | Meaning                                    |
-| ------------------------- | -------------------------------------- | ------------------------------------------ |
-| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
-| 404 Not Found             | Class with that index not found        | Class with that index could not be found   |
-| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
-
-
-## Update Player Class
-
-```
-PUT /api/players/:player_id/classes/:index
-```
-
-Replacing :player_id with the ID. Replacing :index with the class index
-
-```json
-{
-    "level": 20,
-    "promotions": 5
-}
-```
-
-### Response
-
-```json
-{
-    "index": 1,
-    "name": "Adept",
-    "level": 20,
-    "exp": 0.0,
-    "promotions": 5
-}
-```
-
-### Error Responses 
-
-| Status Code               | Body                                   | Meaning                                    |
-| ------------------------- | -------------------------------------- | ------------------------------------------ |
-| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
-| 404 Not Found             | Class with that index not found        | Class with that index could not be found   |
-| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
-
-
-## Get Specific Player Characters
-
-```
-GET /api/players/:player_id/characters
-```
-
-Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
-a specific ID. This only includes the characters for the player
-
-### Response
-
-```json
-[
-    {
-        "index": 0,
-        "kit_name": "AdeptHumanMale",
-        "name": "Test",
-        "tint1": 0,
-        "tint2": 26,
-        "pattern": 0,
-        "pattern_color": 47,
-        "phong": 45,
-        "emissive": 9,
-        "skin_tone": 9,
-        "seconds_played": 0,
-        "timestamp_year": 0,
-        "timestamp_month": 0,
-        "timestamp_day": 0,
-        "timestamp_seconds": 0,
-        "powers": "Singularity 179 1.000_Shield 89 1.0000 0 0 0 0 0 0 0...Remaining ommited",
-        "hotkeys": "",
-        "weapons": "0,25",
-        "weapon_mods": "",
-        "deployed": true,
-        "leveled_up": false
-    },
-    ... Remaining characters ommitted for documentation
-]
-```
-
-### Error Responses 
-
-| Status Code               | Body                                   | Meaning                                    |
-| ------------------------- | -------------------------------------- | ------------------------------------------ |
-| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
-| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
 
 
 ## Get Specific Player Galaxy At War
@@ -641,9 +342,8 @@ a specific ID. This only includes the characters for the player
 ```
 GET /api/players/:player_id/galaxy_at_war
 ```
+This route retrieves the galaxy at war data for the provided player. If the data has not yet been generated new default data will be generated.
 
-Replacing :player_id with the ID of the player this route allows you to get only the player data for a player with
-a specific ID. This only includes the galaxy at war data for the player
 
 ### Response
 

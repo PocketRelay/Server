@@ -1,15 +1,10 @@
 use crate::{
-    dto::{
-        players::{PlayerDataUpdate, PlayerUpdate},
-        ParsedUpdate,
-    },
-    entities::players,
-    DbResult, Player, PlayerCharacter, PlayerClass,
+    entities::{player_data, players, PlayerData},
+    DbResult, Player,
 };
 use sea_orm::{
-    ActiveModelTrait,
-    ActiveValue::{NotSet, Set},
-    ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait,
+    IntoActiveModel, ModelTrait, QueryFilter,
 };
 use std::iter::Iterator;
 
@@ -61,26 +56,11 @@ impl Player {
         origin: bool,
     ) -> DbResult<Self> {
         let active_model = players::ActiveModel {
-            id: NotSet,
-            email: Set(email.to_string()),
+            email: Set(email),
             display_name: Set(display_name),
-            session_token: NotSet,
             origin: Set(origin),
             password: Set(password),
-            credits: NotSet,
-            credits_spent: NotSet,
-            games_played: NotSet,
-            seconds_played: NotSet,
-            inventory: Set(String::new()),
-            csreward: NotSet,
-            face_codes: NotSet,
-            new_item: NotSet,
-            completion: NotSet,
-            progress: NotSet,
-            cs_completion: NotSet,
-            cs_timestamps1: NotSet,
-            cs_timestamps2: NotSet,
-            cs_timestamps3: NotSet,
+            ..Default::default()
         };
         active_model.insert(db).await
     }
@@ -94,6 +74,67 @@ impl Player {
         Ok(())
     }
 
+    /// Retrieves all the player data for this player
+    pub async fn all_data(&self, db: &DatabaseConnection) -> DbResult<Vec<PlayerData>> {
+        self.find_related(player_data::Entity).all(db).await
+    }
+
+    pub async fn set_data(
+        &self,
+        db: &DatabaseConnection,
+        key: String,
+        value: String,
+    ) -> DbResult<PlayerData> {
+        match self
+            .find_related(player_data::Entity)
+            .filter(player_data::Column::Key.eq(key.clone()))
+            .one(db)
+            .await?
+        {
+            Some(player_data) => {
+                let mut model = player_data.into_active_model();
+                model.key = Set(key);
+                model.value = Set(value);
+                model.update(db).await
+            }
+            None => {
+                player_data::ActiveModel {
+                    player_id: Set(self.id),
+                    key: Set(key),
+                    value: Set(value),
+                    ..Default::default()
+                }
+                .insert(db)
+                .await
+            }
+        }
+    }
+
+    pub async fn get_data(
+        &self,
+        db: &DatabaseConnection,
+        key: &str,
+    ) -> DbResult<Option<PlayerData>> {
+        self.find_related(player_data::Entity)
+            .filter(player_data::Column::Key.eq(key))
+            .one(db)
+            .await
+    }
+
+    pub async fn get_classes(&self, db: &DatabaseConnection) -> DbResult<Vec<PlayerData>> {
+        self.find_related(player_data::Entity)
+            .filter(player_data::Column::Key.starts_with("class"))
+            .all(db)
+            .await
+    }
+
+    pub async fn get_characters(&self, db: &DatabaseConnection) -> DbResult<Vec<PlayerData>> {
+        self.find_related(player_data::Entity)
+            .filter(player_data::Column::Key.starts_with("char"))
+            .all(db)
+            .await
+    }
+
     /// Updates the player using the optional values provided from the HTTP
     /// API
     ///
@@ -102,41 +143,29 @@ impl Player {
     /// `display_name` The optional display name to use
     /// `origin`       The optional origin value to use
     /// `password`     The optional password to use
-    /// `credits`      The optional credits to use
-    /// `inventory`    The optional inventory to use
-    /// `csreward`     The optional csreward to use
     pub async fn update_http(
         self,
         db: &DatabaseConnection,
-        update: PlayerUpdate,
+        email: Option<String>,
+        display_name: Option<String>,
+        origin: Option<bool>,
+        password: Option<String>,
     ) -> DbResult<Self> {
         let mut active = self.into_active_model();
-        if let Some(email) = update.email {
+        if let Some(email) = email {
             active.email = Set(email);
         }
 
-        if let Some(display_name) = update.display_name {
+        if let Some(display_name) = display_name {
             active.display_name = Set(display_name);
         }
 
-        if let Some(origin) = update.origin {
+        if let Some(origin) = origin {
             active.origin = Set(origin);
         }
 
-        if let Some(password) = update.password {
+        if let Some(password) = password {
             active.password = Set(password);
-        }
-
-        if let Some(credits) = update.credits {
-            active.credits = Set(credits);
-        }
-
-        if let Some(inventory) = update.inventory {
-            active.inventory = Set(inventory);
-        }
-
-        if let Some(csreward) = update.csreward {
-            active.csreward = Set(csreward);
         }
 
         active.update(db).await
@@ -144,8 +173,8 @@ impl Player {
 
     /// Parses the challenge points value which is the second
     /// item in the completion list.
-    pub fn get_challenge_points(&self) -> Option<u32> {
-        let list = self.completion.as_ref()?;
+    pub async fn get_challenge_points(&self, db: &DatabaseConnection) -> Option<u32> {
+        let list = self.get_data(db, "Completion").await.ok()??.value;
         let part = list.split(',').nth(1)?;
         let value: u32 = part.parse().ok()?;
         Some(value)
@@ -254,73 +283,5 @@ impl Player {
             Some(value) => value.clone(),
         };
         Ok((self, token))
-    }
-
-    pub fn encode_base(&self) -> String {
-        format!(
-            "20;4;{};-1;0;{};0;{};{};0;{}",
-            self.credits,
-            self.credits_spent,
-            self.games_played,
-            self.seconds_played,
-            &self.inventory
-        )
-    }
-
-    fn apply_update(model: &mut players::ActiveModel, update: PlayerDataUpdate) {
-        match update {
-            PlayerDataUpdate::Base(base) => {
-                model.credits = Set(base.credits);
-                model.credits_spent = Set(base.credits_spent);
-                model.games_played = Set(base.games_played);
-                model.seconds_played = Set(base.seconds_played);
-                model.inventory = Set(base.inventory);
-            }
-            PlayerDataUpdate::FaceCodes(value) => model.face_codes = Set(Some(value)),
-            PlayerDataUpdate::NewItem(value) => model.new_item = Set(Some(value)),
-            PlayerDataUpdate::ChallengeReward(value) => model.csreward = Set(value),
-            PlayerDataUpdate::Completion(value) => model.completion = Set(Some(value)),
-            PlayerDataUpdate::Progress(value) => model.progress = Set(Some(value)),
-            PlayerDataUpdate::Cscompletion(value) => model.cs_completion = Set(Some(value)),
-            PlayerDataUpdate::Cstimestamps(value) => model.cs_timestamps1 = Set(Some(value)),
-            PlayerDataUpdate::Cstimestamps2(value) => model.cs_timestamps2 = Set(Some(value)),
-            PlayerDataUpdate::Cstimestamps3(value) => model.cs_timestamps3 = Set(Some(value)),
-        }
-    }
-
-    pub async fn update(self, db: &DatabaseConnection, update: PlayerDataUpdate) -> DbResult<Self> {
-        let mut model = self.into_active_model();
-        Self::apply_update(&mut model, update);
-        model.update(db).await
-    }
-
-    pub async fn update_all(
-        self,
-        db: &DatabaseConnection,
-        updates: Vec<ParsedUpdate>,
-    ) -> DbResult<players::Model> {
-        let mut data_updates = Vec::new();
-        for update in updates {
-            match update {
-                ParsedUpdate::Character(index, value) => {
-                    PlayerCharacter::update(db, &self, index, value).await?;
-                }
-                ParsedUpdate::Class(index, value) => {
-                    PlayerClass::update(db, &self, index, value).await?;
-                }
-                ParsedUpdate::Data(value) => data_updates.push(value),
-            }
-        }
-
-        if !data_updates.is_empty() {
-            let mut model = self.into_active_model();
-            for update in data_updates {
-                Self::apply_update(&mut model, update);
-            }
-            let model = model.update(db).await?;
-            return Ok(model);
-        }
-
-        Ok(self)
     }
 }

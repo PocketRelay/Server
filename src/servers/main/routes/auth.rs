@@ -8,7 +8,6 @@ use crate::{
     utils::{
         env,
         hashing::{hash_password, verify_password},
-        parsing::parse_updates,
         types::PlayerID,
         validate::is_email,
     },
@@ -216,13 +215,19 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
                 return Ok(player);
             };
 
-            let updates = parse_updates(settings.into_iter());
+            let futures: Vec<_> = settings
+                .into_iter()
+                .map(|(key, value)| player.set_data(db, key, value))
+                .collect();
 
-            // Update the player settings with those retrieved from origin
-            player
-                .update_all(db, updates)
+            futures_util::future::try_join_all(futures)
                 .await
-                .map_err(|_| ServerError::ServerUnavailable)
+                .map_err(|err| {
+                    error!("Failed to set origin data: {err:?}");
+                    ServerError::ServerUnavailable
+                })?;
+
+            Ok(player)
         }
     }
 }

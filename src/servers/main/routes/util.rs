@@ -6,11 +6,11 @@ use crate::{
     },
     servers::main::{models::util::*, routes::HandleResult, session::Session},
     state::GlobalState,
-    utils::{constants, dmap::load_dmap, env, parsing::parse_update, types::PlayerID},
+    utils::{constants, dmap::load_dmap, env, types::PlayerID},
 };
 use base64;
 use blaze_pk::{packet::Packet, types::TdfMap};
-use database::{dto::ParsedUpdate, PlayerCharacter, PlayerClass};
+use database::Player;
 use flate2::{write::ZlibEncoder, Compression};
 use log::{error, warn};
 use rust_embed::RustEmbed;
@@ -20,7 +20,7 @@ use std::{
     str::Chars,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tokio::{fs::read, try_join};
+use tokio::fs::read;
 
 /// Routing function for handling packets with the `Util` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -528,45 +528,20 @@ fn handle_suspend_user_ping(packet: &Packet) -> HandleResult {
 /// ```
 async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> HandleResult {
     let req: SettingsSaveRequest = packet.decode()?;
-    let update = parse_update(req.key, req.value).ok_or(ServerError::ServerUnavailable)?;
     let db = GlobalState::database();
-    match update {
-        ParsedUpdate::Character(index, value) => {
-            let player = session
-                .player
-                .as_ref()
-                .ok_or(ServerError::FailedNoLoginAction)?;
-            PlayerCharacter::update(db, player, index, value)
-                .await
-                .map_err(|err| {
-                    warn!("Failed to update player character: {err:?}");
-                    ServerError::ServerUnavailable
-                })?;
-        }
-        ParsedUpdate::Class(index, value) => {
-            let player = session
-                .player
-                .as_ref()
-                .ok_or(ServerError::FailedNoLoginAction)?;
-            PlayerClass::update(db, player, index, value)
-                .await
-                .map_err(|err| {
-                    warn!("Failed to update player class: {err:?}");
-                    ServerError::ServerUnavailable
-                })?;
-        }
-        ParsedUpdate::Data(value) => {
-            let player = session
-                .player
-                .take()
-                .ok_or(ServerError::FailedNoLoginAction)?;
-            let player = player.update(db, value).await.map_err(|err| {
-                warn!("Failed to update player data: {err:?}");
-                ServerError::ServerUnavailable
-            })?;
-            session.player = Some(player);
-        }
-    }
+
+    let player: &Player = session
+        .player
+        .as_ref()
+        .ok_or(ServerError::FailedNoLoginAction)?;
+
+    player
+        .set_data(db, req.key, req.value)
+        .await
+        .map_err(|err| {
+            warn!("Failed to update player data: {err:?}");
+            ServerError::ServerUnavailable
+        })?;
     Ok(packet.respond_empty())
 }
 
@@ -579,50 +554,17 @@ async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> Ha
 /// Content: {}
 /// ```
 async fn handle_user_settings_load_all(session: &mut Session, packet: &Packet) -> HandleResult {
-    let mut settings = TdfMap::<String, String>::new();
-    {
-        let player = session
-            .player
-            .as_ref()
-            .ok_or(ServerError::FailedNoLoginAction)?;
-
-        settings.insert("Base", player.encode_base());
-
-        let db = GlobalState::database();
-
-        let classes = PlayerClass::find_all(db, player);
-        let characters = PlayerCharacter::find_all(db, player);
-
-        let (classes, characters) = try_join!(classes, characters)?;
-
-        let mut index = 0;
-        for char in characters {
-            settings.insert(format!("char{}", index), char.encode());
-            index += 1;
-        }
-
-        index = 0;
-        for class in classes {
-            settings.insert(format!("class{}", index), class.encode());
-            index += 1;
-        }
-
-        #[inline]
-        fn insert_optional(map: &mut TdfMap<String, String>, key: &str, value: &Option<String>) {
-            if let Some(value) = value {
-                map.insert(key, value);
-            }
-        }
-        insert_optional(&mut settings, "Completion", &player.completion);
-        insert_optional(&mut settings, "cscompletion", &player.cs_completion);
-        settings.insert("csreward", player.csreward.to_string());
-        insert_optional(&mut settings, "cstimestamps", &player.cs_timestamps1);
-        insert_optional(&mut settings, "cstimestamps2", &player.cs_timestamps2);
-        insert_optional(&mut settings, "cstimestamps3", &player.cs_timestamps3);
-        insert_optional(&mut settings, "FaceCodes", &player.face_codes);
-        insert_optional(&mut settings, "NewItem", &player.new_item);
-        insert_optional(&mut settings, "Progress", &player.progress);
+    let player = session
+        .player
+        .as_ref()
+        .ok_or(ServerError::FailedNoLoginAction)?;
+    let db = GlobalState::database();
+    let data = player.all_data(db).await?;
+    let mut settings = TdfMap::<String, String>::with_capacity(data.len());
+    for value in data {
+        settings.insert(value.key, value.value)
     }
+    settings.order();
     let response = SettingsResponse { settings };
     Ok(packet.respond(response))
 }

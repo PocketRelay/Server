@@ -10,13 +10,9 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use database::{
-    dto::players::PlayerUpdate, DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter,
-    PlayerClass,
-};
+use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData};
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-use tokio::try_join;
+use std::{collections::HashMap, fmt::Display};
 
 /// Router function creates a new router with all the underlying
 /// routes for this file.
@@ -29,18 +25,14 @@ pub(super) fn router() -> Router {
             "/:id",
             get(get_player).put(modify_player).delete(delete_player),
         )
-        .route("/:id/full", get(get_player_full))
-        .route("/:id/classes", get(get_player_classes))
-        .route(
-            "/:id/classes/:index",
-            get(get_player_class).put(update_player_class),
-        )
-        .route("/:id/characters", get(get_player_characters))
+        .route("/:id/data", get(all_data))
+        .route("/:id/data/:key", get(get_data).put(set_data))
         .route("/:id/galaxy_at_war", get(get_player_gaw))
 }
 
 /// Enum for errors that could occur when accessing any of
 /// the players routes
+#[derive(Debug)]
 enum PlayersError {
     /// The player with the requested ID was not found
     PlayerNotFound,
@@ -52,7 +44,7 @@ enum PlayersError {
     /// or a database error
     ServerError,
     /// Requested class could not be found
-    ClassNotFound,
+    DataNotFound,
 }
 
 /// Type alias for players result responses which wraps the provided type in
@@ -133,12 +125,6 @@ struct ModifyPlayerRequest {
     origin: Option<bool>,
     /// Plain text password to be hashed and used
     password: Option<String>,
-    /// Credits value
-    credits: Option<u32>,
-    /// Inventory value
-    inventory: Option<String>,
-    /// Challenge reward value
-    csreward: Option<u16>,
 }
 
 /// Route for modifying a player with the provided ID can take multiple
@@ -190,17 +176,9 @@ async fn modify_player(
         None
     };
 
-    let update = PlayerUpdate {
-        email,
-        display_name,
-        origin: req.origin,
-        password,
-        credits: req.credits,
-        inventory: req.inventory,
-        csreward: req.csreward,
-    };
-
-    let player = player.update_http(db, update).await?;
+    let player = player
+        .update_http(db, email, display_name, req.origin, password)
+        .await?;
 
     Ok(Json(player))
 }
@@ -245,77 +223,37 @@ async fn delete_player(Path(player_id): Path<PlayerID>) -> Result<Response, Play
     Ok(StatusCode::OK.into_response())
 }
 
-/// Response structure for a response from the full player route
-/// which includes the player as well as all its relations
-#[derive(Serialize)]
-struct FullPlayerResponse {
-    /// Player that was found
-    player: Player,
-    /// The classes for the player
-    classes: Vec<PlayerClass>,
-    /// The characters for the player
-    characters: Vec<PlayerCharacter>,
-    /// The galaxy at war for the player
-    galaxy_at_war: GalaxyAtWar,
-}
-
-/// Route for retrieving a player from the database with an ID that
-/// matches the provided {id} this route will also load all the
-/// classes, characters, and galaxy at war data for the player
-///
-/// `path` The route path with the ID for the player to find
-async fn get_player_full(Path(player_id): Path<PlayerID>) -> PlayersResult<FullPlayerResponse> {
-    let db = GlobalState::database();
-    let player: Player = find_player(db, player_id).await?;
-
-    let (classes, characters, galaxy_at_war) = try_join!(
-        PlayerClass::find_all(db, &player),
-        PlayerCharacter::find_all(db, &player),
-        GalaxyAtWar::find_or_create(db, &player, 0.0),
-    )?;
-
-    Ok(Json(FullPlayerResponse {
-        player,
-        classes,
-        characters,
-        galaxy_at_war,
-    }))
-}
-
 /// Route for retrieving the list of classes for a provided player
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find the classes for
-async fn get_player_classes(Path(player_id): Path<PlayerID>) -> PlayersResult<Vec<PlayerClass>> {
+async fn all_data(Path(player_id): Path<PlayerID>) -> PlayersResult<HashMap<String, String>> {
     let db = GlobalState::database();
     let player: Player = find_player(db, player_id).await?;
-    let classes = PlayerClass::find_all(db, &player).await?;
-    Ok(Json(classes))
+    let data = player.all_data(db).await?;
+    let mut output = HashMap::with_capacity(data.len());
+    for value in data {
+        output.insert(value.key, value.value);
+    }
+
+    Ok(Json(output))
+}
+
+async fn get_data(Path((player_id, key)): Path<(PlayerID, String)>) -> PlayersResult<PlayerData> {
+    let db = GlobalState::database();
+    let player: Player = find_player(db, player_id).await?;
+    let value = player
+        .get_data(db, &key)
+        .await?
+        .ok_or(PlayersError::DataNotFound)?;
+    Ok(Json(value))
 }
 
 /// Request structure for a request to update the level and or promotions
 /// of a class
 #[derive(Deserialize)]
-struct UpdateClassRequest {
-    /// The level to change to 0 - 20
-    level: Option<u8>,
-    /// The promotions to change to
-    promotions: Option<u32>,
-}
-
-/// Route for retrieving the list of classes for a provided player
-/// matches the provided {id} with the provided {index}
-///
-/// `path` The route path with the ID for the player to find the classes for
-async fn get_player_class(
-    Path((player_id, index)): Path<(PlayerID, u16)>,
-) -> PlayersResult<PlayerClass> {
-    let db = GlobalState::database();
-    let player: Player = find_player(db, player_id).await?;
-    let class: PlayerClass = PlayerClass::find_index(db, &player, index)
-        .await?
-        .ok_or(PlayersError::ClassNotFound)?;
-    Ok(Json(class))
+struct SetDataRequest {
+    value: String,
 }
 
 /// Route for updating the class for a player with the provided {id}
@@ -323,30 +261,14 @@ async fn get_player_class(
 ///
 /// `path` The route path with the ID for the player to find the classes for and class index
 /// `req`  The update class request
-async fn update_player_class(
-    Path((player_id, index)): Path<(PlayerID, u16)>,
-    Json(req): Json<UpdateClassRequest>,
-) -> PlayersResult<PlayerClass> {
+async fn set_data(
+    Path((player_id, key)): Path<(PlayerID, String)>,
+    Json(req): Json<SetDataRequest>,
+) -> PlayersResult<PlayerData> {
     let db = GlobalState::database();
     let player: Player = find_player(db, player_id).await?;
-    let class: PlayerClass = PlayerClass::find_index(db, &player, index)
-        .await?
-        .ok_or(PlayersError::ClassNotFound)?;
-    let class = class.update_http(db, req.level, req.promotions).await?;
-    Ok(Json(class))
-}
-
-/// Route for retrieving the list of characters for a provided player
-/// matches the provided {id}
-///
-/// `path` The route path with the ID for the player to find the characters for
-async fn get_player_characters(
-    Path(player_id): Path<PlayerID>,
-) -> PlayersResult<Vec<PlayerCharacter>> {
-    let db = GlobalState::database();
-    let player: Player = find_player(db, player_id).await?;
-    let characters = PlayerCharacter::find_all(db, &player).await?;
-    Ok(Json(characters))
+    let data = player.set_data(db, key, req.value).await?;
+    Ok(Json(data))
 }
 
 /// Route for retrieving the galaxy at war data for a provided player
@@ -364,13 +286,7 @@ async fn get_player_gaw(Path(player_id): Path<PlayerID>) -> PlayersResult<Galaxy
 /// error has a custom message. All other errors use "Internal Server Error"
 impl Display for PlayersError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ClassNotFound => f.write_str("Class with that index not found"),
-            Self::EmailTaken => f.write_str("Email address is already taken"),
-            Self::InvalidEmail => f.write_str("Email address is not valid"),
-            Self::PlayerNotFound => f.write_str("Couldn't find any players with that ID"),
-            _ => f.write_str("Internal Server Error"),
-        }
+        write!(f, "{:?}", self)
     }
 }
 
@@ -379,7 +295,7 @@ impl Display for PlayersError {
 impl ErrorStatusCode for PlayersError {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::ClassNotFound => StatusCode::NOT_FOUND,
+            Self::DataNotFound => StatusCode::NOT_FOUND,
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
             Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
