@@ -147,29 +147,13 @@ that a server is actually a Pocket Relay server.
 
 ### Response
 
-The "version" field is the server version and the "services" field contains a list of each of
-the servers running under Pocket Relay along with their ports and the type of server
+The "version" field is the server version and the "ident" field is a constant value of "POCKET_RELAY_SERVER"
+to identify that the server is a Pocket Relay server
 
 ```json
 {
+    "ident": "POCKET_RELAY_SERVER",
     "version": "0.1.0",
-    "services": [
-        {
-            "name": "Redirector Server",
-            "port": 42127,
-            "type": "BlazeSecure"
-        },
-        {
-            "name": "Main Server",
-            "port": 14219,
-            "type": "Blaze"
-        },
-        {
-            "name": "HTTP Server",
-            "port": 80,
-            "type": "Http"
-        }
-    ]
 }
 ```
 
