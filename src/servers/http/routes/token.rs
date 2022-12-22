@@ -118,20 +118,20 @@ async fn validate_token(
     Extension(token_store): Extension<Arc<TokenStore>>,
     Query(token): Query<ValidateTokenQuery>,
 ) -> Json<ValidateTokenResponse> {
-    let expiry = token_store.get_token_expiry(&token.token).await;
-
-    let (valid, expiry_time) = match expiry {
-        Some(value) => {
-            let expiry_time = value
+    let expiry_time: Option<u64> = token_store
+        .get_token_expiry(&token.token)
+        .await
+        .map(|value| {
+            value
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or(Duration::ZERO)
-                .as_secs();
-            (true, Some(expiry_time))
-        }
-        None => (false, None),
-    };
+                .as_secs()
+        });
 
-    Json(ValidateTokenResponse { valid, expiry_time })
+    Json(ValidateTokenResponse {
+        valid: expiry_time.is_some(),
+        expiry_time,
+    })
 }
 
 /// IntoResponse implementation for InvalidCredentails to allow it to be
