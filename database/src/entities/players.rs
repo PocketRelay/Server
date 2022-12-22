@@ -21,53 +21,19 @@ pub struct Model {
     /// Hashed password which is omitted from serialization
     #[serde(skip)]
     pub password: String,
-    /// Total number of credits the account has to spend
-    pub credits: u32,
-    /// Total number of credits the account has spent
-    pub credits_spent: u32,
-    /// The total number of games played by the player
-    pub games_played: u32,
-    /// The total number of seconds played.
-    pub seconds_played: u32,
-    /// The encoded inventory list
-    pub inventory: String,
-    /// The currently selected reward banner ID
-    pub csreward: u16,
-    pub face_codes: Option<String>,
-    pub new_item: Option<String>,
-    /// Challenge completion string starts with 22, then the
-    /// next field is the number of challenge points obtained
-    pub completion: Option<String>,
-    /// Progress for each challenge
-    pub progress: Option<String>,
-    pub cs_completion: Option<String>,
-    /// List of timestamps for the completion time of each challenge
-    pub cs_timestamps1: Option<String>,
-    /// List of timestamps for the completion time of each challenge
-    pub cs_timestamps2: Option<String>,
-    /// List of timestamps for the completion time of each challenge
-    pub cs_timestamps3: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::player_classes::Entity")]
-    Classes,
-    #[sea_orm(has_many = "super::player_characters::Entity")]
-    Characters,
+    #[sea_orm(has_many = "super::player_data::Entity")]
+    Data,
     #[sea_orm(has_one = "super::galaxy_at_war::Entity")]
     GalaxyAtWar,
 }
 
-impl Related<super::player_classes::Entity> for Entity {
+impl Related<super::player_data::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Classes.def()
-    }
-}
-
-impl Related<super::player_characters::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Characters.def()
+        Relation::Data.def()
     }
 }
 

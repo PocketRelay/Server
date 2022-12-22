@@ -12,7 +12,7 @@ pub mod interfaces;
 mod migration;
 
 // Re-exports of named entities
-pub use entities::{GalaxyAtWar, Player, PlayerCharacter, PlayerClass};
+pub use entities::{GalaxyAtWar, Player};
 
 // Re-exports of database types
 pub use sea_orm::DatabaseConnection;

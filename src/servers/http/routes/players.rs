@@ -1,7 +1,12 @@
 use crate::{
     servers::http::ext::ErrorStatusCode,
     state::GlobalState,
-    utils::{hashing::hash_password, types::PlayerID, validate::is_email},
+    utils::{
+        hashing::hash_password,
+        parsing::{parse_player_character, parse_player_class, PlayerCharacter, PlayerClass},
+        types::PlayerID,
+        validate::is_email,
+    },
 };
 use axum::{
     extract::{Path, Query},
@@ -10,10 +15,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use database::{
-    dto::players::PlayerUpdate, DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerCharacter,
-    PlayerClass,
-};
+use database::{dto::players::PlayerUpdate, DatabaseConnection, DbErr, GalaxyAtWar, Player};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tokio::try_join;
@@ -269,10 +271,20 @@ async fn get_player_full(Path(player_id): Path<PlayerID>) -> PlayersResult<FullP
     let player: Player = find_player(db, player_id).await?;
 
     let (classes, characters, galaxy_at_war) = try_join!(
-        PlayerClass::find_all(db, &player),
-        PlayerCharacter::find_all(db, &player),
+        player.get_classes(db),
+        player.get_characters(db),
         GalaxyAtWar::find_or_create(db, &player, 0.0),
     )?;
+
+    let classes = classes
+        .into_iter()
+        .filter_map(|value| parse_player_class(value.value))
+        .collect();
+
+    let characters = characters
+        .into_iter()
+        .filter_map(|value| parse_player_character(value.value))
+        .collect();
 
     Ok(Json(FullPlayerResponse {
         player,
@@ -289,7 +301,13 @@ async fn get_player_full(Path(player_id): Path<PlayerID>) -> PlayersResult<FullP
 async fn get_player_classes(Path(player_id): Path<PlayerID>) -> PlayersResult<Vec<PlayerClass>> {
     let db = GlobalState::database();
     let player: Player = find_player(db, player_id).await?;
-    let classes = PlayerClass::find_all(db, &player).await?;
+
+    let classes = player
+        .get_classes(db)
+        .await?
+        .into_iter()
+        .filter_map(|value| parse_player_class(value.value))
+        .collect();
     Ok(Json(classes))
 }
 
@@ -312,8 +330,10 @@ async fn get_player_class(
 ) -> PlayersResult<PlayerClass> {
     let db = GlobalState::database();
     let player: Player = find_player(db, player_id).await?;
-    let class: PlayerClass = PlayerClass::find_index(db, &player, index)
+    let class = player
+        .get_class(db, index)
         .await?
+        .and_then(|value| parse_player_class(value.value))
         .ok_or(PlayersError::ClassNotFound)?;
     Ok(Json(class))
 }
@@ -329,10 +349,19 @@ async fn update_player_class(
 ) -> PlayersResult<PlayerClass> {
     let db = GlobalState::database();
     let player: Player = find_player(db, player_id).await?;
-    let class: PlayerClass = PlayerClass::find_index(db, &player, index)
+
+    let mut class = player
+        .get_class(db, index)
         .await?
+        .and_then(|value| parse_player_class(value.value))
         .ok_or(PlayersError::ClassNotFound)?;
-    let class = class.update_http(db, req.level, req.promotions).await?;
+    if let Some(level) = req.level {
+        class.level = level;
+    }
+    if let Some(promotions) = req.promotions {
+        class.promotions = promotions;
+    }
+    player.set_class(db, index, class.encode()).await?;
     Ok(Json(class))
 }
 
@@ -345,7 +374,13 @@ async fn get_player_characters(
 ) -> PlayersResult<Vec<PlayerCharacter>> {
     let db = GlobalState::database();
     let player: Player = find_player(db, player_id).await?;
-    let characters = PlayerCharacter::find_all(db, &player).await?;
+
+    let characters = player
+        .get_characters(db)
+        .await?
+        .into_iter()
+        .filter_map(|value| parse_player_character(value.value))
+        .collect();
     Ok(Json(characters))
 }
 

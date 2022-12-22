@@ -1,8 +1,11 @@
 //! Module for leaderboard related logic
 
 use self::models::*;
-use crate::state::GlobalState;
-use database::{DatabaseConnection, DbResult, Player, PlayerCharacter, PlayerClass};
+use crate::{
+    state::GlobalState,
+    utils::parsing::{parse_player_character, parse_player_class},
+};
+use database::{DatabaseConnection, DbResult, Player};
 use futures_util::try_join;
 use tokio::sync::RwLock;
 
@@ -77,7 +80,9 @@ impl Leaderboard {
                 LeaderboardType::N7Rating => {
                     Self::compute_n7_players(db, players, &mut values).await?
                 }
-                LeaderboardType::ChallengePoints => Self::compute_cp_players(players, &mut values),
+                LeaderboardType::ChallengePoints => {
+                    Self::compute_cp_players(db, players, &mut values).await?
+                }
             }
             if !more {
                 break;
@@ -128,10 +133,18 @@ impl Leaderboard {
     ) -> DbResult<LeaderboardEntry> {
         let mut total_promotions = 0;
         let mut total_level: u32 = 0;
-        let (classes, characters) = try_join!(
-            PlayerClass::find_all(db, &player),
-            PlayerCharacter::find_all(db, &player),
-        )?;
+        let (classes, characters) = try_join!(player.get_classes(db), player.get_characters(db),)?;
+
+        let classes: Vec<_> = classes
+            .into_iter()
+            .filter_map(|value| parse_player_class(value.value))
+            .collect();
+
+        let characters: Vec<_> = characters
+            .into_iter()
+            .filter_map(|value| parse_player_character(value.value))
+            .collect();
+
         for class in classes {
             // Classes are active if atleast one character from the class is deployed
             let is_active = characters
@@ -158,16 +171,31 @@ impl Leaderboard {
     ///
     /// `players` The players to convert
     /// `output`  The output to append the entries to
-    fn compute_cp_players(players: Vec<Player>, output: &mut Vec<LeaderboardEntry>) {
-        for player in players {
-            let value = player.get_challenge_points().unwrap_or(0);
-            output.push(LeaderboardEntry {
-                player_id: player.id,
-                player_name: player.display_name,
-                // Rank is not computed yet at this stage
-                rank: 0,
-                value,
-            })
-        }
+    async fn compute_cp_players(
+        db: &DatabaseConnection,
+        players: Vec<Player>,
+        output: &mut Vec<LeaderboardEntry>,
+    ) -> DbResult<()> {
+        let futures = players
+            .into_iter()
+            .map(|player| Self::compute_cp_player(db, player))
+            .collect::<Vec<_>>();
+        let results = futures_util::future::try_join_all(futures).await?;
+        output.extend(results);
+        Ok(())
+    }
+
+    async fn compute_cp_player(
+        db: &DatabaseConnection,
+        player: Player,
+    ) -> DbResult<LeaderboardEntry> {
+        let value = player.get_challenge_points(db).await.unwrap_or(0);
+        Ok(LeaderboardEntry {
+            player_id: player.id,
+            player_name: player.display_name,
+            // Rank is not computed yet at this stage
+            rank: 0,
+            value,
+        })
     }
 }

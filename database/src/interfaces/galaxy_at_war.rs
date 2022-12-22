@@ -1,5 +1,5 @@
 use crate::{
-    entities::{galaxy_at_war, player_classes, players},
+    entities::{galaxy_at_war, players},
     DbResult, GalaxyAtWar,
 };
 use chrono::Local;
@@ -15,23 +15,6 @@ impl GalaxyAtWar {
     const MIN_VALUE: u16 = 5000;
     /// The maximum value for galaxy at war entries
     const MAX_VALUE: u16 = 10099;
-
-    /// Finds the total number of promotions that the
-    /// provided player has returning zero on failure
-    ///
-    /// `db`     The database instance
-    /// `player` The player to get promotions for
-    pub async fn find_promotions(db: &DatabaseConnection, player: &players::Model) -> u32 {
-        let Ok(classes) = player
-            .find_related(player_classes::Entity)
-            .all(db)
-            .await else {
-
-            return 0;
-        };
-        let promotions = classes.iter().map(|value| value.promotions).sum();
-        promotions
-    }
 
     /// Finds or creates a new galaxy at war entry for the provided
     /// player. If one exists then the provided decay value will be

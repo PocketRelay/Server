@@ -67,7 +67,7 @@ dotenvy = "0.15.5"
 # Library for obtaining the local IP address of the device
 local-ip-address = "0.4.9"
 
-# Tokio async runtime# Logging framework
+# Tokio async runtime
 [dependencies.tokio]
 version = "1"
 features = [

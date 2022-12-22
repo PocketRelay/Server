@@ -8,6 +8,7 @@ use crate::{
     env,
     servers::http::ext::{ErrorStatusCode, Xml},
     state::GlobalState,
+    utils::parsing::parse_player_class,
 };
 use axum::{
     extract::{Path, Query},
@@ -16,7 +17,7 @@ use axum::{
     routing::get,
     Router,
 };
-use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player};
+use database::{DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player};
 use serde::Deserialize;
 use std::fmt::Display;
 use tokio::try_join;
@@ -105,17 +106,24 @@ async fn get_player_gaw_data(
     let player = Player::by_id(db, id)
         .await?
         .ok_or(GAWError::PlayerNotFound)?;
-    let gaw_task = GalaxyAtWar::find_or_create(db, &player, env::from_env(env::GAW_DAILY_DECAY));
-    let promotions_task = async {
-        Ok(if env::from_env(env::GAW_PROMOTIONS) {
-            GalaxyAtWar::find_promotions(db, &player).await
-        } else {
-            0
-        })
-    };
-
-    let (gaw_data, promotions) = try_join!(gaw_task, promotions_task)?;
+    let (gaw_data, promotions) = try_join!(
+        GalaxyAtWar::find_or_create(db, &player, env::from_env(env::GAW_DAILY_DECAY)),
+        get_promotions(db, &player)
+    )?;
     Ok((gaw_data, promotions))
+}
+
+async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u32> {
+    if !env::from_env(env::GAW_PROMOTIONS) {
+        return Ok(0);
+    }
+    Ok(player
+        .get_classes(db)
+        .await?
+        .into_iter()
+        .filter_map(|value| parse_player_class(value.value))
+        .map(|value| value.promotions)
+        .sum())
 }
 
 /// Route for retrieving the galaxy at war ratings for the player

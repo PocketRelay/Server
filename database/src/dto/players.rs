@@ -17,21 +17,6 @@ pub struct PlayerUpdate {
     pub csreward: Option<u16>,
 }
 
-/// Enum containing the different values which can be updated
-/// from the different player data keys
-pub enum PlayerDataUpdate {
-    Base(PlayerBaseUpdate),
-    FaceCodes(String),
-    NewItem(String),
-    ChallengeReward(u16),
-    Completion(String),
-    Progress(String),
-    Cscompletion(String),
-    Cstimestamps(String),
-    Cstimestamps2(String),
-    Cstimestamps3(String),
-}
-
 /// Structure for an update to the base data of a player that was
 /// parsed from an ME3 string
 pub struct PlayerBaseUpdate {
