@@ -138,6 +138,6 @@ async fn validate_token(
 /// used within the result type as a error response
 impl IntoResponse for InvalidCredentails {
     fn into_response(self) -> Response {
-        (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response()
+        (StatusCode::UNAUTHORIZED, "InvalidCredentails").into_response()
     }
 }

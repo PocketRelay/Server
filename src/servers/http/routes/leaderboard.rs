@@ -26,6 +26,7 @@ pub(super) fn router() -> Router {
 /// Error type used in leaderboard routes to handle errors
 /// such as database errors and player not founds when
 /// searching for a specific player.
+#[derive(Debug)]
 enum LeaderboardError {
     /// Some server error occurred like a database failure when computing
     /// the leaderboards
@@ -131,11 +132,7 @@ async fn get_player_ranking(
 /// as the error response message.
 impl Display for LeaderboardError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::PlayerNotFound => f.write_str("Player not found"),
-            Self::ServerError => f.write_str("Server Error Occurred"),
-            Self::UnknownLeaderboard => f.write_str("Leaderboard not found"),
-        }
+        write!(f, "{:?}", self)
     }
 }
 

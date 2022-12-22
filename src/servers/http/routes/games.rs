@@ -79,6 +79,6 @@ async fn get_game(Path(game_id): Path<GameID>) -> Result<Json<GameSnapshot>, Gam
 impl IntoResponse for GameNotFound {
     #[inline]
     fn into_response(self) -> Response {
-        (StatusCode::NOT_FOUND, "Game with that ID not found").into_response()
+        (StatusCode::NOT_FOUND, "GameNotFound").into_response()
     }
 }
