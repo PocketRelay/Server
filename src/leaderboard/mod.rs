@@ -7,7 +7,7 @@ use crate::{
 };
 use database::{DatabaseConnection, DbResult, Player};
 use futures_util::try_join;
-use tokio::sync::RwLock;
+use tokio::{sync::RwLock, task::JoinSet};
 
 pub mod models;
 
@@ -76,14 +76,27 @@ impl Leaderboard {
             if players.is_empty() {
                 break;
             }
+            let mut join_set = JoinSet::new();
             match ty {
                 LeaderboardType::N7Rating => {
-                    Self::compute_n7_players(db, players, &mut values).await?
+                    for player in players {
+                        join_set.spawn(Self::compute_n7_player(db, player));
+                    }
                 }
                 LeaderboardType::ChallengePoints => {
-                    Self::compute_cp_players(db, players, &mut values).await?
+                    for player in players {
+                        join_set.spawn(Self::compute_cp_player(db, player));
+                    }
                 }
             }
+
+            // Await computed results
+            while let Some(value) = join_set.join_next().await {
+                if let Ok(Ok(value)) = value {
+                    values.push(value)
+                }
+            }
+
             if !more {
                 break;
             }
@@ -100,26 +113,6 @@ impl Leaderboard {
         }
 
         Ok(values)
-    }
-
-    /// Computes the N7 ratings for all the provided players converting them
-    /// into leaderboard entries with the player n7 rating as the value
-    ///
-    /// `db`      The database connection
-    /// `players` The players to convert
-    /// `output`  The output to append the entries to
-    async fn compute_n7_players(
-        db: &DatabaseConnection,
-        players: Vec<Player>,
-        output: &mut Vec<LeaderboardEntry>,
-    ) -> DbResult<()> {
-        let futures = players
-            .into_iter()
-            .map(|player| Self::compute_n7_player(db, player))
-            .collect::<Vec<_>>();
-        let results = futures_util::future::try_join_all(futures).await?;
-        output.extend(results);
-        Ok(())
     }
 
     /// Computes the N7 rating for the provided player converting the player
@@ -164,25 +157,6 @@ impl Leaderboard {
             rank: 0,
             value: rating,
         })
-    }
-
-    /// Computes the challenge points for all the provided players converting
-    /// them into leaderboard entries with the player challenge points as the value
-    ///
-    /// `players` The players to convert
-    /// `output`  The output to append the entries to
-    async fn compute_cp_players(
-        db: &DatabaseConnection,
-        players: Vec<Player>,
-        output: &mut Vec<LeaderboardEntry>,
-    ) -> DbResult<()> {
-        let futures = players
-            .into_iter()
-            .map(|player| Self::compute_cp_player(db, player))
-            .collect::<Vec<_>>();
-        let results = futures_util::future::try_join_all(futures).await?;
-        output.extend(results);
-        Ok(())
     }
 
     async fn compute_cp_player(
