@@ -12,6 +12,17 @@ Development on this implementation has made great strides and has surpassed the 
 reliabality, functionality and actual parody to the official server. However as this implementation is still considered to be
 in active development.
 
+# ⛔️ Breaking Changes
+
+There has been breaking changes made to the new version after the current release. These changes alter the
+database structure. In order to migrate to the new versions released you will need to delete the old app.db
+file in order to generate the new structure. 
+
+The database formats are not compatable with eachother. Removing the old app.db file will remove all stored
+player data. If you are using Origin with fetch data your data will be retrieved again from the official servers
+the next time you start the game. However cracked accounts using manual login will loose their data
+
+
 # 📖 Setting up a server
 
 For a guide on how to setup a Pocket Relay server see [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_SERVER.md)
