@@ -41,8 +41,12 @@ pub async fn route(
         Authentication::CreateAccount => handle_create_account(session, packet).await,
         Authentication::PasswordForgot => handle_forgot_password(packet),
         Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(packet),
-        Authentication::GetTermsOfServiceConent => handle_tos_content(packet).await,
-        Authentication::GetPrivacyPolicyContent => handle_privacy_content(packet).await,
+        Authentication::GetTermsOfServiceConent => {
+            handle_legal_content(packet, LegalType::TermsOfService).await
+        }
+        Authentication::GetPrivacyPolicyContent => {
+            handle_legal_content(packet, LegalType::PrivacyPolicy).await
+        }
         Authentication::GetAuthToken => handle_get_auth_token(session, packet).await,
         _ => Ok(packet.respond_empty()),
     }
@@ -448,23 +452,46 @@ fn handle_get_legal_docs_info(packet: &Packet) -> HandleResult {
     Ok(packet.respond(LegalDocsInfo))
 }
 
-/// Attempts to load the local file returnin the fallback value instead
-/// if the local path doesn't exist, is not a file, or couldn't be read
-///
-/// `path`     The path to the file
-/// `fallback` The fallback contents to use
-async fn load_local<'a>(path: &str, fallback: &'a str) -> Cow<'a, str> {
-    let path = Path::new(path);
-    if path.exists() && path.is_file() {
-        if let Ok(value) = read_to_string(path).await {
-            return Cow::Owned(value);
-        }
-    }
-    Cow::Borrowed(fallback)
+/// Type for deciding which legal document to respond with
+enum LegalType {
+    TermsOfService,
+    PrivacyPolicy,
 }
 
-/// Handles serving the contents of the terms of service. This is an HTML document which is
-/// rendered inside the game when you click the button for viewing terms of service.
+impl LegalType {
+    async fn load(&self) -> (Cow<'static, str>, &'static str, u16) {
+        let (local_path, web_path, col) = match self {
+            Self::TermsOfService => (
+                "data/terms_of_service.html",
+                "webterms/au/en/pc/default/09082020/02042022",
+                0xdaed,
+            ),
+            Self::PrivacyPolicy => (
+                "data/privacy_policy.html",
+                "webprivacy/au/en/pc/default/08202020/02042022",
+                0xc99c,
+            ),
+        };
+        let path = Path::new(local_path);
+        if path.exists() && path.is_file() {
+            if let Ok(value) = read_to_string(path).await {
+                return (Cow::Owned(value), web_path, col);
+            }
+        }
+        let fallback = match self {
+            Self::TermsOfService => {
+                include_str!("../../../resources/defaults/terms_of_service.html")
+            }
+            Self::PrivacyPolicy => include_str!("../../../resources/defaults/privacy_policy.html"),
+        };
+
+        (Cow::Borrowed(fallback), web_path, col)
+    }
+}
+
+/// Handles serving the contents of the terms of service and privacy policy.
+/// These are HTML documents which is rendered inside the game when you click
+/// the button for viewing terms of service or the privacy policy.
 ///
 /// ```
 /// Route: Authentication(GetTermsOfServiceContent)
@@ -476,23 +503,6 @@ async fn load_local<'a>(path: &str, fallback: &'a str) -> Cow<'a, str> {
 ///     "TEXT": 1
 /// }
 /// ```
-async fn handle_tos_content(packet: &Packet) -> HandleResult {
-    let content: Cow<'_, str> = load_local(
-        "data/terms_of_service.html",
-        include_str!("../../../resources/defaults/terms_of_service.html"),
-    )
-    .await;
-    let response = LegalContent {
-        path: "webterms/au/en/pc/default/09082020/02042022",
-        content: &content,
-        col: 0xdaed,
-    };
-    Ok(packet.respond(response))
-}
-
-/// Handles serving the contents of the privacy policy. This is an HTML document which is
-/// rendered inside the game when you click the button for viewing privacy policy.
-///
 /// ```
 /// Route: Authentication(GetPrivacyPolicyContent)
 /// ID: 24
@@ -503,16 +513,12 @@ async fn handle_tos_content(packet: &Packet) -> HandleResult {
 ///     "TEXT": 1
 /// }
 /// ```
-async fn handle_privacy_content(packet: &Packet) -> HandleResult {
-    let content = load_local(
-        "data/privacy_policy.html",
-        include_str!("../../../resources/defaults/privacy_policy.html"),
-    )
-    .await;
+async fn handle_legal_content(packet: &Packet, ty: LegalType) -> HandleResult {
+    let (content, path, col) = ty.load().await;
     let response = LegalContent {
-        path: "webprivacy/au/en/pc/default/08202020/02042022",
+        path,
         content: &content,
-        col: 0xc99c,
+        col,
     };
     Ok(packet.respond(response))
 }
