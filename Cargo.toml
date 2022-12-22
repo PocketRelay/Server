@@ -39,8 +39,6 @@ database-mysql = ["database/mysql"]
 log = { workspace = true }
 serde = { workspace = true }
 
-futures-util = "0.3.16"
-
 # Blaze packet system 
 blaze-pk = { version = "^0.6" }
 # Blaze SSLv3 async TCPStream implementation

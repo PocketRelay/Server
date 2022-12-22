@@ -1562,7 +1562,6 @@ dependencies = [
  "blaze-ssl-async",
  "dotenvy",
  "flate2",
- "futures-util",
  "local-ip-address",
  "log",
  "log4rs",
