@@ -336,8 +336,162 @@ The response is the player structure but with the new values updated
 | 500 Internal Server Error | ServerError    | Database or other server error occurred                 |
 
 
+## Player Data Details
 
-## Get Specific Player Galaxy At War
+This section describes different keys and formats for assocated player data. 
+
+> NOTE: Keys may not be added to the player data if they haven't be initialized yet. This can occur if the player account was created but the player hasnt ender multiplayer or done a specific action yet
+
+### Inventory, Credits, Etc
+
+The key "Base" stores the base player data such as the number of credits, the number of credits spent in the past, the number of games played, the number of seconds spent in game, the encoded inventory string
+
+#### Encoding
+```
+20;4;CREDITS;UNKNOWN;UKNOWN;CREDITS_SPENT;UKNOWN;GAMES_PLAYED;SECONDS_PLAYED;UKNOWN;INVENTORY
+```
+
+The inventory string is a long sequence of lowercase hex encoded values every 2 characters representing an item in the inventory.
+
+
+> The values titled UNKNOWN are not yet documented and should be left as the in the example
+
+#### Example
+```
+20;4;21474;-1;0;0;0;50;180000;0;fff....(LARGE SEQUENCE OF INVENTORY CHARS)
+```
+
+### Player Classes
+
+Player classes are stored using keys that start with "class" followed by a number. This number is the index of the class. There can be multiple or 
+no classes if not initialized
+
+#### Encoding
+```
+20;4;NAME;LEVEL;EXP;PROMOTIONS
+```
+
+#### Example
+```
+20;4;Adept;20;0;50
+```
+### Player Characters
+
+Player characters are stored using keys that start with "char" followed by a number. This number is the index of the character. There can be multiple or 
+no characters if not initialized
+
+#### Encoding
+```
+20;4;KIT_NAME;NAME;TINT1;TINT2;PATTERN;PATTERN_COLOR;PHONG;EMISSIVE;SKIN_TONE;SECONDS_PLAYED;TIMESTAMP_YEAR;TIMESTAMP_MONTH;TIMESTAMP_DAY;TIMESTAMP_SECONDS;POWERS;HOTKEYS;WEAPONS;WEAPON_MODS;DEPLOYED;LEVELED_UP
+```
+
+The KIT_NAME is the internal name of the character; This usually contains the class name somewhere in it. The NAME is the player given name for the character
+
+#### Example
+```
+20;4;AdeptHumanMale;Test;0;45;0;47;45;9;9;0;0;0;0;0;Singularity 179 1.0000 0 0 0 0 0 0 0 True,Warp 185 0.0000 0 0 0 0 0 0 0 True,Shockwave 177 0.0000 0 0 0 0 0 0 0 True,MPPassive 206 0.0000 0 0 0 0 0 0 0 True,MPMeleePassive 200 0.0000 0 0 0 0 0 0 0 True,Consumable_Rocket 88 1.0000 0 0 0 0 0 0 0 False,Consumable_Revive 87 1.0000 0 0 0 0 0 0 0 False,Consumable_Shield 89 1.0000 0 0 0 0 0 0 0 False,Consumable_Ammo 86 1.0000 0 0 0 0 0 0 0 False;;627,25;;True;False
+```
+
+
+
+## Get All Player Data
+```
+GET /api/players/:player_id/data
+```
+
+This route retrieves all the assocated data for the provided player. The
+response is a map of the data key to the value. All the values are strings
+
+### Response
+
+```json
+{
+    "Base": "Example",
+    "char1": "Example",
+    "char2": "Example",
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body           | Meaning                                             |
+| ------------------------- | -------------- | --------------------------------------------------- |
+| 404 Not Found             | PlayerNotFound | Player with matching ID could not be found          |
+| 404 Not Found             | DataNotFound   | Couldn't find any data values with the provided key |
+| 500 Internal Server Error | ServerError    | Database or other server error occurred             |
+
+## Get Specific Player Data
+```
+GET /api/players/:player_id/data/:key
+```
+
+This route retrieves the assocated player data with the provided key
+
+### Response
+
+```json
+{
+    "value": "Example value"
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body           | Meaning                                             |
+| ------------------------- | -------------- | --------------------------------------------------- |
+| 404 Not Found             | PlayerNotFound | Player with matching ID could not be found          |
+| 404 Not Found             | DataNotFound   | Couldn't find any data values with the provided key |
+| 500 Internal Server Error | ServerError    | Database or other server error occurred             |
+
+
+
+## Set Player Data
+```
+PUT /api/players/:player_id/data/:key
+```
+
+```json
+{
+    "value": "Example",
+}
+```
+
+This route sets the player data of the provided key to the provided value
+responding with the set key and value
+
+### Response
+
+```json
+{
+    "key": ":key",
+    "value": "Example",
+}
+```
+
+### Error Responses 
+
+| Status Code               | Body           | Meaning                                    |
+| ------------------------- | -------------- | ------------------------------------------ |
+| 404 Not Found             | PlayerNotFound | Player with matching ID could not be found |
+| 500 Internal Server Error | ServerError    | Database or other server error occurred    |
+
+
+
+## Delete Player Data
+```
+DELETE /api/players/:player_id/data/:key
+```
+
+### Error Responses 
+
+| Status Code               | Body           | Meaning                                    |
+| ------------------------- | -------------- | ------------------------------------------ |
+| 404 Not Found             | PlayerNotFound | Player with matching ID could not be found |
+| 500 Internal Server Error | ServerError    | Database or other server error occurred    |
+
+
+
+## Get Player Galaxy At War
 
 ```
 GET /api/players/:player_id/galaxy_at_war

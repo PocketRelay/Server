@@ -49,49 +49,6 @@ impl<'a> MEStringParser<'a> {
     }
 }
 
-pub struct PlayerBase {
-    /// The number of credits the player has
-    pub credits: u32,
-    /// The number of credits the player has spent
-    pub credits_spent: u32,
-    /// The number of games played by the player
-    pub games_played: u32,
-    /// The number of seconds played by the player
-    pub seconds_played: u32,
-    /// The encoded player inventory string
-    pub inventory: String,
-}
-
-/// Attempts to parse the provided player base data string and update the fields
-/// on the provided active player let  Will return a None option if parsing
-/// failed.
-///
-/// # Format
-/// ```
-/// 20;4;21474;-1;0;0;0;50;180000;0;fff....(LARGE SEQUENCE OF INVENTORY CHARS)
-/// 20;4;CREDITS;UNKNOWN;UKNOWN;CREDITS_SPENT;UKNOWN;GAMES_PLAYED;SECONDS_PLAYED;UKNOWN;INVENTORY
-/// ```
-///
-/// `value` The value to parse
-pub fn parse_player_base(value: String) -> Option<PlayerBase> {
-    let mut parser = MEStringParser::new(&value)?;
-    let credits: u32 = parser.parse_next()?;
-    parser.skip(2)?;
-    let credits_spent: u32 = parser.parse_next()?;
-    parser.skip(1)?;
-    let games_played: u32 = parser.parse_next()?;
-    let seconds_played: u32 = parser.parse_next()?;
-    parser.skip(1)?;
-    let inventory = parser.next_str()?;
-    Some(PlayerBase {
-        credits,
-        credits_spent,
-        games_played,
-        seconds_played,
-        inventory,
-    })
-}
-
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PlayerClass {
     /// The class name

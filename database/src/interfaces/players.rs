@@ -110,6 +110,18 @@ impl Player {
         }
     }
 
+    pub async fn delete_data(&self, db: &DatabaseConnection, key: &str) -> DbResult<()> {
+        let data = self
+            .find_related(player_data::Entity)
+            .filter(player_data::Column::Key.eq(key.clone()))
+            .one(db)
+            .await?
+        if let Some(data) = data {
+            data.delete(db).await?;
+        }
+        Ok(())
+    }
+
     pub async fn get_data(
         &self,
         db: &DatabaseConnection,

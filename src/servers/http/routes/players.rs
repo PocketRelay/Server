@@ -26,7 +26,10 @@ pub(super) fn router() -> Router {
             get(get_player).put(modify_player).delete(delete_player),
         )
         .route("/:id/data", get(all_data))
-        .route("/:id/data/:key", get(get_data).put(set_data))
+        .route(
+            "/:id/data/:key",
+            get(get_data).put(set_data).delete(delete_data),
+        )
         .route("/:id/galaxy_at_war", get(get_player_gaw))
 }
 
@@ -269,6 +272,17 @@ async fn set_data(
     let player: Player = find_player(db, player_id).await?;
     let data = player.set_data(db, key, req.value).await?;
     Ok(Json(data))
+}
+/// Route for updating the class for a player with the provided {id}
+/// at the class {index}
+///
+/// `path` The route path with the ID for the player to find the classes for and class index
+/// `req`  The update class request
+async fn delete_data(Path((player_id, key)): Path<(PlayerID, String)>) -> PlayersResult<()> {
+    let db = GlobalState::database();
+    let player: Player = find_player(db, player_id).await?;
+    player.delete_data(db, &key).await?;
+    Ok(Json(()))
 }
 
 /// Route for retrieving the galaxy at war data for a provided player
