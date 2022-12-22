@@ -1,5 +1,4 @@
 //! Utilites for parsing ME3 strings
-use database::dto::players::PlayerBaseUpdate;
 use serde::Serialize;
 use std::str::{FromStr, Split};
 
@@ -50,6 +49,19 @@ impl<'a> MEStringParser<'a> {
     }
 }
 
+pub struct PlayerBase {
+    /// The number of credits the player has
+    pub credits: u32,
+    /// The number of credits the player has spent
+    pub credits_spent: u32,
+    /// The number of games played by the player
+    pub games_played: u32,
+    /// The number of seconds played by the player
+    pub seconds_played: u32,
+    /// The encoded player inventory string
+    pub inventory: String,
+}
+
 /// Attempts to parse the provided player base data string and update the fields
 /// on the provided active player let  Will return a None option if parsing
 /// failed.
@@ -61,7 +73,7 @@ impl<'a> MEStringParser<'a> {
 /// ```
 ///
 /// `value` The value to parse
-pub fn parse_player_base(value: String) -> Option<PlayerBaseUpdate> {
+pub fn parse_player_base(value: String) -> Option<PlayerBase> {
     let mut parser = MEStringParser::new(&value)?;
     let credits: u32 = parser.parse_next()?;
     parser.skip(2)?;
@@ -71,7 +83,7 @@ pub fn parse_player_base(value: String) -> Option<PlayerBaseUpdate> {
     let seconds_played: u32 = parser.parse_next()?;
     parser.skip(1)?;
     let inventory = parser.next_str()?;
-    Some(PlayerBaseUpdate {
+    Some(PlayerBase {
         credits,
         credits_spent,
         games_played,
