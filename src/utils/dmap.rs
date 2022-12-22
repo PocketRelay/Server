@@ -16,11 +16,7 @@ use blaze_pk::types::TdfMap;
 /// `contents` The dmap format string
 pub fn load_dmap(contents: &str) -> TdfMap<String, String> {
     let mut map = TdfMap::<String, String>::new();
-    for line in contents.lines() {
-        let (key, value) = match line.split_once('=') {
-            Some(v) => v,
-            _ => continue,
-        };
+    for (key, value) in contents.lines().filter_map(|line| line.split_once('=')) {
         map.insert(key, value)
     }
     map
