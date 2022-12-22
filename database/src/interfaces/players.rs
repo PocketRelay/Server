@@ -1,5 +1,4 @@
 use crate::{
-    dto::players::PlayerUpdate,
     entities::{player_data, players, PlayerData},
     DbResult, Player,
 };
@@ -144,28 +143,28 @@ impl Player {
     /// `display_name` The optional display name to use
     /// `origin`       The optional origin value to use
     /// `password`     The optional password to use
-    /// `credits`      The optional credits to use
-    /// `inventory`    The optional inventory to use
-    /// `csreward`     The optional csreward to use
     pub async fn update_http(
         self,
         db: &DatabaseConnection,
-        update: PlayerUpdate,
+        email: Option<String>,
+        display_name: Option<String>,
+        origin: Option<bool>,
+        password: Option<String>,
     ) -> DbResult<Self> {
         let mut active = self.into_active_model();
-        if let Some(email) = update.email {
+        if let Some(email) = email {
             active.email = Set(email);
         }
 
-        if let Some(display_name) = update.display_name {
+        if let Some(display_name) = display_name {
             active.display_name = Set(display_name);
         }
 
-        if let Some(origin) = update.origin {
+        if let Some(origin) = origin {
             active.origin = Set(origin);
         }
 
-        if let Some(password) = update.password {
+        if let Some(password) = password {
             active.password = Set(password);
         }
 

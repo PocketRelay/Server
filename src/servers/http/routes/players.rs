@@ -10,9 +10,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use database::{
-    dto::players::PlayerUpdate, DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData,
-};
+use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Display};
 
@@ -177,14 +175,9 @@ async fn modify_player(
         None
     };
 
-    let update = PlayerUpdate {
-        email,
-        display_name,
-        origin: req.origin,
-        password,
-    };
-
-    let player = player.update_http(db, update).await?;
+    let player = player
+        .update_http(db, email, display_name, req.origin, password)
+        .await?;
 
     Ok(Json(player))
 }
