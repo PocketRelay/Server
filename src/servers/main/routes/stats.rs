@@ -181,7 +181,7 @@ async fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
     })
 }
 
-fn get_locale_name(code: &str) -> String {
+fn get_locale_name(code: &str) -> &str {
     match code {
         "global" => "Global",
         "de" => "Germany",
@@ -194,7 +194,6 @@ fn get_locale_name(code: &str) -> String {
         "ru" => "Russia",
         value => value,
     }
-    .to_string()
 }
 
 ///
@@ -217,17 +216,19 @@ fn handle_leaderboard_group(packet: &Packet) -> HandleResult {
     let split = if is_n7 { 8 } else { 15 };
     let locale = get_locale_name(name.split_at(split).1);
     let group = if is_n7 {
+        let desc = format!("N7 Rating - {locale}");
         LeaderboardGroupResponse {
             name,
-            desc: format!("N7 Rating - {locale}"),
+            desc,
             sname: "n7rating",
             sdsc: "N7 Rating",
             gname: "ME3LeaderboardGroup",
         }
     } else {
+        let desc = format!("Challenge Points - {locale}");
         LeaderboardGroupResponse {
             name,
-            desc: format!("Challenge Points - {locale}"),
+            desc,
             sname: "ChallengePoints",
             sdsc: "Challenge Points",
             gname: "ME3ChallengePoints",
