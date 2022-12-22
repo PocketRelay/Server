@@ -11,8 +11,8 @@ use axum::{
     Json, Router,
 };
 use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData};
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt::Display};
+use serde::{ser::SerializeMap, Deserialize, Serialize};
+use std::fmt::Display;
 
 /// Router function creates a new router with all the underlying
 /// routes for this file.
@@ -226,20 +226,32 @@ async fn delete_player(Path(player_id): Path<PlayerID>) -> Result<Response, Play
     Ok(StatusCode::OK.into_response())
 }
 
+/// Structure wrapping a vec of player data in order to make
+/// it serializable without requiring a hashmap
+struct PlayerDataMap(Vec<PlayerData>);
+
+impl Serialize for PlayerDataMap {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for value in &self.0 {
+            map.serialize_entry(&value.key, &value.value)?;
+        }
+        map.end()
+    }
+}
+
 /// Route for retrieving the list of classes for a provided player
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find the classes for
-async fn all_data(Path(player_id): Path<PlayerID>) -> PlayersResult<HashMap<String, String>> {
+async fn all_data(Path(player_id): Path<PlayerID>) -> PlayersResult<PlayerDataMap> {
     let db = GlobalState::database();
     let player: Player = find_player(db, player_id).await?;
     let data = player.all_data(db).await?;
-    let mut output = HashMap::with_capacity(data.len());
-    for value in data {
-        output.insert(value.key, value.value);
-    }
-
-    Ok(Json(output))
+    Ok(Json(PlayerDataMap(data)))
 }
 
 async fn get_data(Path((player_id, key)): Path<(PlayerID, String)>) -> PlayersResult<PlayerData> {
