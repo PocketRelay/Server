@@ -30,14 +30,12 @@ impl Player {
             .first(count + 1)
             .all(db)
             .await?;
-
-        Ok(if values.len() == (count + 1) as usize {
+        let is_more = values.len() == (count + 1) as usize;
+        if is_more {
             // Pop the value being used to determine the leftover size
             values.pop();
-            (values, true)
-        } else {
-            (values, false)
-        })
+        }
+        Ok((values, is_more))
     }
 
     /// Creates a new player with the proivded details and inserts
