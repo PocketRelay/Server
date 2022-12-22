@@ -200,44 +200,43 @@ async fn handle_login_origin(
         .await
         .map_err(|_| ServerError::ServerUnavailable)?;
 
-    match player {
-        Some(player) => Ok(player),
-        None => {
-            let player: Player =
-                Player::create(db, details.email, details.display_name, String::new(), true)
-                    .await
-                    .map_err(|_| ServerError::ServerUnavailable)?;
+    if let Some(player) = player {
+        return Ok(player);
+    }
 
-            // Early return created player if origin fetching is disabled
-            if !env::from_env(env::ORIGIN_FETCH_DATA) {
-                return Ok(player);
-            }
+    let player: Player =
+        Player::create(db, details.email, details.display_name, String::new(), true)
+            .await
+            .map_err(|_| ServerError::ServerUnavailable)?;
 
-            // Load the player settings from origin
-            let Some(settings) = flow.get_settings().await else {
-                warn!(
-                    "Unable to load origin player settings from official servers (Name: {}, Email: {})",
-                    &player.display_name, &player.email
-                );
-                return Ok(player);
-            };
+    // Early return created player if origin fetching is disabled
+    if !env::from_env(env::ORIGIN_FETCH_DATA) {
+        return Ok(player);
+    }
 
-            let player_id: u32 = player.id;
-            let mut join_set = JoinSet::new();
-            for (key, value) in settings {
-                join_set.spawn(Player::set_data_impl(player_id, db, key, value));
-            }
+    // Load the player settings from origin
+    let Some(settings) = flow.get_settings().await else {
+        warn!(
+            "Unable to load origin player settings from official servers (Name: {}, Email: {})",
+            &player.display_name, &player.email
+        );
+        return Ok(player);
+    };
 
-            while let Some(value) = join_set.join_next().await {
-                if let Ok(Err(err)) = value {
-                    error!("Failed to set origin data: {err:?}");
-                    return Err(ServerError::ServerUnavailable);
-                }
-            }
+    let player_id: u32 = player.id;
+    let mut join_set = JoinSet::new();
+    for (key, value) in settings {
+        join_set.spawn(Player::set_data_impl(player_id, db, key, value));
+    }
 
-            Ok(player)
+    while let Some(value) = join_set.join_next().await {
+        if let Ok(Err(err)) = value {
+            error!("Failed to set origin data: {err:?}");
+            return Err(ServerError::ServerUnavailable);
         }
     }
+
+    Ok(player)
 }
 
 /// Handles logging out by the client this removes any current player data from the
