@@ -18,7 +18,7 @@ use std::{collections::HashMap, fmt::Display};
 /// routes for this file.
 ///
 /// Prefix: /api/players
-pub(super) fn router() -> Router {
+pub fn router() -> Router {
     Router::new()
         .route("/", get(get_players).post(create_player))
         .route(

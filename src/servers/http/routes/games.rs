@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 /// routes for this file.
 ///
 /// Prefix: /api/games
-pub(super) fn router() -> Router {
+pub fn router() -> Router {
     Router::new()
         .route("/", get(get_games))
         .route("/:id", get(get_game))

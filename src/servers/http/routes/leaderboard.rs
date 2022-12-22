@@ -18,7 +18,7 @@ use std::fmt::Display;
 /// routes for this file.
 ///
 /// Prefix: /api/leaderboard
-pub(super) fn router() -> Router {
+pub fn router() -> Router {
     Router::new()
         .route("/:name", get(get_leaderboard))
         .route("/:name/:player_id", get(get_player_ranking))

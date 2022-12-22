@@ -16,7 +16,7 @@ struct PublicContent;
 /// routes for this file.
 ///
 /// Prefix: /content
-pub(super) fn router() -> Router {
+pub fn router() -> Router {
     Router::new().route("/*filename", get(content))
 }
 

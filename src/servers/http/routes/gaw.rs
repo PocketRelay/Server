@@ -26,7 +26,7 @@ use tokio::try_join;
 /// routes for this file.
 ///
 /// Prefix: /gaw
-pub(super) fn router() -> Router {
+pub fn router() -> Router {
     Router::new()
         .route("/authentication/sharedTokenLogin", get(shared_token_login))
         .route("/galaxyatwar/getRatings/:id", get(get_ratings))

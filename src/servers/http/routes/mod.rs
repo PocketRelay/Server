@@ -9,7 +9,7 @@ mod games;
 mod gaw;
 mod leaderboard;
 mod players;
-mod public;
+mod content;
 mod qos;
 mod server;
 mod token;
@@ -21,7 +21,7 @@ mod token;
 /// `token_store` The token store for token authentication
 pub fn router() -> Router {
     Router::new()
-        .nest("/content", public::router())
+        .nest("/content", content::router())
         .nest("/gaw", gaw::router())
         .nest("/qos", qos::router())
         .nest("/api", api_router())

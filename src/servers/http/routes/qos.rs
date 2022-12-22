@@ -10,7 +10,7 @@ use serde::Deserialize;
 /// routes for this file.
 ///
 /// Prefix: /qos
-pub(super) fn router() -> Router {
+pub fn router() -> Router {
     Router::new().route("/qos", get(qos))
 }
 

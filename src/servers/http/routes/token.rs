@@ -19,7 +19,7 @@ use std::{
 /// routes for this file.
 ///
 /// Prefix: /api/token
-pub(super) fn router() -> Router {
+pub fn router() -> Router {
     Router::new().route(
         "/",
         get(validate_token).post(get_token).delete(delete_token),

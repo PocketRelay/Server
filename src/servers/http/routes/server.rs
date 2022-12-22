@@ -9,7 +9,7 @@ use serde::Serialize;
 /// routes for this file.
 ///
 /// Prefix: /api/server
-pub(super) fn router() -> Router {
+pub fn router() -> Router {
     Router::new().route("/", get(server_details))
 }
 
