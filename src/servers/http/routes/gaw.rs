@@ -57,6 +57,10 @@ struct AuthQuery {
 /// But this implementation just responds with the bare minimum response directly
 /// passing the auth key as the session token for further requests
 ///
+/// Note: Many fields here have their values ommitted compared to the
+/// actual response. This is because these are not needed to function
+/// so not nessicary to implement the fetching
+///
 /// `query` The query containing the auth token (In this case the hex player ID)
 async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
     let response = format!(
@@ -65,23 +69,23 @@ async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
     <canageup>0</canageup>
     <legaldochost/>
     <needslegaldoc>0</needslegaldoc>
-    <pclogintoken></pclogintoken>
+    <pclogintoken/>
     <privacypolicyuri/>
     <sessioninfo>
-        <blazeuserid></blazeuserid>
+        <blazeuserid/>
         <isfirstlogin>0</isfirstlogin>
         <sessionkey>{}</sessionkey>
-        <lastlogindatetime></lastlogindatetime>
-        <email></email>
+        <lastlogindatetime/>
+        <email/>
         <personadetails>
-            <displayname></displayname>
-            <lastauthenticated></lastauthenticated>
-            <personaid></personaid>
+            <displayname/>
+            <lastauthenticated/>
+            <personaid/>
             <status>UNKNOWN</status>
             <extid>0</extid>
             <exttype>BLAZE_EXTERNAL_REF_TYPE_UNKNOWN</exttype>
         </personadetails>
-        <userid></userid>
+        <userid/>
     </sessioninfo>
     <isoflegalcontactage>0</isoflegalcontactage>
     <toshost/>
