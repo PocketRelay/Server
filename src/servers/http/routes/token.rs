@@ -15,13 +15,13 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-/// Function for adding all the routes in this file to
-/// the provided router
+/// Router function creates a new router with all the underlying
+/// routes for this file.
 ///
-/// `router` The route to add to
-pub fn route(router: Router) -> Router {
-    router.route(
-        "/api/token",
+/// Prefix: /api/token
+pub(super) fn router() -> Router {
+    Router::new().route(
+        "/",
         get(validate_token).post(get_token).delete(delete_token),
     )
 }

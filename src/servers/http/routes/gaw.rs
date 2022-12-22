@@ -21,21 +21,15 @@ use serde::Deserialize;
 use std::fmt::Display;
 use tokio::try_join;
 
-/// Function for adding all the routes in this file to
-/// the provided router
+/// Router function creates a new router with all the underlying
+/// routes for this file.
 ///
-/// `router` The route to add to
-pub fn route(router: Router) -> Router {
-    router
-        .route(
-            "/gaw/authentication/sharedTokenLogin",
-            get(shared_token_login),
-        )
-        .route("/gaw/galaxyatwar/getRatings/:id", get(get_ratings))
-        .route(
-            "/gaw/galaxyatwar/increaseRatings/:id",
-            get(increase_ratings),
-        )
+/// Prefix: /gaw
+pub(super) fn router() -> Router {
+    Router::new()
+        .route("/authentication/sharedTokenLogin", get(shared_token_login))
+        .route("/galaxyatwar/getRatings/:id", get(get_ratings))
+        .route("/galaxyatwar/increaseRatings/:id", get(increase_ratings))
 }
 
 /// Error type used in gaw routes to handle errors such

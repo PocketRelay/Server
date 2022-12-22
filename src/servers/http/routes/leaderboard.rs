@@ -14,16 +14,15 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-/// Function for adding all the routes in this file to
-/// the provided router
+/// Router function creates a new router with all the underlying
+/// routes for this file.
 ///
-/// `router` The route to add to
-pub fn route(router: Router) -> Router {
-    router
-        .route("/api/leaderboard/:name", get(get_leaderboard))
-        .route("/api/leaderboard/:name/:player_id", get(get_player_ranking))
+/// Prefix: /api/leaderboard
+pub(super) fn router() -> Router {
+    Router::new()
+        .route("/:name", get(get_leaderboard))
+        .route("/:name/:player_id", get(get_player_ranking))
 }
-
 /// Error type used in leaderboard routes to handle errors
 /// such as database errors and player not founds when
 /// searching for a specific player.

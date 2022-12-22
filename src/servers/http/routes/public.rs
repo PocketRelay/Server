@@ -12,12 +12,12 @@ use rust_embed::{EmbeddedFile, RustEmbed};
 #[folder = "src/resources/public"]
 struct PublicContent;
 
-/// Function for adding all the routes in this file to
-/// the provided router
+/// Router function creates a new router with all the underlying
+/// routes for this file.
 ///
-/// `router` The route to add to
-pub fn route(router: Router) -> Router {
-    router.route("/content/*filename", get(content))
+/// Prefix: /content
+pub(super) fn router() -> Router {
+    Router::new().route("/*filename", get(content))
 }
 
 /// Function for serving content from the embedded public

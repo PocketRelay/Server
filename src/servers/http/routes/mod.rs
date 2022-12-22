@@ -3,8 +3,7 @@ use super::{
     stores::token::TokenStore,
 };
 use crate::env;
-use axum::{middleware, Extension, Router};
-use std::sync::Arc;
+use axum::{middleware, Router};
 
 mod games;
 mod gaw;
@@ -21,45 +20,36 @@ mod token;
 /// `cfg`         Service config to configure
 /// `token_store` The token store for token authentication
 pub fn router() -> Router {
-    let mut router = Router::new();
+    Router::new()
+        .nest("/content", public::router())
+        .nest("/gaw", gaw::router())
+        .nest("/qos", qos::router())
+        .nest("/api", api_router())
+}
 
-    router = server::route(router);
-    router = public::route(router);
-    router = gaw::route(router);
-    router = qos::route(router);
-
-    // If the API is enabled
+/// Creates a router for the routes that reside under /api
+fn api_router() -> Router {
     if env::from_env(env::API) {
-        let token_store = Arc::new(TokenStore::default());
-
-        let mut api_router = Router::new();
-
-        {
-            // Auth protected routes
-            {
-                api_router = games::route(api_router);
-                api_router = players::route(api_router);
-                // Apply the token auth middleware
-                api_router = api_router.layer(middleware::from_fn(token_auth_layer));
-            }
-
+        Router::new()
+            // Games routing
+            .nest("/games", games::router())
+            // Players routing
+            .nest("/players", players::router())
+            // Apply the token auth middleware
+            .layer(middleware::from_fn(token_auth_layer))
             // Routes that require token store access but arent protected
-            {
-                api_router = token::route(api_router);
-            }
-
+            .nest("/token", token::router())
             // Provide token store to API routes
-            api_router = api_router.layer(Extension(token_store));
-        }
-
-        // Non protected API routes
-        {
-            api_router = leaderboard::route(api_router);
-        }
-
-        router = router.merge(api_router);
+            .layer(TokenStore::extension())
+            // Non protected API routes
+            .nest("/leaderboard", leaderboard::router())
+    } else {
+        // If the API is disable a default empty router is added
+        Router::new()
     }
-
-    // CORS middleware is applied to all routes to allow browser access
-    router.layer(middleware::from_fn(cors_layer))
+    // Even when the API is disabled the server route must still
+    // be applied otherwise clients won't be able to check the server
+    .nest("/server", server::router())
+    // CORS middleware is applied to all API routes to allow browser access
+    .layer(middleware::from_fn(cors_layer))
 }

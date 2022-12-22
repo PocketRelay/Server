@@ -6,12 +6,12 @@ use axum::{extract::Query, routing::get, Router};
 use log::debug;
 use serde::Deserialize;
 
-/// Function for adding all the routes in this file to
-/// the provided router
+/// Router function creates a new router with all the underlying
+/// routes for this file.
 ///
-/// `router` The route to add to
-pub fn route(router: Router) -> Router {
-    router.route("/qos/qos", get(qos))
+/// Prefix: /qos
+pub(super) fn router() -> Router {
+    Router::new().route("/qos", get(qos))
 }
 
 /// Query for the Qualitu Of Service route

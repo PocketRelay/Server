@@ -1,6 +1,8 @@
 use crate::env;
 use crate::utils::random::generate_random_string;
+use axum::Extension;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::Mutex;
 
@@ -15,6 +17,11 @@ pub struct TokenStore {
 }
 
 impl TokenStore {
+    /// Creates a token store extension to supply to the router
+    pub fn extension() -> Extension<Arc<TokenStore>> {
+        Extension(Default::default())
+    }
+
     /// The amount of time it takes for a session token to expire.
     /// currently set to 1day before expiring
     const EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24);

@@ -8,14 +8,14 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-/// Function for adding all the routes in this file to
-/// the provided router
+/// Router function creates a new router with all the underlying
+/// routes for this file.
 ///
-/// `router` The route to add to
-pub fn route(router: Router) -> Router {
-    router
-        .route("/api/games", get(get_games))
-        .route("/api/games/:id", get(get_game))
+/// Prefix: /api/games
+pub(super) fn router() -> Router {
+    Router::new()
+        .route("/", get(get_games))
+        .route("/:id", get(get_game))
 }
 
 /// The query structure for a players query

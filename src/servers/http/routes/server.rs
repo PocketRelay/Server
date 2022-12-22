@@ -5,12 +5,12 @@ use crate::utils::{constants, env};
 use axum::{routing::get, Json, Router};
 use serde::Serialize;
 
-/// Function for adding all the routes in this file to
-/// the provided router
+/// Router function creates a new router with all the underlying
+/// routes for this file.
 ///
-/// `router` The route to add to
-pub fn route(router: Router) -> Router {
-    router.route("/api/server", get(server_details))
+/// Prefix: /api/server
+pub(super) fn router() -> Router {
+    Router::new().route("/", get(server_details))
 }
 
 /// Response detailing the information about this Pocket Relay server

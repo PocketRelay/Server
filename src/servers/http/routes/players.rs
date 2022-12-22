@@ -18,25 +18,25 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tokio::try_join;
 
-/// Function for adding all the routes in this file to
-/// the provided router
+/// Router function creates a new router with all the underlying
+/// routes for this file.
 ///
-/// `router` The route to add to
-pub fn route(router: Router) -> Router {
-    router
-        .route("/api/players", get(get_players).post(create_player))
+/// Prefix: /api/players
+pub(super) fn router() -> Router {
+    Router::new()
+        .route("/", get(get_players).post(create_player))
         .route(
-            "/api/players/:id",
+            "/:id",
             get(get_player).put(modify_player).delete(delete_player),
         )
-        .route("/api/players/:id/full", get(get_player_full))
-        .route("/api/players/:id/classes", get(get_player_classes))
+        .route("/:id/full", get(get_player_full))
+        .route("/:id/classes", get(get_player_classes))
         .route(
-            "/api/players/:id/classes/:index",
+            "/:id/classes/:index",
             get(get_player_class).put(update_player_class),
         )
-        .route("/api/players/:id/characters", get(get_player_characters))
-        .route("/api/players/:id/galaxy_at_war", get(get_player_gaw))
+        .route("/:id/characters", get(get_player_characters))
+        .route("/:id/galaxy_at_war", get(get_player_gaw))
 }
 
 /// Enum for errors that could occur when accessing any of
