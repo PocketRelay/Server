@@ -2,6 +2,7 @@
 
 use crate::{
     blaze::{
+        append_packet_decoded,
         codec::{InstanceDetails, Port},
         components::{Components, Redirector},
         errors::BlazeResult,
@@ -12,10 +13,10 @@ use crate::{
 };
 use blaze_pk::{
     codec::{Decodable, Encodable},
-    packet::{Packet, PacketType},
+    packet::{Packet, PacketComponents, PacketType},
 };
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
-use log::{debug, error};
+use log::{debug, error, log_enabled};
 use tokio::net::TcpStream;
 
 mod models;
@@ -152,6 +153,7 @@ impl RetSession {
     ) -> BlazeResult<Packet> {
         let request = Packet::request(self.id, component, contents);
         request.write_blaze(&mut self.stream)?;
+        debug_log_packet(&request, "Sent to Official");
         self.stream.flush().await?;
         self.id += 1;
         self.expect_response(&request).await
@@ -174,6 +176,7 @@ impl RetSession {
     pub async fn request_empty_raw(&mut self, component: Components) -> BlazeResult<Packet> {
         let request = Packet::request_empty(self.id, component);
         request.write_blaze(&mut self.stream)?;
+        debug_log_packet(&request, "Sent to Official");
         self.stream.flush().await?;
         self.id += 1;
         self.expect_response(&request).await
@@ -184,6 +187,7 @@ impl RetSession {
     async fn expect_response(&mut self, request: &Packet) -> BlazeResult<Packet> {
         loop {
             let (component, response) = Packet::read_blaze_typed(&mut self.stream).await?;
+            debug_log_packet(&response, "Received from Official");
             let header = &request.header;
             if header.ty == PacketType::Notify {
                 self.handle_notify(component, &response).await.ok();
@@ -202,4 +206,34 @@ impl RetSession {
         )
         .await
     }
+}
+
+/// Logs the contents of the provided packet to the debug output along with
+/// the header information.
+///
+/// `component` The component for the packet routing
+/// `packet`    The packet that is being logged
+/// `direction` The direction name for the packet
+fn debug_log_packet(packet: &Packet, action: &str) {
+    // Skip if debug logging is disabled
+    if !log_enabled!(log::Level::Debug) {
+        return;
+    }
+    let header = &packet.header;
+    let component = Components::from_header(header);
+    let mut message = String::new();
+    message.push_str("\n");
+    message.push_str(action);
+    message.push_str(&format!("\nComponent: {:?}", component));
+    message.push_str(&format!("\nType: {:?}", header.ty));
+    if header.ty != PacketType::Notify {
+        message.push_str("\nID: ");
+        message.push_str(&header.id.to_string());
+    }
+    if header.ty == PacketType::Error {
+        message.push_str("\nERROR: ");
+        message.push_str(&header.error.to_string());
+    }
+    append_packet_decoded(packet, &mut message);
+    debug!("{}", message);
 }

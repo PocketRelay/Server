@@ -227,7 +227,13 @@ impl Session {
         message.push_str(&format!("\nComponent: {:?}", component));
         message.push_str(&format!("\nType: {:?}", header.ty));
         if header.ty != PacketType::Notify {
-            message.push_str(&format!("\nID: {}", header.id));
+            message.push_str("\nID: ");
+            message.push_str(&header.id.to_string());
+        }
+
+        if header.ty == PacketType::Error {
+            message.push_str("\nERROR: ");
+            message.push_str(&header.error.to_string());
         }
 
         if !Self::is_debug_minified(&component) {

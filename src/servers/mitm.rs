@@ -95,6 +95,10 @@ fn debug_log_packet(component: Components, packet: &Packet, direction: &str) {
         message.push_str("\nID: ");
         message.push_str(&header.id.to_string());
     }
+    if header.ty == PacketType::Error {
+        message.push_str("\nERROR: ");
+        message.push_str(&header.error.to_string());
+    }
     append_packet_decoded(packet, &mut message);
     debug!("{}", message);
 }
