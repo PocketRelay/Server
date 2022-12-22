@@ -1,11 +1,9 @@
 //! Module for retrieving data from the official Mass Effect 3 Servers
-
 use crate::{
     blaze::{
         append_packet_decoded,
         codec::{InstanceDetails, Port},
         components::{Components, Redirector},
-        errors::BlazeResult,
     },
     env,
     retriever::models::InstanceRequest,
@@ -13,11 +11,12 @@ use crate::{
 };
 use blaze_pk::{
     codec::{Decodable, Encodable},
+    error::DecodeError,
     packet::{Packet, PacketComponents, PacketType},
 };
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
 use log::{debug, error, log_enabled};
-use tokio::net::TcpStream;
+use tokio::{io, net::TcpStream};
 
 mod models;
 pub mod origin;
@@ -113,6 +112,18 @@ pub struct RetSession {
     stream: Stream,
 }
 
+/// Error type for retriever errors
+pub enum RetrieverError {
+    /// Packet decode errror
+    Decode(DecodeError),
+    /// IO Error
+    IO(io::Error),
+    /// Error response packet
+    Packet(Packet),
+}
+
+pub type RetrieverResult<T> = Result<T, RetrieverError>;
+
 impl RetSession {
     /// Creates a new retriever session for the provided host and
     /// port. This will create the underlying connection aswell.
@@ -121,24 +132,13 @@ impl RetSession {
         Some(Self { id: 0, stream })
     }
 
-    /// Handler for notification type packets that are encountered
-    /// while expecting a response packet from the server.
-    pub async fn handle_notify(
-        &mut self,
-        component: Components,
-        _value: &Packet,
-    ) -> BlazeResult<()> {
-        debug!("Got notify packet: {component:?}");
-        Ok(())
-    }
-
     /// Writes a request packet and waits until the response packet is
     /// recieved returning the contents of that response packet.
     pub async fn request<Req: Encodable, Res: Decodable>(
         &mut self,
         component: Components,
         contents: Req,
-    ) -> BlazeResult<Res> {
+    ) -> RetrieverResult<Res> {
         let response = self.request_raw(component, contents).await?;
         let contents = response.decode::<Res>()?;
         Ok(contents)
@@ -150,7 +150,7 @@ impl RetSession {
         &mut self,
         component: Components,
         contents: Req,
-    ) -> BlazeResult<Packet> {
+    ) -> RetrieverResult<Packet> {
         let request = Packet::request(self.id, component, contents);
         request.write_blaze(&mut self.stream)?;
         debug_log_packet(&request, "Sent to Official");
@@ -165,7 +165,7 @@ impl RetSession {
     pub async fn request_empty<Res: Decodable>(
         &mut self,
         component: Components,
-    ) -> BlazeResult<Res> {
+    ) -> RetrieverResult<Res> {
         let response = self.request_empty_raw(component).await?;
         let contents = response.decode::<Res>()?;
         Ok(contents)
@@ -173,7 +173,7 @@ impl RetSession {
 
     /// Writes a request packet and waits until the response packet is
     /// recieved returning the raw response packet
-    pub async fn request_empty_raw(&mut self, component: Components) -> BlazeResult<Packet> {
+    pub async fn request_empty_raw(&mut self, component: Components) -> RetrieverResult<Packet> {
         let request = Packet::request_empty(self.id, component);
         request.write_blaze(&mut self.stream)?;
         debug_log_packet(&request, "Sent to Official");
@@ -184,22 +184,25 @@ impl RetSession {
 
     /// Waits for a response packet to be recieved any notification packets
     /// that are recieved are handled in the handle_notify function.
-    async fn expect_response(&mut self, request: &Packet) -> BlazeResult<Packet> {
+    async fn expect_response(&mut self, request: &Packet) -> RetrieverResult<Packet> {
         loop {
-            let (component, response) = Packet::read_blaze_typed(&mut self.stream).await?;
+            let response = Packet::read_blaze(&mut self.stream).await?;
             debug_log_packet(&response, "Received from Official");
             let header = &request.header;
-            if header.ty == PacketType::Notify {
-                self.handle_notify(component, &response).await.ok();
-            } else if header.path_matches(&request.header) {
-                return Ok(response);
+
+            if let PacketType::Response = header.ty {
+                if header.path_matches(header) {
+                    return Ok(response);
+                }
+            } else if let PacketType::Error = header.ty {
+                return Err(RetrieverError::Packet(response));
             }
         }
     }
 
     /// Function for making the request for the official server instance
     /// from the redirector server.
-    async fn get_main_instance(&mut self) -> BlazeResult<InstanceDetails> {
+    async fn get_main_instance(&mut self) -> RetrieverResult<InstanceDetails> {
         self.request::<InstanceRequest, InstanceDetails>(
             Components::Redirector(Redirector::GetServerInstance),
             InstanceRequest,
@@ -236,4 +239,16 @@ fn debug_log_packet(packet: &Packet, action: &str) {
     }
     append_packet_decoded(packet, &mut message);
     debug!("{}", message);
+}
+
+impl From<DecodeError> for RetrieverError {
+    fn from(err: DecodeError) -> Self {
+        RetrieverError::Decode(err)
+    }
+}
+
+impl From<io::Error> for RetrieverError {
+    fn from(err: io::Error) -> Self {
+        RetrieverError::IO(err)
+    }
 }
