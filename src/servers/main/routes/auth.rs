@@ -421,13 +421,10 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
         return Err(ServerError::EmailAlreadyInUse.into());
     }
 
-    let hashed_password = match hash_password(&req.password) {
-        Ok(password) => password,
-        Err(err) => {
-            error!("Failed to hash passsword: {err:?}");
-            return Err(ServerError::ServerUnavailable.into());
-        }
-    };
+    let hashed_password = hash_password(&req.password).map_err(|err| {
+        error!("Failed to hash passsword: {err:?}");
+        ServerError::ServerUnavailable
+    })?;
 
     let display_name = email.chars().take(99).collect::<String>();
     let player: Player = Player::create(db, email, display_name, hashed_password, false).await?;
@@ -531,11 +528,11 @@ async fn handle_legal_content(packet: &Packet, ty: LegalType) -> HandleResult {
 /// Content: {}
 /// ```
 async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> HandleResult {
-    let player: &Player = session
+    let token: String = session
         .player
         .as_ref()
+        .map(|player| format!("{:X}", player.id))
         .ok_or(ServerError::FailedNoLoginAction)?;
-    let token = format!("{:X}", player.id);
     let response = GetTokenResponse { token };
     Ok(packet.respond(response))
 }
