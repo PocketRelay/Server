@@ -225,7 +225,7 @@ fn debug_log_packet(packet: &Packet, action: &str) {
     let header = &packet.header;
     let component = Components::from_header(header);
     let mut message = String::new();
-    message.push_str("\n");
+    message.push('\n');
     message.push_str(action);
     message.push_str(&format!("\nComponent: {:?}", component));
     message.push_str(&format!("\nType: {:?}", header.ty));
