@@ -115,7 +115,7 @@ impl Player {
             .find_related(player_data::Entity)
             .filter(player_data::Column::Key.eq(key.clone()))
             .one(db)
-            .await?
+            .await?;
         if let Some(data) = data {
             data.delete(db).await?;
         }
