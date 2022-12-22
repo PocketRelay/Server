@@ -144,7 +144,7 @@ fn handle_ping(packet: &Packet) -> HandleResult {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_else(|_| Duration::from_secs(0))
+        .unwrap_or(Duration::ZERO)
         .as_secs();
     let response = PingResponse { server_time };
     Ok(packet.respond(response))
