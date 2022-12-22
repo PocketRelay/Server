@@ -7,7 +7,6 @@ use crate::{
         errors::BlazeResult,
     },
     env,
-    state::GlobalState,
     utils::{
         constants,
         net::{accept_stream, listener},
@@ -24,8 +23,7 @@ use tokio::{net::TcpStream, select, time::sleep};
 /// the client where the server is and whether it should use SSLv3 to connect.
 pub async fn start_server() {
     let listener = listener("Redirector", env::from_env(env::REDIRECTOR_PORT)).await;
-    let mut shutdown = GlobalState::shutdown();
-    while let Some((stream, addr)) = accept_stream(&listener, &mut shutdown).await {
+    while let Some((stream, addr)) = accept_stream(&listener).await {
         tokio::spawn(async move {
             if let Err(err) = handle_client(stream, addr).await {
                 error!("Unable to handle redirect: {err}");
@@ -46,8 +44,6 @@ const REDIRECT_COMPONENT: Components = Components::Redirector(Redirector::GetSer
 /// `addr`     The client address
 /// `instance` The server instance information
 async fn handle_client(stream: TcpStream, addr: SocketAddr) -> BlazeResult<()> {
-    let mut shutdown = GlobalState::shutdown();
-
     let mut stream = match BlazeStream::new(stream, StreamMode::Server).await {
         Ok(stream) => stream,
         Err(_) => {
@@ -60,8 +56,6 @@ async fn handle_client(stream: TcpStream, addr: SocketAddr) -> BlazeResult<()> {
         let (component, packet) = select! {
             // Attempt to read packets from the stream
             result = Packet::read_blaze_typed::<Components, TcpStream>(&mut stream) => result,
-            // Shutdown hook to ensure we don't keep trying to read after shutdown
-            _ = shutdown.changed() => { break; }
             // If the timeout completes before the redirect is complete the
             // request is considered over and terminates
             _ = sleep(DEFAULT_TIMEOUT) => { break; }

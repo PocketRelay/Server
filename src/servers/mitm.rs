@@ -24,8 +24,7 @@ pub async fn start_server() {
     };
 
     let listener = listener("MITM", env::from_env(env::MAIN_PORT)).await;
-    let mut shutdown = GlobalState::shutdown();
-    while let Some((stream, addr)) = accept_stream(&listener, &mut shutdown).await {
+    while let Some((stream, addr)) = accept_stream(&listener).await {
         tokio::spawn(async move {
             if let Err(err) = handle_client(stream, retriever).await {
                 error!("Unable to handle MITM (Addr: {addr}): {err}");
@@ -48,9 +47,6 @@ async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> 
             return Ok(());
         }
     };
-
-    let mut shutdown = GlobalState::shutdown();
-
     loop {
         select! {
             // Read packets coming from the client
@@ -66,12 +62,8 @@ async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> 
                 debug_log_packet(component, &packet, "From Server");
                 packet.write_async(&mut client).await?;
             }
-            // Shutdown hook to ensure we don't keep trying to read after shutdown
-            _ = shutdown.changed() => {   break;  }
         };
     }
-
-    Ok(())
 }
 
 /// Logs the contents of the provided packet to the debug output along with

@@ -2,6 +2,7 @@ use dotenvy::dotenv;
 use log::info;
 use servers::*;
 use state::GlobalState;
+use tokio::signal;
 use utils::{constants::VERSION, env, logging};
 
 mod blaze;
@@ -32,11 +33,14 @@ async fn main() {
 
     if env::from_env(env::MITM_ENABLED) {
         // Start the MITM server
-        mitm::start_server().await;
+        tokio::spawn(mitm::start_server());
     } else {
         // Spawn the Main server in its own task
         tokio::spawn(http::start_server());
         // Start the HTTP server
-        main::start_server().await;
+        tokio::spawn(main::start_server());
     }
+
+    signal::ctrl_c().await.ok();
+    info!("Shutting down...");
 }

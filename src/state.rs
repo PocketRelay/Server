@@ -1,7 +1,6 @@
 use crate::{env, game::manager::Games, leaderboard::Leaderboard, retriever::Retriever};
 use database::{self, DatabaseConnection, DatabaseType};
-use log::info;
-use tokio::{join, signal, sync::watch};
+use tokio::join;
 
 /// Global state that is shared throughout the application this
 /// will be unset until the value is initialized then it will be
@@ -13,7 +12,6 @@ pub enum GlobalState {
         db: DatabaseConnection,
         retriever: Option<Retriever>,
         leaderboard: Leaderboard,
-        shutdown: watch::Receiver<()>,
     },
 }
 
@@ -27,7 +25,6 @@ impl GlobalState {
     pub async fn init() {
         let (db, retriever) = join!(Self::init_database(), Retriever::new());
 
-        let shutdown = Self::hook_shutdown();
         let games: Games = Games::default();
         let leaderboard: Leaderboard = Leaderboard::default();
 
@@ -37,24 +34,8 @@ impl GlobalState {
                 games,
                 retriever,
                 leaderboard,
-                shutdown,
             };
         }
-    }
-
-    /// Spawns a tokio task which waits for the CTRL C signal
-    /// and creates a channel returning the receiver for the
-    /// channel.
-    fn hook_shutdown() -> watch::Receiver<()> {
-        // Channel for safely shutdown
-        let (shutdown_send, shutdown_recv) = watch::channel(());
-        // Spawn a handler for safe shutdown
-        tokio::spawn(async move {
-            signal::ctrl_c().await.ok();
-            info!("Shutting down safely...");
-            shutdown_send.send(()).ok();
-        });
-        shutdown_recv
     }
 
     /// Initializes the connection with the database using the url or file
@@ -111,16 +92,6 @@ impl GlobalState {
         unsafe {
             match &GLOBAL_STATE {
                 GlobalState::Set { leaderboard, .. } => leaderboard,
-                GlobalState::Unset => panic!("Global state not initialized"),
-            }
-        }
-    }
-
-    /// Obtains a clone of the shutdown receiever from the global state
-    pub fn shutdown() -> watch::Receiver<()> {
-        unsafe {
-            match &GLOBAL_STATE {
-                GlobalState::Set { shutdown, .. } => shutdown.clone(),
                 GlobalState::Unset => panic!("Global state not initialized"),
             }
         }

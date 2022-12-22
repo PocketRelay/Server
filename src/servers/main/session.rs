@@ -110,7 +110,6 @@ impl Session {
     ///
     /// `message` The receiver for receiving session messages
     pub async fn process(mut self, mut receiver: mpsc::UnboundedReceiver<SessionMessage>) {
-        let mut shutdown = GlobalState::shutdown();
         loop {
             select! {
                 // Recieve session instruction messages
@@ -125,8 +124,6 @@ impl Session {
                         break;
                     }
                 }
-                // Shutdown hook to ensure we don't keep trying to process after shutdown
-                _ = shutdown.changed() => { break; }
             };
         }
     }

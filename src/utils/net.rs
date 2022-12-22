@@ -2,11 +2,7 @@ use log::{error, info};
 use reqwest;
 use serde::Deserialize;
 use std::net::SocketAddr;
-use tokio::{
-    net::{TcpListener, TcpStream},
-    select,
-    sync::watch,
-};
+use tokio::net::{TcpListener, TcpStream};
 
 /// Retrieves the public IPv4 address of this machine using the ip4.seeip.org
 /// API trimming the response to remove new lines.
@@ -132,22 +128,11 @@ pub async fn listener(name: &str, port: u16) -> TcpListener {
 ///
 /// `listener` The TCP listener to accept from
 /// `shutdown` The shutdown watch receiver
-pub async fn accept_stream(
-    listener: &TcpListener,
-    shutdown: &mut watch::Receiver<()>,
-) -> Option<(TcpStream, SocketAddr)> {
-    select! {
-        result = listener.accept() => {
-            match result {
-                Ok(value) => Some(value),
-                Err(err) => {
-                    error!("Error occurred while accepting connections: {:?}", err);
-                    None
-                }
-            }
-        }
-        _ = shutdown.changed() => {
-            info!("Stopping server listener from shutdown trigger.");
+pub async fn accept_stream(listener: &TcpListener) -> Option<(TcpStream, SocketAddr)> {
+    match listener.accept().await {
+        Ok(value) => Some(value),
+        Err(err) => {
+            error!("Error occurred while accepting connections: {:?}", err);
             None
         }
     }
