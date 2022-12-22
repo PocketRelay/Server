@@ -83,9 +83,21 @@ impl Player {
         key: String,
         value: String,
     ) -> DbResult<PlayerData> {
-        match self
-            .find_related(player_data::Entity)
-            .filter(player_data::Column::Key.eq(key.clone()))
+        Self::set_data_impl(self.id, db, key, value).await
+    }
+
+    pub async fn set_data_impl(
+        player_id: u32,
+        db: &DatabaseConnection,
+        key: String,
+        value: String,
+    ) -> DbResult<PlayerData> {
+        match player_data::Entity::find()
+            .filter(
+                player_data::Column::PlayerId
+                    .eq(player_id)
+                    .and(player_data::Column::Key.eq(key.clone())),
+            )
             .one(db)
             .await?
         {
@@ -97,7 +109,7 @@ impl Player {
             }
             None => {
                 player_data::ActiveModel {
-                    player_id: Set(self.id),
+                    player_id: Set(player_id),
                     key: Set(key),
                     value: Set(value),
                     ..Default::default()

@@ -17,7 +17,7 @@ use database::{DatabaseConnection, Player};
 use log::{debug, error, warn};
 use std::borrow::Cow;
 use std::path::Path;
-use tokio::fs::read_to_string;
+use tokio::{fs::read_to_string, task::JoinSet};
 
 /// Routing function for handling packets with the `Authentication` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -164,7 +164,10 @@ async fn handle_login_email(
 ///
 /// `db`    The database connection
 /// `token` The origin authentication token
-async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerResult<Player> {
+async fn handle_login_origin(
+    db: &'static DatabaseConnection,
+    token: String,
+) -> ServerResult<Player> {
     // Only continue if Origin Fetch is actually enabled
     if !env::from_env(env::ORIGIN_FETCH) {
         return Err(ServerError::ServerUnavailable);
@@ -215,17 +218,18 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
                 return Ok(player);
             };
 
-            let futures: Vec<_> = settings
-                .into_iter()
-                .map(|(key, value)| player.set_data(db, key, value))
-                .collect();
+            let player_id: u32 = player.id;
+            let mut join_set = JoinSet::new();
+            for (key, value) in settings {
+                join_set.spawn(Player::set_data_impl(player_id, db, key, value));
+            }
 
-            futures_util::future::try_join_all(futures)
-                .await
-                .map_err(|err| {
+            while let Some(value) = join_set.join_next().await {
+                if let Ok(Err(err)) = value {
                     error!("Failed to set origin data: {err:?}");
-                    ServerError::ServerUnavailable
-                })?;
+                    return Err(ServerError::ServerUnavailable);
+                }
+            }
 
             Ok(player)
         }
