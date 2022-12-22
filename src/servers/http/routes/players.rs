@@ -32,6 +32,7 @@ pub(super) fn router() -> Router {
 
 /// Enum for errors that could occur when accessing any of
 /// the players routes
+#[derive(Debug)]
 enum PlayersError {
     /// The player with the requested ID was not found
     PlayerNotFound,
@@ -285,13 +286,7 @@ async fn get_player_gaw(Path(player_id): Path<PlayerID>) -> PlayersResult<Galaxy
 /// error has a custom message. All other errors use "Internal Server Error"
 impl Display for PlayersError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::DataNotFound => f.write_str("Class with that index not found"),
-            Self::EmailTaken => f.write_str("Email address is already taken"),
-            Self::InvalidEmail => f.write_str("Email address is not valid"),
-            Self::PlayerNotFound => f.write_str("Couldn't find any players with that ID"),
-            _ => f.write_str("Internal Server Error"),
-        }
+        write!(f, "{:?}", self)
     }
 }
 
