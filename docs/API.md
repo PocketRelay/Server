@@ -62,9 +62,9 @@ The "expiry_time" field is the unix time stamp in seconds of when the token will
 
 ### Error Responses 
 
-| Status Code      | Body                | Meaning                                |
-| ---------------- | ------------------- | -------------------------------------- |
-| 401 Unauthorized | invalid credentials | The username or password was incorrect |
+| Status Code      | Body               | Meaning                                |
+| ---------------- | ------------------ | -------------------------------------- |
+| 401 Unauthorized | InvalidCredentials | The username or password was incorrect |
 
 
 
@@ -360,10 +360,10 @@ This route retrieves the galaxy at war data for the provided player. If the data
 
 ### Error Responses 
 
-| Status Code               | Body                                   | Meaning                                    |
-| ------------------------- | -------------------------------------- | ------------------------------------------ |
-| 404 Not Found             | Couldn't find any players with that ID | Player with matching ID could not be found |
-| 500 Internal Server Error | Internal Server Error                  | Database or other server error occurred    |
+| Status Code               | Body           | Meaning                                    |
+| ------------------------- | -------------- | ------------------------------------------ |
+| 404 Not Found             | PlayerNotFound | Player with matching ID could not be found |
+| 500 Internal Server Error | ServerError    | Database or other server error occurred    |
 
 
 
@@ -509,9 +509,9 @@ the game to retrieve
 
 ### Error Responses 
 
-| Status Code   | Body                        | Meaning                                  |
-| ------------- | --------------------------- | ---------------------------------------- |
-| 404 Not Found | Game with that ID not found | Game with matching ID could not be found |
+| Status Code   | Body         | Meaning                                  |
+| ------------- | ------------ | ---------------------------------------- |
+| 404 Not Found | GameNotFound | Game with matching ID could not be found |
 
 
 # Leaderboard API 🟢
@@ -594,10 +594,10 @@ determine whether a next page is available for pagination
 
 ### Error Responses 
 
-| Status Code               | Body                  | Meaning                                                                        |
-| ------------------------- | --------------------- | ------------------------------------------------------------------------------ |
-| 500 Internal Server Error | Server Error Occurred | An error occurred on the server likely a failure when updating the leaderboard |
-| 404 Not Found             | Leaderboard not found | The leaderboard key you used was not valid                                     |
+| Status Code               | Body               | Meaning                                                                        |
+| ------------------------- | ------------------ | ------------------------------------------------------------------------------ |
+| 404 Not Found             | UnknownLeaderboard | The leaderboard key you used was not valid                                     |
+| 500 Internal Server Error | ServerError        | An error occurred on the server likely a failure when updating the leaderboard |
 
 
 ## Specific player ranking
@@ -621,8 +621,8 @@ This route allows you to retrieve the leader board entry of a specific player us
 
 ### Error Responses 
 
-| Status Code               | Body                  | Meaning                                                                                                                      |
-| ------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 404 Not Found             | Player not found      | The specific player you queried for could not be found its possible the leaderboard hasnt updated to include this player yet |
-| 404 Not Found             | Leaderboard not found | The leaderboard key you used was not valid                                                                                   |
-| 500 Internal Server Error | Server Error Occurred | An error occurred on the server likely a failure when updating the leaderboard                                               |
+| Status Code               | Body               | Meaning                                                                                                                      |
+| ------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| 404 Not Found             | PlayerNotFound     | The specific player you queried for could not be found its possible the leaderboard hasnt updated to include this player yet |
+| 404 Not Found             | UnknownLeaderboard | The leaderboard key you used was not valid                                                                                   |
+| 500 Internal Server Error | ServerError        | An error occurred on the server likely a failure when updating the leaderboard                                               |
