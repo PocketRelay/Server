@@ -85,7 +85,7 @@ impl Player {
         db: &DatabaseConnection,
         key: String,
         value: String,
-    ) -> DbResult<()> {
+    ) -> DbResult<PlayerData> {
         match self
             .find_related(player_data::Entity)
             .filter(player_data::Column::Key.eq(key.clone()))
@@ -96,7 +96,7 @@ impl Player {
                 let mut model = player_data.into_active_model();
                 model.key = Set(key);
                 model.value = Set(value);
-                model.update(db).await?;
+                model.update(db).await
             }
             None => {
                 player_data::ActiveModel {
@@ -106,57 +106,20 @@ impl Player {
                     ..Default::default()
                 }
                 .insert(db)
-                .await?;
+                .await
             }
         }
-        Ok(())
     }
 
-    pub async fn get_data(&self, db: &DatabaseConnection, key: &str) -> DbResult<Option<String>> {
+    pub async fn get_data(
+        &self,
+        db: &DatabaseConnection,
+        key: &str,
+    ) -> DbResult<Option<PlayerData>> {
         self.find_related(player_data::Entity)
             .filter(player_data::Column::Key.eq(key))
             .one(db)
             .await
-            .map(|value| value.map(|value| value.value))
-    }
-
-    pub async fn get_class(
-        &self,
-        db: &DatabaseConnection,
-        index: u16,
-    ) -> DbResult<Option<PlayerData>> {
-        self.find_related(player_data::Entity)
-            .filter(player_data::Column::Key.eq(format!("class{index}")))
-            .one(db)
-            .await
-    }
-    pub async fn set_class(
-        &self,
-        db: &DatabaseConnection,
-        index: u16,
-        value: String,
-    ) -> DbResult<()> {
-        self.set_data(db, format!("class{index}"), value).await
-    }
-
-    pub async fn get_character(
-        &self,
-        db: &DatabaseConnection,
-        index: u32,
-    ) -> DbResult<Option<PlayerData>> {
-        self.find_related(player_data::Entity)
-            .filter(player_data::Column::Key.eq(format!("char{index}")))
-            .one(db)
-            .await
-    }
-
-    pub async fn set_character(
-        &self,
-        db: &DatabaseConnection,
-        index: u32,
-        value: String,
-    ) -> DbResult<()> {
-        self.set_data(db, format!("char{index}"), value).await
     }
 
     pub async fn get_classes(&self, db: &DatabaseConnection) -> DbResult<Vec<PlayerData>> {
@@ -189,11 +152,6 @@ impl Player {
         db: &DatabaseConnection,
         update: PlayerUpdate,
     ) -> DbResult<Self> {
-        if let Some(csreward) = update.csreward {
-            self.set_data(db, "csreward".to_string(), csreward.to_string())
-                .await?;
-        }
-
         let mut active = self.into_active_model();
         if let Some(email) = update.email {
             active.email = Set(email);
@@ -217,7 +175,7 @@ impl Player {
     /// Parses the challenge points value which is the second
     /// item in the completion list.
     pub async fn get_challenge_points(&self, db: &DatabaseConnection) -> Option<u32> {
-        let list = self.get_data(db, "Completion").await.ok()??;
+        let list = self.get_data(db, "Completion").await.ok()??.value;
         let part = list.split(',').nth(1)?;
         let value: u32 = part.parse().ok()?;
         Some(value)

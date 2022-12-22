@@ -9,12 +9,6 @@ pub struct PlayerUpdate {
     pub origin: Option<bool>,
     /// Optional password which has already been hashed in the HTTP layer
     pub password: Option<String>,
-    /// Optional new credits amount
-    pub credits: Option<u32>,
-    /// Optional inventory string
-    pub inventory: Option<String>,
-    /// Optional reward value
-    pub csreward: Option<u16>,
 }
 
 /// Structure for an update to the base data of a player that was

@@ -188,10 +188,10 @@ impl RetSession {
         loop {
             let response = Packet::read_blaze(&mut self.stream).await?;
             debug_log_packet(&response, "Received from Official");
-            let header = &request.header;
+            let header = &response.header;
 
             if let PacketType::Response = header.ty {
-                if header.path_matches(header) {
+                if header.path_matches(&request.header) {
                     return Ok(response);
                 }
             } else if let PacketType::Error = header.ty {

@@ -222,7 +222,10 @@ async fn handle_login_origin(db: &DatabaseConnection, token: String) -> ServerRe
 
             futures_util::future::try_join_all(futures)
                 .await
-                .map_err(|_| ServerError::ServerUnavailable)?;
+                .map_err(|err| {
+                    error!("Failed to set origin data: {err:?}");
+                    ServerError::ServerUnavailable
+                })?;
 
             Ok(player)
         }

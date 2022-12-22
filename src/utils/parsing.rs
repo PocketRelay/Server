@@ -92,15 +92,6 @@ pub struct PlayerClass {
     pub promotions: u32,
 }
 
-impl PlayerClass {
-    pub fn encode(&self) -> String {
-        format!(
-            "20;4;{};{};{};{}",
-            self.name, self.level, self.exp, self.promotions
-        )
-    }
-}
-
 /// Attempts to parse the provided player character data string and update the fields
 /// on the provided active player character model. Will return a None option if parsing
 /// failed.
@@ -190,34 +181,6 @@ pub struct PlayerCharacter {
     pub deployed: bool,
     /// Whether this character has leveled up
     pub leveled_up: bool,
-}
-
-impl PlayerCharacter {
-    pub fn encode(&self) -> String {
-        format!(
-            "20;4;{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{};{}",
-            &self.kit_name,
-            &self.name,
-            self.tint1,
-            self.tint2,
-            self.pattern,
-            self.pattern_color,
-            self.phong,
-            self.emissive,
-            self.skin_tone,
-            self.seconds_played,
-            self.timestamp_year,
-            self.timestamp_month,
-            self.timestamp_day,
-            self.timestamp_seconds,
-            self.powers,
-            self.hotkeys,
-            self.weapons,
-            self.weapon_mods,
-            if self.deployed { "True" } else { "False" },
-            if self.leveled_up { "True" } else { "False" },
-        )
-    }
 }
 
 pub fn parse_player_character(value: String) -> Option<PlayerCharacter> {
