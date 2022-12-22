@@ -163,13 +163,9 @@ async fn modify_player(
     };
 
     // Ignore the display name field if it has not changed
-    let display_name = req.display_name.and_then(|value| {
-        if value == player.display_name {
-            None
-        } else {
-            Some(value)
-        }
-    });
+    let display_name = req
+        .display_name
+        .filter(|value| value.ne(&player.display_name));
 
     // Hash the password value if it is present
     let password = if let Some(password) = req.password.as_ref() {
