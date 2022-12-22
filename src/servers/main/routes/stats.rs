@@ -79,11 +79,11 @@ async fn handle_leaderboard(packet: &Packet) -> HandleResult {
     let end_index = request.count.min(group.values.len());
 
     let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
-    if let Some(values) = values {
-        Ok(packet.respond(LeaderboardResponse { values }))
+    Ok(if let Some(values) = values {
+        packet.respond(LeaderboardResponse { values })
     } else {
-        Ok(packet.respond(EmptyLeaderboardResponse))
-    }
+        packet.respond(EmptyLeaderboardResponse)
+    })
 }
 
 /// Handles returning a centered leaderboard object. This is currently not implemented
@@ -135,11 +135,11 @@ async fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
     let end_index = (index_of + after).min(group.values.len());
 
     let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
-    if let Some(values) = values {
-        Ok(packet.respond(LeaderboardResponse { values }))
+    Ok(if let Some(values) = values {
+        packet.respond(LeaderboardResponse { values })
     } else {
-        Ok(packet.respond(EmptyLeaderboardResponse))
-    }
+        packet.respond(EmptyLeaderboardResponse)
+    })
 }
 
 /// Handles returning a filtered leaderboard object. This is currently not implemented
@@ -174,11 +174,11 @@ async fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
         .iter()
         .find(|value| value.player_id == player_id);
 
-    if let Some(entry) = entry {
-        Ok(packet.respond(FilteredLeaderboardResponse { value: entry }))
+    Ok(if let Some(entry) = entry {
+        packet.respond(FilteredLeaderboardResponse { value: entry })
     } else {
-        Ok(packet.respond(EmptyLeaderboardResponse))
-    }
+        packet.respond(EmptyLeaderboardResponse)
+    })
 }
 
 fn get_locale_name(code: &str) -> String {
