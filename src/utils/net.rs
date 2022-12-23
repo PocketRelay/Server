@@ -7,7 +7,7 @@ use tokio::net::{TcpListener, TcpStream};
 /// Retrieves the public IPv4 address of this machine using the ip4.seeip.org
 /// API trimming the response to remove new lines.
 pub async fn public_address() -> Option<String> {
-    let result = reqwest::get("https://ip4.seeip.org/")
+    let result = reqwest::get("https://ipv4.icanhazip.com/")
         .await
         .ok()?
         .text()

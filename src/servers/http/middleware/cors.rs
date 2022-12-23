@@ -1,9 +1,8 @@
 use axum::{
-    http::{header, HeaderValue, Method, Request},
+    http::{header, HeaderValue, Method, Request, StatusCode},
     middleware::Next,
     response::Response,
 };
-use reqwest::StatusCode;
 
 /// Middleware layer function for appending CORS headers to requests
 /// and responding to options requests
