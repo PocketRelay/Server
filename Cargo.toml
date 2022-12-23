@@ -54,8 +54,8 @@ rust-embed = { version = "6.4.2", features = ["debug-embed"] }
 argon2 = { version = "0.4" }
 password-hash = { version = "0.4.2" }
 
-base64 = "0.20.0"
-flate2 = { version = "1.0.24", features = ["zlib"], default-features = false }
+base64 = "0.13"
+flate2 = { version = "1", features = ["zlib"], default-features = false }
 
 # .env file loader
 dotenvy = "0.15.5"
