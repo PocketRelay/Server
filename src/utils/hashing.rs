@@ -1,8 +1,7 @@
 //! Hashing utility for hashing and verifying passwords
 
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher};
-use password_hash::PasswordVerifier;
-use rand_core::OsRng;
+use password_hash::{rand_core::OsRng, PasswordVerifier};
 
 /// Hashes the provided password using the Argon2 algorithm returning
 /// the generated hash in string form.

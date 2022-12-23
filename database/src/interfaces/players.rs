@@ -123,7 +123,7 @@ impl Player {
     pub async fn delete_data(&self, db: &DatabaseConnection, key: &str) -> DbResult<()> {
         let data = self
             .find_related(player_data::Entity)
-            .filter(player_data::Column::Key.eq(key.clone()))
+            .filter(player_data::Column::Key.eq(key))
             .one(db)
             .await?;
         if let Some(data) = data {
