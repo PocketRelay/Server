@@ -1,3 +1,4 @@
+use self::rules::RuleSet;
 use crate::{
     blaze::components::{Components, GameManager, UserSessions},
     utils::types::{GameID, GameSlot, PlayerID, SessionID},
@@ -7,13 +8,9 @@ use codec::*;
 use log::debug;
 use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
-use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
-use self::rules::RuleSet;
-
 pub mod codec;
-pub mod enums;
 pub mod manager;
 pub mod player;
 pub mod rules;
@@ -72,7 +69,7 @@ impl GameAddr {
         reciever.await.unwrap_or(true)
     }
 
-    pub async fn check_joinable(&self, rules: Option<Arc<RuleSet>>) -> GameJoinableState {
+    pub async fn check_joinable(&self, rules: Option<RuleSet>) -> GameJoinableState {
         let (sender, reciever) = oneshot::channel();
         if self
             .sender
@@ -118,7 +115,7 @@ pub enum GameModifyAction {
 
     /// Request for checking if the game is joinable optionally with
     /// a ruleset for checking attributes against
-    CheckJoinable(Option<Arc<RuleSet>>, oneshot::Sender<GameJoinableState>),
+    CheckJoinable(Option<RuleSet>, oneshot::Sender<GameJoinableState>),
 
     /// Requests a snapshot of the current game state
     Snapshot(oneshot::Sender<GameSnapshot>),
@@ -185,7 +182,7 @@ impl Game {
         }
     }
 
-    fn check_joinable(&self, rules: Option<Arc<RuleSet>>) -> GameJoinableState {
+    fn check_joinable(&self, rules: Option<RuleSet>) -> GameJoinableState {
         let is_joinable = self.next_slot < Self::MAX_PLAYERS;
         if let Some(rules) = rules {
             if !rules.matches(&self.attributes) {

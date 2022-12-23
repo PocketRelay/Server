@@ -7,10 +7,7 @@ use blaze_pk::types::TdfMap;
 use log::debug;
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicU32, Ordering},
     time::SystemTime,
 };
 use tokio::{
@@ -34,7 +31,7 @@ struct QueueEntry {
     player: GamePlayer,
     /// The rules that games must meet for this
     /// queue entry to join.
-    rules: Arc<RuleSet>,
+    rules: RuleSet,
     /// The time that the queue entry was created at
     time: SystemTime,
 }
@@ -176,7 +173,6 @@ impl Games {
     /// `rules`   The rules the game must match to be valid
     pub fn add_or_queue(&'static self, player: GamePlayer, rules: RuleSet) {
         tokio::spawn(async move {
-            let rules = Arc::new(rules);
             let games = &*self.games.read().await;
             for (id, game) in games.iter() {
                 let join_state = game.check_joinable(Some(rules.clone())).await;

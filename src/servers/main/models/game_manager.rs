@@ -1,7 +1,7 @@
 use crate::{
     game::{
         codec::{GameState, PlayerState, RemoveReason},
-        rules::{MatchRules, RuleSet},
+        rules::RuleSet,
         AttrMap, GameModifyAction,
     },
     utils::types::{GameID, PlayerID, SessionID},
@@ -151,7 +151,8 @@ impl Decodable for MatchmakingRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
         reader.until_tag("CRIT", TdfType::Group)?;
         let rule_count: usize = reader.until_list("RLST", TdfType::Group)?;
-        let mut rules: Vec<MatchRules> = Vec::with_capacity(rule_count);
+
+        let mut rules: Vec<(String, String)> = Vec::with_capacity(rule_count);
         for _ in 0..rule_count {
             let name: String = reader.tag("NAME")?;
             let values_count: usize = reader.until_list("VALU", TdfType::String)?;
@@ -165,9 +166,7 @@ impl Decodable for MatchmakingRequest {
                 }
             }
             reader.skip_group()?;
-            if let Some(rule) = MatchRules::parse(&name, &value) {
-                rules.push(rule);
-            }
+            rules.push((name, value));
         }
         Ok(Self {
             rules: RuleSet::new(rules),

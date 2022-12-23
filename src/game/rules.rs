@@ -1,100 +1,97 @@
-use super::{
-    enums::{Difficulty, EnemyType, GameMap, MatchRule},
-    AttrMap,
-};
-use log::debug;
+use super::AttrMap;
 
-// DLC Requirement attributes
-// ME3_dlc2300 = required
-// ME3_dlc2500
-// ME3_dlc2700
-// ME3_dlc3050
-// ME3_dlc3225
-
-/// Structure for known rule types that can be compared
-/// correctly. Unknown rules are simply ignored.
-#[derive(Debug, PartialEq, Eq)]
-pub enum MatchRules {
-    Map(GameMap),
-    Enemy(EnemyType),
-    Difficulty(Difficulty),
-}
-
-impl MatchRules {
-    /// Parses a match rule from the provided key and value pair
-    /// the key being the rule key present in the matchmaking query.
-    pub fn parse(key: &str, value: &str) -> Option<Self> {
-        Some(match key {
-            GameMap::RULE => Self::Map(GameMap::from_value(value)),
-            EnemyType::RULE => Self::Enemy(EnemyType::from_value(value)),
-            Difficulty::RULE => Self::Difficulty(Difficulty::from_value(value)),
-            _ => return None,
-        })
-    }
-
-    /// Function for finding the attribute key for the
-    /// provided rule value in a game attributes map.
-    pub fn attr(&self) -> &'static str {
-        match self {
-            Self::Map(_) => GameMap::ATTR,
-            Self::Enemy(_) => EnemyType::ATTR,
-            Self::Difficulty(_) => Difficulty::ATTR,
-        }
-    }
-
-    /// Attempts to compare the provided value from the
-    /// game attributes map with the value stored in the
-    /// underlying enum.
-    pub fn try_compare(&self, value: &str) -> bool {
-        match self {
-            Self::Map(a) => a.try_compare(value),
-            Self::Enemy(a) => a.try_compare(value),
-            Self::Difficulty(a) => a.try_compare(value),
-        }
-    }
-}
-
-/// Structure for a set of rules used to determine
-/// whether a matchmaking query matches a game.
+/// Rulesets are fairly cheap to clone. Rule values are not usually
+/// very long.
+#[derive(Clone)]
 pub struct RuleSet {
-    /// The list of match rules.
-    values: Vec<MatchRules>,
+    /// Map rule provided in the matchmaking request
+    map_rule: Option<String>,
+    /// Enemy rule provided in the matchmaking request
+    enemy_rule: Option<String>,
+    /// Difficulty rule provided in the matchmaking request
+    difficulty_rule: Option<String>,
 }
 
 impl RuleSet {
-    /// Key for the privacy attribute on games
-    const PRIVACY_KEY: &str = "ME3privacy";
+    /// Attribute determining the game privacy for public
+    /// match checking
+    const PRIVACY_ATTR: &str = "ME3privacy";
 
-    /// Creates a new rule set from the provided vec of match rules.
-    pub fn new(values: Vec<MatchRules>) -> Self {
-        Self { values }
+    /// Map attribute and rule keys
+    const MAP_ATTR: &str = "ME3map";
+    const MAP_RULE: &str = "ME3_gameMapMatchRule";
+
+    /// Enemy attribute and rule keys
+    const ENEMY_ATTR: &str = "ME3gameEnemyType";
+    const ENEMY_RULE: &str = "ME3_gameEnemyTypeRule";
+
+    /// Difficulty attribute and rule keys
+    const DIFFICULTY_ATTR: &str = "ME3gameDifficulty";
+    const DIFFICULTY_RULE: &str = "ME3_gameDifficultyRule";
+
+    /// Value for rules that have been abstained from matching
+    /// when a rule is abstained it is ignored
+    const ABSTAIN: &str = "abstain";
+
+    /// Creates a new rule set from the provided list
+    /// of rule key values
+    ///
+    /// `rules` The rules to create from
+    pub fn new(rules: Vec<(String, String)>) -> Self {
+        let mut map_rule: Option<String> = None;
+        let mut enemy_rule: Option<String> = None;
+        let mut difficulty_rule: Option<String> = None;
+
+        for (rule, value) in rules {
+            if value == Self::ABSTAIN {
+                continue;
+            }
+            match &rule as &str {
+                Self::MAP_RULE => map_rule = Some(value),
+                Self::ENEMY_RULE => enemy_rule = Some(value),
+                Self::DIFFICULTY_RULE => difficulty_rule = Some(value),
+                _ => {}
+            }
+        }
+        Self {
+            map_rule,
+            enemy_rule,
+            difficulty_rule,
+        }
     }
 
-    /// Attempts to see if the provided game matches the rules
-    /// in this rule set. Its okay for the values of rules to be
-    /// missing and rules with unknown values are treated as a
-    /// failure.
+    /// Checks if the rules provided in this rule set match the values in
+    /// the attributes map.
+    ///
+    /// `attributes` The attributes map to check for matches
     pub fn matches(&self, attributes: &AttrMap) -> bool {
-        // Private games will always fail to match
-        if let Some(privacy) = attributes.get(Self::PRIVACY_KEY) {
+        // Non public matches are unable to be matched
+        if let Some(privacy) = attributes.get(Self::PRIVACY_ATTR) {
             if privacy != "PUBLIC" {
                 return false;
             }
         }
 
-        for rule in &self.values {
-            let attr = rule.attr();
-            if let Some(value) = attributes.get(attr) {
-                debug!("Comparing {rule:?} {attr} {value}");
-                if !rule.try_compare(value) {
-                    debug!("Doesn't Match");
-                    return false;
-                } else {
-                    debug!("Matches")
-                }
-            } else {
-                debug!("Game didn't have attr {rule:?} {attr}");
-            }
+        fn compare_rule(rule: Option<&String>, value: Option<&String>) -> bool {
+            rule.zip(value)
+                .map(|(a, b)| a.eq(b))
+                // Missing rules / attributes count as match and continue
+                .unwrap_or(true)
+        }
+
+        if !compare_rule(self.map_rule.as_ref(), attributes.get(Self::MAP_ATTR)) {
+            return false;
+        }
+
+        if !compare_rule(self.enemy_rule.as_ref(), attributes.get(Self::ENEMY_ATTR)) {
+            return false;
+        }
+
+        if !compare_rule(
+            self.difficulty_rule.as_ref(),
+            attributes.get(Self::DIFFICULTY_ATTR),
+        ) {
+            return false;
         }
 
         true
