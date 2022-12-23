@@ -219,11 +219,10 @@ dependencies = [
 
 [[package]]
 name = "blaze-pk"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbbbb2a8a7b69824c69c1d45dc62ff841355a89b91bf34e0b597a98674d0dc32"
+checksum = "423c1784bcfe524b3eb4134daee9160267fbc94c081e368162cb51016747971d"
 dependencies = [
- "blaze-ssl-async",
  "bytes",
  "serde",
  "tokio",
@@ -231,15 +230,13 @@ dependencies = [
 
 [[package]]
 name = "blaze-ssl-async"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c1c172d852ab23a343f69f6338777f1d9ea4a813dd58b3a1effc4eae29e99f7"
+checksum = "8251565cb85a5158253b0f423a8c41ff5985ac87d260578b6dd5b7c0fb477f57"
 dependencies = [
- "der 0.6.1",
  "getrandom",
  "lazy_static",
  "pem",
- "pkcs1 0.4.1",
  "rsa 0.7.2",
  "rust-crypto",
  "tokio",

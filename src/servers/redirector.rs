@@ -16,7 +16,7 @@ use blaze_pk::packet::Packet;
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
 use log::{debug, error};
 use std::{net::SocketAddr, time::Duration};
-use tokio::{net::TcpStream, select, time::sleep};
+use tokio::{io::AsyncWriteExt, net::TcpStream, select, time::sleep};
 
 /// Starts the Redirector server this server is what the Mass Effect 3 game
 /// client initially reaches out to. This server is responsible for telling
@@ -53,9 +53,9 @@ async fn handle_client(stream: TcpStream, addr: SocketAddr) -> BlazeResult<()> {
     };
 
     loop {
-        let (component, packet) = select! {
+        let (component, packet): (Components, Packet) = select! {
             // Attempt to read packets from the stream
-            result = Packet::read_blaze_typed::<Components, TcpStream>(&mut stream) => result,
+            result = Packet::read_async_typed(&mut stream) => result,
             // If the timeout completes before the redirect is complete the
             // request is considered over and terminates
             _ = sleep(DEFAULT_TIMEOUT) => { break; }
@@ -72,12 +72,12 @@ async fn handle_client(stream: TcpStream, addr: SocketAddr) -> BlazeResult<()> {
             };
 
             let response = Packet::response(&packet, instance);
-            response.write_blaze(&mut stream)?;
+            response.write_async(&mut stream).await?;
             stream.flush().await?;
             break;
         } else {
             let response = Packet::response_empty(&packet);
-            response.write_blaze(&mut stream)?;
+            response.write_async(&mut stream).await?;
             stream.flush().await?;
         }
     }

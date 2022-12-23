@@ -40,9 +40,9 @@ log = { workspace = true }
 serde = { workspace = true }
 
 # Blaze packet system 
-blaze-pk = { version = "^0.6" }
+blaze-pk = "^0.7"
 # Blaze SSLv3 async TCPStream implementation
-blaze-ssl-async = "^0.1"
+blaze-ssl-async = "^0.2"
 
 # Isolated database crate
 database = { path = "database", package = "pocket-relay-database", version = "^0.2" }

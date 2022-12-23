@@ -16,7 +16,10 @@ use blaze_pk::{
 };
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
 use log::{debug, error, log_enabled};
-use tokio::{io, net::TcpStream};
+use tokio::{
+    io::{self, AsyncWriteExt},
+    net::TcpStream,
+};
 
 mod models;
 pub mod origin;
@@ -152,7 +155,7 @@ impl RetSession {
         contents: Req,
     ) -> RetrieverResult<Packet> {
         let request = Packet::request(self.id, component, contents);
-        request.write_blaze(&mut self.stream)?;
+        request.write_async(&mut self.stream).await?;
         debug_log_packet(&request, "Sent to Official");
         self.stream.flush().await?;
         self.id += 1;
@@ -175,7 +178,7 @@ impl RetSession {
     /// recieved returning the raw response packet
     pub async fn request_empty_raw(&mut self, component: Components) -> RetrieverResult<Packet> {
         let request = Packet::request_empty(self.id, component);
-        request.write_blaze(&mut self.stream)?;
+        request.write_async(&mut self.stream).await?;
         debug_log_packet(&request, "Sent to Official");
         self.stream.flush().await?;
         self.id += 1;
@@ -186,7 +189,7 @@ impl RetSession {
     /// that are recieved are handled in the handle_notify function.
     async fn expect_response(&mut self, request: &Packet) -> RetrieverResult<Packet> {
         loop {
-            let response = Packet::read_blaze(&mut self.stream).await?;
+            let response = Packet::read_async(&mut self.stream).await?;
             debug_log_packet(&response, "Received from Official");
             let header = &response.header;
 

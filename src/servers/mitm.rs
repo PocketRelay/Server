@@ -9,8 +9,9 @@ use crate::{
     utils::net::{accept_stream, listener},
 };
 use blaze_pk::packet::{Packet, PacketType};
+use blaze_ssl_async::stream::BlazeStream;
 use log::{debug, error, log_enabled};
-use tokio::{net::TcpStream, select};
+use tokio::{io::AsyncWriteExt, net::TcpStream, select};
 
 /// Starts the MITM server. This server is responsible for creating a sort of
 /// proxy between this server and the official servers. All packets send and
@@ -53,11 +54,11 @@ async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> 
             result = Packet::read_async_typed::<Components, TcpStream>(&mut client) => {
                 let (component, packet) = result?;
                 debug_log_packet(component, &packet, "From Client");
-                packet.write_blaze(&mut server)?;
+                packet.write_async(&mut server).await?;
                 server.flush().await?;
             }
             // Read packets from the official server
-            result = Packet::read_blaze_typed::<Components, TcpStream>(&mut server) => {
+            result = Packet::read_async_typed::<Components, BlazeStream<TcpStream>>(&mut server) => {
                 let (component, packet) = result?;
                 debug_log_packet(component, &packet, "From Server");
                 packet.write_async(&mut client).await?;
