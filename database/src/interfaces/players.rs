@@ -3,8 +3,10 @@ use crate::{
     DbResult, Player,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait,
-    IntoActiveModel, ModelTrait, QueryFilter,
+    ActiveModelTrait,
+    ActiveValue::{NotSet, Set},
+    ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait,
+    QueryFilter,
 };
 use std::iter::Iterator;
 
@@ -77,27 +79,22 @@ impl Player {
         self.find_related(player_data::Entity).all(db).await
     }
 
+    /// Sets the key value data for the provided player. If the data exists then
+    /// the value is updated otherwise the data will be created. The new data is
+    /// returned.
+    ///
+    /// `db`    The database connection
+    /// `key`   The data key
+    /// `value` The data value
     pub async fn set_data(
         &self,
         db: &DatabaseConnection,
         key: String,
         value: String,
     ) -> DbResult<PlayerData> {
-        Self::set_data_impl(self.id, db, key, value).await
-    }
-
-    pub async fn set_data_impl(
-        player_id: u32,
-        db: &DatabaseConnection,
-        key: String,
-        value: String,
-    ) -> DbResult<PlayerData> {
-        match player_data::Entity::find()
-            .filter(
-                player_data::Column::PlayerId
-                    .eq(player_id)
-                    .and(player_data::Column::Key.eq(key.clone())),
-            )
+        match self
+            .find_related(player_data::Entity)
+            .filter(player_data::Column::Key.eq(key.clone()))
             .one(db)
             .await?
         {
@@ -109,7 +106,7 @@ impl Player {
             }
             None => {
                 player_data::ActiveModel {
-                    player_id: Set(player_id),
+                    player_id: Set(self.id),
                     key: Set(key),
                     value: Set(value),
                     ..Default::default()
@@ -118,6 +115,31 @@ impl Player {
                 .await
             }
         }
+    }
+
+    /// Bulk inserts a collection of player data for the provided player. Will not handle
+    /// conflicts so this should only be done on a freshly create player where data doesnt
+    /// already exist
+    ///
+    /// `db`   The database connection
+    /// `data` Iterator of the data keys and values
+    pub async fn bulk_insert_data(
+        &self,
+        db: &DatabaseConnection,
+        data: impl Iterator<Item = (String, String)>,
+    ) -> DbResult<()> {
+        // Transform the provided key values into active models
+        let models_iter = data.map(|(key, value)| player_data::ActiveModel {
+            id: NotSet,
+            player_id: Set(self.id),
+            key: Set(key),
+            value: Set(value),
+        });
+        // Insert all the models
+        player_data::Entity::insert_many(models_iter)
+            .exec(db)
+            .await?;
+        Ok(())
     }
 
     pub async fn delete_data(&self, db: &DatabaseConnection, key: &str) -> DbResult<()> {

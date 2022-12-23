@@ -17,7 +17,7 @@ use database::{DatabaseConnection, Player};
 use log::{debug, error, warn};
 use std::borrow::Cow;
 use std::path::Path;
-use tokio::{fs::read_to_string, task::JoinSet};
+use tokio::fs::read_to_string;
 
 /// Routing function for handling packets with the `Authentication` component and routing them
 /// to the correct routing function. If no routing function is found then the packet
@@ -223,17 +223,9 @@ async fn handle_login_origin(
         return Ok(player);
     };
 
-    let player_id: u32 = player.id;
-    let mut join_set = JoinSet::new();
-    for (key, value) in settings {
-        join_set.spawn(Player::set_data_impl(player_id, db, key, value));
-    }
-
-    while let Some(value) = join_set.join_next().await {
-        if let Ok(Err(err)) = value {
-            error!("Failed to set origin data: {err:?}");
-            return Err(ServerError::ServerUnavailable);
-        }
+    if let Err(err) = player.bulk_insert_data(db, settings.into_iter()).await {
+        error!("Failed to set origin data: {err:?}");
+        return Err(ServerError::ServerUnavailable);
     }
 
     Ok(player)
