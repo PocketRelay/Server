@@ -229,6 +229,7 @@ impl Player {
     ///
     /// `db` The database instance
     /// `id` The ID of the player to find
+    #[inline]
     pub async fn by_id(db: &DatabaseConnection, id: u32) -> DbResult<Option<Self>> {
         players::Entity::find_by_id(id).one(db).await
     }
