@@ -58,7 +58,7 @@ base64 = "0.13"
 flate2 = { version = "1", features = ["zlib"], default-features = false }
 
 # .env file loader
-dotenvy = "0.15.5"
+dotenvy = "0.15"
 
 # Library for obtaining the local IP address of the device
 local-ip-address = "0.4.9"

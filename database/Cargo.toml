@@ -15,12 +15,18 @@ mysql = ["sea-orm/sqlx-mysql", "sea-orm-migration/sqlx-mysql"]
 [dependencies]
 log = { workspace = true }
 serde = { workspace = true }
-chrono = "0.4"
+
+[dependencies.chrono]
+version = "0.4"
+default-features = false
+features = ["std", "serde"]
 
 [dependencies.sea-orm]
 version = "^0"
-features = ["runtime-tokio-rustls", "macros"]
+default-features = false
+features = ["runtime-tokio-rustls", "macros", "with-chrono"]
 
 [dependencies.sea-orm-migration]
 version = "^0"
+default-features = false
 features = ["runtime-tokio-rustls"]
