@@ -7,23 +7,47 @@ use crate::{
         errors::BlazeResult,
     },
     env,
-    utils::{
-        constants,
-        net::{accept_stream, listener},
-    },
+    utils::constants,
 };
 use blaze_pk::packet::Packet;
 use blaze_ssl_async::stream::{BlazeStream, StreamMode};
-use log::{debug, error};
+use log::{debug, error, info};
 use std::{net::SocketAddr, time::Duration};
-use tokio::{io::AsyncWriteExt, net::TcpStream, select, time::sleep};
+use tokio::{
+    io::AsyncWriteExt,
+    net::{TcpListener, TcpStream},
+    select,
+    time::sleep,
+};
 
 /// Starts the Redirector server this server is what the Mass Effect 3 game
 /// client initially reaches out to. This server is responsible for telling
 /// the client where the server is and whether it should use SSLv3 to connect.
 pub async fn start_server() {
-    let listener = listener("Redirector", env::from_env(env::REDIRECTOR_PORT)).await;
-    while let Some((stream, addr)) = accept_stream(&listener).await {
+    // Initializing the underlying TCP listener
+    let listener = {
+        let port = env::from_env(env::REDIRECTOR_PORT);
+        match TcpListener::bind(("0.0.0.0", port)).await {
+            Ok(value) => {
+                info!("Started Redirector server (Port: {})", port);
+                value
+            }
+            Err(_) => {
+                error!("Failed to bind Redirector server (Port: {})", port);
+                panic!()
+            }
+        }
+    };
+
+    // Accept incoming connections
+    loop {
+        let (stream, addr) = match listener.accept().await {
+            Ok(value) => value,
+            Err(err) => {
+                error!("Failed to accept redirector connection: {err:?}");
+                continue;
+            }
+        };
         tokio::spawn(async move {
             if let Err(err) = handle_client(stream, addr).await {
                 error!("Unable to handle redirect: {err}");

@@ -6,12 +6,15 @@ use crate::{
     env,
     retriever::Retriever,
     state::GlobalState,
-    utils::net::{accept_stream, listener},
 };
 use blaze_pk::packet::{Packet, PacketType};
 use blaze_ssl_async::stream::BlazeStream;
-use log::{debug, error, log_enabled};
-use tokio::{io::AsyncWriteExt, net::TcpStream, select};
+use log::{debug, error, info, log_enabled};
+use tokio::{
+    io::AsyncWriteExt,
+    net::{TcpListener, TcpStream},
+    select,
+};
 
 /// Starts the MITM server. This server is responsible for creating a sort of
 /// proxy between this server and the official servers. All packets send and
@@ -24,8 +27,30 @@ pub async fn start_server() {
         panic!();
     };
 
-    let listener = listener("MITM", env::from_env(env::MAIN_PORT)).await;
-    while let Some((stream, addr)) = accept_stream(&listener).await {
+    // Initializing the underlying TCP listener
+    let listener = {
+        let port = env::from_env(env::MAIN_PORT);
+        match TcpListener::bind(("0.0.0.0", port)).await {
+            Ok(value) => {
+                info!("Started MITM server (Port: {})", port);
+                value
+            }
+            Err(_) => {
+                error!("Failed to bind MITM server (Port: {})", port);
+                panic!()
+            }
+        }
+    };
+
+    // Accept incoming connections
+    loop {
+        let (stream, addr) = match listener.accept().await {
+            Ok(value) => value,
+            Err(err) => {
+                error!("Failed to accept MITM connection: {err:?}");
+                continue;
+            }
+        };
         tokio::spawn(async move {
             if let Err(err) = handle_client(stream, retriever).await {
                 error!("Unable to handle MITM (Addr: {addr}): {err}");
