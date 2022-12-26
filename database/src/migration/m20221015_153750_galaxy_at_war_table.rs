@@ -54,7 +54,8 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .from(GalaxyAtWar::Table, GalaxyAtWar::PlayerId)
-                            .to(Players::Table, Players::Id),
+                            .to(Players::Table, Players::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
                     )
                     .to_owned(),
             )

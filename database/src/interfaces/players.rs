@@ -1,12 +1,12 @@
 use crate::{
-    entities::{galaxy_at_war, player_data, players, PlayerData},
+    entities::{player_data, players, PlayerData},
     DbResult, Player,
 };
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, CursorTrait, DatabaseConnection, EntityTrait, IntoActiveModel, ModelTrait,
-    QueryFilter,
+    ColumnTrait, CursorTrait, DatabaseConnection, DeleteResult, EntityTrait, IntoActiveModel,
+    ModelTrait, QueryFilter,
 };
 use std::iter::Iterator;
 
@@ -65,27 +65,13 @@ impl Player {
         active_model.insert(db).await
     }
 
-    /// Deletes the current player and all the relations to the
-    /// player
+    /// Deletes the provided player
     ///
     /// `db` The database connection
-    pub async fn delete(self, db: &DatabaseConnection) -> DbResult<()> {
-        // Deleted associated player data
-        player_data::Entity::delete_many()
-            .filter(player_data::Column::PlayerId.eq(self.id))
-            .exec(db)
-            .await?;
-        // Delete assocaited galaxy at war data
-        galaxy_at_war::Entity::delete_many()
-            .filter(galaxy_at_war::Column::PlayerId.eq(self.id))
-            .exec(db)
-            .await?;
-
+    pub async fn delete(self, db: &DatabaseConnection) -> DbResult<DeleteResult> {
         // Delete player itself
         let model = self.into_active_model();
-        model.delete(db).await?;
-
-        Ok(())
+        model.delete(db).await
     }
 
     /// Retrieves all the player data for this player
