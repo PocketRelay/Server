@@ -1,5 +1,5 @@
 use crate::{
-    entities::{player_data, players, PlayerData},
+    entities::{galaxy_at_war, player_data, players, PlayerData},
     DbResult, Player,
 };
 use sea_orm::{
@@ -65,12 +65,26 @@ impl Player {
         active_model.insert(db).await
     }
 
-    /// Deletes the current player
+    /// Deletes the current player and all the relations to the
+    /// player
     ///
     /// `db` The database connection
     pub async fn delete(self, db: &DatabaseConnection) -> DbResult<()> {
+        // Deleted associated player data
+        player_data::Entity::delete_many()
+            .filter(player_data::Column::PlayerId.eq(self.id))
+            .exec(db)
+            .await?;
+        // Delete assocaited galaxy at war data
+        galaxy_at_war::Entity::delete_many()
+            .filter(galaxy_at_war::Column::PlayerId.eq(self.id))
+            .exec(db)
+            .await?;
+
+        // Delete player itself
         let model = self.into_active_model();
         model.delete(db).await?;
+
         Ok(())
     }
 
