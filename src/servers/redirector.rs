@@ -10,15 +10,10 @@ use crate::{
     utils::constants,
 };
 use blaze_pk::packet::Packet;
-use blaze_ssl_async::stream::{BlazeStream, StreamMode};
+use blaze_ssl_async::{BlazeAccept, BlazeListener};
 use log::{debug, error, info};
-use std::{net::SocketAddr, time::Duration};
-use tokio::{
-    io::AsyncWriteExt,
-    net::{TcpListener, TcpStream},
-    select,
-    time::sleep,
-};
+use std::time::Duration;
+use tokio::{io::AsyncWriteExt, select, time::sleep};
 
 /// Starts the Redirector server this server is what the Mass Effect 3 game
 /// client initially reaches out to. This server is responsible for telling
@@ -27,7 +22,7 @@ pub async fn start_server() {
     // Initializing the underlying TCP listener
     let listener = {
         let port = env::from_env(env::REDIRECTOR_PORT);
-        match TcpListener::bind(("0.0.0.0", port)).await {
+        match BlazeListener::bind(("0.0.0.0", port)).await {
             Ok(value) => {
                 info!("Started Redirector server (Port: {})", port);
                 value
@@ -41,7 +36,7 @@ pub async fn start_server() {
 
     // Accept incoming connections
     loop {
-        let (stream, addr) = match listener.accept().await {
+        let accept = match listener.accept().await {
             Ok(value) => value,
             Err(err) => {
                 error!("Failed to accept redirector connection: {err:?}");
@@ -49,7 +44,7 @@ pub async fn start_server() {
             }
         };
         tokio::spawn(async move {
-            if let Err(err) = handle_client(stream, addr).await {
+            if let Err(err) = handle_client(accept).await {
                 error!("Unable to handle redirect: {err}");
             };
         });
@@ -67,9 +62,9 @@ const REDIRECT_COMPONENT: Components = Components::Redirector(Redirector::GetSer
 /// `stream`   The stream to the client
 /// `addr`     The client address
 /// `instance` The server instance information
-async fn handle_client(stream: TcpStream, addr: SocketAddr) -> BlazeResult<()> {
-    let mut stream = match BlazeStream::new(stream, StreamMode::Server).await {
-        Ok(stream) => stream,
+async fn handle_client(accept: BlazeAccept) -> BlazeResult<()> {
+    let (mut stream, addr) = match accept.finish_accept().await {
+        Ok(value) => value,
         Err(_) => {
             error!("Unable to establish SSL connection within redirector");
             return Ok(());

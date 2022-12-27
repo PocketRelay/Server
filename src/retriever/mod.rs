@@ -14,7 +14,7 @@ use blaze_pk::{
     error::DecodeError,
     packet::{Packet, PacketComponents, PacketType},
 };
-use blaze_ssl_async::stream::{BlazeStream, StreamMode};
+use blaze_ssl_async::stream::BlazeStream;
 use log::{debug, error, log_enabled};
 use tokio::{
     io::{self, AsyncWriteExt},
@@ -79,17 +79,7 @@ impl Retriever {
     /// Returns a new stream to the mian server
     pub async fn stream_to(host: &String, port: Port) -> Option<Stream> {
         let addr = (host.clone(), port);
-        let stream = TcpStream::connect(addr)
-            .await
-            .map_err(|err| {
-                error!(
-                    "Failed to connect to server at {}:{}; Cause: {err:?}",
-                    host, port
-                );
-                err
-            })
-            .ok()?;
-        BlazeStream::new(stream, StreamMode::Client)
+        BlazeStream::connect(addr)
             .await
             .map_err(|err| {
                 error!(

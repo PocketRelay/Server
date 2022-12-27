@@ -42,7 +42,7 @@ serde = { workspace = true }
 # Blaze packet system 
 blaze-pk = "^0.7"
 # Blaze SSLv3 async TCPStream implementation
-blaze-ssl-async = "^0.2"
+blaze-ssl-async = "^0.3"
 
 # Isolated database crate
 database = { path = "database", package = "pocket-relay-database", version = "^0.2" }
