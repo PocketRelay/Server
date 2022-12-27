@@ -56,7 +56,7 @@ pub fn setup() {
 
     let file_appender = RollingFileAppender::builder()
         .encoder(pattern)
-        .build(&latest_path, Box::new(compound_policy))
+        .build(latest_path, Box::new(compound_policy))
         .expect("Unable to create logging file appender");
 
     const APPENDERS: [&str; 2] = ["stdout", "file"];
