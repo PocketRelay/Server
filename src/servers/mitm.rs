@@ -83,7 +83,7 @@ async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> 
                 server.flush().await?;
             }
             // Read packets from the official server
-            result = Packet::read_async_typed::<Components, BlazeStream<TcpStream>>(&mut server) => {
+            result = Packet::read_async_typed::<Components, BlazeStream>(&mut server) => {
                 let (component, packet) = result?;
                 debug_log_packet(component, &packet, "From Server");
                 packet.write_async(&mut client).await?;

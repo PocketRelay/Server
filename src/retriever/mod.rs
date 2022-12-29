@@ -16,16 +16,10 @@ use blaze_pk::{
 };
 use blaze_ssl_async::stream::BlazeStream;
 use log::{debug, error, log_enabled};
-use tokio::{
-    io::{self, AsyncWriteExt},
-    net::TcpStream,
-};
+use tokio::io::{self, AsyncWriteExt};
 
 mod models;
 pub mod origin;
-
-/// Type for SSL wrapped blaze stream
-type Stream = BlazeStream<TcpStream>;
 
 /// Structure for the retrievier system which contains the host address
 /// for the official game server in order to make further connections
@@ -77,7 +71,7 @@ impl Retriever {
     }
 
     /// Returns a new stream to the mian server
-    pub async fn stream_to(host: &String, port: Port) -> Option<Stream> {
+    pub async fn stream_to(host: &String, port: Port) -> Option<BlazeStream> {
         let addr = (host.clone(), port);
         BlazeStream::connect(addr)
             .await
@@ -92,7 +86,7 @@ impl Retriever {
     }
 
     /// Returns a new stream to the main server
-    pub async fn stream(&self) -> Option<Stream> {
+    pub async fn stream(&self) -> Option<BlazeStream> {
         Self::stream_to(&self.host, self.port).await
     }
 }
@@ -102,7 +96,7 @@ pub struct RetSession {
     /// The ID for the next request packet
     id: u16,
     /// The underlying SSL / TCP stream connection
-    stream: Stream,
+    stream: BlazeStream,
 }
 
 /// Error type for retriever errors
@@ -121,7 +115,7 @@ impl RetSession {
     /// Creates a new retriever session for the provided host and
     /// port. This will create the underlying connection aswell.
     /// If creating the connection fails then None is returned instead.
-    pub fn new(stream: Stream) -> Option<Self> {
+    pub fn new(stream: BlazeStream) -> Option<Self> {
         Some(Self { id: 0, stream })
     }
 

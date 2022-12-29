@@ -213,9 +213,9 @@ dependencies = [
 
 [[package]]
 name = "blaze-ssl-async"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64796ba6b3c73e0264c2a6fe48f5cc4529cac3412f32910877c12ab531c509b6"
+checksum = "001886d76238b83cda57670e49a2c032e8deb5827142977abd64dd6f3fd391e1"
 dependencies = [
  "pem-rfc7468 0.6.0",
  "rsa 0.7.2",
