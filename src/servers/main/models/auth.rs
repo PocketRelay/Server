@@ -92,16 +92,12 @@ fn encode_persona(writer: &mut TdfWriter, id: PlayerID, display_name: &str) {
 
 /// Structure for the response to an authentication request.
 pub struct AuthResponse {
-    /// The ID of the authenticated player
-    player_id: PlayerID,
-    /// The email of the authenticated player
-    email: String,
-    /// The display name of the authenticated player
-    display_name: String,
+    /// The authenticated player
+    pub player: Player,
     /// The session token for the completed authentication
-    session_token: String,
+    pub session_token: String,
     /// Whether the authentication proccess was silent
-    silent: bool,
+    pub silent: bool,
 }
 
 impl AuthResponse {
@@ -111,11 +107,9 @@ impl AuthResponse {
     /// `player`        The player that was authenticated
     /// `session_token` The session token to use
     /// `silent`        Whether the auth request was silent
-    pub fn new(player: &Player, session_token: String, silent: bool) -> Self {
+    pub fn new(player: Player, session_token: String, silent: bool) -> Self {
         Self {
-            player_id: player.id,
-            email: player.email.clone(),
-            display_name: player.display_name.clone(),
+            player,
             session_token,
             silent,
         }
@@ -134,21 +128,22 @@ impl Encodable for AuthResponse {
             writer.tag_str_empty(b"PRIV");
             {
                 writer.tag_group(b"SESS");
-                writer.tag_u32(b"BUID", self.player_id);
+                writer.tag_u32(b"BUID", self.player.id);
                 writer.tag_zero(b"FRST");
                 writer.tag_str(b"KEY", &self.session_token); // Session Token
                 writer.tag_zero(b"LLOG");
-                writer.tag_str(b"MAIL", &self.email); // Player Email
+                writer.tag_str(b"MAIL", &self.player.email); // Player Email
                 {
                     writer.tag_group(b"PDTL");
-                    encode_persona(writer, self.player_id, &self.display_name); // Persona Details
+                    encode_persona(writer, self.player.id, &self.player.display_name);
+                    // Persona Details
                 }
-                writer.tag_u32(b"UID", self.player_id);
+                writer.tag_u32(b"UID", self.player.id);
                 writer.tag_group_end();
             }
         } else {
             writer.tag_list_start(b"PLST", TdfType::Group, 1);
-            encode_persona(writer, self.player_id, &self.display_name);
+            encode_persona(writer, self.player.id, &self.player.display_name);
             writer.tag_str_empty(b"PRIV");
             writer.tag_str(b"SKEY", &self.session_token);
         }
@@ -157,7 +152,7 @@ impl Encodable for AuthResponse {
         writer.tag_str_empty(b"TSUI");
         writer.tag_str_empty(b"TURI");
         if !self.silent {
-            writer.tag_u32(b"UID", self.player_id);
+            writer.tag_u32(b"UID", self.player.id);
         }
     }
 }
@@ -183,12 +178,9 @@ impl Decodable for CreateAccountRequest {
 /// about the current persona. Which in this case is just the
 /// player details
 pub struct PersonaResponse {
-    /// The player ID
-    player_id: PlayerID,
-    /// The player email address
-    email: String,
-    /// The player display name
-    display_name: String,
+    /// The player
+    player: Player,
+
     /// The players current session token
     session_token: String,
 }
@@ -198,11 +190,9 @@ impl PersonaResponse {
     ///
     /// `player`        The player that was authenticated
     /// `session_token` The session token to use
-    pub fn new(player: &Player, session_token: String) -> Self {
+    pub fn new(player: Player, session_token: String) -> Self {
         Self {
-            player_id: player.id,
-            email: player.email.clone(),
-            display_name: player.display_name.clone(),
+            player,
             session_token,
         }
     }
@@ -210,15 +200,15 @@ impl PersonaResponse {
 
 impl Encodable for PersonaResponse {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"BUID", self.player_id);
+        writer.tag_u32(b"BUID", self.player.id);
         writer.tag_zero(b"FRST");
         writer.tag_str(b"KEY", &self.session_token);
         writer.tag_zero(b"LLOG");
-        writer.tag_str(b"MAIL", &self.email);
+        writer.tag_str(b"MAIL", &self.player.email);
 
         writer.tag_group(b"PDTL");
-        encode_persona(writer, self.player_id, &self.display_name);
-        writer.tag_u32(b"UID", self.player_id);
+        encode_persona(writer, self.player.id, &self.player.display_name);
+        writer.tag_u32(b"UID", self.player.id);
     }
 }
 

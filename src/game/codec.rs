@@ -236,14 +236,14 @@ pub fn encode_game_data(writer: &mut TdfWriter, game: &Game, player: &GamePlayer
     let mut player_ids = game
         .players
         .iter()
-        .map(|value| value.player_id)
+        .map(|value| value.player.id)
         .collect::<Vec<_>>();
-    player_ids.push(player.player_id);
+    player_ids.push(player.player.id);
     let host_player = game.players.first().unwrap_or(player);
 
     writer.tag_group(b"GAME");
 
-    let game_name = &host_player.display_name;
+    let game_name = &host_player.player.display_name;
 
     writer.tag_value(b"ADMN", &player_ids);
     writer.tag_value(b"ATTR", &game.attributes);
@@ -268,7 +268,7 @@ pub fn encode_game_data(writer: &mut TdfWriter, game: &Game, player: &GamePlayer
         host_player.net.groups.encode(writer);
     }
 
-    writer.tag_u32(b"HSES", host_player.session_id);
+    writer.tag_u32(b"HSES", host_player.addr.id);
     writer.tag_zero(b"IGNO");
     writer.tag_u8(b"MCAP", 4);
     writer.tag_value(b"NQOS", &host_player.net.qos);
@@ -279,7 +279,7 @@ pub fn encode_game_data(writer: &mut TdfWriter, game: &Game, player: &GamePlayer
 
     {
         writer.tag_group(b"PHST");
-        writer.tag_u32(b"HPID", host_player.player_id);
+        writer.tag_u32(b"HPID", host_player.player.id);
         writer.tag_zero(b"HSLT");
         writer.tag_group_end();
     }
@@ -292,7 +292,7 @@ pub fn encode_game_data(writer: &mut TdfWriter, game: &Game, player: &GamePlayer
 
     {
         writer.tag_group(b"THST");
-        writer.tag_u32(b"HPID", host_player.player_id);
+        writer.tag_u32(b"HPID", host_player.player.id);
         writer.tag_u8(b"HSLT", 0x0);
         writer.tag_group_end();
     }
@@ -333,7 +333,7 @@ impl Encodable for GameDetails<'_> {
                 writer.tag_u8(b"DCTX", 0x0);
             }
             GameDetailsType::Joined => {
-                let session_id = self.player.session_id;
+                let session_id = self.player.addr.id;
                 writer.tag_u16(b"FIT", 0x3f7a);
                 writer.tag_u16(b"MAXF", 0x5460);
                 writer.tag_u32(b"MSID", session_id);

@@ -1,6 +1,6 @@
 use crate::{
     blaze::components::{Components, Messaging},
-    servers::main::{models::messaging::*, routes::HandleResult, session::Session},
+    servers::main::{models::messaging::*, routes::HandleResult, session::SessionAddr},
     utils::{constants, env},
 };
 use blaze_pk::packet::Packet;
@@ -12,9 +12,9 @@ use blaze_pk::packet::Packet;
 /// `session`   The session that the packet was recieved by
 /// `component` The component of the packet recieved
 /// `packet`    The recieved packet
-pub fn route(session: &mut Session, component: Messaging, packet: &Packet) -> HandleResult {
+pub async fn route(session: SessionAddr, component: Messaging, packet: &Packet) -> HandleResult {
     match component {
-        Messaging::FetchMessages => handle_fetch_messages(session, packet),
+        Messaging::FetchMessages => handle_fetch_messages(session, packet).await,
         _ => Ok(packet.respond_empty()),
     }
 }
@@ -39,13 +39,13 @@ pub fn route(session: &mut Session, component: Messaging, packet: &Packet) -> Ha
 /// }
 /// ```
 ///
-fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult {
-    let Some(player) = session.player.as_ref() else {
+async fn handle_fetch_messages(session: SessionAddr, packet: &Packet) -> HandleResult {
+    let Some(player) = session.get_player().await else {
         // Not authenticated return empty count
         let response = FetchMessageResponse { count: 0 };
         return Ok(packet.respond(response));
     };
-    let message = get_menu_message(session, &player.display_name);
+    let message = get_menu_message(&session, &player.display_name).await;
     let notify = Packet::notify(
         Components::Messaging(Messaging::SendMessage),
         MessageNotify {
@@ -66,7 +66,7 @@ fn handle_fetch_messages(session: &mut Session, packet: &Packet) -> HandleResult
 /// - {v} = Server Version
 /// - {n} = Player Display Name
 /// - {ip} = Session IP Address
-fn get_menu_message(session: &Session, player_name: &str) -> String {
+async fn get_menu_message(session: &SessionAddr, player_name: &str) -> String {
     let mut message = env::env(env::MENU_MESSAGE);
     if message.contains("{v}") {
         message = message.replace("{v}", constants::VERSION);
@@ -75,7 +75,9 @@ fn get_menu_message(session: &Session, player_name: &str) -> String {
         message = message.replace("{n}", player_name);
     }
     if message.contains("{ip}") {
-        message = message.replace("{ip}", &session.addr.to_string());
+        if let Some(network_addr) = session.get_network_addr().await {
+            message = message.replace("{ip}", &network_addr.to_string());
+        }
     }
     // Line terminator for the end of the message
     message.push(char::from(0x0A));

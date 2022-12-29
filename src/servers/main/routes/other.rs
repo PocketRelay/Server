@@ -1,6 +1,6 @@
 use crate::{
     blaze::components::{AssociationLists, Components, GameReporting},
-    servers::main::{models::other::*, routes::HandleResult, session::Session},
+    servers::main::{models::other::*, routes::HandleResult, session::SessionAddr},
 };
 use blaze_pk::packet::Packet;
 
@@ -12,7 +12,7 @@ use blaze_pk::packet::Packet;
 /// `component` The component of the packet recieved
 /// `packet`    The recieved packet
 pub fn route_game_reporting(
-    session: &mut Session,
+    session: SessionAddr,
     component: GameReporting,
     packet: &Packet,
 ) -> HandleResult {
@@ -47,7 +47,7 @@ pub fn route_game_reporting(
 ///     "GTYP": "massEffectReport"
 /// }
 /// ```
-fn handle_submit_offline(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_submit_offline(session: SessionAddr, packet: &Packet) -> HandleResult {
     let notify = Packet::notify(
         Components::GameReporting(GameReporting::GameReportSubmitted),
         GameReportResponse,

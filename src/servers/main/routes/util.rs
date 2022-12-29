@@ -4,13 +4,12 @@ use crate::{
         components::Util,
         errors::{ServerError, ServerResult},
     },
-    servers::main::{models::util::*, routes::HandleResult, session::Session},
+    servers::main::{models::util::*, routes::HandleResult, session::SessionAddr},
     state::GlobalState,
-    utils::{constants, dmap::load_dmap, env, types::PlayerID},
+    utils::{constants, dmap::load_dmap, env},
 };
 use base64;
 use blaze_pk::{packet::Packet, types::TdfMap};
-use database::Player;
 use flate2::{write::ZlibEncoder, Compression};
 use log::{error, warn};
 use rust_embed::RustEmbed;
@@ -29,10 +28,10 @@ use tokio::fs::read;
 /// `session`   The session that the packet was recieved by
 /// `component` The component of the packet recieved
 /// `packet`    The recieved packet
-pub async fn route(session: &mut Session, component: Util, packet: &Packet) -> HandleResult {
+pub async fn route(session: SessionAddr, component: Util, packet: &Packet) -> HandleResult {
     match component {
         Util::PreAuth => handle_pre_auth(packet),
-        Util::PostAuth => handle_post_auth(session, packet),
+        Util::PostAuth => handle_post_auth(session, packet).await,
         Util::Ping => handle_ping(packet),
         Util::FetchClientConfig => handle_fetch_client_config(packet).await,
         Util::SuspendUserPing => handle_suspend_user_ping(packet),
@@ -115,12 +114,13 @@ fn handle_pre_auth(packet: &Packet) -> HandleResult {
 /// ID: 27
 /// Content: {}
 /// ```
-fn handle_post_auth(session: &mut Session, packet: &Packet) -> HandleResult {
-    let player_id: PlayerID = session
-        .player
-        .as_ref()
+async fn handle_post_auth(session: SessionAddr, packet: &Packet) -> HandleResult {
+    let player_id = session
+        .get_player()
+        .await
         .map(|value| value.id)
         .ok_or(ServerError::FailedNoLoginAction)?;
+
     session.update_self();
     let response = PostAuthResponse {
         telemetry: TelemetryServer { port: 9988 },
@@ -526,13 +526,13 @@ fn handle_suspend_user_ping(packet: &Packet) -> HandleResult {
 ///     "UID": 0
 /// }
 /// ```
-async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_user_settings_save(session: SessionAddr, packet: &Packet) -> HandleResult {
     let req: SettingsSaveRequest = packet.decode()?;
     let db = GlobalState::database();
 
-    let player: &Player = session
-        .player
-        .as_ref()
+    let player = session
+        .get_player()
+        .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     player
@@ -553,10 +553,10 @@ async fn handle_user_settings_save(session: &mut Session, packet: &Packet) -> Ha
 /// ID: 23
 /// Content: {}
 /// ```
-async fn handle_user_settings_load_all(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_user_settings_load_all(session: SessionAddr, packet: &Packet) -> HandleResult {
     let player = session
-        .player
-        .as_ref()
+        .get_player()
+        .await
         .ok_or(ServerError::FailedNoLoginAction)?;
     let db = GlobalState::database();
     let data = player.all_data(db).await?;

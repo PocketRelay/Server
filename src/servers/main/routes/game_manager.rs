@@ -1,7 +1,7 @@
 use crate::{
     blaze::{components::GameManager, errors::ServerError},
     game::{player::GamePlayer, GameModifyAction, RemovePlayerType},
-    servers::main::{models::game_manager::*, routes::HandleResult, session::Session},
+    servers::main::{models::game_manager::*, routes::HandleResult, session::SessionAddr},
     state::GlobalState,
     utils::types::GameID,
 };
@@ -15,7 +15,7 @@ use log::info;
 /// `session`   The session that the packet was recieved by
 /// `component` The component of the packet recieved
 /// `packet`    The recieved packet
-pub async fn route(session: &mut Session, component: GameManager, packet: &Packet) -> HandleResult {
+pub async fn route(session: SessionAddr, component: GameManager, packet: &Packet) -> HandleResult {
     match component {
         GameManager::CreateGame => handle_create_game(session, packet).await,
         GameManager::AdvanceGameState
@@ -23,7 +23,7 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
         | GameManager::SetGameAttributes => handle_game_modify(packet),
         GameManager::RemovePlayer => handle_remove_player(packet),
         GameManager::UpdateMeshConnection => handle_update_mesh_connection(session, packet),
-        GameManager::StartMatchmaking => handle_start_matchmaking(session, packet),
+        GameManager::StartMatchmaking => handle_start_matchmaking(session, packet).await,
         GameManager::CancelMatchmaking => handle_cancel_matchmaking(session, packet),
         _ => Ok(packet.respond_empty()),
     }
@@ -80,11 +80,12 @@ pub async fn route(session: &mut Session, component: GameManager, packet: &Packe
 ///     "VSTR": "ME3-295976325-179181965240128"
 /// }
 /// ```
-async fn handle_create_game(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_create_game(session: SessionAddr, packet: &Packet) -> HandleResult {
     let req: CreateGameRequest = packet.decode()?;
 
     let player: GamePlayer = session
         .try_into_player()
+        .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let games = GlobalState::games();
@@ -180,7 +181,7 @@ fn handle_remove_player(packet: &Packet) -> HandleResult {
 ///     ]
 /// }
 /// ```
-fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_update_mesh_connection(session: SessionAddr, packet: &Packet) -> HandleResult {
     let req: UpdateMeshRequest = packet.decode()?;
     let target = match req.target {
         Some(value) => value,
@@ -320,14 +321,15 @@ fn handle_update_mesh_connection(session: &mut Session, packet: &Packet) -> Hand
 ///     "VOIP": 2
 /// }
 /// ```
-fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_start_matchmaking(session: SessionAddr, packet: &Packet) -> HandleResult {
     let req: MatchmakingRequest = packet.decode()?;
 
     let player: GamePlayer = session
         .try_into_player()
+        .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    info!("Player {} started matchmaking", player.display_name);
+    info!("Player {} started matchmaking", player.player.display_name);
 
     let games = GlobalState::games();
     games.add_or_queue(player, req.rules);
@@ -346,7 +348,7 @@ fn handle_start_matchmaking(session: &mut Session, packet: &Packet) -> HandleRes
 ///     "MSID": 1
 /// }
 /// ```
-fn handle_cancel_matchmaking(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_cancel_matchmaking(session: SessionAddr, packet: &Packet) -> HandleResult {
     session.remove_games();
     Ok(packet.respond_empty())
 }

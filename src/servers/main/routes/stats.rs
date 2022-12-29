@@ -1,7 +1,11 @@
 use crate::{
     blaze::components::Stats,
     leaderboard::models::*,
-    servers::main::{models::stats::*, routes::HandleResult, session::Session},
+    servers::main::{
+        models::stats::*,
+        routes::HandleResult,
+        session::{Session, SessionAddr},
+    },
     state::GlobalState,
 };
 use blaze_pk::packet::Packet;
@@ -13,7 +17,7 @@ use blaze_pk::packet::Packet;
 /// `session`   The session that the packet was recieved by
 /// `component` The component of thet recieved
 /// `packet`    The recieved packet
-pub async fn route(_session: &mut Session, component: Stats, packet: &Packet) -> HandleResult {
+pub async fn route(component: Stats, packet: &Packet) -> HandleResult {
     match component {
         Stats::GetLeaderboardEntityCount => handle_leaderboard_entity_count(packet).await,
         Stats::GetLeaderboard => handle_leaderboard(packet).await,

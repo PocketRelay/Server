@@ -5,10 +5,10 @@ use crate::{
     servers::main::{
         models::{auth::AuthResponse, user_sessions::*},
         routes::HandleResult,
-        session::Session,
+        session::SessionAddr,
     },
     state::GlobalState,
-    utils::net::public_address,
+    utils::{net::public_address, random::generate_random_string},
 };
 use blaze_pk::packet::Packet;
 use database::Player;
@@ -20,11 +20,7 @@ use database::Player;
 /// `session`   The session that the packet was recieved by
 /// `component` The component of the packet recieved
 /// `packet`    The recieved packet
-pub async fn route(
-    session: &mut Session,
-    component: UserSessions,
-    packet: &Packet,
-) -> HandleResult {
+pub async fn route(session: SessionAddr, component: UserSessions, packet: &Packet) -> HandleResult {
     match component {
         UserSessions::ResumeSession => handle_resume_session(session, packet).await,
         UserSessions::UpdateNetworkInfo => handle_update_network_info(session, packet).await,
@@ -43,15 +39,22 @@ pub async fn route(
 ///     "SKEY": "127_CHARACTER_TOKEN"
 /// }
 /// ```
-async fn handle_resume_session(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_resume_session(session: SessionAddr, packet: &Packet) -> HandleResult {
     let req: ResumeSessionRequest = packet.decode()?;
     let db = GlobalState::database();
     let player: Player = Player::by_token(db, &req.session_token)
         .await?
         .ok_or(ServerError::InvalidSession)?;
-
-    let (player, session_token) = session.set_player(db, player).await?;
-    let response = AuthResponse::new(player, session_token, true);
+    let (player, session_token) = player
+        .with_token(db, generate_random_string)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?;
+    session.set_player(Some(player.clone()));
+    let response = AuthResponse {
+        player,
+        session_token,
+        silent: true,
+    };
     Ok(packet.respond(response))
 }
 
@@ -84,7 +87,7 @@ async fn handle_resume_session(session: &mut Session, packet: &Packet) -> Handle
 ///     }
 /// }
 /// ```
-async fn handle_update_network_info(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_update_network_info(session: SessionAddr, packet: &Packet) -> HandleResult {
     let req: UpdateNetworkRequest = packet.decode()?;
 
     // TODO: Possibly spawn this off into a task and have a session
@@ -95,7 +98,7 @@ async fn handle_update_network_info(session: &mut Session, packet: &Packet) -> H
     if external.0.is_invalid() || external.1 == 0 {
         // Match port with internal address
         external.1 = groups.internal.1;
-        external.0 = get_network_address(&session.addr).await;
+        external.0 = get_network_address(session.get_network_addr().await).await;
     }
 
     session.set_network_info(groups, req.qos);
@@ -107,19 +110,24 @@ async fn handle_update_network_info(session: &mut Session, packet: &Packet) -> H
 /// public IP address of the network is used instead.
 ///
 /// `value` The socket address
-async fn get_network_address(addr: &SocketAddr) -> NetAddress {
-    let ip = addr.ip();
-    if let IpAddr::V4(value) = ip {
-        // Value is local or private
-        if value.is_loopback() || value.is_private() {
-            if let Some(public_addr) = public_address().await {
-                return NetAddress::from_ipv4(&public_addr);
+async fn get_network_address(addr: Option<SocketAddr>) -> NetAddress {
+    if let Some(addr) = addr {
+        let ip = addr.ip();
+        if let IpAddr::V4(value) = ip {
+            // Address is already a public address
+            if !value.is_loopback() && !value.is_private() {
+                let value = format!("{}", value);
+                return NetAddress::from_ipv4(&value);
             }
+        } else {
+            // Don't know how to handle IPv6 addresses
+            return NetAddress(0);
         }
-        let value = format!("{}", value);
-        NetAddress::from_ipv4(&value)
+    }
+
+    if let Some(public_addr) = public_address().await {
+        NetAddress::from_ipv4(&public_addr)
     } else {
-        // Don't know how to handle IPv6 addresses
         NetAddress(0)
     }
 }
@@ -133,7 +141,7 @@ async fn get_network_address(addr: &SocketAddr) -> NetAddress {
 ///     "HWFG": 0
 /// }
 /// ```
-fn handle_update_hardware_flag(session: &mut Session, packet: &Packet) -> HandleResult {
+fn handle_update_hardware_flag(session: SessionAddr, packet: &Packet) -> HandleResult {
     let req: HardwareFlagRequest = packet.decode()?;
     session.set_hardware_flag(req.hardware_flag);
     Ok(packet.respond_empty())

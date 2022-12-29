@@ -3,11 +3,12 @@ use crate::{
         components::Authentication,
         errors::{ServerError, ServerResult},
     },
-    servers::main::{models::auth::*, routes::HandleResult, session::Session},
+    servers::main::{models::auth::*, routes::HandleResult, session::SessionAddr},
     state::GlobalState,
     utils::{
         env,
         hashing::{hash_password, verify_password},
+        random::generate_random_string,
         types::PlayerID,
         validate::is_email,
     },
@@ -27,7 +28,7 @@ use tokio::fs::read_to_string;
 /// `component` The component of the packet recieved
 /// `packet`    The recieved packet
 pub async fn route(
-    session: &mut Session,
+    session: SessionAddr,
     component: Authentication,
     packet: &Packet,
 ) -> HandleResult {
@@ -101,7 +102,7 @@ pub async fn route(
 ///     "TYPE": 0 // Authentication type
 /// }
 /// ```
-async fn handle_auth_request(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_auth_request(session: SessionAddr, packet: &Packet) -> HandleResult {
     let req: AuthRequest = packet.decode()?;
     let silent = req.is_silent();
     let db = GlobalState::database();
@@ -110,8 +111,18 @@ async fn handle_auth_request(session: &mut Session, packet: &Packet) -> HandleRe
         AuthRequest::Login { email, password } => handle_login_email(db, email, password).await,
         AuthRequest::Origin { token } => handle_login_origin(db, token).await,
     }?;
-    let (player, session_token) = session.set_player(db, player).await?;
-    let response = AuthResponse::new(player, session_token, silent);
+
+    let (player, session_token) = player
+        .with_token(db, generate_random_string)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?;
+
+    session.set_player(Some(player.clone()));
+    let response = AuthResponse {
+        player,
+        session_token,
+        silent,
+    };
     Ok(packet.respond(response))
 }
 
@@ -239,8 +250,8 @@ async fn handle_login_origin(
 /// ID: 8
 /// Content: {}
 /// ```
-fn handle_logout(session: &mut Session, packet: &Packet) -> HandleResult {
-    session.clear_player();
+fn handle_logout(session: SessionAddr, packet: &Packet) -> HandleResult {
+    session.set_player(None);
     Ok(packet.respond_empty())
 }
 
@@ -334,10 +345,10 @@ fn handle_list_entitlements(packet: &Packet) -> HandleResult {
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-async fn handle_login_persona(session: &mut Session, packet: &Packet) -> HandleResult {
-    let player: &Player = session
-        .player
-        .as_ref()
+async fn handle_login_persona(session: SessionAddr, packet: &Packet) -> HandleResult {
+    let player: Player = session
+        .get_player()
+        .await
         .ok_or(ServerError::FailedNoLoginAction)?;
     let session_token = player
         .session_token
@@ -400,7 +411,7 @@ fn handle_forgot_password(packet: &Packet) -> HandleResult {
 /// }
 /// ```
 ///
-async fn handle_create_account(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_create_account(session: SessionAddr, packet: &Packet) -> HandleResult {
     let req: CreateAccountRequest = packet.decode()?;
     let email = req.email;
     if !is_email(&email) {
@@ -420,8 +431,19 @@ async fn handle_create_account(session: &mut Session, packet: &Packet) -> Handle
 
     let display_name = email.chars().take(99).collect::<String>();
     let player: Player = Player::create(db, email, display_name, hashed_password, false).await?;
-    let (player, session_token) = session.set_player(db, player).await?;
-    let response = AuthResponse::new(player, session_token, false);
+    let (player, session_token) = player
+        .with_token(db, generate_random_string)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?;
+
+    session.set_player(Some(player.clone()));
+
+    let response = AuthResponse {
+        player,
+        session_token,
+        silent: false,
+    };
+
     Ok(packet.respond(response))
 }
 
@@ -519,10 +541,10 @@ async fn handle_legal_content(packet: &Packet, ty: LegalType) -> HandleResult {
 /// ID: 35
 /// Content: {}
 /// ```
-async fn handle_get_auth_token(session: &mut Session, packet: &Packet) -> HandleResult {
+async fn handle_get_auth_token(session: SessionAddr, packet: &Packet) -> HandleResult {
     let token: String = session
-        .player
-        .as_ref()
+        .get_player()
+        .await
         .map(|player| format!("{:X}", player.id))
         .ok_or(ServerError::FailedNoLoginAction)?;
     let response = GetTokenResponse { token };

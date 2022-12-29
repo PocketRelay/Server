@@ -4,27 +4,23 @@ use crate::{
         codec::{NetData, UpdateExtDataAttr},
         components::{Components, UserSessions},
     },
-    servers::main::session::SessionMessage,
+    servers::main::session::SessionAddr,
     utils::types::{GameID, PlayerID, SessionID},
 };
 use blaze_pk::{codec::Encodable, packet::Packet, tag::TdfType, writer::TdfWriter};
+use database::Player;
 use serde::Serialize;
-use tokio::sync::mpsc;
 
 pub struct GamePlayer {
     pub game_id: GameID,
-    /// The ID of the session for the player
-    pub session_id: SessionID,
-    /// The player ID
-    pub player_id: PlayerID,
-    /// The player display name
-    pub display_name: String,
+    /// Session player
+    pub player: Player,
+    /// Session address
+    pub addr: SessionAddr,
     /// Networking information for the player
     pub net: NetData,
     /// State of the game player
     pub state: PlayerState,
-    /// Sender for sending messages to the session
-    sender: mpsc::UnboundedSender<SessionMessage>,
 }
 
 /// Structure for taking a snapshot of the players current
@@ -42,26 +38,16 @@ impl GamePlayer {
     /// Creates a new game player structure with the provided player
     /// details
     ///
-    /// `session_id`     The session ID of the player
-    /// `player_id`      The ID of the player
-    /// `display_name`   The display name of the player
-    /// `net`            The player networking details
-    /// `message_sender` The message sender for sending session messages
-    pub fn new(
-        session_id: SessionID,
-        player_id: PlayerID,
-        display_name: String,
-        net: NetData,
-        sender: mpsc::UnboundedSender<SessionMessage>,
-    ) -> Self {
+    /// `player` The session player
+    /// `net`    The player networking details
+    /// `addr`   The session address
+    pub fn new(player: Player, net: NetData, addr: SessionAddr) -> Self {
         Self {
-            session_id,
-            player_id,
-            display_name,
+            player,
+            addr,
             net,
             game_id: 1,
             state: PlayerState::Connecting,
-            sender,
         }
     }
 
@@ -69,33 +55,25 @@ impl GamePlayer {
     /// for serialization
     pub fn snapshot(&self) -> GamePlayerSnapshot {
         GamePlayerSnapshot {
-            session_id: self.session_id,
-            player_id: self.player_id,
-            display_name: self.display_name.clone(),
+            session_id: self.addr.id,
+            player_id: self.player.id,
+            display_name: self.player.display_name.clone(),
             net: self.net,
         }
     }
 
-    pub fn push(&self, packet: Packet) {
-        self.sender.send(SessionMessage::Write(packet)).ok();
-    }
-
     pub fn write_updates(&self, other: &GamePlayer) {
-        other.push(Packet::notify(
+        other.addr.push(Packet::notify(
             Components::UserSessions(UserSessions::SessionDetails),
             PlayerUpdate { player: self },
         ));
-        other.push(Packet::notify(
+        other.addr.push(Packet::notify(
             Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
             UpdateExtDataAttr {
                 flags: 0x3,
-                player_id: self.player_id,
+                player_id: self.player.id,
             },
         ));
-    }
-
-    pub fn set_game(&self, game: Option<GameID>) {
-        self.sender.send(SessionMessage::SetGame(game)).ok();
     }
 
     pub fn create_set_session(&self) -> Packet {
@@ -110,8 +88,8 @@ impl GamePlayer {
         writer.tag_u8(b"EXID", 0);
         writer.tag_u32(b"GID", self.game_id);
         writer.tag_u32(b"LOC", 0x64654445);
-        writer.tag_str(b"NAME", &self.display_name);
-        writer.tag_u32(b"PID", self.player_id);
+        writer.tag_str(b"NAME", &self.player.display_name);
+        writer.tag_u32(b"PID", self.player.id);
         self.net.tag_groups(b"PNET", writer);
         writer.tag_usize(b"SID", slot);
         writer.tag_u8(b"SLOT", 0);
@@ -119,7 +97,7 @@ impl GamePlayer {
         writer.tag_u16(b"TIDX", 0xffff);
         writer.tag_u8(b"TIME", 0);
         writer.tag_triple(b"UGID", (0, 0, 0));
-        writer.tag_u32(b"UID", self.session_id);
+        writer.tag_u32(b"UID", self.addr.id);
         writer.tag_group_end();
     }
 
@@ -149,7 +127,7 @@ impl GamePlayer {
 impl Drop for GamePlayer {
     fn drop(&mut self) {
         // Clear player game when game player is dropped
-        self.set_game(None)
+        self.addr.set_game(None)
     }
 }
 
@@ -163,12 +141,12 @@ impl Encodable for PlayerUpdate<'_> {
         self.player.encode_data(writer);
 
         writer.tag_group(b"USER");
-        writer.tag_u32(b"AID", self.player.player_id);
+        writer.tag_u32(b"AID", self.player.player.id);
         writer.tag_u32(b"ALOC", 0x64654445);
         writer.tag_empty_blob(b"EXBB");
         writer.tag_u8(b"EXID", 0);
-        writer.tag_u32(b"ID", self.player.player_id);
-        writer.tag_str(b"NAME", &self.player.display_name);
+        writer.tag_u32(b"ID", self.player.player.id);
+        writer.tag_str(b"NAME", &self.player.player.display_name);
         writer.tag_group_end();
     }
 }
@@ -181,6 +159,6 @@ impl Encodable for SetPlayer<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_group(b"DATA");
         self.player.encode_data(writer);
-        writer.tag_u32(b"USID", self.player.player_id);
+        writer.tag_u32(b"USID", self.player.player.id);
     }
 }

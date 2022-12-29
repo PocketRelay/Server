@@ -216,7 +216,7 @@ impl Game {
     fn push_all(&self, packet: &Packet) {
         self.players
             .iter()
-            .for_each(|value| value.push(packet.clone()));
+            .for_each(|value| value.addr.push(packet.clone()));
     }
 
     /// Sends a notification packet to all the connected session
@@ -296,7 +296,7 @@ impl Game {
     ///
     /// `session` The session to check for
     fn is_player_sid(&self, sid: SessionID) -> bool {
-        self.players.iter().any(|value| value.session_id == sid)
+        self.players.iter().any(|value| value.addr.id == sid)
     }
 
     /// Checks whether this game contains a player with the provided
@@ -304,7 +304,7 @@ impl Game {
     ///
     /// `pid` The player ID
     fn is_player_pid(&self, pid: PlayerID) -> bool {
-        self.players.iter().any(|value| value.player_id == pid)
+        self.players.iter().any(|value| value.player.id == pid)
     }
 
     fn aquire_slot(&mut self) -> usize {
@@ -328,7 +328,7 @@ impl Game {
         self.update_clients(&player);
         self.notify_game_setup(&player, slot);
 
-        player.set_game(Some(self.id));
+        player.addr.set_game(Some(self.id));
 
         let packet = player.create_set_session();
         self.push_all(&packet);
@@ -349,7 +349,7 @@ impl Game {
             PlayerJoining { slot, player },
         );
         self.push_all(&packet);
-        player.push(packet);
+        player.addr.push(packet);
     }
 
     /// Notifies the provided player that the game has been setup and
@@ -372,7 +372,7 @@ impl Game {
             },
         );
 
-        player.push(packet);
+        player.addr.push(packet);
     }
 
     /// Sets the state for the provided session notifying all
@@ -385,10 +385,10 @@ impl Game {
             let player = self
                 .players
                 .iter_mut()
-                .find(|value| value.session_id == session)?;
+                .find(|value| value.addr.id == session)?;
             let old_state = player.state;
             player.state = state;
-            (player.player_id, old_state)
+            (player.player.id, old_state)
         };
 
         let packet = Packet::notify(
@@ -414,7 +414,7 @@ impl Game {
             let Some(host) = self.players.first() else {
                 return;
             };
-            host.player_id
+            host.player.id
         };
         let packet = Packet::notify(
             Components::GameManager(GameManager::AdminListChange),
@@ -460,18 +460,18 @@ impl Game {
     ///
     /// `session` The session that completed joining
     fn on_join_complete(&self, session: SessionID) {
-        let Some(player) = self.players.iter().find(|value| value.session_id == session) else {
+        let Some(player) = self.players.iter().find(|value| value.addr.id == session) else {
             return;
         };
         let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerJoinCompleted),
             JoinComplete {
                 game_id: self.id,
-                player_id: player.player_id,
+                player_id: player.player.id,
             },
         );
         self.push_all(&packet);
-        self.modify_admin_list(player.player_id, AdminListOperation::Add);
+        self.modify_admin_list(player.player.id, AdminListOperation::Add);
     }
 
     fn remove_player(&mut self, ty: RemovePlayerType) -> bool {
@@ -483,13 +483,13 @@ impl Game {
                 RemovePlayerType::Player(player_id, reason) => (
                     self.players
                         .iter()
-                        .position(|value| value.player_id == player_id),
+                        .position(|value| value.player.id == player_id),
                     reason,
                 ),
                 RemovePlayerType::Session(session_id) => (
                     self.players
                         .iter()
-                        .position(|value| value.session_id == session_id),
+                        .position(|value| value.addr.id == session_id),
                     RemoveReason::Generic,
                 ),
             };
@@ -501,17 +501,17 @@ impl Game {
             (player, index, reason, self.players.is_empty())
         };
 
-        player.set_game(None);
+        player.addr.set_game(None);
         self.notify_player_removed(&player, reason);
         self.notify_fetch_data(&player);
-        self.modify_admin_list(player.player_id, AdminListOperation::Remove);
+        self.modify_admin_list(player.player.id, AdminListOperation::Remove);
 
         // Possibly not needed
         // let packet = player.create_set_session();
         // self.push_all(&packet);
         debug!(
             "Removed player from game (PID: {}, GID: {})",
-            player.player_id, self.id
+            player.player.id, self.id
         );
         // If the player was in the host slot
         if slot == 0 {
@@ -532,12 +532,12 @@ impl Game {
             Components::GameManager(GameManager::PlayerRemoved),
             PlayerRemoved {
                 game_id: self.id,
-                player_id: player.player_id,
+                player_id: player.player.id,
                 reason,
             },
         );
         self.push_all(&packet);
-        player.push(packet);
+        player.addr.push(packet);
     }
 
     /// Notifies all the sessions in the game to fetch the player data
@@ -551,7 +551,7 @@ impl Game {
         let removed_packet = Packet::notify(
             Components::UserSessions(UserSessions::FetchExtendedData),
             FetchExtendedData {
-                player_id: player.player_id,
+                player_id: player.player.id,
             },
         );
         self.push_all(&removed_packet);
@@ -560,10 +560,10 @@ impl Game {
             let packet = Packet::notify(
                 Components::UserSessions(UserSessions::FetchExtendedData),
                 FetchExtendedData {
-                    player_id: other_player.player_id,
+                    player_id: other_player.player.id,
                 },
             );
-            player.push(packet)
+            player.addr.push(packet)
         }
     }
 
@@ -591,7 +591,7 @@ impl Game {
             Components::GameManager(GameManager::HostMigrationStart),
             HostMigrateStart {
                 game_id: self.id,
-                host_id: new_host.player_id,
+                host_id: new_host.player.id,
             },
         );
         self.push_all(&packet);

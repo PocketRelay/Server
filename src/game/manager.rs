@@ -217,7 +217,7 @@ impl Games {
     pub fn unqueue_session(&'static self, sid: SessionID) {
         tokio::spawn(async move {
             let queue = &mut self.queue.lock().await;
-            queue.retain(|value| value.player.session_id != sid);
+            queue.retain(|value| value.player.addr.id != sid);
         });
     }
 
