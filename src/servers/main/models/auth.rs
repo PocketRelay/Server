@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::utils::types::PlayerID;
 use blaze_pk::{
     codec::{Decodable, Encodable},
@@ -100,22 +102,6 @@ pub struct AuthResponse {
     pub silent: bool,
 }
 
-impl AuthResponse {
-    /// Creates a new auth response from the provided player, session token
-    /// and whether or not to be a silent value
-    ///
-    /// `player`        The player that was authenticated
-    /// `session_token` The session token to use
-    /// `silent`        Whether the auth request was silent
-    pub fn new(player: Player, session_token: String, silent: bool) -> Self {
-        Self {
-            player,
-            session_token,
-            silent,
-        }
-    }
-}
-
 impl Encodable for AuthResponse {
     fn encode(&self, writer: &mut TdfWriter) {
         if self.silent {
@@ -179,23 +165,10 @@ impl Decodable for CreateAccountRequest {
 /// player details
 pub struct PersonaResponse {
     /// The player
-    player: Player,
+    pub player: Player,
 
     /// The players current session token
-    session_token: String,
-}
-
-impl PersonaResponse {
-    /// Creates a new auth response from the provided player, session token
-    ///
-    /// `player`        The player that was authenticated
-    /// `session_token` The session token to use
-    pub fn new(player: Player, session_token: String) -> Self {
-        Self {
-            player,
-            session_token,
-        }
-    }
+    pub session_token: String,
 }
 
 impl Encodable for PersonaResponse {
@@ -345,20 +318,20 @@ impl Encodable for LegalDocsInfo {
 
 /// Structure for legal content responses such as the Privacy Policy
 /// and the terms and condition.
-pub struct LegalContent<'a> {
+pub struct LegalContent {
     /// The url path to the legal content (Prefix this value with https://tos.ea.com/legalapp/ to get the url)
     pub path: &'static str,
     /// The actual HTML content of the legal document
-    pub content: &'a str,
+    pub content: Cow<'static, str>,
     /// Unknown value
     pub col: u16,
 }
 
-impl Encodable for LegalContent<'_> {
+impl Encodable for LegalContent {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_str(b"LDVC", self.path);
         writer.tag_u16(b"TCOL", self.col);
-        writer.tag_str(b"TCOT", self.content);
+        writer.tag_str(b"TCOT", &self.content);
     }
 }
 

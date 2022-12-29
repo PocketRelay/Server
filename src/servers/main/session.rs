@@ -1,25 +1,24 @@
 //! Sessions are client connections to the main server with associated
 //! data such as player data for when they become authenticated and
 //! networking data.
-use super::{
-    models::session::{SessionUpdate, SetSession},
-    routes,
-};
+use super::models::session::{SessionUpdate, SetSession};
 use crate::{
     blaze::{
         append_packet_decoded,
         codec::{NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
         components::{self, Components, UserSessions},
-        errors::{BlazeError, ServerError},
     },
     game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
     utils::types::{GameID, SessionID},
 };
-use blaze_pk::packet::{Packet, PacketComponents, PacketType};
+use blaze_pk::{
+    packet::{Packet, PacketComponents, PacketType},
+    router::Router,
+};
 use database::Player;
-use log::{debug, error, log_enabled};
-use std::{collections::VecDeque, io, net::SocketAddr};
+use log::{debug, error, info, log_enabled};
+use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
 use tokio::{
     net::TcpStream,
     select,
@@ -56,8 +55,10 @@ pub struct Session {
     /// already queued in the reciever
     flush_queued: bool,
 
-    /// Sender for session messages
-    sender: mpsc::UnboundedSender<SessionMessage>,
+    router: Arc<Router<Components, SessionAddr>>,
+
+    /// Internal address used for routing can be cloned and used elsewhere
+    address: SessionAddr,
 }
 
 /// Address to a session which allows manipulating sessions asyncronously
@@ -137,8 +138,17 @@ impl SessionAddr {
     /// Sets the player associated with the session
     ///
     /// `player` The player
-    pub fn set_player(&self, player: Option<Player>) {
-        self.sender.send(SessionMessage::SetPlayer(player)).ok();
+    pub async fn set_player(&self, player: Option<Player>) {
+        let (tx, rx) = oneshot::channel();
+        match self.sender.send(SessionMessage::SetPlayer(player, tx)) {
+            Ok(_) => {
+                info!("Sent set player message");
+                rx.await.ok();
+            }
+            Err(err) => {
+                error!("Failed to send to sender: {err:?}");
+            }
+        }
     }
 
     /// Sends an update self message to the associated client
@@ -151,6 +161,10 @@ impl SessionAddr {
     pub fn remove_games(&self) {
         self.sender.send(SessionMessage::RemoveGames).ok();
     }
+
+    pub fn flush(&self) {
+        self.sender.send(SessionMessage::Flush).ok();
+    }
 }
 
 /// Enum of different messages that can be sent to this
@@ -162,7 +176,7 @@ pub enum SessionMessage {
     GetPlayer(oneshot::Sender<Option<Player>>),
 
     /// Sets the player associated to this session
-    SetPlayer(Option<Player>),
+    SetPlayer(Option<Player>, oneshot::Sender<()>),
 
     /// Retrieves the socket address for the session and sends
     /// it through the provided sender channel
@@ -196,18 +210,14 @@ pub enum SessionMessage {
 }
 
 impl Session {
-    pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr)) {
+    pub fn spawn(
+        id: SessionID,
+        values: (TcpStream, SocketAddr),
+        router: Arc<Router<Components, SessionAddr>>,
+    ) {
         let (sender, receiver) = mpsc::unbounded_channel();
-        let session = Session::new(id, values.0, values.1, sender);
+        let session = Session::new(id, values.0, values.1, sender, router);
         tokio::spawn(session.process(receiver));
-    }
-
-    /// Returns an address to this session
-    pub fn addr(&self) -> SessionAddr {
-        SessionAddr {
-            id: self.id,
-            sender: self.sender.clone(),
-        }
     }
 
     /// Creates a new session with the provided values.
@@ -220,17 +230,19 @@ impl Session {
         stream: TcpStream,
         addr: SocketAddr,
         sender: mpsc::UnboundedSender<SessionMessage>,
+        router: Arc<Router<Components, SessionAddr>>,
     ) -> Self {
         Self {
             id,
             stream,
             addr,
             queue: VecDeque::new(),
-            sender,
             player: None,
             net: NetData::default(),
             game: None,
             flush_queued: false,
+            router,
+            address: SessionAddr { id, sender },
         }
     }
 
@@ -265,30 +277,22 @@ impl Session {
     /// `session`   The session to process the packet for
     /// `component` The component of the packet for routing
     /// `packet`    The packet itself
-    async fn handle_packet(&mut self, component: Components, packet: &Packet) {
-        let address = self.addr();
-        self.debug_log_packet("Read", packet);
-        match routes::route(address, component, packet).await {
-            Ok(response) => {
-                if let Err(err) = self.write(response).await {
-                    error!(
-                        "Error occurred while responding (SID: {}): {:?}",
-                        self.id, err
-                    );
+    fn handle_packet(&mut self, packet: Packet) {
+        self.debug_log_packet("Read", &packet);
+        let addr = self.address.clone();
+        let router = self.router.clone();
+        tokio::spawn(async move {
+            match router.handle(addr.clone(), packet).await {
+                Ok(packet) => {
+                    addr.push(packet);
+                }
+                Err(err) => {
+                    error!("Error occurred while decoding packet: {:?}", err);
                 }
             }
-            Err(err) => {
-                let error = if let BlazeError::Server(err) = err {
-                    err
-                } else {
-                    error!("Error occurred while routing (SID: {}): {:?}", self.id, err);
-                    ServerError::ServerUnavailable
-                };
-                let response = Packet::error_empty(packet, error as u16);
-                self.write(response).await.ok();
-            }
-        }
-        self.flush().await;
+
+            addr.flush();
+        });
     }
 
     /// Handles a message recieved for the session
@@ -307,7 +311,13 @@ impl Session {
             }
             SessionMessage::RemoveGames => self.remove_games(),
             SessionMessage::UpdateSelf => self.update_self(),
-            SessionMessage::SetPlayer(player) => self.player = player,
+            SessionMessage::SetPlayer(player, tx) => {
+                self.player = player;
+                match tx.send(()) {
+                    Ok(_) => info!("Sent player res"),
+                    Err(err) => error!("Err playe res {err:?}"),
+                }
+            }
             SessionMessage::SetNetworkInfo(groups, ext) => self.set_network_info(groups, ext),
             SessionMessage::SetHardwareFlag(flag) => self.set_hardware_flag(flag),
             SessionMessage::SetGame(game) => self.set_game(game),
@@ -410,7 +420,7 @@ impl Session {
     fn queue_flush(&mut self) {
         if !self.flush_queued {
             self.flush_queued = true;
-            self.sender.send(SessionMessage::Flush).ok();
+            self.address.sender.send(SessionMessage::Flush).ok();
         }
     }
 
@@ -453,9 +463,8 @@ impl Session {
     /// Reads a packet from the stream and then passes the packet
     /// onto `handle_packet` awaiting the result of that
     async fn read(&mut self) -> io::Result<()> {
-        let (component, packet): (Components, Packet) =
-            Packet::read_async_typed(&mut self.stream).await?;
-        self.handle_packet(component, &packet).await;
+        let packet: Packet = Packet::read_async(&mut self.stream).await?;
+        self.handle_packet(packet);
         Ok(())
     }
 

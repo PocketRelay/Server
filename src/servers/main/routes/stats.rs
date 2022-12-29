@@ -1,31 +1,33 @@
 use crate::{
-    blaze::components::Stats,
-    leaderboard::models::*,
-    servers::main::{
-        models::stats::*,
-        routes::HandleResult,
-        session::{Session, SessionAddr},
+    blaze::{
+        components::{Components as C, Stats as S},
+        errors::BlazeResult,
     },
+    leaderboard::models::*,
+    servers::main::{models::stats::*, session::SessionAddr},
     state::GlobalState,
 };
-use blaze_pk::packet::Packet;
+use blaze_pk::router::Router;
 
-/// Routing function for handling packets with the `Stats` component and routing them
-/// to the correct routing function. If no routing function is found then the packet
-/// is printed to the output and an empty response is sent.
+/// Routing function for adding all the routes in this file to the
+/// provided router
 ///
-/// `session`   The session that the packet was recieved by
-/// `component` The component of thet recieved
-/// `packet`    The recieved packet
-pub async fn route(component: Stats, packet: &Packet) -> HandleResult {
-    match component {
-        Stats::GetLeaderboardEntityCount => handle_leaderboard_entity_count(packet).await,
-        Stats::GetLeaderboard => handle_leaderboard(packet).await,
-        Stats::GetCenteredLeaderboard => handle_centered_leaderboard(packet).await,
-        Stats::GetFilteredLeaderboard => handle_filtered_leaderboard(packet).await,
-        Stats::GetLeaderboardGroup => handle_leaderboard_group(packet),
-        _ => Ok(packet.respond_empty()),
-    }
+/// `router` The router to add to
+pub fn route(router: &mut Router<C, SessionAddr>) {
+    router.route(
+        C::Stats(S::GetLeaderboardEntityCount),
+        handle_leaderboard_entity_count,
+    );
+    router.route(C::Stats(S::GetLeaderboard), handle_leaderboard);
+    router.route(
+        C::Stats(S::GetCenteredLeaderboard),
+        handle_centered_leaderboard,
+    );
+    router.route(
+        C::Stats(S::GetFilteredLeaderboard),
+        handle_filtered_leaderboard,
+    );
+    router.route(C::Stats(S::GetLeaderboardGroup), handle_leaderboard_group);
 }
 
 /// Handles returning the number of leaderboard objects present.
@@ -43,13 +45,13 @@ pub async fn route(component: Stats, packet: &Packet) -> HandleResult {
 ///     "POFF": 0
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
-    let request: EntityCountRequest = packet.decode()?;
+async fn handle_leaderboard_entity_count(
+    req: EntityCountRequest,
+) -> BlazeResult<EntityCountResponse> {
     let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(request.name);
+    let ty = LeaderboardType::from(req.name);
     let (count, _) = leaderboard.get(ty).await?;
-    let response = EntityCountResponse { count };
-    Ok(packet.respond(response))
+    Ok(EntityCountResponse { count })
 }
 
 ///
@@ -71,23 +73,20 @@ async fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
 ///   "USET": (0, 0, 0),
 /// }
 /// ```
-async fn handle_leaderboard(packet: &Packet) -> HandleResult {
-    let request: LeaderboardRequest = packet.decode()?;
+async fn handle_leaderboard(req: LeaderboardRequest) -> BlazeResult<()> {
     // Leaderboard but only returns self
     let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(request.name);
+    let ty = LeaderboardType::from(req.name);
     let (_, group) = leaderboard.get(ty).await?;
     let group = &*group.read().await;
 
-    let start_index = request.start;
-    let end_index = request.count.min(group.values.len());
+    let start_index = req.start;
+    let end_index = req.count.min(group.values.len());
 
     let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
-    Ok(if let Some(values) = values {
-        packet.respond(LeaderboardResponse { values })
-    } else {
-        packet.respond(EmptyLeaderboardResponse)
-    })
+    // TODO: IMEPLEMENT PROPERLY
+    // Ok(LeaderboardResponse { values })
+    Ok(())
 }
 
 /// Handles returning a centered leaderboard object. This is currently not implemented
@@ -110,9 +109,8 @@ async fn handle_leaderboard(packet: &Packet) -> HandleResult {
 ///     "USET": (0, 0, 0)
 /// }
 /// ```
-async fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
-    let request: CenteredLeaderboardRequest = packet.decode()?;
-    let count = request.count.max(1);
+async fn handle_centered_leaderboard(req: CenteredLeaderboardRequest) -> BlazeResult<()> {
+    let count = req.count.max(1);
     let before = if count % 2 == 0 {
         count / 2 + 1
     } else {
@@ -121,29 +119,29 @@ async fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
     let after = count / 2;
 
     let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(request.name);
+    let ty = LeaderboardType::from(req.name);
     let (_, group) = leaderboard.get(ty).await?;
     let group: &LeaderboardEntityGroup = &*group.read().await;
 
     let index_of = group
         .values
         .iter()
-        .position(|value| value.player_id == request.center);
+        .position(|value| value.player_id == req.center);
 
     let index_of = match index_of {
         Some(value) => value,
-        None => return Ok(packet.respond(EmptyLeaderboardResponse)),
+        // None => return Ok(LeaderboardResponse { values: &[] }),
+        None => return Ok(()),
     };
 
     let start_index = index_of - before.min(index_of);
     let end_index = (index_of + after).min(group.values.len());
 
     let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
-    Ok(if let Some(values) = values {
-        packet.respond(LeaderboardResponse { values })
-    } else {
-        packet.respond(EmptyLeaderboardResponse)
-    })
+    Ok(())
+
+    // TODO: IMPLEMENT PROPERLY
+    // Ok(LeaderboardResponse { values })
 }
 
 /// Handles returning a filtered leaderboard object. This is currently not implemented
@@ -165,12 +163,11 @@ async fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
 ///     "USET": (0, 0, 0)
 /// }
 /// ```
-async fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
-    let request: FilteredLeaderboardRequest = packet.decode()?;
-    let player_id = request.id;
+async fn handle_filtered_leaderboard(req: FilteredLeaderboardRequest) -> BlazeResult<()> {
+    let player_id = req.id;
     // Leaderboard but only returns self
     let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(request.name);
+    let ty = LeaderboardType::from(req.name);
     let (_, group) = leaderboard.get(ty).await?;
     let group: &LeaderboardEntityGroup = &*group.read().await;
     let entry = group
@@ -178,11 +175,15 @@ async fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
         .iter()
         .find(|value| value.player_id == player_id);
 
-    Ok(if let Some(entry) = entry {
-        packet.respond(FilteredLeaderboardResponse { value: entry })
-    } else {
-        packet.respond(EmptyLeaderboardResponse)
-    })
+    // todo!("Properly implement with response types")
+
+    Ok(())
+
+    // Ok(if let Some(entry) = entry {
+    //     packet.respond(FilteredLeaderboardResponse { value: entry })
+    // } else {
+    //     packet.respond(EmptyLeaderboardResponse)
+    // })
 }
 
 fn get_locale_name(code: &str) -> &str {
@@ -210,12 +211,13 @@ fn get_locale_name(code: &str) -> &str {
 ///     "NAME": "N7RatingGlobal"
 /// }
 /// ```
-fn handle_leaderboard_group(packet: &Packet) -> HandleResult {
-    let req: LeaderboardGroupRequest = packet.decode()?;
+async fn handle_leaderboard_group(
+    req: LeaderboardGroupRequest,
+) -> Option<LeaderboardGroupResponse<'static>> {
     let name = req.name;
     let is_n7 = name.starts_with("N7Rating");
     if !is_n7 && !name.starts_with("ChallengePoints") {
-        return Ok(packet.respond_empty());
+        return None;
     }
     let split = if is_n7 { 8 } else { 15 };
     let locale = get_locale_name(name.split_at(split).1);
@@ -238,5 +240,5 @@ fn handle_leaderboard_group(packet: &Packet) -> HandleResult {
             gname: "ME3ChallengePoints",
         }
     };
-    Ok(packet.respond(group))
+    Some(group)
 }
