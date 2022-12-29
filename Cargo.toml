@@ -40,7 +40,7 @@ log = { workspace = true }
 serde = { workspace = true }
 
 # Blaze packet system 
-blaze-pk = "^0.7"
+blaze-pk = { path = "../BlazePk", version = "0.8.0-alpha" }
 # Blaze SSLv3 async TCPStream implementation
 blaze-ssl-async = "^0.3"
 
