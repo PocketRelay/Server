@@ -81,7 +81,7 @@ async fn get_leaderboard(
     // The number of entries to return
     let count: usize = query.count.unwrap_or(DEFAULT_COUNT) as usize;
     // Calculate the start and ending indexes
-    let start: usize = query.offset * (count as usize);
+    let start: usize = query.offset * count;
 
     let (entries, more) = leaderboard
         .get(

@@ -274,7 +274,7 @@ value_type!(QosNetworkData, TdfType::Group);
 /// Type alias for ports which are always u16
 pub type Port = u16;
 
-#[derive(Debug, Default, Copy, Clone, Serialize)]
+#[derive(Debug, Default, Clone, Serialize)]
 pub struct NetData {
     pub groups: NetGroups,
     pub qos: QosNetworkData,
@@ -282,7 +282,7 @@ pub struct NetData {
     pub is_set: bool,
 }
 
-#[derive(Debug, Default, Copy, Clone, Serialize)]
+#[derive(Debug, Default, Clone, Serialize)]
 pub struct NetGroups {
     pub internal: NetGroup,
     pub external: NetGroup,
@@ -317,14 +317,13 @@ impl NetData {
             writer.tag_union_unset(tag);
             return;
         }
-
-        writer.tag_union_value(tag, NetworkAddressType::Pair.into(), b"VALU", self.groups);
+        writer.tag_union_value(tag, NetworkAddressType::Pair.into(), b"VALU", &self.groups);
     }
 }
 
 /// Structure for a networking group which consists of a
 /// networking address and port value
-#[derive(Debug, Copy, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct NetGroup(pub NetAddress, pub Port);
 
 impl Encodable for NetGroup {

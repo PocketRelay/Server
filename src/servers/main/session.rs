@@ -36,7 +36,7 @@ pub struct Session {
     stream: TcpStream,
 
     /// The socket connection address of the client
-    addr: SocketAddr,
+    socket_addr: SocketAddr,
 
     /// If the session is authenticated it will have a linked
     /// player model from the database
@@ -58,7 +58,7 @@ pub struct Session {
     router: Arc<Router<Components, SessionAddr>>,
 
     /// Internal address used for routing can be cloned and used elsewhere
-    address: SessionAddr,
+    addr: SessionAddr,
 }
 
 /// Address to a session which allows manipulating sessions asyncronously
@@ -235,14 +235,14 @@ impl Session {
         Self {
             id,
             stream,
-            addr,
+            socket_addr: addr,
             queue: VecDeque::new(),
             player: None,
             net: NetData::default(),
             game: None,
             flush_queued: false,
             router,
-            address: SessionAddr { id, sender },
+            addr: SessionAddr { id, sender },
         }
     }
 
@@ -279,7 +279,7 @@ impl Session {
     /// `packet`    The packet itself
     fn handle_packet(&mut self, packet: Packet) {
         self.debug_log_packet("Read", &packet);
-        let addr = self.address.clone();
+        let addr = self.addr.clone();
         let router = self.router.clone();
         tokio::spawn(async move {
             match router.handle(addr.clone(), packet).await {
@@ -301,7 +301,7 @@ impl Session {
     async fn handle_message(&mut self, message: SessionMessage) {
         match message {
             SessionMessage::GetNetworkAddr(tx) => {
-                tx.send(self.addr.clone()).ok();
+                tx.send(self.socket_addr).ok();
             }
             SessionMessage::GetNet(tx) => {
                 tx.send(self.net.clone()).ok();
@@ -417,7 +417,7 @@ impl Session {
     fn queue_flush(&mut self) {
         if !self.flush_queued {
             self.flush_queued = true;
-            self.address.sender.send(SessionMessage::Flush).ok();
+            self.addr.sender.send(SessionMessage::Flush).ok();
         }
     }
 
