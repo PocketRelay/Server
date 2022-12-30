@@ -1,9 +1,9 @@
 use crate::{
     blaze::{
         components::{Components as C, Stats as S},
-        errors::BlazeResult,
+        errors::{BlazeResult, ServerError, ServerResult},
     },
-    leaderboard::models::*,
+    leaderboard::{models::*, LeaderboardQuery},
     servers::main::{models::stats::*, session::SessionAddr},
     state::GlobalState,
 };
@@ -18,14 +18,32 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
         C::Stats(S::GetLeaderboardEntityCount),
         handle_leaderboard_entity_count,
     );
-    router.route(C::Stats(S::GetLeaderboard), handle_leaderboard);
+    router.route(C::Stats(S::GetLeaderboard), |req: LeaderboardRequest| {
+        handle_leaderboard_query(
+            req.name,
+            LeaderboardQuery::Normal {
+                start: req.start,
+                count: req.count,
+            },
+        )
+    });
     router.route(
         C::Stats(S::GetCenteredLeaderboard),
-        handle_centered_leaderboard,
+        |req: CenteredLeaderboardRequest| {
+            handle_leaderboard_query(
+                req.name,
+                LeaderboardQuery::Centered {
+                    player_id: req.center,
+                    count: req.count,
+                },
+            )
+        },
     );
     router.route(
         C::Stats(S::GetFilteredLeaderboard),
-        handle_filtered_leaderboard,
+        |req: FilteredLeaderboardRequest| {
+            handle_leaderboard_query(req.name, LeaderboardQuery::Filtered { player_id: req.id })
+        },
     );
     router.route(C::Stats(S::GetLeaderboardGroup), handle_leaderboard_group);
 }
@@ -50,140 +68,30 @@ async fn handle_leaderboard_entity_count(
 ) -> BlazeResult<EntityCountResponse> {
     let leaderboard = GlobalState::leaderboard();
     let ty = LeaderboardType::from(req.name);
-    let (count, _) = leaderboard.get(ty).await?;
+    let count = leaderboard.get_size(ty).await?;
     Ok(EntityCountResponse { count })
 }
 
+/// Handler function for handling leaderboard querys and returning the resulting
+/// leaderboard
 ///
-///
-/// Component: Stats(GetLeaderboard)
-/// ```
-/// ID: 1274
-/// Content: {
-///   "COUN": 61,
-///   "KSUM": Map {
-///     "accountcountry": 0
-///     "ME3Map": 0
-///   },
-///   "LBID": 0,
-///   "NAME": "N7RatingGlobal",
-///   "POFF": 0,
-///   "STRT": 29,
-///   "TIME": 0,
-///   "USET": (0, 0, 0),
-/// }
-/// ```
-async fn handle_leaderboard(req: LeaderboardRequest) -> BlazeResult<()> {
-    // Leaderboard but only returns self
+/// `name`  The name of the leaderboard
+/// `query` The query to resolve
+async fn handle_leaderboard_query(
+    name: String,
+    query: LeaderboardQuery,
+) -> ServerResult<LeaderboardResponse> {
     let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(req.name);
-    let (_, group) = leaderboard.get(ty).await?;
-    let group = &*group.read().await;
-
-    let start_index = req.start;
-    let end_index = req.count.min(group.values.len());
-
-    let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
-    // TODO: IMEPLEMENT PROPERLY
-    // Ok(LeaderboardResponse { values })
-    Ok(())
-}
-
-/// Handles returning a centered leaderboard object. This is currently not implemented
-///
-/// ```
-/// Route: Stats(GetCenteredLeaderboard)
-/// ID: 0
-/// Content: {
-///     "BOTT": 0,
-///     "CENT": 1, // Player ID to center on
-///     "COUN": 60,
-///     "KSUM": Map {
-///         "accountcountry": 0,
-///         "ME3Map": 0
-///     },
-///     "LBID": 0,
-///     "NAME": "N7RatingGlobal",
-///     "POFF": 0,
-///     "TIME": 0,
-///     "USET": (0, 0, 0)
-/// }
-/// ```
-async fn handle_centered_leaderboard(req: CenteredLeaderboardRequest) -> BlazeResult<()> {
-    let count = req.count.max(1);
-    let before = if count % 2 == 0 {
-        count / 2 + 1
-    } else {
-        count / 2
+    let ty = LeaderboardType::from(name);
+    let values = leaderboard
+        .get(ty, query)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?;
+    let response = match values {
+        Some(values) => LeaderboardResponse::Values(values.0),
+        None => LeaderboardResponse::Empty,
     };
-    let after = count / 2;
-
-    let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(req.name);
-    let (_, group) = leaderboard.get(ty).await?;
-    let group: &LeaderboardEntityGroup = &*group.read().await;
-
-    let index_of = group
-        .values
-        .iter()
-        .position(|value| value.player_id == req.center);
-
-    let index_of = match index_of {
-        Some(value) => value,
-        // None => return Ok(LeaderboardResponse { values: &[] }),
-        None => return Ok(()),
-    };
-
-    let start_index = index_of - before.min(index_of);
-    let end_index = (index_of + after).min(group.values.len());
-
-    let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
-    Ok(())
-
-    // TODO: IMPLEMENT PROPERLY
-    // Ok(LeaderboardResponse { values })
-}
-
-/// Handles returning a filtered leaderboard object. This is currently not implemented
-///
-/// ```
-/// Route: Stats(GetFilteredLeaderboard)
-/// ID: 27
-/// Content: {
-///     "FILT": 1,
-///     "IDLS": [1], // Player IDs
-///     "KSUM": Map {
-///         "accountcountry": 0,
-///         "ME3Map": 0
-///     },
-///     "LBID": 0,
-///     "NAME": "N7RatingGlobal",
-///     "POFF": 0,
-///     "TIME": 0,
-///     "USET": (0, 0, 0)
-/// }
-/// ```
-async fn handle_filtered_leaderboard(req: FilteredLeaderboardRequest) -> BlazeResult<()> {
-    let player_id = req.id;
-    // Leaderboard but only returns self
-    let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(req.name);
-    let (_, group) = leaderboard.get(ty).await?;
-    let group: &LeaderboardEntityGroup = &*group.read().await;
-    let entry = group
-        .values
-        .iter()
-        .find(|value| value.player_id == player_id);
-
-    // todo!("Properly implement with response types")
-
-    Ok(())
-
-    // Ok(if let Some(entry) = entry {
-    //     packet.respond(FilteredLeaderboardResponse { value: entry })
-    // } else {
-    //     packet.respond(EmptyLeaderboardResponse)
-    // })
+    Ok(response)
 }
 
 fn get_locale_name(code: &str) -> &str {

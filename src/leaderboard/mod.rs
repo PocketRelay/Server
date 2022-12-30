@@ -3,7 +3,10 @@
 use self::models::*;
 use crate::{
     state::GlobalState,
-    utils::parsing::{parse_player_character, parse_player_class},
+    utils::{
+        parsing::{parse_player_character, parse_player_class},
+        types::PlayerID,
+    },
 };
 use database::{DatabaseConnection, DbResult, Player};
 use tokio::{sync::RwLock, task::JoinSet, try_join};
@@ -20,12 +23,37 @@ pub struct Leaderboard {
     cp_group: RwLock<LeaderboardEntityGroup>,
 }
 
+/// Different query types for querying the leaderboards
+/// in different ways
+pub enum LeaderboardQuery {
+    /// Normal query
+    Normal {
+        /// Offset amount to start at
+        start: usize,
+        /// Number of items to retrieve
+        count: usize,
+    },
+    /// Query where the center is a specific player
+    Centered {
+        /// The ID of the player to center
+        player_id: PlayerID,
+        /// The number of players to query
+        count: usize,
+    },
+    /// Returning a leaderboard filtered for
+    /// a specific player
+    Filtered {
+        /// The ID of the player to get
+        player_id: PlayerID,
+    },
+}
+
 impl Leaderboard {
     /// Retrieves the lock to the leaderboard entity group for the
     /// provided leaderboard type
     ///
     /// `ty` The leaderboard type
-    pub fn get_type_lock(&self, ty: &LeaderboardType) -> &RwLock<LeaderboardEntityGroup> {
+    fn get_type_lock(&self, ty: &LeaderboardType) -> &RwLock<LeaderboardEntityGroup> {
         match ty {
             LeaderboardType::N7Rating => &self.n7_group,
             LeaderboardType::ChallengePoints => &self.cp_group,
@@ -33,29 +61,105 @@ impl Leaderboard {
     }
 
     /// Updates the provided leaderboard type. If the contents are
-    /// expired then they are computed again. Returns the total number
-    /// of entities present in the leaderboard type and the lock used
-    /// to access the entity
+    /// expired then they are computed again. Returns a cloned list of
+    /// entires matching the provided query or None if the query was not
+    /// valid
     ///
     /// `ty` The leaderboard type
     pub async fn get(
         &self,
         ty: LeaderboardType,
-    ) -> DbResult<(usize, &RwLock<LeaderboardEntityGroup>)> {
+        query: LeaderboardQuery,
+    ) -> DbResult<Option<(Vec<LeaderboardEntry>, bool)>> {
         let read_lock = self.get_type_lock(&ty);
         // Check the cached value to see if its valid
         {
             let entity = &*read_lock.read().await;
             if entity.is_valid() {
-                return Ok((entity.values.len(), read_lock));
+                return Ok(Self::resolve_query(entity, query));
             }
         }
 
         let ranking = self.compute_rankings(&ty).await?;
-        let count = ranking.len();
         let entity = &mut *self.get_type_lock(&ty).write().await;
         entity.update(ranking);
-        Ok((count, read_lock))
+        Ok(Self::resolve_query(entity, query))
+    }
+    /// Updates the provided leaderboard type. If the contents are
+    /// expired then they are computed again. Returns the total number
+    /// of entities present in the leaderboard type
+    ///
+    /// `ty` The leaderboard type
+    pub async fn get_size(&self, ty: LeaderboardType) -> DbResult<usize> {
+        let read_lock = self.get_type_lock(&ty);
+        // Check the cached value to see if its valid
+        {
+            let entity = &*read_lock.read().await;
+            if entity.is_valid() {
+                return Ok(entity.values.len());
+            }
+        }
+
+        let ranking = self.compute_rankings(&ty).await?;
+        let entity = &mut *self.get_type_lock(&ty).write().await;
+        entity.update(ranking);
+        Ok(entity.values.len())
+    }
+
+    /// Resolves the query based on the provided entity group
+    /// cloning any values that are needed returning a list of
+    /// entires and a boolean for whether there are more entries
+    /// after the current query.
+    ///
+    /// `group` The group to resolve with
+    /// `query` The query to resolve
+    fn resolve_query(
+        group: &LeaderboardEntityGroup,
+        query: LeaderboardQuery,
+    ) -> Option<(Vec<LeaderboardEntry>, bool)> {
+        let values = &group.values;
+        let values_len = values.len();
+        match query {
+            LeaderboardQuery::Normal { start, count } => {
+                // The index to stop at
+                let end_index = count.min(values_len);
+
+                values
+                    .get(start..end_index)
+                    .map(|value| (value.to_vec(), values_len > end_index))
+            }
+            LeaderboardQuery::Centered { player_id, count } => {
+                // The number of items before the center index
+                let before = if count % 2 == 0 {
+                    count / 2 + 1
+                } else {
+                    count / 2
+                };
+                // The number of items after the center index
+                let after = count / 2;
+
+                // The index of the centered player
+                let player_index = values
+                    .iter()
+                    .position(|value| value.player_id == player_id)?;
+
+                // The index of the first item
+                let start_index = player_index - before.min(player_index);
+                // The index of the last item
+                let end_index = (player_index + after).min(values_len);
+                values
+                    .get(start_index..end_index)
+                    .map(|value| (value.to_vec(), values_len > end_index))
+            }
+            LeaderboardQuery::Filtered { player_id } => {
+                let player_entry = values
+                    .iter()
+                    .find(|value| value.player_id == player_id)
+                    .cloned()?;
+
+                Some((vec![player_entry], false))
+            }
+        }
     }
 
     /// Computes the ranking values for the provided `ty` this consists of

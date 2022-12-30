@@ -34,22 +34,27 @@ impl Encodable for EntityCountResponse {
     }
 }
 
-fn write_leaderboard_entry(writer: &mut TdfWriter, value: &LeaderboardEntry) {
-    writer.tag_str(b"ENAM", &value.player_name);
-    writer.tag_u32(b"ENID", value.player_id);
-    writer.tag_usize(b"RANK", value.rank);
-    let value_str = value.value.to_string();
-    writer.tag_str(b"RSTA", &value_str);
-    writer.tag_zero(b"RWFG");
-    writer.tag_union_unset(b"RWST");
-    {
-        writer.tag_list_start(b"STAT", TdfType::String, 1);
-        writer.write_str(&value_str);
-    }
-    writer.tag_zero(b"UATT");
-    writer.tag_group_end();
-}
-
+/// Request for a list of leaderboard entries where the center
+/// value is the entry for the player with the provided ID
+///
+/// ```
+/// Route: Stats(GetCenteredLeaderboard)
+/// ID: 0
+/// Content: {
+///     "BOTT": 0,
+///     "CENT": 1, // Player ID to center on
+///     "COUN": 60,
+///     "KSUM": Map {
+///         "accountcountry": 0,
+///         "ME3Map": 0
+///     },
+///     "LBID": 0,
+///     "NAME": "N7RatingGlobal",
+///     "POFF": 0,
+///     "TIME": 0,
+///     "USET": (0, 0, 0)
+/// }
+/// ```
 pub struct CenteredLeaderboardRequest {
     /// The entity count
     pub count: usize,
@@ -72,21 +77,61 @@ impl Decodable for CenteredLeaderboardRequest {
     }
 }
 
-pub struct LeaderboardResponse<'a> {
-    pub values: &'a [LeaderboardEntry],
+pub enum LeaderboardResponse {
+    /// Empty response where there is no content
+    Empty,
+    /// Response with many leaderboard entires
+    Values(Vec<LeaderboardEntry>),
 }
 
-impl Encodable for LeaderboardResponse<'_> {
+impl Encodable for LeaderboardResponse {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_list_start(b"LDLS", TdfType::Group, self.values.len());
-        for value in self.values {
-            write_leaderboard_entry(writer, value);
+        match self {
+            Self::Empty => {
+                writer.tag_list_start(b"LDLS", TdfType::Group, 0);
+            }
+            Self::Values(values) => {
+                writer.tag_list_start(b"LDLS", TdfType::Group, values.len());
+                for value in values {
+                    writer.tag_str(b"ENAM", &value.player_name);
+                    writer.tag_u32(b"ENID", value.player_id);
+                    writer.tag_usize(b"RANK", value.rank);
+                    let value_str = value.value.to_string();
+                    writer.tag_str(b"RSTA", &value_str);
+                    writer.tag_zero(b"RWFG");
+                    writer.tag_union_unset(b"RWST");
+                    {
+                        writer.tag_list_start(b"STAT", TdfType::String, 1);
+                        writer.write_str(&value_str);
+                    }
+                    writer.tag_zero(b"UATT");
+                    writer.tag_group_end();
+                }
+            }
         }
     }
 }
 
 /// Structure for the request to retrieve a leaderboards
 /// contents at the provided start offset
+///
+/// Component: Stats(GetLeaderboard)
+/// ```
+/// ID: 1274
+/// Content: {
+///   "COUN": 61,
+///   "KSUM": Map {
+///     "accountcountry": 0
+///     "ME3Map": 0
+///   },
+///   "LBID": 0,
+///   "NAME": "N7RatingGlobal",
+///   "POFF": 0,
+///   "STRT": 29,
+///   "TIME": 0,
+///   "USET": (0, 0, 0),
+/// }
+/// ```
 pub struct LeaderboardRequest {
     /// The entity count
     pub count: usize,
@@ -107,6 +152,24 @@ impl Decodable for LeaderboardRequest {
 
 /// Structure for a request to get a leaderboard only
 /// containing the details for a specific player
+///
+/// ```
+/// Route: Stats(GetFilteredLeaderboard)
+/// ID: 27
+/// Content: {
+///     "FILT": 1,
+///     "IDLS": [1], // Player IDs
+///     "KSUM": Map {
+///         "accountcountry": 0,
+///         "ME3Map": 0
+///     },
+///     "LBID": 0,
+///     "NAME": "N7RatingGlobal",
+///     "POFF": 0,
+///     "TIME": 0,
+///     "USET": (0, 0, 0)
+/// }
+/// ```
 pub struct FilteredLeaderboardRequest {
     /// The player ID
     pub id: PlayerID,
@@ -126,45 +189,6 @@ impl Decodable for FilteredLeaderboardRequest {
         }
         let name: String = reader.tag("NAME")?;
         Ok(Self { id, name })
-    }
-}
-
-pub struct FilteredLeaderboardResponse<'a> {
-    pub value: &'a LeaderboardEntry,
-}
-
-impl Encodable for FilteredLeaderboardResponse<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_list_start(b"LDLS", TdfType::Group, 1);
-        write_leaderboard_entry(writer, self.value)
-    }
-}
-
-/// Structure for an empty leaderboard response
-///
-/// # Example
-///
-/// ```
-/// Content: {
-///  "LDLS": List<Group> [
-///    {
-///      "ENAM": "Jacobtread",
-///      "ENID": 978651371, PLAYER ID
-///      "RANK": 45, Leaderboard rank value
-///      "RSTA": "91920",
-///      "RWFG": 0,
-///      "RWST": Optional(Empty),
-///      "STAT": List<String> ["91920"],
-///      "UATT": 0,
-///    }
-///  ],
-///}
-/// ```
-pub struct EmptyLeaderboardResponse;
-
-impl Encodable for EmptyLeaderboardResponse {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_list_start(b"LDLS", TdfType::Group, 0);
     }
 }
 
