@@ -313,10 +313,7 @@ impl Session {
             SessionMessage::UpdateSelf => self.update_self(),
             SessionMessage::SetPlayer(player, tx) => {
                 self.player = player;
-                match tx.send(()) {
-                    Ok(_) => info!("Sent player res"),
-                    Err(err) => error!("Err playe res {err:?}"),
-                }
+                tx.send(()).ok();
             }
             SessionMessage::SetNetworkInfo(groups, ext) => self.set_network_info(groups, ext),
             SessionMessage::SetHardwareFlag(flag) => self.set_hardware_flag(flag),
@@ -448,16 +445,6 @@ impl Session {
             }
         }
         debug!("Flushed session (SID: {}, Count: {})", self.id, write_count);
-    }
-
-    /// Writes the provided packet directly to the underlying stream
-    /// rather than pushing to the buffer. Only use when handling
-    /// responses will cause long blocks because will wait for all
-    /// the data to be written.
-    async fn write(&mut self, packet: Packet) -> io::Result<()> {
-        packet.write_async(&mut self.stream).await?;
-        self.debug_log_packet("Wrote", &packet);
-        Ok(())
     }
 
     /// Reads a packet from the stream and then passes the packet
