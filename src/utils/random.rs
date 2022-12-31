@@ -1,4 +1,4 @@
-use password_hash::rand_core::{OsRng, RngCore};
+use argon2::password_hash::rand_core::{OsRng, RngCore};
 
 pub fn generate_random_string(len: usize) -> String {
     const RANGE: u32 = 26 + 26 + 10;

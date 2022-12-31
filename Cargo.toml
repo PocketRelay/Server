@@ -51,8 +51,7 @@ database = { path = "database", package = "pocket-relay-database", version = "^0
 rust-embed = { version = "6.4.2", features = ["debug-embed"] }
 
 # Password hashing
-argon2 = { version = "0.4" }
-password-hash = { version = "0.4.2" }
+argon2 = "0.4"
 
 base64 = "0.13"
 flate2 = { version = "1", features = ["zlib"], default-features = false }
@@ -61,7 +60,7 @@ flate2 = { version = "1", features = ["zlib"], default-features = false }
 dotenvy = "0.15"
 
 # Library for obtaining the local IP address of the device
-local-ip-address = "0.4.9"
+local-ip-address = "0.5.0"
 
 # Tokio async runtime
 [dependencies.tokio]
