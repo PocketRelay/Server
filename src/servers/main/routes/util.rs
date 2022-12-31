@@ -8,7 +8,8 @@ use crate::{
     state::GlobalState,
     utils::{constants, dmap::load_dmap, env},
 };
-use base64;
+
+use base64ct::{Base64, Encoding};
 use blaze_pk::{router::Router, types::TdfMap};
 use database::PlayerData;
 use flate2::{write::ZlibEncoder, Compression};
@@ -265,7 +266,7 @@ fn create_base64_map(bytes: &[u8]) -> ChunkMap {
     // The size of the chunks
     const CHUNK_LENGTH: usize = 255;
 
-    let encoded: String = base64::encode(bytes);
+    let encoded: String = Base64::encode_string(bytes);
     let length = encoded.len();
 
     let mut output: ChunkMap = TdfMap::with_capacity(length / CHUNK_LENGTH);

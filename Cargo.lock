@@ -1391,7 +1391,7 @@ version = "0.2.0"
 dependencies = [
  "argon2",
  "axum",
- "base64",
+ "base64ct",
  "blaze-pk",
  "blaze-ssl-async",
  "dotenvy",
