@@ -1,7 +1,7 @@
 use crate::{
     blaze::{
         components::{Authentication as A, Components as C},
-        errors::{BlazeResult, ServerError, ServerResult},
+        errors::{ServerError, ServerResult},
     },
     servers::main::{models::auth::*, session::SessionAddr},
     state::GlobalState,
@@ -408,29 +408,56 @@ async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> 
 async fn handle_create_account(
     session: SessionAddr,
     req: CreateAccountRequest,
-) -> BlazeResult<AuthResponse> {
+) -> ServerResult<AuthResponse> {
     let email = req.email;
     if !is_email(&email) {
-        return Err(ServerError::InvalidEmail.into());
+        return Err(ServerError::InvalidEmail);
     }
 
     let db = GlobalState::database();
-    let email_exists = Player::is_email_taken(db, &email).await?;
-    if email_exists {
-        return Err(ServerError::EmailAlreadyInUse.into());
+
+    match Player::is_email_taken(db, &email).await {
+        // Continue normally for non taken emails
+        Ok(false) => {}
+        // Handle email address is already in use
+        Ok(true) => return Err(ServerError::EmailAlreadyInUse),
+        // Handle database error while checking taken
+        Err(err) => {
+            error!("Unable to check if email '{email}' is already taken: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
     }
 
-    let hashed_password = hash_password(&req.password).map_err(|err| {
-        error!("Failed to hash passsword: {err:?}");
-        ServerError::ServerUnavailable
-    })?;
+    // Hash the proivded plain text password using Argon2
+    let hashed_password: String = match hash_password(&req.password) {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to hash password for creating account: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
 
-    let display_name = email.chars().take(99).collect::<String>();
-    let player: Player = Player::create(db, email, display_name, hashed_password, false).await?;
-    let (player, session_token) = player
-        .with_token(db, generate_random_string)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?;
+    // Create a default display name from the first 99 chars of the email
+    let display_name: String = email.chars().take(99).collect::<String>();
+
+    // Create a new player
+    let player: Player = match Player::create(db, email, display_name, hashed_password, false).await
+    {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to create player: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
+
+    // Generate a session token for the player
+    let (player, session_token) = match player.with_token(db, generate_random_string).await {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to create session token: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
 
     session.set_player(Some(player.clone())).await;
 

@@ -4,17 +4,18 @@ use crate::{
     blaze::{
         codec::NetAddress,
         components::{Components as C, UserSessions as U},
-        errors::{BlazeResult, ServerError},
+        errors::{ServerError, ServerResult},
     },
     servers::main::{
         models::{auth::AuthResponse, user_sessions::*},
         session::SessionAddr,
     },
     state::GlobalState,
-    utils::{net::public_address, random::generate_random_string},
+    utils::net::public_address,
 };
 use blaze_pk::router::Router;
 use database::Player;
+use log::error;
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
@@ -45,19 +46,27 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 async fn handle_resume_session(
     session: SessionAddr,
     req: ResumeSessionRequest,
-) -> BlazeResult<AuthResponse> {
+) -> ServerResult<AuthResponse> {
     let db = GlobalState::database();
-    let player: Player = Player::by_token(db, &req.session_token)
-        .await?
-        .ok_or(ServerError::InvalidSession)?;
-    let (player, session_token) = player
-        .with_token(db, generate_random_string)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?;
+
+    // Find the player that the token is for
+    let player: Player = match Player::by_token(db, &req.session_token).await {
+        // Valid session token
+        Ok(Some(player)) => player,
+        // Session that was attempted to resume is expired
+        Ok(None) => return Err(ServerError::InvalidSession),
+        // Error occurred while looking up token
+        Err(err) => {
+            error!("Error while attempt to resume session: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
+
     session.set_player(Some(player.clone())).await;
+
     Ok(AuthResponse {
         player,
-        session_token,
+        session_token: req.session_token,
         silent: true,
     })
 }

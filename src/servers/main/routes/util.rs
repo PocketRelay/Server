@@ -2,7 +2,7 @@ use crate::{
     blaze::{
         codec::Port,
         components::{Components as C, Util as U},
-        errors::{BlazeResult, ServerError, ServerResult},
+        errors::{ServerError, ServerResult},
     },
     servers::main::{models::util::*, session::SessionAddr},
     state::GlobalState,
@@ -10,6 +10,7 @@ use crate::{
 };
 use base64;
 use blaze_pk::{router::Router, types::TdfMap};
+use database::PlayerData;
 use flate2::{write::ZlibEncoder, Compression};
 use log::{error, warn};
 use rust_embed::RustEmbed;
@@ -519,21 +520,18 @@ async fn handle_user_settings_save(
     session: SessionAddr,
     req: SettingsSaveRequest,
 ) -> ServerResult<()> {
-    let db = GlobalState::database();
-
     let player = session
         .get_player()
         .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    player
-        .set_data(db, req.key, req.value)
-        .await
-        .map_err(|err| {
-            warn!("Failed to update player data: {err:?}");
-            ServerError::ServerUnavailable
-        })?;
-    Ok(())
+    let db = GlobalState::database();
+    if let Err(err) = player.set_data(db, req.key, req.value).await {
+        warn!("Failed to update player data: {err:?}");
+        Err(ServerError::ServerUnavailable)
+    } else {
+        Ok(())
+    }
 }
 
 /// Handles loading all the user details for the current account and sending them to the
@@ -544,13 +542,24 @@ async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-async fn handle_user_settings_load_all(session: SessionAddr) -> BlazeResult<SettingsResponse> {
+async fn handle_user_settings_load_all(session: SessionAddr) -> ServerResult<SettingsResponse> {
     let player = session
         .get_player()
         .await
         .ok_or(ServerError::FailedNoLoginAction)?;
+
     let db = GlobalState::database();
-    let data = player.all_data(db).await?;
+
+    // Load the player data from the database
+    let data: Vec<PlayerData> = match player.all_data(db).await {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to load player data: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
+
+    // Encode the player data into a settings map and order it
     let mut settings = TdfMap::<String, String>::with_capacity(data.len());
     for value in data {
         settings.insert(value.key, value.value)

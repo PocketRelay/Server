@@ -1,13 +1,11 @@
 use crate::{
-    blaze::{
-        components::{Components as C, Stats as S},
-        errors::{BlazeResult, ServerError, ServerResult},
-    },
+    blaze::components::{Components as C, Stats as S},
     leaderboard::{models::*, LeaderboardQuery},
     servers::main::{models::stats::*, session::SessionAddr},
     state::GlobalState,
 };
 use blaze_pk::router::Router;
+use log::error;
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
@@ -63,13 +61,17 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 ///     "POFF": 0
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(
-    req: EntityCountRequest,
-) -> BlazeResult<EntityCountResponse> {
+async fn handle_leaderboard_entity_count(req: EntityCountRequest) -> EntityCountResponse {
     let leaderboard = GlobalState::leaderboard();
     let ty = LeaderboardType::from(req.name);
-    let count = leaderboard.get_size(ty).await?;
-    Ok(EntityCountResponse { count })
+    let count = match leaderboard.get_size(ty).await {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Unable to compute leaderboard size: {err:?}");
+            0
+        }
+    };
+    EntityCountResponse { count }
 }
 
 /// Handler function for handling leaderboard querys and returning the resulting
@@ -77,21 +79,20 @@ async fn handle_leaderboard_entity_count(
 ///
 /// `name`  The name of the leaderboard
 /// `query` The query to resolve
-async fn handle_leaderboard_query(
-    name: String,
-    query: LeaderboardQuery,
-) -> ServerResult<LeaderboardResponse> {
+async fn handle_leaderboard_query(name: String, query: LeaderboardQuery) -> LeaderboardResponse {
     let leaderboard = GlobalState::leaderboard();
     let ty = LeaderboardType::from(name);
-    let values = leaderboard
-        .get(ty, query)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?;
-    let response = match values {
-        Some(values) => LeaderboardResponse::Values(values.0),
-        None => LeaderboardResponse::Empty,
-    };
-    Ok(response)
+    match leaderboard.get(ty, query).await {
+        // Values response
+        Ok(Some((values, _))) => LeaderboardResponse::Values(values),
+        // Empty query response
+        Ok(None) => LeaderboardResponse::Empty,
+        // Error handling
+        Err(err) => {
+            error!("Failed to compute leaderboard: {err:?}");
+            LeaderboardResponse::Empty
+        }
+    }
 }
 
 fn get_locale_name(code: &str) -> &str {

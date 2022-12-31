@@ -1,56 +1,6 @@
 use blaze_pk::packet::{IntoResponse, Packet};
-use database::DbErr;
-use std::{fmt::Display, io};
 
-pub type BlazeResult<T> = Result<T, BlazeError>;
 pub type ServerResult<T> = Result<T, ServerError>;
-
-/// Error type used for handling a variety of possible errors
-/// that can occur throughout the applications
-#[derive(Debug)]
-pub enum BlazeError {
-    IO(io::Error),
-    Database(DbErr),
-    Server(ServerError),
-}
-
-impl Display for BlazeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::IO(value) => write!(f, "IO error: {value:?}"),
-            Self::Database(value) => write!(f, "Database error: {value}"),
-            Self::Server(value) => write!(f, "Server error: {value:?}"),
-        }
-    }
-}
-
-impl From<io::Error> for BlazeError {
-    fn from(err: io::Error) -> Self {
-        BlazeError::IO(err)
-    }
-}
-
-impl From<DbErr> for BlazeError {
-    fn from(err: DbErr) -> Self {
-        BlazeError::Database(err)
-    }
-}
-
-impl From<ServerError> for BlazeError {
-    fn from(err: ServerError) -> Self {
-        BlazeError::Server(err)
-    }
-}
-
-impl IntoResponse for BlazeError {
-    fn into_response(self, req: Packet) -> Packet {
-        let err = match self {
-            Self::Server(err) => err as u16,
-            _ => ServerError::ServerUnavailable as u16,
-        };
-        req.respond_error_empty(err)
-    }
-}
 
 ///  Enum for server error values
 #[derive(Debug, Clone)]
