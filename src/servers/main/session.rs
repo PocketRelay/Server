@@ -328,7 +328,13 @@ impl Session {
     ///
     /// `packet` The packet to push to the buffer
     fn push(&mut self, packet: Packet) {
-        self.queue.push_back(packet);
+        if let PacketType::Notify = packet.header.ty {
+            // Notifications are pushed to the back
+            self.queue.push_back(packet);
+        } else {
+            // Responses are pushed to the front
+            self.queue.push_front(packet);
+        }
         self.queue_flush();
     }
 
