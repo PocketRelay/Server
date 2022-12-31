@@ -58,7 +58,7 @@ impl GamePlayer {
             session_id: self.addr.id,
             player_id: self.player.id,
             display_name: self.player.display_name.clone(),
-            net: self.net,
+            net: self.net.clone(),
         }
     }
 

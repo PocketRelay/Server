@@ -1,5 +1,5 @@
-use crate::blaze::{components::Components, errors::BlazeError};
-use blaze_pk::packet::Packet;
+use crate::blaze::components::Components;
+use blaze_pk::router::Router;
 
 use super::session::SessionAddr;
 
@@ -11,26 +11,15 @@ mod stats;
 mod user_sessions;
 mod util;
 
-/// Type alias for result from a routing function. Routing functions either
-/// return a Packet tor esponse with or an Error
-pub type HandleResult = Result<Packet, BlazeError>;
-
-/// Root routing function handles the different components passing each
-/// component onto its specific route function in its module.
-///
-/// `session`   The session to route the packet for
-/// `component` The component of the packet
-/// `packet`    The packet itself
-pub async fn route(session: SessionAddr, component: Components, packet: &Packet) -> HandleResult {
-    match component {
-        Components::Authentication(value) => auth::route(session, value, packet).await,
-        Components::GameManager(value) => game_manager::route(session, value, packet).await,
-        Components::Stats(value) => stats::route(value, packet).await,
-        Components::Util(value) => util::route(session, value, packet).await,
-        Components::Messaging(value) => messaging::route(session, value, packet).await,
-        Components::UserSessions(value) => user_sessions::route(session, value, packet).await,
-        Components::AssociationLists(value) => other::route_assoc_lists(value, packet),
-        Components::GameReporting(value) => other::route_game_reporting(session, value, packet),
-        _ => Ok(packet.respond_empty()),
-    }
+/// Function which creates a router for sessions to use
+pub fn router() -> Router<Components, SessionAddr> {
+    let mut router = Router::new();
+    auth::route(&mut router);
+    game_manager::route(&mut router);
+    stats::route(&mut router);
+    util::route(&mut router);
+    messaging::route(&mut router);
+    user_sessions::route(&mut router);
+    other::route(&mut router);
+    router
 }

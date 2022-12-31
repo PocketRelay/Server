@@ -3,7 +3,7 @@
 
 use std::hash::Hash;
 
-use blaze_pk::{define_components, packet::PacketComponents};
+use blaze_pk::define_components;
 
 define_components! {
     Authentication (0x1) {
@@ -265,13 +265,5 @@ define_components! {
             UpdateExtendedDataAttribute (0x5)
             FetchExtendedData (0x3)
         }
-    }
-}
-
-/// Hashing implementation to allow components to be used
-/// as map keys
-impl Hash for Components {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.values().hash(state)
     }
 }

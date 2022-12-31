@@ -1,32 +1,36 @@
 use std::net::{IpAddr, SocketAddr};
 
 use crate::{
-    blaze::{codec::NetAddress, components::UserSessions, errors::ServerError},
+    blaze::{
+        codec::NetAddress,
+        components::{Components as C, UserSessions as U},
+        errors::{ServerError, ServerResult},
+    },
     servers::main::{
         models::{auth::AuthResponse, user_sessions::*},
-        routes::HandleResult,
         session::SessionAddr,
     },
     state::GlobalState,
-    utils::{net::public_address, random::generate_random_string},
+    utils::net::public_address,
 };
-use blaze_pk::packet::Packet;
+use blaze_pk::router::Router;
 use database::Player;
+use log::error;
 
-/// Routing function for handling packets with the `Stats` component and routing them
-/// to the correct routing function. If no routing function is found then the packet
-/// is printed to the output and an empty response is sent.
+/// Routing function for adding all the routes in this file to the
+/// provided router
 ///
-/// `session`   The session that the packet was recieved by
-/// `component` The component of the packet recieved
-/// `packet`    The recieved packet
-pub async fn route(session: SessionAddr, component: UserSessions, packet: &Packet) -> HandleResult {
-    match component {
-        UserSessions::ResumeSession => handle_resume_session(session, packet).await,
-        UserSessions::UpdateNetworkInfo => handle_update_network_info(session, packet).await,
-        UserSessions::UpdateHardwareFlags => handle_update_hardware_flag(session, packet),
-        _ => Ok(packet.respond_empty()),
-    }
+/// `router` The router to add to
+pub fn route(router: &mut Router<C, SessionAddr>) {
+    router.route_stateful(C::UserSessions(U::ResumeSession), handle_resume_session);
+    router.route_stateful(
+        C::UserSessions(U::UpdateNetworkInfo),
+        handle_update_network_info,
+    );
+    router.route_stateful(
+        C::UserSessions(U::UpdateHardwareFlags),
+        handle_update_hardware_flag,
+    );
 }
 
 /// Attempts to resume an existing session for a player that has the
@@ -39,23 +43,32 @@ pub async fn route(session: SessionAddr, component: UserSessions, packet: &Packe
 ///     "SKEY": "127_CHARACTER_TOKEN"
 /// }
 /// ```
-async fn handle_resume_session(session: SessionAddr, packet: &Packet) -> HandleResult {
-    let req: ResumeSessionRequest = packet.decode()?;
+async fn handle_resume_session(
+    session: SessionAddr,
+    req: ResumeSessionRequest,
+) -> ServerResult<AuthResponse> {
     let db = GlobalState::database();
-    let player: Player = Player::by_token(db, &req.session_token)
-        .await?
-        .ok_or(ServerError::InvalidSession)?;
-    let (player, session_token) = player
-        .with_token(db, generate_random_string)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?;
-    session.set_player(Some(player.clone()));
-    let response = AuthResponse {
-        player,
-        session_token,
-        silent: true,
+
+    // Find the player that the token is for
+    let player: Player = match Player::by_token(db, &req.session_token).await {
+        // Valid session token
+        Ok(Some(player)) => player,
+        // Session that was attempted to resume is expired
+        Ok(None) => return Err(ServerError::InvalidSession),
+        // Error occurred while looking up token
+        Err(err) => {
+            error!("Error while attempt to resume session: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
     };
-    Ok(packet.respond(response))
+
+    session.set_player(Some(player.clone())).await;
+
+    Ok(AuthResponse {
+        player,
+        session_token: req.session_token,
+        silent: true,
+    })
 }
 
 /// Handles updating the stored networking information for the current session
@@ -87,9 +100,7 @@ async fn handle_resume_session(session: SessionAddr, packet: &Packet) -> HandleR
 ///     }
 /// }
 /// ```
-async fn handle_update_network_info(session: SessionAddr, packet: &Packet) -> HandleResult {
-    let req: UpdateNetworkRequest = packet.decode()?;
-
+async fn handle_update_network_info(session: SessionAddr, req: UpdateNetworkRequest) {
     // TODO: Possibly spawn this off into a task and have a session
     // message update the networking information when this is complete?
 
@@ -102,7 +113,6 @@ async fn handle_update_network_info(session: SessionAddr, packet: &Packet) -> Ha
     }
 
     session.set_network_info(groups, req.qos);
-    Ok(packet.respond_empty())
 }
 
 /// Obtains the networking address from the provided SocketAddr
@@ -141,8 +151,6 @@ async fn get_network_address(addr: Option<SocketAddr>) -> NetAddress {
 ///     "HWFG": 0
 /// }
 /// ```
-fn handle_update_hardware_flag(session: SessionAddr, packet: &Packet) -> HandleResult {
-    let req: HardwareFlagRequest = packet.decode()?;
+async fn handle_update_hardware_flag(session: SessionAddr, req: HardwareFlagRequest) {
     session.set_hardware_flag(req.hardware_flag);
-    Ok(packet.respond_empty())
 }

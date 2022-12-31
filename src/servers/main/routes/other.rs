@@ -1,25 +1,19 @@
 use crate::{
-    blaze::components::{AssociationLists, Components, GameReporting},
-    servers::main::{models::other::*, routes::HandleResult, session::SessionAddr},
+    blaze::components::{AssociationLists as A, Components as C, GameReporting as G},
+    servers::main::{models::other::*, session::SessionAddr},
 };
-use blaze_pk::packet::Packet;
+use blaze_pk::{packet::Packet, router::Router};
 
-/// Routing function for handling packets with the `GameReporting` component and routing them
-/// to the correct routing function. If no routing function is found then the packet
-/// is printed to the output and an empty response is sent.
+/// Routing function for adding all the routes in this file to the
+/// provided router
 ///
-/// `session`   The session that the packet was recieved by
-/// `component` The component of the packet recieved
-/// `packet`    The recieved packet
-pub fn route_game_reporting(
-    session: SessionAddr,
-    component: GameReporting,
-    packet: &Packet,
-) -> HandleResult {
-    match component {
-        GameReporting::SubmitOfflineGameReport => handle_submit_offline(session, packet),
-        _ => Ok(packet.respond_empty()),
-    }
+/// `router` The router to add to
+pub fn route(router: &mut Router<C, SessionAddr>) {
+    router.route_stateful(
+        C::GameReporting(G::SubmitOfflineGameReport),
+        handle_submit_offline,
+    );
+    router.route(C::AssociationLists(A::GetLists), handle_get_lists);
 }
 
 /// Handles submission of offline game reports from clients.
@@ -47,29 +41,11 @@ pub fn route_game_reporting(
 ///     "GTYP": "massEffectReport"
 /// }
 /// ```
-fn handle_submit_offline(session: SessionAddr, packet: &Packet) -> HandleResult {
-    let notify = Packet::notify(
-        Components::GameReporting(GameReporting::GameReportSubmitted),
-        GameReportResponse,
-    );
-
+async fn handle_submit_offline(session: SessionAddr) {
+    let notify = Packet::notify(C::GameReporting(G::GameReportSubmitted), GameReportResponse);
     session.push(notify);
-    Ok(packet.respond_empty())
 }
 
-/// Routing function for handling packets with the `AssociationLists` component and routing them
-/// to the correct routing function. If no routing function is found then the packet
-/// is printed to the output and an empty response is sent.
-///
-/// `session`   The session that the packet was recieved by
-/// `component` The component of the packet recieved
-/// `packet`    The recieved packet
-pub fn route_assoc_lists(component: AssociationLists, packet: &Packet) -> HandleResult {
-    match component {
-        AssociationLists::GetLists => handle_get_lists(packet),
-        _ => Ok(packet.respond_empty()),
-    }
-}
 /// Handles getting associated lists for the player
 ///
 /// ```
@@ -92,6 +68,6 @@ pub fn route_assoc_lists(component: AssociationLists, packet: &Packet) -> Handle
 ///     "OFRC": 0
 /// }
 /// ```
-fn handle_get_lists(packet: &Packet) -> HandleResult {
-    Ok(packet.respond(AssocListResponse))
+async fn handle_get_lists() -> AssocListResponse {
+    AssocListResponse
 }

@@ -1,54 +1,6 @@
-use blaze_pk::error::DecodeError;
-use database::DbErr;
-use std::{fmt::Display, io};
+use blaze_pk::packet::{IntoResponse, Packet};
 
-pub type BlazeResult<T> = Result<T, BlazeError>;
 pub type ServerResult<T> = Result<T, ServerError>;
-
-/// Error type used for handling a variety of possible errors
-/// that can occur throughout the applications
-#[derive(Debug)]
-pub enum BlazeError {
-    Decode(DecodeError),
-    IO(io::Error),
-    Database(DbErr),
-    Server(ServerError),
-}
-
-impl Display for BlazeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Decode(value) => write!(f, "Decode error occurred: {value:?}"),
-            Self::IO(value) => write!(f, "IO error: {value:?}"),
-            Self::Database(value) => write!(f, "Database error: {value}"),
-            Self::Server(value) => write!(f, "Server error: {value:?}"),
-        }
-    }
-}
-
-impl From<DecodeError> for BlazeError {
-    fn from(err: DecodeError) -> Self {
-        BlazeError::Decode(err)
-    }
-}
-
-impl From<io::Error> for BlazeError {
-    fn from(err: io::Error) -> Self {
-        BlazeError::IO(err)
-    }
-}
-
-impl From<DbErr> for BlazeError {
-    fn from(err: DbErr) -> Self {
-        BlazeError::Database(err)
-    }
-}
-
-impl From<ServerError> for BlazeError {
-    fn from(err: ServerError) -> Self {
-        BlazeError::Server(err)
-    }
-}
 
 ///  Enum for server error values
 #[derive(Debug, Clone)]
@@ -77,4 +29,10 @@ pub enum ServerError {
     // Errors from suspend
     Suspend12D = 0x12D,
     Suspend12E = 0x12E,
+}
+
+impl IntoResponse for ServerError {
+    fn into_response(self, req: Packet) -> Packet {
+        req.respond_error_empty(self as u16)
+    }
 }

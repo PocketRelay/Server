@@ -1,7 +1,12 @@
-use crate::env;
+use std::sync::Arc;
+
+use crate::{blaze::components::Components, env};
+use blaze_pk::router::Router;
 use log::{error, info};
 use session::Session;
 use tokio::net::TcpListener;
+
+use self::session::SessionAddr;
 
 mod models;
 mod routes;
@@ -25,6 +30,7 @@ pub async fn start_server() {
         }
     };
 
+    let router: Arc<Router<Components, SessionAddr>> = Arc::new(routes::router());
     let mut session_id = 1;
     // Accept incoming connections
     loop {
@@ -35,7 +41,7 @@ pub async fn start_server() {
                 continue;
             }
         };
-        Session::spawn(session_id, values);
+        Session::spawn(session_id, values, router.clone());
         session_id += 1;
     }
 }

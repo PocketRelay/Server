@@ -1,15 +1,16 @@
 use crate::{
     blaze::{
         codec::Port,
-        components::Util,
+        components::{Components as C, Util as U},
         errors::{ServerError, ServerResult},
     },
-    servers::main::{models::util::*, routes::HandleResult, session::SessionAddr},
+    servers::main::{models::util::*, session::SessionAddr},
     state::GlobalState,
     utils::{constants, dmap::load_dmap, env},
 };
 use base64;
-use blaze_pk::{packet::Packet, types::TdfMap};
+use blaze_pk::{router::Router, types::TdfMap};
+use database::PlayerData;
 use flate2::{write::ZlibEncoder, Compression};
 use log::{error, warn};
 use rust_embed::RustEmbed;
@@ -21,26 +22,23 @@ use std::{
 };
 use tokio::fs::read;
 
-/// Routing function for handling packets with the `Util` component and routing them
-/// to the correct routing function. If no routing function is found then the packet
-/// is printed to the output and an empty response is sent.
+/// Routing function for adding all the routes in this file to the
+/// provided router
 ///
-/// `session`   The session that the packet was recieved by
-/// `component` The component of the packet recieved
-/// `packet`    The recieved packet
-pub async fn route(session: SessionAddr, component: Util, packet: &Packet) -> HandleResult {
-    match component {
-        Util::PreAuth => handle_pre_auth(packet),
-        Util::PostAuth => handle_post_auth(session, packet).await,
-        Util::Ping => handle_ping(packet),
-        Util::FetchClientConfig => handle_fetch_client_config(packet).await,
-        Util::SuspendUserPing => handle_suspend_user_ping(packet),
-        Util::UserSettingsSave => handle_user_settings_save(session, packet).await,
-        Util::GetTelemetryServer => handle_get_telemetry_server(packet),
-        Util::GetTickerServer => handle_get_ticker_server(packet),
-        Util::UserSettingsLoadAll => handle_user_settings_load_all(session, packet).await,
-        _ => Ok(packet.respond_empty()),
-    }
+/// `router` The router to add to
+pub fn route(router: &mut Router<C, SessionAddr>) {
+    router.route(C::Util(U::PreAuth), handle_pre_auth);
+    router.route_stateful(C::Util(U::PostAuth), handle_post_auth);
+    router.route(C::Util(U::Ping), handle_ping);
+    router.route(C::Util(U::FetchClientConfig), handle_fetch_client_config);
+    router.route(C::Util(U::SuspendUserPing), handle_suspend_user_ping);
+    router.route_stateful(C::Util(U::UserSettingsSave), handle_user_settings_save);
+    router.route(C::Util(U::GetTelemetryServer), handle_get_telemetry_server);
+    router.route(C::Util(U::GetTickerServer), handle_get_ticker_server);
+    router.route_stateful(
+        C::Util(U::UserSettingsLoadAll),
+        handle_user_settings_load_all,
+    );
 }
 
 /// Handles retrieving the details about the telemetry server
@@ -51,9 +49,8 @@ pub async fn route(session: SessionAddr, component: Util, packet: &Packet) -> Ha
 /// Content: {}
 /// ```
 ///
-fn handle_get_telemetry_server(packet: &Packet) -> HandleResult {
-    let response = TelemetryServer { port: 9988 };
-    Ok(packet.respond(response))
+async fn handle_get_telemetry_server() -> TelemetryServer {
+    TelemetryServer { port: 9988 }
 }
 
 /// Handles retrieving the details about the ticker server
@@ -64,9 +61,8 @@ fn handle_get_telemetry_server(packet: &Packet) -> HandleResult {
 /// Content: {}
 /// ```
 ///
-fn handle_get_ticker_server(packet: &Packet) -> HandleResult {
-    let response = TickerServer { port: 8999 };
-    Ok(packet.respond(response))
+async fn handle_get_ticker_server() -> TickerServer {
+    TickerServer { port: 8999 }
 }
 
 /// Handles responding to pre-auth requests which is the first request
@@ -100,10 +96,9 @@ fn handle_get_ticker_server(packet: &Packet) -> HandleResult {
 ///     }
 /// }
 /// ```
-fn handle_pre_auth(packet: &Packet) -> HandleResult {
+async fn handle_pre_auth() -> PreAuthResponse {
     let qos_port: Port = env::from_env(env::HTTP_PORT);
-    let response = PreAuthResponse { qos_port };
-    Ok(packet.respond(response))
+    PreAuthResponse { qos_port }
 }
 
 /// Handles post authentication requests. This provides information about other
@@ -114,7 +109,7 @@ fn handle_pre_auth(packet: &Packet) -> HandleResult {
 /// ID: 27
 /// Content: {}
 /// ```
-async fn handle_post_auth(session: SessionAddr, packet: &Packet) -> HandleResult {
+async fn handle_post_auth(session: SessionAddr) -> ServerResult<PostAuthResponse> {
     let player_id = session
         .get_player()
         .await
@@ -122,12 +117,11 @@ async fn handle_post_auth(session: SessionAddr, packet: &Packet) -> HandleResult
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     session.update_self();
-    let response = PostAuthResponse {
+    Ok(PostAuthResponse {
         telemetry: TelemetryServer { port: 9988 },
         ticker: TickerServer { port: 8999 },
         player_id,
-    };
-    Ok(packet.respond(response))
+    })
 }
 
 /// Handles ping update requests. These are sent by the client at the interval
@@ -140,14 +134,13 @@ async fn handle_post_auth(session: SessionAddr, packet: &Packet) -> HandleResult
 /// Content: {}
 /// ```
 ///
-fn handle_ping(packet: &Packet) -> HandleResult {
+async fn handle_ping() -> PingResponse {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_secs();
-    let response = PingResponse { server_time };
-    Ok(packet.respond(response))
+    PingResponse { server_time }
 }
 
 /// Contents of the entitlements dmap file
@@ -171,9 +164,8 @@ const ME3_DIME: &str = include_str!("../../../resources/data/dime.xml");
 ///     "CFID": "ME3_DATA"
 /// }
 /// ```
-async fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
-    let fetch_config: FetchConfigRequest = packet.decode()?;
-    let config = match fetch_config.id.as_ref() {
+async fn handle_fetch_client_config(req: FetchConfigRequest) -> ServerResult<FetchConfigResponse> {
+    let config = match req.id.as_ref() {
         "ME3_DATA" => data_config(),
         "ME3_MSG" => messages(),
         "ME3_ENT" => load_dmap(ME3_ENT),
@@ -198,8 +190,7 @@ async fn handle_fetch_client_config(packet: &Packet) -> HandleResult {
         }
     };
 
-    let response = FetchConfigResponse { config };
-    Ok(packet.respond(response))
+    Ok(FetchConfigResponse { config })
 }
 
 /// Loads the local coalesced if one is present falling back
@@ -506,12 +497,11 @@ fn data_config() -> TdfMap<String, String> {
 ///     "TVAL": 90000000
 /// }
 /// ```
-fn handle_suspend_user_ping(packet: &Packet) -> HandleResult {
-    let req: SuspendPingRequest = packet.decode()?;
+async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
     match req.value {
-        20000000 => Err(ServerError::Suspend12D.into()),
-        90000000 => Err(ServerError::Suspend12E.into()),
-        _ => Ok(packet.respond_empty()),
+        20000000 => Err(ServerError::Suspend12D),
+        90000000 => Err(ServerError::Suspend12E),
+        _ => Ok(()),
     }
 }
 
@@ -526,23 +516,22 @@ fn handle_suspend_user_ping(packet: &Packet) -> HandleResult {
 ///     "UID": 0
 /// }
 /// ```
-async fn handle_user_settings_save(session: SessionAddr, packet: &Packet) -> HandleResult {
-    let req: SettingsSaveRequest = packet.decode()?;
-    let db = GlobalState::database();
-
+async fn handle_user_settings_save(
+    session: SessionAddr,
+    req: SettingsSaveRequest,
+) -> ServerResult<()> {
     let player = session
         .get_player()
         .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    player
-        .set_data(db, req.key, req.value)
-        .await
-        .map_err(|err| {
-            warn!("Failed to update player data: {err:?}");
-            ServerError::ServerUnavailable
-        })?;
-    Ok(packet.respond_empty())
+    let db = GlobalState::database();
+    if let Err(err) = player.set_data(db, req.key, req.value).await {
+        warn!("Failed to update player data: {err:?}");
+        Err(ServerError::ServerUnavailable)
+    } else {
+        Ok(())
+    }
 }
 
 /// Handles loading all the user details for the current account and sending them to the
@@ -553,18 +542,28 @@ async fn handle_user_settings_save(session: SessionAddr, packet: &Packet) -> Han
 /// ID: 23
 /// Content: {}
 /// ```
-async fn handle_user_settings_load_all(session: SessionAddr, packet: &Packet) -> HandleResult {
+async fn handle_user_settings_load_all(session: SessionAddr) -> ServerResult<SettingsResponse> {
     let player = session
         .get_player()
         .await
         .ok_or(ServerError::FailedNoLoginAction)?;
+
     let db = GlobalState::database();
-    let data = player.all_data(db).await?;
+
+    // Load the player data from the database
+    let data: Vec<PlayerData> = match player.all_data(db).await {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to load player data: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
+
+    // Encode the player data into a settings map and order it
     let mut settings = TdfMap::<String, String>::with_capacity(data.len());
     for value in data {
         settings.insert(value.key, value.value)
     }
     settings.order();
-    let response = SettingsResponse { settings };
-    Ok(packet.respond(response))
+    Ok(SettingsResponse { settings })
 }

@@ -1,9 +1,9 @@
 use crate::{
     blaze::{
-        components::Authentication,
+        components::{Authentication as A, Components as C},
         errors::{ServerError, ServerResult},
     },
-    servers::main::{models::auth::*, routes::HandleResult, session::SessionAddr},
+    servers::main::{models::auth::*, session::SessionAddr},
     state::GlobalState,
     utils::{
         env,
@@ -13,44 +13,40 @@ use crate::{
         validate::is_email,
     },
 };
-use blaze_pk::packet::Packet;
+use blaze_pk::router::Router;
 use database::{DatabaseConnection, Player};
 use log::{debug, error, warn};
 use std::borrow::Cow;
 use std::path::Path;
 use tokio::fs::read_to_string;
 
-/// Routing function for handling packets with the `Authentication` component and routing them
-/// to the correct routing function. If no routing function is found then the packet
-/// is printed to the output and an empty response is sent.
+/// Routing function for adding all the routes in this file to the
+/// provided router
 ///
-/// `session`   The session that the packet was recieved by
-/// `component` The component of the packet recieved
-/// `packet`    The recieved packet
-pub async fn route(
-    session: SessionAddr,
-    component: Authentication,
-    packet: &Packet,
-) -> HandleResult {
-    match component {
-        Authentication::Logout => handle_logout(session, packet),
-        Authentication::SilentLogin | Authentication::OriginLogin | Authentication::Login => {
-            handle_auth_request(session, packet).await
-        }
-        Authentication::LoginPersona => handle_login_persona(session, packet).await,
-        Authentication::ListUserEntitlements2 => handle_list_entitlements(packet),
-        Authentication::CreateAccount => handle_create_account(session, packet).await,
-        Authentication::PasswordForgot => handle_forgot_password(packet),
-        Authentication::GetLegalDocsInfo => handle_get_legal_docs_info(packet),
-        Authentication::GetTermsOfServiceConent => {
-            handle_legal_content(packet, LegalType::TermsOfService).await
-        }
-        Authentication::GetPrivacyPolicyContent => {
-            handle_legal_content(packet, LegalType::PrivacyPolicy).await
-        }
-        Authentication::GetAuthToken => handle_get_auth_token(session, packet).await,
-        _ => Ok(packet.respond_empty()),
-    }
+/// `router` The router to add to
+pub fn route(router: &mut Router<C, SessionAddr>) {
+    router.route_stateful(C::Authentication(A::Logout), handle_logout);
+    router.route_stateful(C::Authentication(A::SilentLogin), handle_auth_request);
+    router.route_stateful(C::Authentication(A::OriginLogin), handle_auth_request);
+    router.route_stateful(C::Authentication(A::Login), handle_auth_request);
+    router.route_stateful(C::Authentication(A::LoginPersona), handle_login_persona);
+    router.route(
+        C::Authentication(A::ListUserEntitlements2),
+        handle_list_entitlements,
+    );
+    router.route_stateful(C::Authentication(A::CreateAccount), handle_create_account);
+    router.route(C::Authentication(A::PasswordForgot), handle_forgot_password);
+    router.route(
+        C::Authentication(A::GetLegalDocsInfo),
+        handle_get_legal_docs_info,
+    );
+    router.route(C::Authentication(A::GetTermsOfServiceConent), || {
+        handle_legal_content(LegalType::TermsOfService)
+    });
+    router.route(C::Authentication(A::GetPrivacyPolicyContent), || {
+        handle_legal_content(LegalType::PrivacyPolicy)
+    });
+    router.route_stateful(C::Authentication(A::GetAuthToken), handle_get_auth_token);
 }
 
 /// This route handles all the different authentication types, Silent, Origin,
@@ -102,8 +98,7 @@ pub async fn route(
 ///     "TYPE": 0 // Authentication type
 /// }
 /// ```
-async fn handle_auth_request(session: SessionAddr, packet: &Packet) -> HandleResult {
-    let req: AuthRequest = packet.decode()?;
+async fn handle_auth_request(session: SessionAddr, req: AuthRequest) -> ServerResult<AuthResponse> {
     let silent = req.is_silent();
     let db = GlobalState::database();
     let player: Player = match req {
@@ -117,13 +112,12 @@ async fn handle_auth_request(session: SessionAddr, packet: &Packet) -> HandleRes
         .await
         .map_err(|_| ServerError::ServerUnavailable)?;
 
-    session.set_player(Some(player.clone()));
-    let response = AuthResponse {
+    session.set_player(Some(player.clone())).await;
+    Ok(AuthResponse {
         player,
         session_token,
         silent,
-    };
-    Ok(packet.respond(response))
+    })
 }
 
 /// Handles finding a player through an authentication token and a player ID
@@ -250,9 +244,8 @@ async fn handle_login_origin(
 /// ID: 8
 /// Content: {}
 /// ```
-fn handle_logout(session: SessionAddr, packet: &Packet) -> HandleResult {
-    session.set_player(None);
-    Ok(packet.respond_empty())
+async fn handle_logout(session: SessionAddr) {
+    session.set_player(None).await;
 }
 
 /// Handles list user entitlements 2 responses requests which contains information
@@ -277,11 +270,12 @@ fn handle_logout(session: SessionAddr, packet: &Packet) -> HandleResult {
 ///     "TYPE": 0
 /// }
 /// ```
-fn handle_list_entitlements(packet: &Packet) -> HandleResult {
-    let req: ListEntitlementsRequest = packet.decode()?;
+async fn handle_list_entitlements(
+    req: ListEntitlementsRequest,
+) -> Option<ListEntitlementsResponse> {
     let tag: String = req.tag;
     if !tag.is_empty() {
-        return Ok(packet.respond_empty());
+        return None;
     }
     // Skip formatting these entitlement creations
     #[rustfmt::skip]
@@ -331,8 +325,7 @@ fn handle_list_entitlements(packet: &Packet) -> HandleResult {
         // Darkhorse Redeem Code (Character boosters and Collector Assault Rifle)
         Entitlement::new_pc(0xec50be8aff,"300241",2,"OFB-MASS:61524","ME3_PRC_DARKHORSECOMIC",5),
     ];
-    let response = ListEntitlementsResponse { list };
-    Ok(packet.respond(response))
+    Some(ListEntitlementsResponse { list })
 }
 
 /// Handles logging into a persona. This system doesn't implement the persona system so
@@ -345,7 +338,7 @@ fn handle_list_entitlements(packet: &Packet) -> HandleResult {
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-async fn handle_login_persona(session: SessionAddr, packet: &Packet) -> HandleResult {
+async fn handle_login_persona(session: SessionAddr) -> ServerResult<PersonaResponse> {
     let player: Player = session
         .get_player()
         .await
@@ -354,8 +347,10 @@ async fn handle_login_persona(session: SessionAddr, packet: &Packet) -> HandleRe
         .session_token
         .clone()
         .ok_or(ServerError::FailedNoLoginAction)?;
-    let response = PersonaResponse::new(player, session_token);
-    Ok(packet.respond(response))
+    Ok(PersonaResponse {
+        player,
+        session_token,
+    })
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -369,13 +364,12 @@ async fn handle_login_persona(session: SessionAddr, packet: &Packet) -> HandleRe
 ///     "MAIL": "ACCOUNT_EMAIL"
 /// }
 /// ```
-fn handle_forgot_password(packet: &Packet) -> HandleResult {
-    let req: ForgotPasswordRequest = packet.decode()?;
+async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> {
     if !is_email(&req.email) {
-        return Err(ServerError::InvalidEmail.into());
+        return Err(ServerError::InvalidEmail);
     }
     debug!("Got request for password rest for email: {}", &req.email);
-    Ok(packet.respond_empty())
+    Ok(())
 }
 
 /// Handles creating accounts
@@ -411,40 +405,67 @@ fn handle_forgot_password(packet: &Packet) -> HandleResult {
 /// }
 /// ```
 ///
-async fn handle_create_account(session: SessionAddr, packet: &Packet) -> HandleResult {
-    let req: CreateAccountRequest = packet.decode()?;
+async fn handle_create_account(
+    session: SessionAddr,
+    req: CreateAccountRequest,
+) -> ServerResult<AuthResponse> {
     let email = req.email;
     if !is_email(&email) {
-        return Err(ServerError::InvalidEmail.into());
+        return Err(ServerError::InvalidEmail);
     }
 
     let db = GlobalState::database();
-    let email_exists = Player::is_email_taken(db, &email).await?;
-    if email_exists {
-        return Err(ServerError::EmailAlreadyInUse.into());
+
+    match Player::is_email_taken(db, &email).await {
+        // Continue normally for non taken emails
+        Ok(false) => {}
+        // Handle email address is already in use
+        Ok(true) => return Err(ServerError::EmailAlreadyInUse),
+        // Handle database error while checking taken
+        Err(err) => {
+            error!("Unable to check if email '{email}' is already taken: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
     }
 
-    let hashed_password = hash_password(&req.password).map_err(|err| {
-        error!("Failed to hash passsword: {err:?}");
-        ServerError::ServerUnavailable
-    })?;
+    // Hash the proivded plain text password using Argon2
+    let hashed_password: String = match hash_password(&req.password) {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to hash password for creating account: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
 
-    let display_name = email.chars().take(99).collect::<String>();
-    let player: Player = Player::create(db, email, display_name, hashed_password, false).await?;
-    let (player, session_token) = player
-        .with_token(db, generate_random_string)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?;
+    // Create a default display name from the first 99 chars of the email
+    let display_name: String = email.chars().take(99).collect::<String>();
 
-    session.set_player(Some(player.clone()));
+    // Create a new player
+    let player: Player = match Player::create(db, email, display_name, hashed_password, false).await
+    {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to create player: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
 
-    let response = AuthResponse {
+    // Generate a session token for the player
+    let (player, session_token) = match player.with_token(db, generate_random_string).await {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to create session token: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
+
+    session.set_player(Some(player.clone())).await;
+
+    Ok(AuthResponse {
         player,
         session_token,
         silent: false,
-    };
-
-    Ok(packet.respond(response))
+    })
 }
 
 /// Expected to be getting information about the legal docs however the exact meaning
@@ -458,8 +479,8 @@ async fn handle_create_account(session: SessionAddr, packet: &Packet) -> HandleR
 ///     "PTFM": "pc" // Platform
 /// }
 /// ```
-fn handle_get_legal_docs_info(packet: &Packet) -> HandleResult {
-    Ok(packet.respond(LegalDocsInfo))
+async fn handle_get_legal_docs_info() -> LegalDocsInfo {
+    LegalDocsInfo
 }
 
 /// Type for deciding which legal document to respond with
@@ -523,14 +544,9 @@ impl LegalType {
 ///     "TEXT": 1
 /// }
 /// ```
-async fn handle_legal_content(packet: &Packet, ty: LegalType) -> HandleResult {
+async fn handle_legal_content(ty: LegalType) -> LegalContent {
     let (content, path, col) = ty.load().await;
-    let response = LegalContent {
-        path,
-        content: &content,
-        col,
-    };
-    Ok(packet.respond(response))
+    LegalContent { path, content, col }
 }
 
 /// Handles retrieving an authentication token for use with the Galaxy At War HTTP service.
@@ -541,12 +557,11 @@ async fn handle_legal_content(packet: &Packet, ty: LegalType) -> HandleResult {
 /// ID: 35
 /// Content: {}
 /// ```
-async fn handle_get_auth_token(session: SessionAddr, packet: &Packet) -> HandleResult {
+async fn handle_get_auth_token(session: SessionAddr) -> ServerResult<GetTokenResponse> {
     let token: String = session
         .get_player()
         .await
         .map(|player| format!("{:X}", player.id))
         .ok_or(ServerError::FailedNoLoginAction)?;
-    let response = GetTokenResponse { token };
-    Ok(packet.respond(response))
+    Ok(GetTokenResponse { token })
 }

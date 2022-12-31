@@ -1,8 +1,10 @@
 //! Module for the Redirector server which handles redirecting the clients
 //! to the correct address for the main server.
 
+use std::io;
+
 use crate::{
-    blaze::{append_packet_decoded, components::Components, errors::BlazeResult},
+    blaze::{append_packet_decoded, components::Components},
     env,
     retriever::Retriever,
     state::GlobalState,
@@ -65,7 +67,7 @@ pub async fn start_server() {
 /// `addr`     The client address
 /// `instance` The server instance information
 /// `shutdown` Async safely shutdown reciever
-async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> BlazeResult<()> {
+async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> io::Result<()> {
     let mut server = match retriever.stream().await {
         Some(stream) => stream,
         None => {

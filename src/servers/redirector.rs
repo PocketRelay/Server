@@ -4,7 +4,6 @@ use crate::{
     blaze::{
         codec::{InstanceDetails, InstanceNet},
         components::{Components, Redirector},
-        errors::BlazeResult,
     },
     env,
     utils::constants,
@@ -12,7 +11,7 @@ use crate::{
 use blaze_pk::packet::Packet;
 use blaze_ssl_async::{BlazeAccept, BlazeListener};
 use log::{debug, error, info};
-use std::time::Duration;
+use std::{io, time::Duration};
 use tokio::{io::AsyncWriteExt, select, time::sleep};
 
 /// Starts the Redirector server this server is what the Mass Effect 3 game
@@ -62,7 +61,7 @@ const REDIRECT_COMPONENT: Components = Components::Redirector(Redirector::GetSer
 /// `stream`   The stream to the client
 /// `addr`     The client address
 /// `instance` The server instance information
-async fn handle_client(accept: BlazeAccept) -> BlazeResult<()> {
+async fn handle_client(accept: BlazeAccept) -> io::Result<()> {
     let (mut stream, addr) = match accept.finish_accept().await {
         Ok(value) => value,
         Err(_) => {

@@ -54,9 +54,9 @@ struct LeaderboardQuery {
 /// The different types of respones that can be created
 /// from a leaderboard request
 #[derive(Serialize)]
-struct LeaderboardResponse<'a> {
+struct LeaderboardResponse {
     /// The entries retrieved at the provided offset
-    entries: &'a [LeaderboardEntry],
+    entries: Vec<LeaderboardEntry>,
     /// Whether there is more entries past the provided offset
     more: bool,
 }
@@ -69,38 +69,32 @@ struct LeaderboardResponse<'a> {
 async fn get_leaderboard(
     Path(name): Path<String>,
     Query(query): Query<LeaderboardQuery>,
-) -> Result<Response, LeaderboardError> {
+) -> Result<Json<LeaderboardResponse>, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
 
     let leaderboard: &Leaderboard = GlobalState::leaderboard();
 
-    let (_, group) = leaderboard
-        .get(ty)
-        .await
-        .map_err(|_| LeaderboardError::ServerError)?;
-    let group: &LeaderboardEntityGroup = &*group.read().await;
-    let values: &Vec<LeaderboardEntry> = &group.values;
-
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
 
-    let count: u8 = query.count.unwrap_or(DEFAULT_COUNT);
-
+    // The number of entries to return
+    let count: usize = query.count.unwrap_or(DEFAULT_COUNT) as usize;
     // Calculate the start and ending indexes
-    let start_index: usize = query.offset * (count as usize);
-    let end_index: usize = (start_index + (count as usize)).min(values.len());
+    let start: usize = query.offset * count;
 
-    // Calculate if there are more entries after the current offset
-    let more: bool = group.values.len() > end_index;
-
-    let entries: &[LeaderboardEntry] = values
-        .get(start_index..end_index)
-        .ok_or(LeaderboardError::ServerError)?;
+    let (entries, more) = leaderboard
+        .get(
+            ty,
+            crate::leaderboard::LeaderboardQuery::Normal { start, count },
+        )
+        .await
+        .map_err(|_| LeaderboardError::ServerError)?
+        .unwrap_or_default();
 
     let response = LeaderboardResponse { entries, more };
 
-    Ok(Json(response).into_response())
+    Ok(Json(response))
 }
 
 /// Retrieves the leaderboard entry for the player with the
@@ -110,22 +104,21 @@ async fn get_leaderboard(
 /// `player_id` The ID of the player to find the leaderboard ranking of
 async fn get_player_ranking(
     Path((name, player_id)): Path<(String, PlayerID)>,
-) -> Result<Response, LeaderboardError> {
+) -> Result<Json<LeaderboardEntry>, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
     let leaderboard: &Leaderboard = GlobalState::leaderboard();
-    let (_, group) = leaderboard
-        .get(ty)
+    let (mut values, _) = leaderboard
+        .get(
+            ty,
+            crate::leaderboard::LeaderboardQuery::Filtered { player_id },
+        )
         .await
-        .map_err(|_| LeaderboardError::ServerError)?;
-    let group: &LeaderboardEntityGroup = &*group.read().await;
-    let values: &Vec<LeaderboardEntry> = &group.values;
-    // Find the entry by the player ID
-    let entry = values
-        .iter()
-        .find(|entry| entry.player_id == player_id)
+        .map_err(|_| LeaderboardError::ServerError)?
         .ok_or(LeaderboardError::PlayerNotFound)?;
-    Ok(Json(entry).into_response())
+
+    let entry = values.pop().ok_or(LeaderboardError::PlayerNotFound)?;
+    Ok(Json(entry))
 }
 
 /// Display implementation for the LeaderboardError this will be displayed

@@ -1,22 +1,16 @@
 use crate::{
-    blaze::components::{Components, Messaging},
-    servers::main::{models::messaging::*, routes::HandleResult, session::SessionAddr},
+    blaze::components::{Components as C, Messaging as M},
+    servers::main::{models::messaging::*, session::SessionAddr},
     utils::{constants, env},
 };
-use blaze_pk::packet::Packet;
+use blaze_pk::{packet::Packet, router::Router};
 
-/// Routing function for handling packets with the `Stats` component and routing them
-/// to the correct routing function. If no routing function is found then the packet
-/// is printed to the output and an empty response is sent.
+/// Routing function for adding all the routes in this file to the
+/// provided router
 ///
-/// `session`   The session that the packet was recieved by
-/// `component` The component of the packet recieved
-/// `packet`    The recieved packet
-pub async fn route(session: SessionAddr, component: Messaging, packet: &Packet) -> HandleResult {
-    match component {
-        Messaging::FetchMessages => handle_fetch_messages(session, packet).await,
-        _ => Ok(packet.respond_empty()),
-    }
+/// `router` The router to add to
+pub fn route(router: &mut Router<C, SessionAddr>) {
+    router.route_stateful(C::Messaging(M::FetchMessages), handle_fetch_messages);
 }
 
 /// Handles requests from the client to fetch the server messages. The initial response contains
@@ -39,15 +33,14 @@ pub async fn route(session: SessionAddr, component: Messaging, packet: &Packet) 
 /// }
 /// ```
 ///
-async fn handle_fetch_messages(session: SessionAddr, packet: &Packet) -> HandleResult {
+async fn handle_fetch_messages(session: SessionAddr) -> FetchMessageResponse {
     let Some(player) = session.get_player().await else {
         // Not authenticated return empty count
-        let response = FetchMessageResponse { count: 0 };
-        return Ok(packet.respond(response));
+        return  FetchMessageResponse { count: 0 };
     };
     let message = get_menu_message(&session, &player.display_name).await;
     let notify = Packet::notify(
-        Components::Messaging(Messaging::SendMessage),
+        C::Messaging(M::SendMessage),
         MessageNotify {
             message,
             player_id: player.id,
@@ -55,8 +48,7 @@ async fn handle_fetch_messages(session: SessionAddr, packet: &Packet) -> HandleR
     );
 
     session.push(notify);
-    let response = FetchMessageResponse { count: 1 };
-    Ok(packet.respond(response))
+    FetchMessageResponse { count: 1 }
 }
 
 /// Retrieves the menu message from the environment variables and replaces

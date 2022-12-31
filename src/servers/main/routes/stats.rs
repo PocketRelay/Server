@@ -1,31 +1,49 @@
 use crate::{
-    blaze::components::Stats,
-    leaderboard::models::*,
-    servers::main::{
-        models::stats::*,
-        routes::HandleResult,
-        session::{Session, SessionAddr},
-    },
+    blaze::components::{Components as C, Stats as S},
+    leaderboard::{models::*, LeaderboardQuery},
+    servers::main::{models::stats::*, session::SessionAddr},
     state::GlobalState,
 };
-use blaze_pk::packet::Packet;
+use blaze_pk::router::Router;
+use log::error;
 
-/// Routing function for handling packets with the `Stats` component and routing them
-/// to the correct routing function. If no routing function is found then the packet
-/// is printed to the output and an empty response is sent.
+/// Routing function for adding all the routes in this file to the
+/// provided router
 ///
-/// `session`   The session that the packet was recieved by
-/// `component` The component of thet recieved
-/// `packet`    The recieved packet
-pub async fn route(component: Stats, packet: &Packet) -> HandleResult {
-    match component {
-        Stats::GetLeaderboardEntityCount => handle_leaderboard_entity_count(packet).await,
-        Stats::GetLeaderboard => handle_leaderboard(packet).await,
-        Stats::GetCenteredLeaderboard => handle_centered_leaderboard(packet).await,
-        Stats::GetFilteredLeaderboard => handle_filtered_leaderboard(packet).await,
-        Stats::GetLeaderboardGroup => handle_leaderboard_group(packet),
-        _ => Ok(packet.respond_empty()),
-    }
+/// `router` The router to add to
+pub fn route(router: &mut Router<C, SessionAddr>) {
+    router.route(
+        C::Stats(S::GetLeaderboardEntityCount),
+        handle_leaderboard_entity_count,
+    );
+    router.route(C::Stats(S::GetLeaderboard), |req: LeaderboardRequest| {
+        handle_leaderboard_query(
+            req.name,
+            LeaderboardQuery::Normal {
+                start: req.start,
+                count: req.count,
+            },
+        )
+    });
+    router.route(
+        C::Stats(S::GetCenteredLeaderboard),
+        |req: CenteredLeaderboardRequest| {
+            handle_leaderboard_query(
+                req.name,
+                LeaderboardQuery::Centered {
+                    player_id: req.center,
+                    count: req.count,
+                },
+            )
+        },
+    );
+    router.route(
+        C::Stats(S::GetFilteredLeaderboard),
+        |req: FilteredLeaderboardRequest| {
+            handle_leaderboard_query(req.name, LeaderboardQuery::Filtered { player_id: req.id })
+        },
+    );
+    router.route(C::Stats(S::GetLeaderboardGroup), handle_leaderboard_group);
 }
 
 /// Handles returning the number of leaderboard objects present.
@@ -43,146 +61,38 @@ pub async fn route(component: Stats, packet: &Packet) -> HandleResult {
 ///     "POFF": 0
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(packet: &Packet) -> HandleResult {
-    let request: EntityCountRequest = packet.decode()?;
+async fn handle_leaderboard_entity_count(req: EntityCountRequest) -> EntityCountResponse {
     let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(request.name);
-    let (count, _) = leaderboard.get(ty).await?;
-    let response = EntityCountResponse { count };
-    Ok(packet.respond(response))
-}
-
-///
-///
-/// Component: Stats(GetLeaderboard)
-/// ```
-/// ID: 1274
-/// Content: {
-///   "COUN": 61,
-///   "KSUM": Map {
-///     "accountcountry": 0
-///     "ME3Map": 0
-///   },
-///   "LBID": 0,
-///   "NAME": "N7RatingGlobal",
-///   "POFF": 0,
-///   "STRT": 29,
-///   "TIME": 0,
-///   "USET": (0, 0, 0),
-/// }
-/// ```
-async fn handle_leaderboard(packet: &Packet) -> HandleResult {
-    let request: LeaderboardRequest = packet.decode()?;
-    // Leaderboard but only returns self
-    let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(request.name);
-    let (_, group) = leaderboard.get(ty).await?;
-    let group = &*group.read().await;
-
-    let start_index = request.start;
-    let end_index = request.count.min(group.values.len());
-
-    let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
-    Ok(if let Some(values) = values {
-        packet.respond(LeaderboardResponse { values })
-    } else {
-        packet.respond(EmptyLeaderboardResponse)
-    })
-}
-
-/// Handles returning a centered leaderboard object. This is currently not implemented
-///
-/// ```
-/// Route: Stats(GetCenteredLeaderboard)
-/// ID: 0
-/// Content: {
-///     "BOTT": 0,
-///     "CENT": 1, // Player ID to center on
-///     "COUN": 60,
-///     "KSUM": Map {
-///         "accountcountry": 0,
-///         "ME3Map": 0
-///     },
-///     "LBID": 0,
-///     "NAME": "N7RatingGlobal",
-///     "POFF": 0,
-///     "TIME": 0,
-///     "USET": (0, 0, 0)
-/// }
-/// ```
-async fn handle_centered_leaderboard(packet: &Packet) -> HandleResult {
-    let request: CenteredLeaderboardRequest = packet.decode()?;
-    let count = request.count.max(1);
-    let before = if count % 2 == 0 {
-        count / 2 + 1
-    } else {
-        count / 2
+    let ty = LeaderboardType::from(req.name);
+    let count = match leaderboard.get_size(ty).await {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Unable to compute leaderboard size: {err:?}");
+            0
+        }
     };
-    let after = count / 2;
-
-    let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(request.name);
-    let (_, group) = leaderboard.get(ty).await?;
-    let group: &LeaderboardEntityGroup = &*group.read().await;
-
-    let index_of = group
-        .values
-        .iter()
-        .position(|value| value.player_id == request.center);
-
-    let index_of = match index_of {
-        Some(value) => value,
-        None => return Ok(packet.respond(EmptyLeaderboardResponse)),
-    };
-
-    let start_index = index_of - before.min(index_of);
-    let end_index = (index_of + after).min(group.values.len());
-
-    let values: Option<&[LeaderboardEntry]> = group.values.get(start_index..end_index);
-    Ok(if let Some(values) = values {
-        packet.respond(LeaderboardResponse { values })
-    } else {
-        packet.respond(EmptyLeaderboardResponse)
-    })
+    EntityCountResponse { count }
 }
 
-/// Handles returning a filtered leaderboard object. This is currently not implemented
+/// Handler function for handling leaderboard querys and returning the resulting
+/// leaderboard
 ///
-/// ```
-/// Route: Stats(GetFilteredLeaderboard)
-/// ID: 27
-/// Content: {
-///     "FILT": 1,
-///     "IDLS": [1], // Player IDs
-///     "KSUM": Map {
-///         "accountcountry": 0,
-///         "ME3Map": 0
-///     },
-///     "LBID": 0,
-///     "NAME": "N7RatingGlobal",
-///     "POFF": 0,
-///     "TIME": 0,
-///     "USET": (0, 0, 0)
-/// }
-/// ```
-async fn handle_filtered_leaderboard(packet: &Packet) -> HandleResult {
-    let request: FilteredLeaderboardRequest = packet.decode()?;
-    let player_id = request.id;
-    // Leaderboard but only returns self
+/// `name`  The name of the leaderboard
+/// `query` The query to resolve
+async fn handle_leaderboard_query(name: String, query: LeaderboardQuery) -> LeaderboardResponse {
     let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(request.name);
-    let (_, group) = leaderboard.get(ty).await?;
-    let group: &LeaderboardEntityGroup = &*group.read().await;
-    let entry = group
-        .values
-        .iter()
-        .find(|value| value.player_id == player_id);
-
-    Ok(if let Some(entry) = entry {
-        packet.respond(FilteredLeaderboardResponse { value: entry })
-    } else {
-        packet.respond(EmptyLeaderboardResponse)
-    })
+    let ty = LeaderboardType::from(name);
+    match leaderboard.get(ty, query).await {
+        // Values response
+        Ok(Some((values, _))) => LeaderboardResponse::Values(values),
+        // Empty query response
+        Ok(None) => LeaderboardResponse::Empty,
+        // Error handling
+        Err(err) => {
+            error!("Failed to compute leaderboard: {err:?}");
+            LeaderboardResponse::Empty
+        }
+    }
 }
 
 fn get_locale_name(code: &str) -> &str {
@@ -210,12 +120,13 @@ fn get_locale_name(code: &str) -> &str {
 ///     "NAME": "N7RatingGlobal"
 /// }
 /// ```
-fn handle_leaderboard_group(packet: &Packet) -> HandleResult {
-    let req: LeaderboardGroupRequest = packet.decode()?;
+async fn handle_leaderboard_group(
+    req: LeaderboardGroupRequest,
+) -> Option<LeaderboardGroupResponse<'static>> {
     let name = req.name;
     let is_n7 = name.starts_with("N7Rating");
     if !is_n7 && !name.starts_with("ChallengePoints") {
-        return Ok(packet.respond_empty());
+        return None;
     }
     let split = if is_n7 { 8 } else { 15 };
     let locale = get_locale_name(name.split_at(split).1);
@@ -238,5 +149,5 @@ fn handle_leaderboard_group(packet: &Packet) -> HandleResult {
             gname: "ME3ChallengePoints",
         }
     };
-    Ok(packet.respond(group))
+    Some(group)
 }
