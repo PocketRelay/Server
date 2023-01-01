@@ -48,9 +48,9 @@ checksum = "2cb2f989d18dd141ab8ae82f64d1a8cdd37e0840f73a406896cf5e99502fab61"
 
 [[package]]
 name = "arc-swap"
-version = "1.5.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "983cd8b9d4b02a6dc6ffa557262eb5858a27a0038ffffe21a0f133eaa819a164"
+checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
 name = "argon2"
@@ -202,9 +202,9 @@ dependencies = [
 
 [[package]]
 name = "blaze-pk"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ff84b913b17e6fd967f073cd3117a9d63bb95fcb7c3e561dfad33eb1b6a0cd5"
+checksum = "c808e07696a249076fdc80f25d41a53db05f52d4e7088a2df390c5f5b6982379"
 dependencies = [
  "bytes",
  "serde",
@@ -213,9 +213,9 @@ dependencies = [
 
 [[package]]
 name = "blaze-ssl-async"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "001886d76238b83cda57670e49a2c032e8deb5827142977abd64dd6f3fd391e1"
+checksum = "563ea6fffce4fcdc9775755a4c9b4435c2a885e2d71a81209b7fe6f33bc5914a"
 dependencies = [
  "pem-rfc7468 0.6.0",
  "rsa 0.7.2",
@@ -1181,9 +1181,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
+checksum = "6f61fba1741ea2b3d6a1e3178721804bb716a68a6aeba1149b5d52e3d464ea66"
 
 [[package]]
 name = "ouroboros"

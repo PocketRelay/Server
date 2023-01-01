@@ -10,7 +10,7 @@ use blaze_pk::{packet::Packet, router::Router};
 ///
 /// `router` The router to add to
 pub fn route(router: &mut Router<C, SessionAddr>) {
-    router.route_stateful(C::Messaging(M::FetchMessages), handle_fetch_messages);
+    router.route(C::Messaging(M::FetchMessages), handle_fetch_messages);
 }
 
 /// Handles requests from the client to fetch the server messages. The initial response contains

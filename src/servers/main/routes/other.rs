@@ -9,7 +9,7 @@ use blaze_pk::{packet::Packet, router::Router};
 ///
 /// `router` The router to add to
 pub fn route(router: &mut Router<C, SessionAddr>) {
-    router.route_stateful(
+    router.route(
         C::GameReporting(G::SubmitOfflineGameReport),
         handle_submit_offline,
     );

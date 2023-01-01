@@ -430,9 +430,7 @@ impl Session {
     /// Flushes the output buffer
     async fn flush(&mut self) {
         self.flush_queued = false;
-        if self.queue.is_empty() {
-            return;
-        }
+
         // Counter for the number of items written
         let mut write_count = 0usize;
         while let Some(item) = self.queue.pop_front() {
@@ -450,7 +448,10 @@ impl Session {
                 }
             }
         }
-        debug!("Flushed session (SID: {}, Count: {})", self.id, write_count);
+
+        if write_count > 0 {
+            debug!("Flushed session (SID: {}, Count: {})", self.id, write_count);
+        }
     }
 
     /// Reads a packet from the stream and then passes the packet
@@ -481,7 +482,9 @@ impl Session {
         let net = &mut &mut self.net;
         net.is_set = true;
         net.qos = ext;
-        net.groups = groups;
+        if net.groups.external.0.is_invalid() && !net.groups.external.0.is_invalid() {
+            net.groups = groups;
+        }
         self.update_client();
     }
 

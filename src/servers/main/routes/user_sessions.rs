@@ -22,12 +22,12 @@ use log::error;
 ///
 /// `router` The router to add to
 pub fn route(router: &mut Router<C, SessionAddr>) {
-    router.route_stateful(C::UserSessions(U::ResumeSession), handle_resume_session);
-    router.route_stateful(
+    router.route(C::UserSessions(U::ResumeSession), handle_resume_session);
+    router.route(
         C::UserSessions(U::UpdateNetworkInfo),
         handle_update_network_info,
     );
-    router.route_stateful(
+    router.route(
         C::UserSessions(U::UpdateHardwareFlags),
         handle_update_hardware_flag,
     );
@@ -101,18 +101,21 @@ async fn handle_resume_session(
 /// }
 /// ```
 async fn handle_update_network_info(session: SessionAddr, req: UpdateNetworkRequest) {
-    // TODO: Possibly spawn this off into a task and have a session
-    // message update the networking information when this is complete?
+    // Initial set to client value
+    session.set_network_info(req.address.clone(), req.qos);
 
-    let mut groups = req.address;
-    let external = &mut groups.external;
-    if external.0.is_invalid() || external.1 == 0 {
-        // Match port with internal address
-        external.1 = groups.internal.1;
-        external.0 = get_network_address(session.get_network_addr().await).await;
-    }
+    tokio::spawn(async move {
+        let mut groups = req.address;
+        let external = &mut groups.external;
+        if external.0.is_invalid() || external.1 == 0 {
+            // Match port with internal address
+            external.1 = groups.internal.1;
+            external.0 = get_network_address(session.get_network_addr().await).await;
+        }
 
-    session.set_network_info(groups, req.qos);
+        // Final update set to actual value
+        session.set_network_info(groups, req.qos);
+    });
 }
 
 /// Obtains the networking address from the provided SocketAddr

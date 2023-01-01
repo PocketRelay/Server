@@ -16,21 +16,21 @@ use log::info;
 ///
 /// `router` The router to add to
 pub fn route(router: &mut Router<C, SessionAddr>) {
-    router.route_stateful(C::GameManager(G::CreateGame), handle_create_game);
+    router.route(C::GameManager(G::CreateGame), handle_create_game);
     router.route(C::GameManager(G::AdvanceGameState), handle_game_modify);
     router.route(C::GameManager(G::SetGameSettings), handle_game_modify);
     router.route(C::GameManager(G::SetGameAttributes), handle_game_modify);
     router.route(C::GameManager(G::RemovePlayer), handle_remove_player);
     router.route(C::GameManager(G::RemovePlayer), handle_remove_player);
-    router.route_stateful(
+    router.route(
         C::GameManager(G::UpdateMeshConnection),
         handle_update_mesh_connection,
     );
-    router.route_stateful(
+    router.route(
         C::GameManager(G::StartMatchmaking),
         handle_start_matchmaking,
     );
-    router.route_stateful(
+    router.route(
         C::GameManager(G::CancelMatchmaking),
         handle_cancel_matchmaking,
     );

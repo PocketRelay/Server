@@ -25,16 +25,16 @@ use tokio::fs::read_to_string;
 ///
 /// `router` The router to add to
 pub fn route(router: &mut Router<C, SessionAddr>) {
-    router.route_stateful(C::Authentication(A::Logout), handle_logout);
-    router.route_stateful(C::Authentication(A::SilentLogin), handle_auth_request);
-    router.route_stateful(C::Authentication(A::OriginLogin), handle_auth_request);
-    router.route_stateful(C::Authentication(A::Login), handle_auth_request);
-    router.route_stateful(C::Authentication(A::LoginPersona), handle_login_persona);
+    router.route(C::Authentication(A::Logout), handle_logout);
+    router.route(C::Authentication(A::SilentLogin), handle_auth_request);
+    router.route(C::Authentication(A::OriginLogin), handle_auth_request);
+    router.route(C::Authentication(A::Login), handle_auth_request);
+    router.route(C::Authentication(A::LoginPersona), handle_login_persona);
     router.route(
         C::Authentication(A::ListUserEntitlements2),
         handle_list_entitlements,
     );
-    router.route_stateful(C::Authentication(A::CreateAccount), handle_create_account);
+    router.route(C::Authentication(A::CreateAccount), handle_create_account);
     router.route(C::Authentication(A::PasswordForgot), handle_forgot_password);
     router.route(
         C::Authentication(A::GetLegalDocsInfo),
@@ -46,7 +46,7 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
     router.route(C::Authentication(A::GetPrivacyPolicyContent), || {
         handle_legal_content(LegalType::PrivacyPolicy)
     });
-    router.route_stateful(C::Authentication(A::GetAuthToken), handle_get_auth_token);
+    router.route(C::Authentication(A::GetAuthToken), handle_get_auth_token);
 }
 
 /// This route handles all the different authentication types, Silent, Origin,

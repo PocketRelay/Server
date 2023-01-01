@@ -29,14 +29,14 @@ use tokio::fs::read;
 /// `router` The router to add to
 pub fn route(router: &mut Router<C, SessionAddr>) {
     router.route(C::Util(U::PreAuth), handle_pre_auth);
-    router.route_stateful(C::Util(U::PostAuth), handle_post_auth);
+    router.route(C::Util(U::PostAuth), handle_post_auth);
     router.route(C::Util(U::Ping), handle_ping);
     router.route(C::Util(U::FetchClientConfig), handle_fetch_client_config);
     router.route(C::Util(U::SuspendUserPing), handle_suspend_user_ping);
-    router.route_stateful(C::Util(U::UserSettingsSave), handle_user_settings_save);
+    router.route(C::Util(U::UserSettingsSave), handle_user_settings_save);
     router.route(C::Util(U::GetTelemetryServer), handle_get_telemetry_server);
     router.route(C::Util(U::GetTickerServer), handle_get_ticker_server);
-    router.route_stateful(
+    router.route(
         C::Util(U::UserSettingsLoadAll),
         handle_user_settings_load_all,
     );
