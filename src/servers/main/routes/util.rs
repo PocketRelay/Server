@@ -36,10 +36,7 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
     router.route(C::Util(U::UserSettingsSave), handle_user_settings_save);
     router.route(C::Util(U::GetTelemetryServer), handle_get_telemetry_server);
     router.route(C::Util(U::GetTickerServer), handle_get_ticker_server);
-    router.route(
-        C::Util(U::UserSettingsLoadAll),
-        handle_user_settings_load_all,
-    );
+    router.route(C::Util(U::UserSettingsLoadAll), handle_load_settings);
 }
 
 /// Handles retrieving the details about the telemetry server
@@ -543,7 +540,7 @@ async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-async fn handle_user_settings_load_all(session: SessionAddr) -> ServerResult<SettingsResponse> {
+async fn handle_load_settings(session: SessionAddr) -> ServerResult<SettingsResponse> {
     let player = session
         .get_player()
         .await

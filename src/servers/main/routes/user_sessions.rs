@@ -23,10 +23,7 @@ use log::error;
 /// `router` The router to add to
 pub fn route(router: &mut Router<C, SessionAddr>) {
     router.route(C::UserSessions(U::ResumeSession), handle_resume_session);
-    router.route(
-        C::UserSessions(U::UpdateNetworkInfo),
-        handle_update_network_info,
-    );
+    router.route(C::UserSessions(U::UpdateNetworkInfo), handle_update_network);
     router.route(
         C::UserSessions(U::UpdateHardwareFlags),
         handle_update_hardware_flag,
@@ -100,7 +97,7 @@ async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-async fn handle_update_network_info(session: SessionAddr, req: UpdateNetworkRequest) {
+async fn handle_update_network(session: SessionAddr, req: UpdateNetworkRequest) {
     // Initial set to client value
     session.set_network_info(req.address.clone(), req.qos);
 
