@@ -55,8 +55,6 @@ impl Encodable for TelemetryServer {
     }
 }
 
-value_type!(TelemetryServer, TdfType::Group);
-
 /// Unique identifiyer key for the ticker server
 /// PLAYER_ID,TICKER_IP:TICKER_PORT,GAME_NAME,....Other values unknown
 const TICKER_KEY: &str = "1,10.23.15.2:8999,masseffect-3-pc,10,50,50,50,50,0,12";
@@ -78,8 +76,6 @@ impl Encodable for TickerServer {
         writer.tag_group_end();
     }
 }
-
-value_type!(TickerServer, TdfType::Group);
 
 /// Server SRC version
 pub const SRC_VERSION: &str = "303107";
@@ -198,8 +194,8 @@ impl Encodable for PostAuthResponse {
         }
 
         // Ticker & Telemtry server options
-        writer.tag_value(b"TELE", &self.telemetry);
-        writer.tag_value(b"TICK", &self.ticker);
+        self.telemetry.encode(writer);
+        self.ticker.encode(writer);
 
         // User options
         {
