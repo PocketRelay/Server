@@ -1,7 +1,10 @@
 //! Sessions are client connections to the main server with associated
 //! data such as player data for when they become authenticated and
 //! networking data.
-use super::models::session::{SessionUpdate, SetSession};
+use super::{
+    models::session::{SessionUpdate, SetSession},
+    router::Router,
+};
 use crate::{
     blaze::{
         append_packet_decoded,
@@ -12,35 +15,28 @@ use crate::{
     state::GlobalState,
     utils::types::{GameID, SessionID},
 };
-use blaze_pk::{
-    packet::{Packet, PacketComponents, PacketType},
-    router::Router,
-};
+use blaze_pk::packet::{Packet, PacketComponents, PacketType};
 use database::Player;
-use log::{debug, error, info, log_enabled};
+use log::{debug, error, log_enabled};
 use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
-use tokio::{
-    net::TcpStream,
-    select,
-    sync::{mpsc, oneshot},
-};
+use tokio::{net::TcpStream, select, sync::mpsc};
 
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
 /// other session state.
 pub struct Session {
     /// Unique identifier for this session.
-    id: SessionID,
+    pub id: SessionID,
 
     /// Underlying connection stream to client
     stream: TcpStream,
 
     /// The socket connection address of the client
-    socket_addr: SocketAddr,
+    pub socket_addr: SocketAddr,
 
     /// If the session is authenticated it will have a linked
     /// player model from the database
-    player: Option<Player>,
+    pub player: Option<Player>,
 
     /// Networking information
     pub net: NetData,
@@ -55,7 +51,7 @@ pub struct Session {
     /// already queued in the reciever
     flush_queued: bool,
 
-    router: Arc<Router<Components, SessionAddr>>,
+    router: Arc<Router>,
 
     /// Internal address used for routing can be cloned and used elsewhere
     addr: SessionAddr,
@@ -72,30 +68,6 @@ pub struct SessionAddr {
 }
 
 impl SessionAddr {
-    /// Retrieves the player for the session this address
-    /// is connected to returning None on failure or if
-    /// there was no attached player
-    pub async fn get_player(&self) -> Option<Player> {
-        let (tx, rx) = oneshot::channel();
-        self.sender.send(SessionMessage::GetPlayer(tx)).ok()?;
-        rx.await.ok().flatten()
-    }
-
-    /// Retrieves the network address for this session
-    /// returning None on failure
-    pub async fn get_network_addr(&self) -> Option<SocketAddr> {
-        let (tx, rx) = oneshot::channel();
-        self.sender.send(SessionMessage::GetNetworkAddr(tx)).ok()?;
-        rx.await.ok()
-    }
-    /// Retrieves the network address for this session
-    /// returning None on failure
-    pub async fn get_net(&self) -> Option<NetData> {
-        let (tx, rx) = oneshot::channel();
-        self.sender.send(SessionMessage::GetNet(tx)).ok()?;
-        rx.await.ok()
-    }
-
     /// Writes a new packet ot the session
     ///
     /// `packet` The packet to write
@@ -103,63 +75,11 @@ impl SessionAddr {
         self.sender.send(SessionMessage::Write(packet)).ok();
     }
 
-    /// Sets the networking information for this session
-    ///
-    /// `groups` The networking groups
-    /// `ext`    The networking ext data
-    pub fn set_network_info(&self, groups: NetGroups, ext: QosNetworkData) {
-        self.sender
-            .send(SessionMessage::SetNetworkInfo(groups, ext))
-            .ok();
-    }
-
-    /// Attempts to obtain a game player from this session will return None
-    /// if this session is not authenticated
-    pub async fn try_into_player(&self) -> Option<GamePlayer> {
-        let net = self.get_net().await?;
-        let player = self.get_player().await?;
-        Some(GamePlayer::new(player, net, self.clone()))
-    }
-
     /// Sets the game that the session is apart of
     ///
     /// `game` The game
     pub fn set_game(&self, game: Option<GameID>) {
         self.sender.send(SessionMessage::SetGame(game)).ok();
-    }
-
-    /// Sets the hardware flag for this session
-    ///
-    /// `flag` The hardware flag
-    pub fn set_hardware_flag(&self, flag: u16) {
-        self.sender.send(SessionMessage::SetHardwareFlag(flag)).ok();
-    }
-
-    /// Sets the player associated with the session
-    ///
-    /// `player` The player
-    pub async fn set_player(&self, player: Option<Player>) {
-        let (tx, rx) = oneshot::channel();
-        match self.sender.send(SessionMessage::SetPlayer(player, tx)) {
-            Ok(_) => {
-                info!("Sent set player message");
-                rx.await.ok();
-            }
-            Err(err) => {
-                error!("Failed to send to sender: {err:?}");
-            }
-        }
-    }
-
-    /// Sends an update self message to the associated client
-    pub fn update_self(&self) {
-        self.sender.send(SessionMessage::UpdateSelf).ok();
-    }
-
-    /// Tells the session to remove itself from any games
-    /// that it is referenced by
-    pub fn remove_games(&self) {
-        self.sender.send(SessionMessage::RemoveGames).ok();
     }
 
     pub fn flush(&self) {
@@ -171,34 +91,6 @@ impl SessionAddr {
 /// session in order to change it in different ways
 #[derive(Debug)]
 pub enum SessionMessage {
-    /// Retrieves the active player for this session and sends
-    /// it through the provided sender channel
-    GetPlayer(oneshot::Sender<Option<Player>>),
-
-    /// Sets the player associated to this session
-    SetPlayer(Option<Player>, oneshot::Sender<()>),
-
-    /// Retrieves the socket address for the session and sends
-    /// it through the provided sender channel
-    GetNetworkAddr(oneshot::Sender<SocketAddr>),
-
-    /// Sets the networking information for this session
-    SetNetworkInfo(NetGroups, QosNetworkData),
-
-    /// Sets the session hardware flag
-    SetHardwareFlag(u16),
-
-    /// Sends a self update to the client
-    UpdateSelf,
-
-    /// Tells the session to remove itself from any games
-    /// that it is referenced by
-    RemoveGames,
-
-    /// Retrieves the net data for this session returning
-    /// a cloned copy of it
-    GetNet(oneshot::Sender<NetData>),
-
     /// Changes the active game value
     SetGame(Option<GameID>),
 
@@ -210,11 +102,7 @@ pub enum SessionMessage {
 }
 
 impl Session {
-    pub fn spawn(
-        id: SessionID,
-        values: (TcpStream, SocketAddr),
-        router: Arc<Router<Components, SessionAddr>>,
-    ) {
+    pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr), router: Arc<Router>) {
         let (sender, receiver) = mpsc::unbounded_channel();
         let session = Session::new(id, values.0, values.1, sender, router);
         tokio::spawn(session.process(receiver));
@@ -230,7 +118,7 @@ impl Session {
         stream: TcpStream,
         addr: SocketAddr,
         sender: mpsc::UnboundedSender<SessionMessage>,
-        router: Arc<Router<Components, SessionAddr>>,
+        router: Arc<Router>,
     ) -> Self {
         Self {
             id,
@@ -270,6 +158,13 @@ impl Session {
         }
     }
 
+    /// Attempts to obtain a game player from this session will return None
+    /// if this session is not authenticated
+    pub fn try_into_player(&self) -> Option<GamePlayer> {
+        let player = self.player.clone()?;
+        Some(GamePlayer::new(player, self.net.clone(), self.addr.clone()))
+    }
+
     /// Handles processing a recieved packet from the `process` function. This includes a
     /// component for routing and the actual packet itself. The buffer is flushed after
     /// routing is complete.
@@ -277,22 +172,19 @@ impl Session {
     /// `session`   The session to process the packet for
     /// `component` The component of the packet for routing
     /// `packet`    The packet itself
-    fn handle_packet(&mut self, packet: Packet) {
+    async fn handle_packet(&mut self, packet: Packet) -> io::Result<()> {
         self.debug_log_packet("Read", &packet);
-        let addr = self.addr.clone();
         let router = self.router.clone();
-        tokio::spawn(async move {
-            match router.handle(addr.clone(), packet).await {
-                Ok(packet) => {
-                    addr.push(packet);
-                }
-                Err(err) => {
-                    error!("Error occurred while decoding packet: {:?}", err);
-                }
+        match router.handle(self, packet).await {
+            Ok(packet) => {
+                self.write(packet).await?;
             }
-
-            addr.flush();
-        });
+            Err(err) => {
+                error!("Error occurred while decoding packet: {:?}", err);
+            }
+        }
+        self.flush().await;
+        Ok(())
     }
 
     /// Handles a message recieved for the session
@@ -300,23 +192,6 @@ impl Session {
     /// `message` The message that was recieved
     async fn handle_message(&mut self, message: SessionMessage) {
         match message {
-            SessionMessage::GetNetworkAddr(tx) => {
-                tx.send(self.socket_addr).ok();
-            }
-            SessionMessage::GetNet(tx) => {
-                tx.send(self.net.clone()).ok();
-            }
-            SessionMessage::GetPlayer(tx) => {
-                tx.send(self.player.clone()).ok();
-            }
-            SessionMessage::RemoveGames => self.remove_games(),
-            SessionMessage::UpdateSelf => self.update_self(),
-            SessionMessage::SetPlayer(player, tx) => {
-                self.player = player;
-                tx.send(()).ok();
-            }
-            SessionMessage::SetNetworkInfo(groups, ext) => self.set_network_info(groups, ext),
-            SessionMessage::SetHardwareFlag(flag) => self.set_hardware_flag(flag),
             SessionMessage::SetGame(game) => self.set_game(game),
             SessionMessage::Write(packet) => self.push(packet),
             SessionMessage::Flush => self.flush().await,
@@ -327,15 +202,18 @@ impl Session {
     /// and sends a flush notification
     ///
     /// `packet` The packet to push to the buffer
-    fn push(&mut self, packet: Packet) {
-        if let PacketType::Notify = packet.header.ty {
-            // Notifications are pushed to the back
-            self.queue.push_back(packet);
-        } else {
-            // Responses are pushed to the front
-            self.queue.push_front(packet);
-        }
+    pub fn push(&mut self, packet: Packet) {
+        self.queue.push_back(packet);
         self.queue_flush();
+    }
+    /// Writes the provided packet directly to the underlying stream
+    /// rather than pushing to the buffer. Only use when handling
+    /// responses will cause long blocks because will wait for all
+    /// the data to be written.
+    async fn write(&mut self, packet: Packet) -> io::Result<()> {
+        packet.write_async(&mut self.stream).await?;
+        self.debug_log_packet("Wrote", &packet);
+        Ok(())
     }
 
     /// Logs the contents of the provided packet to the debug output along with
@@ -352,7 +230,7 @@ impl Session {
 
         let header = &packet.header;
         let component = Components::from_header(header);
-        if Self::is_debug_ignored(&component) {
+        if false || Self::is_debug_ignored(&component) {
             return;
         }
 
@@ -391,7 +269,7 @@ impl Session {
             message.push_str(&header.error.to_string());
         }
 
-        if !Self::is_debug_minified(&component) {
+        if true || !Self::is_debug_minified(&component) {
             append_packet_decoded(packet, &mut message);
         }
 
@@ -458,8 +336,7 @@ impl Session {
     /// onto `handle_packet` awaiting the result of that
     async fn read(&mut self) -> io::Result<()> {
         let packet: Packet = Packet::read_async(&mut self.stream).await?;
-        self.handle_packet(packet);
-        Ok(())
+        self.handle_packet(packet).await
     }
 
     /// Sets the game details for the current session and updates
@@ -478,7 +355,7 @@ impl Session {
     ///
     /// `groups` The networking groups
     /// `ext`    The networking ext
-    fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
+    pub fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
         let net = &mut &mut self.net;
         net.is_set = true;
         net.qos = ext;
@@ -492,7 +369,7 @@ impl Session {
     /// updates the client with the changes
     ///
     /// `value` The new hardware flag value
-    fn set_hardware_flag(&mut self, value: u16) {
+    pub fn set_hardware_flag(&mut self, value: u16) {
         self.net.hardware_flags = value;
         self.update_client();
     }
@@ -511,7 +388,7 @@ impl Session {
         self.push(packet);
     }
 
-    fn update_self(&mut self) {
+    pub fn update_self(&mut self) {
         let Some(player) = self.player.as_ref() else {return;};
         let a = Packet::notify(
             Components::UserSessions(UserSessions::SessionDetails),
@@ -534,7 +411,7 @@ impl Session {
 
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    fn remove_games(&mut self) {
+    pub fn remove_games(&mut self) {
         let game = self.game.take();
         let games = GlobalState::games();
         if let Some(game_id) = game {

@@ -8,7 +8,6 @@ use blaze_pk::{
     reader::TdfReader,
     tag::TdfType,
     types::TdfMap,
-    value_type,
     writer::TdfWriter,
 };
 use std::borrow::Cow;
@@ -179,6 +178,7 @@ pub struct PostAuthResponse {
     /// The player ID of the player who this is for
     pub player_id: PlayerID,
 }
+
 impl Encodable for PostAuthResponse {
     fn encode(&self, writer: &mut TdfWriter) {
         // Player Sync Service server details

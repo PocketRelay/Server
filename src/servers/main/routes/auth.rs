@@ -3,7 +3,7 @@ use crate::{
         components::{Authentication as A, Components as C},
         errors::{ServerError, ServerResult},
     },
-    servers::main::{models::auth::*, session::SessionAddr},
+    servers::main::{models::auth::*, router::Router, session::Session},
     state::GlobalState,
     utils::{
         env,
@@ -13,9 +13,8 @@ use crate::{
         validate::is_email,
     },
 };
-use blaze_pk::router::Router;
 use database::{DatabaseConnection, Player};
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use std::borrow::Cow;
 use std::path::Path;
 use tokio::fs::read_to_string;
@@ -24,7 +23,7 @@ use tokio::fs::read_to_string;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionAddr>) {
+pub fn route(router: &mut Router) {
     router.route(C::Authentication(A::Logout), handle_logout);
     router.route(C::Authentication(A::SilentLogin), handle_auth_request);
     router.route(C::Authentication(A::OriginLogin), handle_auth_request);
@@ -98,7 +97,10 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 ///     "TYPE": 0 // Authentication type
 /// }
 /// ```
-async fn handle_auth_request(session: SessionAddr, req: AuthRequest) -> ServerResult<AuthResponse> {
+async fn handle_auth_request(
+    session: &mut Session,
+    req: AuthRequest,
+) -> ServerResult<AuthResponse> {
     let silent = req.is_silent();
     let db = GlobalState::database();
     let player: Player = match req {
@@ -112,7 +114,10 @@ async fn handle_auth_request(session: SessionAddr, req: AuthRequest) -> ServerRe
         .await
         .map_err(|_| ServerError::ServerUnavailable)?;
 
-    session.set_player(Some(player.clone())).await;
+    session.player = Some(player.clone());
+
+    info!("End of handle auth req");
+
     Ok(AuthResponse {
         player,
         session_token,
@@ -244,8 +249,8 @@ async fn handle_login_origin(
 /// ID: 8
 /// Content: {}
 /// ```
-async fn handle_logout(session: SessionAddr) {
-    session.set_player(None).await;
+async fn handle_logout(session: &mut Session) {
+    session.player = None;
 }
 
 /// Handles list user entitlements 2 responses requests which contains information
@@ -338,10 +343,11 @@ async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-async fn handle_login_persona(session: SessionAddr) -> ServerResult<PersonaResponse> {
+async fn handle_login_persona(session: &mut Session) -> ServerResult<PersonaResponse> {
     let player: Player = session
-        .get_player()
-        .await
+        .player
+        .as_ref()
+        .cloned()
         .ok_or(ServerError::FailedNoLoginAction)?;
     let session_token = player
         .session_token
@@ -406,7 +412,7 @@ async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> 
 /// ```
 ///
 async fn handle_create_account(
-    session: SessionAddr,
+    session: &mut Session,
     req: CreateAccountRequest,
 ) -> ServerResult<AuthResponse> {
     let email = req.email;
@@ -459,7 +465,7 @@ async fn handle_create_account(
         }
     };
 
-    session.set_player(Some(player.clone())).await;
+    session.player = Some(player.clone());
 
     Ok(AuthResponse {
         player,
@@ -557,10 +563,10 @@ async fn handle_legal_content(ty: LegalType) -> LegalContent {
 /// ID: 35
 /// Content: {}
 /// ```
-async fn handle_get_auth_token(session: SessionAddr) -> ServerResult<GetTokenResponse> {
+async fn handle_get_auth_token(session: &mut Session) -> ServerResult<GetTokenResponse> {
     let token: String = session
-        .get_player()
-        .await
+        .player
+        .as_ref()
         .map(|player| format!("{:X}", player.id))
         .ok_or(ServerError::FailedNoLoginAction)?;
     Ok(GetTokenResponse { token })

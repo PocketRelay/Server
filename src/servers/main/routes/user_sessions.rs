@@ -8,12 +8,12 @@ use crate::{
     },
     servers::main::{
         models::{auth::AuthResponse, user_sessions::*},
-        session::SessionAddr,
+        router::Router,
+        session::Session,
     },
     state::GlobalState,
     utils::net::public_address,
 };
-use blaze_pk::router::Router;
 use database::Player;
 use log::error;
 
@@ -21,7 +21,7 @@ use log::error;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionAddr>) {
+pub fn route(router: &mut Router) {
     router.route(C::UserSessions(U::ResumeSession), handle_resume_session);
     router.route(C::UserSessions(U::UpdateNetworkInfo), handle_update_network);
     router.route(
@@ -41,7 +41,7 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 /// }
 /// ```
 async fn handle_resume_session(
-    session: SessionAddr,
+    session: &mut Session,
     req: ResumeSessionRequest,
 ) -> ServerResult<AuthResponse> {
     let db = GlobalState::database();
@@ -59,7 +59,7 @@ async fn handle_resume_session(
         }
     };
 
-    session.set_player(Some(player.clone())).await;
+    session.player = Some(player.clone());
 
     Ok(AuthResponse {
         player,
@@ -97,22 +97,16 @@ async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-async fn handle_update_network(session: SessionAddr, req: UpdateNetworkRequest) {
-    // Initial set to client value
-    session.set_network_info(req.address.clone(), req.qos);
+async fn handle_update_network(session: &mut Session, req: UpdateNetworkRequest) {
+    let mut groups = req.address;
+    let external = &mut groups.external;
+    if external.0.is_invalid() || external.1 == 0 {
+        // Match port with internal address
+        external.1 = groups.internal.1;
+        external.0 = get_network_address(&session.socket_addr).await;
+    }
 
-    tokio::spawn(async move {
-        let mut groups = req.address;
-        let external = &mut groups.external;
-        if external.0.is_invalid() || external.1 == 0 {
-            // Match port with internal address
-            external.1 = groups.internal.1;
-            external.0 = get_network_address(session.get_network_addr().await).await;
-        }
-
-        // Final update set to actual value
-        session.set_network_info(groups, req.qos);
-    });
+    session.set_network_info(groups, req.qos);
 }
 
 /// Obtains the networking address from the provided SocketAddr
@@ -120,23 +114,17 @@ async fn handle_update_network(session: SessionAddr, req: UpdateNetworkRequest) 
 /// public IP address of the network is used instead.
 ///
 /// `value` The socket address
-async fn get_network_address(addr: Option<SocketAddr>) -> NetAddress {
-    if let Some(addr) = addr {
-        let ip = addr.ip();
-        if let IpAddr::V4(value) = ip {
-            // Address is already a public address
-            if !value.is_loopback() && !value.is_private() {
-                let value = format!("{}", value);
-                return NetAddress::from_ipv4(&value);
+async fn get_network_address(addr: &SocketAddr) -> NetAddress {
+    let ip = addr.ip();
+    if let IpAddr::V4(value) = ip {
+        // Address is already a public address
+        if value.is_loopback() || value.is_private() {
+            if let Some(public_addr) = public_address().await {
+                return NetAddress::from_ipv4(&public_addr);
             }
-        } else {
-            // Don't know how to handle IPv6 addresses
-            return NetAddress(0);
         }
-    }
-
-    if let Some(public_addr) = public_address().await {
-        NetAddress::from_ipv4(&public_addr)
+        let value = format!("{}", value);
+        NetAddress::from_ipv4(&value)
     } else {
         NetAddress(0)
     }
@@ -151,6 +139,6 @@ async fn get_network_address(addr: Option<SocketAddr>) -> NetAddress {
 ///     "HWFG": 0
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: SessionAddr, req: HardwareFlagRequest) {
+async fn handle_update_hardware_flag(session: &mut Session, req: HardwareFlagRequest) {
     session.set_hardware_flag(req.hardware_flag);
 }

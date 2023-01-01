@@ -4,18 +4,17 @@ use crate::{
         errors::{ServerError, ServerResult},
     },
     game::{player::GamePlayer, GameModifyAction, RemovePlayerType},
-    servers::main::{models::game_manager::*, session::SessionAddr},
+    servers::main::{models::game_manager::*, router::Router, session::Session},
     state::GlobalState,
     utils::types::GameID,
 };
-use blaze_pk::router::Router;
 use log::info;
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionAddr>) {
+pub fn route(router: &mut Router) {
     router.route(C::GameManager(G::CreateGame), handle_create_game);
     router.route(C::GameManager(G::AdvanceGameState), handle_game_modify);
     router.route(C::GameManager(G::SetGameSettings), handle_game_modify);
@@ -88,12 +87,11 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 /// }
 /// ```
 async fn handle_create_game(
-    session: SessionAddr,
+    session: &mut Session,
     req: CreateGameRequest,
 ) -> ServerResult<CreateGameResponse> {
     let player: GamePlayer = session
         .try_into_player()
-        .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let games = GlobalState::games();
@@ -184,7 +182,7 @@ async fn handle_remove_player(req: RemovePlayerRequest) {
 ///     ]
 /// }
 /// ```
-async fn handle_update_mesh_connection(session: SessionAddr, req: UpdateMeshRequest) {
+async fn handle_update_mesh_connection(session: &mut Session, req: UpdateMeshRequest) {
     let target = match req.target {
         Some(value) => value,
         None => return,
@@ -323,12 +321,11 @@ async fn handle_update_mesh_connection(session: SessionAddr, req: UpdateMeshRequ
 /// }
 /// ```
 async fn handle_start_matchmaking(
-    session: SessionAddr,
+    session: &mut Session,
     req: MatchmakingRequest,
 ) -> ServerResult<MatchmakingResponse> {
     let player: GamePlayer = session
         .try_into_player()
-        .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     info!("Player {} started matchmaking", player.player.display_name);
@@ -349,6 +346,6 @@ async fn handle_start_matchmaking(
 ///     "MSID": 1
 /// }
 /// ```
-async fn handle_cancel_matchmaking(session: SessionAddr) {
+async fn handle_cancel_matchmaking(session: &mut Session) {
     session.remove_games();
 }
