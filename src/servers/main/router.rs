@@ -1,16 +1,18 @@
-use std::{collections::HashMap, future::Future, marker::PhantomData, pin::Pin};
-
 use blaze_pk::{
-    codec::Decodable,
     error::DecodeResult,
-    packet::{IntoResponse, Packet, PacketComponents},
+    packet::{FromRequest, IntoResponse, Packet, PacketComponents},
 };
+use pin_project::pin_project;
+use std::{collections::HashMap, future::Future, marker::PhantomData, pin::Pin, task::Poll};
+
+use crate::blaze::components::Components;
 
 use super::session::Session;
-use crate::blaze::components::Components as C;
+
+type RouteFuture = DecodeResult<Pin<Box<dyn Future<Output = Packet> + Send>>>;
 
 pub struct Router {
-    routes: HashMap<C, Box<dyn Route>>,
+    routes: HashMap<Components, Box<dyn Route>>,
 }
 
 impl Router {
@@ -20,13 +22,9 @@ impl Router {
         }
     }
 
-    /// Adds a new route that doesn't require state to be provided
-    ///
-    /// `component` The route component
-    /// `route`     The route function
-    pub fn route<R, T>(&mut self, component: C, route: R) -> &mut Self
+    pub fn route<F, R>(&mut self, component: Components, route: F) -> &mut Self
     where
-        R: IntoRoute<T>,
+        F: IntoRoute<R>,
     {
         self.routes.insert(component, route.into_route());
         self
@@ -41,164 +39,183 @@ impl Router {
     /// `state`  The additional handle state
     /// `packet` The packet to handle routing
     pub async fn handle(&self, state: &mut Session, packet: Packet) -> DecodeResult<Packet> {
-        let component = C::from_header(&packet.header);
+        let component = Components::from_header(&packet.header);
         let route = match self.routes.get(&component) {
             Some(value) => value,
             None => return Ok(packet.respond_empty()),
         };
-        route.handle(state, packet).await
+        Ok(route.handle(Pin::new(state), packet)?.await)
     }
 }
 
-type RouteFuture = Pin<Box<dyn Future<Output = DecodeResult<Packet>> + Send>>;
+trait Route: Send + Sync {
+    fn handle(&self, session: Pin<&mut Session>, packet: Packet) -> RouteFuture;
+}
 
-trait IntoRoute<T> {
+struct Empty;
+
+trait IntoRoute<Args> {
     fn into_route(self) -> Box<dyn Route>;
 }
 
-/// Route implementation used for handling requests
-trait Route: Send + Sync {
-    /// Handles the routing for this route using the provided
-    /// state and processing the provided packet
-    ///
-    /// `state`  The additional state
-    /// `packet` The packet to handle
-    fn handle(&self, state: &mut Session, packet: Packet) -> RouteFuture;
-}
-
-/// Function based route implementation which wraps a function
-/// that is used to handle a request and return a response
-struct FnRoute<F, T> {
-    /// The inner route function handle
+struct StatelessRoute<F, Fut, Res, Req> {
     inner: F,
-    /// Phantom data for storing the associated types
-    _marker: PhantomData<fn() -> T>,
+    _marker: PhantomData<fn() -> (Fut, Req, Res)>,
 }
 
-impl<F, T> Route for FnRoute<F, T>
+impl<F, Fut, Res, Req> Route for StatelessRoute<F, Fut, Res, Req>
 where
-    F: FnHandle<T>,
+    F: Fn(Req) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Res> + Send + 'static,
+    Req: FromRequest + 'static,
+    Res: IntoResponse + 'static,
 {
-    fn handle(&self, state: &mut Session, packet: Packet) -> RouteFuture {
-        let inner = self.inner.clone();
-        Box::pin(inner.handle(state, packet))
+    fn handle(&self, _session: Pin<&mut Session>, packet: Packet) -> RouteFuture {
+        let req: Req = FromRequest::from_request(&packet)?;
+        let fut: Fut = (self.inner)(req);
+        Ok(Box::pin(Handle {
+            inner: fut,
+            packet,
+            _marker: PhantomData,
+        }))
     }
 }
 
-trait FnHandle<T>: Clone + Send + Sync + Sized + 'static {
-    fn handle(self, state: &mut Session, packet: Packet) -> RouteFuture;
-}
-
-impl<H, T> IntoRoute<T> for H
+impl<F, Fut, Res, Req> IntoRoute<(Empty, Req)> for F
 where
-    H: FnHandle<T>,
+    F: Fn(Req) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Res> + Send + 'static,
+    Req: FromRequest + 'static,
+    Res: IntoResponse + 'static,
 {
     fn into_route(self) -> Box<dyn Route> {
-        Box::new(FnRoute {
+        Box::new(StatelessRoute {
             inner: self,
-            _marker: PhantomData as PhantomData<fn() -> T>,
+            _marker: PhantomData as PhantomData<fn() -> (Fut, Req, Res)>,
         })
     }
 }
 
-async fn test(session: &mut Session) -> () {
-    ()
-}
-
-fn test1() {
-    let route = test.into_route();
-}
-
-struct Nil;
-
-/// Handle implementation for functions that take the session state
-/// argument as well as a request argument
-///
-/// ```
-/// async fn test_route(state:  &mut Session) -> Res {
-///
-/// }
-/// ```
-impl<F, Res, Fut> FnHandle<(Session, Nil)> for F
+impl<F, Fut, Res> Route for StatelessRoute<F, Fut, Res, Empty>
 where
-    F: FnOnce(&mut Session) -> Fut + Clone + Send + Sync + 'static,
+    F: Fn() -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'static,
     Res: IntoResponse + 'static,
 {
-    fn handle(self, state: &mut Session, packet: Packet) -> RouteFuture {
-        Box::pin(async move {
-            let res: Res = self(state).await;
-            Ok(res.into_response(packet))
+    fn handle(&self, _session: Pin<&mut Session>, packet: Packet) -> RouteFuture {
+        let fut: Fut = (self.inner)();
+        Ok(Box::pin(Handle {
+            inner: fut,
+            packet,
+            _marker: PhantomData,
+        }))
+    }
+}
+
+impl<F, Fut, Res> IntoRoute<(Empty, Empty)> for F
+where
+    F: Fn() -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Res> + Send + 'static,
+    Res: IntoResponse + 'static,
+{
+    fn into_route(self) -> Box<dyn Route> {
+        Box::new(StatelessRoute {
+            inner: self,
+            _marker: PhantomData as PhantomData<fn() -> (Fut, Empty, Res)>,
         })
     }
 }
 
-/// Handle implementation for functions that take the session state
-/// argument as well as a request argument
-///
-/// ```
-/// async fn test_route(state:  &mut Session, req: Req) -> Res {
-///
-/// }
-/// ```
-impl<F, Req, Res, Fut> FnHandle<(Session, Req)> for F
+struct StateRoute<F, Fut, Res, Req> {
+    inner: F,
+    _marker: PhantomData<fn() -> (Fut, Req, Res)>,
+}
+
+impl<F, Fut, Res, Req> Route for StateRoute<F, Fut, Res, Req>
 where
-    F: FnOnce(&mut Session, Req) -> Fut + Clone + Send + Sync + 'static,
+    F: for<'a> Fn(&'a mut Session, Req) -> Fut + Send + Sync,
     Fut: Future<Output = Res> + Send,
-    Req: Decodable + Send + 'static,
+    Req: FromRequest + 'static,
     Res: IntoResponse + 'static,
 {
-    fn handle(self, state: &mut Session, packet: Packet) -> RouteFuture {
-        Box::pin(async move {
-            let req: Req = packet.decode()?;
-            let res: Res = self(state, req).await;
-            Ok(res.into_response(packet))
+    fn handle(&self, session: Pin<&mut Session>, packet: Packet) -> RouteFuture {
+        let req: Req = FromRequest::from_request(&packet)?;
+        let fut: Fut = (self.inner)(session.get_mut(), req);
+        Ok(Box::pin(Handle {
+            inner: fut,
+            packet,
+            _marker: PhantomData,
+        }))
+    }
+}
+
+impl<F, Fut, Res, Req> IntoRoute<(Session, Req)> for F
+where
+    F: for<'a> Fn(&'a mut Session, Req) -> Fut + Send + Sync,
+    Fut: Future<Output = Res> + Send,
+    Req: FromRequest + 'static,
+    Res: IntoResponse + 'static,
+{
+    fn into_route(self) -> Box<dyn Route> {
+        Box::new(StateRoute {
+            inner: self,
+            _marker: PhantomData as PhantomData<fn() -> (Fut, Req, Res)>,
         })
     }
 }
 
-/// Handle implementation for functions that take the session state
-/// argument as well as a request argument
-///
-/// ```
-/// async fn test_route(req: Req) -> Res {
-///
-/// }
-/// ```
-impl<F, Req, Res, Fut> FnHandle<(Nil, Req)> for F
+impl<F, Fut, Res> Route for StateRoute<F, Fut, Res, Empty>
 where
-    F: FnOnce(Req) -> Fut + Clone + Send + Sync + 'static,
+    F: for<'a> Fn(&'a mut Session) -> Fut + Send + Sync,
     Fut: Future<Output = Res> + Send,
-    Req: Decodable + Send + 'static,
-    Res: IntoResponse + 'static,
+    Res: IntoResponse,
 {
-    fn handle(self, _state: &mut Session, packet: Packet) -> RouteFuture {
-        Box::pin(async move {
-            let req: Req = packet.decode()?;
-            let res: Res = self(req).await;
-            Ok(res.into_response(packet))
+    fn handle(&self, session: Pin<&mut Session>, packet: Packet) -> RouteFuture {
+        let fut: Fut = (self.inner)(session.get_mut());
+        Ok(Box::pin(Handle {
+            inner: fut,
+            packet,
+            _marker: PhantomData,
+        }))
+    }
+}
+
+impl<F, Fut, Res> IntoRoute<Session> for F
+where
+    F: for<'a> Fn(&'a mut Session) -> Fut + Send + Sync,
+    Fut: Future<Output = Res> + Send,
+    Res: IntoResponse,
+{
+    fn into_route(self) -> Box<dyn Route> where {
+        Box::new(StateRoute {
+            inner: self,
+            _marker: PhantomData as PhantomData<fn() -> (Fut, Empty, Res)>,
         })
     }
 }
 
-/// Handle implementation for functions that take the session state
-/// argument as well as a request argument
-///
-/// ```
-/// async fn test_route() -> Res {
-///
-/// }
-/// ```
-impl<F, Res, Fut> FnHandle<(Nil, Nil)> for F
+#[pin_project]
+struct Handle<'a, Fut, Res> {
+    #[pin]
+    inner: Fut,
+    packet: Packet,
+    _marker: PhantomData<fn(&'a mut Session) -> Res>,
+}
+
+impl<'a, Fut, Res> Future for Handle<'a, Fut, Res>
 where
-    F: FnOnce() -> Fut + Clone + Send + Sync + 'static,
-    Fut: Future<Output = Res> + Send,
-    Res: IntoResponse + 'static,
+    Fut: Future<Output = Res> + Send + 'a,
+    Res: IntoResponse,
 {
-    fn handle(self, _state: &mut Session, packet: Packet) -> RouteFuture {
-        Box::pin(async move {
-            let res: Res = self().await;
-            Ok(res.into_response(packet))
-        })
+    type Output = Packet;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        let it = self.project();
+        let res = match it.inner.poll(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(res) => res,
+        };
+        let response = res.into_response(&it.packet);
+        Poll::Ready(response)
     }
 }

@@ -32,7 +32,7 @@ pub enum ServerError {
 }
 
 impl IntoResponse for ServerError {
-    fn into_response(self, req: Packet) -> Packet {
+    fn into_response(self, req: &Packet) -> Packet {
         req.respond_error_empty(self as u16)
     }
 }

@@ -40,7 +40,7 @@ log = { workspace = true }
 serde = { workspace = true }
 
 # Blaze packet system 
-blaze-pk = "^0.8"
+blaze-pk = { version = "^0.8", path = "../BlazePK" }
 # Blaze SSLv3 async TCPStream implementation
 blaze-ssl-async = "^0.3"
 
@@ -61,6 +61,7 @@ dotenvy = "0.15"
 
 # Library for obtaining the local IP address of the device
 local-ip-address = "0.5.0"
+pin-project = "1"
 
 # Tokio async runtime
 [dependencies.tokio]
