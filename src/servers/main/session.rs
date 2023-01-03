@@ -234,7 +234,7 @@ impl Session {
 
         let header = &packet.header;
         let component = Components::from_header(header);
-        if false || Self::is_debug_ignored(&component) {
+        if Self::is_debug_ignored(&component) {
             return;
         }
 
@@ -273,7 +273,7 @@ impl Session {
             message.push_str(&header.error.to_string());
         }
 
-        if true || !Self::is_debug_minified(&component) {
+        if !Self::is_debug_minified(&component) {
             append_packet_decoded(packet, &mut message);
         }
 

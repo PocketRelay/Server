@@ -48,7 +48,9 @@ pub fn route(router: &mut Router<C, Session>) {
 /// ```
 ///
 async fn handle_get_telemetry_server() -> TelemetryServer {
-    TelemetryServer { port: 9988 }
+    TelemetryServer {
+        port: env::from_env(env::TELEMETRY_PORT),
+    }
 }
 
 /// Handles retrieving the details about the ticker server
@@ -60,7 +62,9 @@ async fn handle_get_telemetry_server() -> TelemetryServer {
 /// ```
 ///
 async fn handle_get_ticker_server() -> TickerServer {
-    TickerServer { port: 8999 }
+    TickerServer {
+        port: env::from_env(env::TICKER_PORT),
+    }
 }
 
 /// Handles responding to pre-auth requests which is the first request
@@ -116,8 +120,12 @@ async fn handle_post_auth(session: &mut Session) -> ServerResult<PostAuthRespons
 
     session.update_self();
     Ok(PostAuthResponse {
-        telemetry: TelemetryServer { port: 9988 },
-        ticker: TickerServer { port: 8999 },
+        telemetry: TelemetryServer {
+            port: env::from_env(env::TELEMETRY_PORT),
+        },
+        ticker: TickerServer {
+            port: env::from_env(env::TICKER_PORT),
+        },
         player_id,
     })
 }
@@ -463,6 +471,7 @@ impl Message {
 ///
 fn data_config() -> TdfMap<String, String> {
     let http_port = env::from_env(env::HTTP_PORT);
+    let tele_port = env::from_env(env::TELEMETRY_PORT);
     let prefix = format!("http://{}:{}", constants::EXTERNAL_HOST, http_port);
 
     let mut config = TdfMap::with_capacity(15);
@@ -470,15 +479,15 @@ fn data_config() -> TdfMap<String, String> {
     config.insert("IMG_MNGR_BASE_URL", format!("{prefix}/content/"));
     config.insert("IMG_MNGR_MAX_BYTES", "1048576");
     config.insert("IMG_MNGR_MAX_IMAGES", "5");
-    config.insert("JOB_THROTTLE_0", "0");
-    config.insert("JOB_THROTTLE_1", "0");
-    config.insert("JOB_THROTTLE_2", "0");
+    config.insert("JOB_THROTTLE_0", "10000");
+    config.insert("JOB_THROTTLE_1", "5000");
+    config.insert("JOB_THROTTLE_2", "1000");
     config.insert("MATCH_MAKING_RULES_VERSION", "5");
     config.insert("MULTIPLAYER_PROTOCOL_VERSION", "3");
-    config.insert("TEL_DISABLE", "**");
+    config.insert("TEL_DISABLE", TELEMTRY_DISA);
     config.insert("TEL_DOMAIN", "pc/masseffect-3-pc-anon");
     config.insert("TEL_FILTER", "-UION/****");
-    config.insert("TEL_PORT", "9988");
+    config.insert("TEL_PORT", tele_port.to_string());
     config.insert("TEL_SEND_DELAY", "15000");
     config.insert("TEL_SEND_PCT", "75");
     config.insert("TEL_SERVER", constants::EXTERNAL_HOST);
