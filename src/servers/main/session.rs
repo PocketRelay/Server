@@ -18,7 +18,7 @@ use crate::{
 use blaze_pk::packet::{Packet, PacketComponents, PacketType};
 use database::Player;
 use log::{debug, error, log_enabled};
-use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
+use std::{collections::VecDeque, io, net::SocketAddr, pin::Pin, sync::Arc};
 use tokio::{net::TcpStream, select, sync::mpsc};
 
 /// Structure for storing a client session. This includes the
@@ -175,6 +175,7 @@ impl Session {
     async fn handle_packet(&mut self, packet: Packet) -> io::Result<()> {
         self.debug_log_packet("Read", &packet);
         let router = self.router.clone();
+
         match router.handle(self, packet).await {
             Ok(packet) => {
                 self.write(packet).await?;
