@@ -4,17 +4,18 @@ use crate::{
         errors::{ServerError, ServerResult},
     },
     game::{player::GamePlayer, GameModifyAction, RemovePlayerType},
-    servers::main::{models::game_manager::*, router::Router, session::Session},
+    servers::main::{models::game_manager::*, session::Session},
     state::GlobalState,
     utils::types::GameID,
 };
+use blaze_pk::router::Router;
 use log::info;
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: &mut Router<C, Session>) {
     router.route(C::GameManager(G::CreateGame), handle_create_game);
     router.route(C::GameManager(G::AdvanceGameState), handle_game_modify);
     router.route(C::GameManager(G::SetGameSettings), handle_game_modify);

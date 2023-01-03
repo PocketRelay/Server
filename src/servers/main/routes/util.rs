@@ -4,13 +4,13 @@ use crate::{
         components::{Components as C, Util as U},
         errors::{ServerError, ServerResult},
     },
-    servers::main::{models::util::*, router::Router, session::Session},
+    servers::main::{models::util::*, session::Session},
     state::GlobalState,
     utils::{constants, dmap::load_dmap, env},
 };
 
 use base64ct::{Base64, Encoding};
-use blaze_pk::types::TdfMap;
+use blaze_pk::{router::Router, types::TdfMap};
 use database::PlayerData;
 use flate2::{write::ZlibEncoder, Compression};
 use log::{error, warn};
@@ -27,7 +27,7 @@ use tokio::fs::read;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: &mut Router<C, Session>) {
     router.route(C::Util(U::PreAuth), handle_pre_auth);
     router.route(C::Util(U::PostAuth), handle_post_auth);
     router.route(C::Util(U::Ping), handle_ping);

@@ -1,16 +1,17 @@
 use crate::{
     blaze::components::{Components as C, Stats as S},
     leaderboard::{models::*, LeaderboardQuery},
-    servers::main::{models::stats::*, router::Router},
+    servers::main::{models::stats::*, session::Session},
     state::GlobalState,
 };
+use blaze_pk::router::Router;
 use log::error;
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: &mut Router<C, Session>) {
     router.route(
         C::Stats(S::GetLeaderboardEntityCount),
         handle_leaderboard_entity_count,

@@ -8,12 +8,12 @@ use crate::{
     },
     servers::main::{
         models::{auth::AuthResponse, user_sessions::*},
-        router::Router,
         session::Session,
     },
     state::GlobalState,
     utils::net::public_address,
 };
+use blaze_pk::router::Router;
 use database::Player;
 use log::error;
 
@@ -21,7 +21,7 @@ use log::error;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: &mut Router<C, Session>) {
     router.route(C::UserSessions(U::ResumeSession), handle_resume_session);
     router.route(C::UserSessions(U::UpdateNetworkInfo), handle_update_network);
     router.route(

@@ -3,7 +3,7 @@ use crate::{
         components::{Authentication as A, Components as C},
         errors::{ServerError, ServerResult},
     },
-    servers::main::{models::auth::*, router::Router, session::Session},
+    servers::main::{models::auth::*, session::Session},
     state::GlobalState,
     utils::{
         env,
@@ -13,6 +13,7 @@ use crate::{
         validate::is_email,
     },
 };
+use blaze_pk::router::Router;
 use database::{DatabaseConnection, Player};
 use log::{debug, error, info, warn};
 use std::borrow::Cow;
@@ -23,7 +24,7 @@ use tokio::fs::read_to_string;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: &mut Router<C, Session>) {
     router.route(C::Authentication(A::Logout), handle_logout);
     router.route(C::Authentication(A::SilentLogin), handle_auth_request);
     router.route(C::Authentication(A::OriginLogin), handle_auth_request);

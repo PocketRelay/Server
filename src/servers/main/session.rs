@@ -1,10 +1,7 @@
 //! Sessions are client connections to the main server with associated
 //! data such as player data for when they become authenticated and
 //! networking data.
-use super::{
-    models::session::{SessionUpdate, SetSession},
-    router::Router,
-};
+use super::models::session::{SessionUpdate, SetSession};
 use crate::{
     blaze::{
         append_packet_decoded,
@@ -15,10 +12,13 @@ use crate::{
     state::GlobalState,
     utils::types::{GameID, SessionID},
 };
-use blaze_pk::packet::{Packet, PacketComponents, PacketType};
+use blaze_pk::{
+    packet::{Packet, PacketComponents, PacketType},
+    router::{Router, State},
+};
 use database::Player;
 use log::{debug, error, log_enabled};
-use std::{collections::VecDeque, io, net::SocketAddr, pin::Pin, sync::Arc};
+use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
 use tokio::{net::TcpStream, select, sync::mpsc};
 
 /// Structure for storing a client session. This includes the
@@ -51,11 +51,14 @@ pub struct Session {
     /// already queued in the reciever
     flush_queued: bool,
 
-    router: Arc<Router>,
+    /// Arc to router to use for routing
+    router: Arc<Router<Components, Session>>,
 
     /// Internal address used for routing can be cloned and used elsewhere
     addr: SessionAddr,
 }
+
+impl State for Session {}
 
 /// Address to a session which allows manipulating sessions asyncronously
 /// using mpsc channels without actually having access to the session itself
@@ -81,10 +84,6 @@ impl SessionAddr {
     pub fn set_game(&self, game: Option<GameID>) {
         self.sender.send(SessionMessage::SetGame(game)).ok();
     }
-
-    pub fn flush(&self) {
-        self.sender.send(SessionMessage::Flush).ok();
-    }
 }
 
 /// Enum of different messages that can be sent to this
@@ -102,10 +101,14 @@ pub enum SessionMessage {
 }
 
 impl Session {
-    pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr), router: Arc<Router>) {
+    pub fn spawn(
+        id: SessionID,
+        values: (TcpStream, SocketAddr),
+        router: Arc<Router<Components, Session>>,
+    ) {
         let (sender, receiver) = mpsc::unbounded_channel();
         let session = Session::new(id, values.0, values.1, sender, router);
-        tokio::spawn(session.process(receiver));
+        tokio::spawn(async move { session.process(receiver).await });
     }
 
     /// Creates a new session with the provided values.
@@ -118,7 +121,7 @@ impl Session {
         stream: TcpStream,
         addr: SocketAddr,
         sender: mpsc::UnboundedSender<SessionMessage>,
-        router: Arc<Router>,
+        router: Arc<Router<Components, Session>>,
     ) -> Self {
         Self {
             id,

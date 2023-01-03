@@ -1,15 +1,15 @@
 use crate::{
     blaze::components::{Components as C, Messaging as M},
-    servers::main::{models::messaging::*, router::Router, session::Session},
+    servers::main::{models::messaging::*, session::Session},
     utils::{constants, env},
 };
-use blaze_pk::packet::Packet;
+use blaze_pk::{packet::Packet, router::Router};
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router) {
+pub fn route(router: &mut Router<C, Session>) {
     router.route(C::Messaging(M::FetchMessages), handle_fetch_messages);
 }
 
