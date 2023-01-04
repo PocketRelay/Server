@@ -117,8 +117,6 @@ async fn handle_auth_request(
 
     session.player = Some(player.clone());
 
-    info!("End of handle auth req");
-
     Ok(AuthResponse {
         player,
         session_token,
