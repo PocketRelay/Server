@@ -202,9 +202,9 @@ dependencies = [
 
 [[package]]
 name = "blaze-pk"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b41bf10b12f1cea6ac020c468a253dd289a084964d31b34192aa841b3b2ec634"
+checksum = "d5dbefd24fa681aefd00a513b873800fe1d47c8e3a666b661307b2c7495f7f10"
 dependencies = [
  "bytes",
  "serde",
