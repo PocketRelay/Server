@@ -42,8 +42,10 @@ pub fn route(router: &mut Router<C, Session>) {
 /// }
 /// ```
 async fn handle_submit_offline(session: &mut Session) {
-    let notify = Packet::notify(C::GameReporting(G::GameReportSubmitted), GameReportResponse);
-    session.push(notify);
+    session.push(Packet::notify(
+        C::GameReporting(G::GameReportSubmitted),
+        GameReportResponse,
+    ));
 }
 
 /// Handles getting associated lists for the player

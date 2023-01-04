@@ -15,7 +15,7 @@ use crate::{
 };
 use blaze_pk::router::Router;
 use database::{DatabaseConnection, Player};
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use std::borrow::Cow;
 use std::path::Path;
 use tokio::fs::read_to_string;

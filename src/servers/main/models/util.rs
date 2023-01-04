@@ -10,7 +10,6 @@ use blaze_pk::{
     types::TdfMap,
     writer::TdfWriter,
 };
-use log::info;
 use std::borrow::Cow;
 
 /// Possibly regions that the telemetry server is disabled for?

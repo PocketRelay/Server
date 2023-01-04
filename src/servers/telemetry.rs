@@ -1,12 +1,9 @@
 //! Module for the Redirector server which handles redirecting the clients
 //! to the correct address for the main server.
 
-use std::{collections::HashMap, io};
-
 use crate::env;
-
 use log::{debug, error, info};
-
+use std::{collections::HashMap, io};
 use tokio::{
     io::AsyncReadExt,
     net::{TcpListener, TcpStream},

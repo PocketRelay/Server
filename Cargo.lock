@@ -202,9 +202,9 @@ dependencies = [
 
 [[package]]
 name = "blaze-pk"
-version = "0.8.3"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5dbefd24fa681aefd00a513b873800fe1d47c8e3a666b661307b2c7495f7f10"
+checksum = "aed9908ecaf1081bf2a2595699cf2c82a17e0430e194d8112bfbc6da2b49b79d"
 dependencies = [
  "bytes",
  "serde",
@@ -1399,7 +1399,6 @@ dependencies = [
  "local-ip-address",
  "log",
  "log4rs",
- "pin-project",
  "pocket-relay-database",
  "regex",
  "reqwest",

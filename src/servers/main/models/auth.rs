@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use crate::utils::types::PlayerID;
 use blaze_pk::{
     codec::{Decodable, Encodable},
@@ -10,6 +8,7 @@ use blaze_pk::{
     writer::TdfWriter,
 };
 use database::Player;
+use std::borrow::Cow;
 
 /// Different possible authentication request types.
 pub enum AuthRequest {

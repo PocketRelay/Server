@@ -2,9 +2,7 @@
 //! to the correct address for the main server.
 
 use crate::env;
-
 use log::{debug, error, info};
-
 use tokio::{
     io::AsyncReadExt,
     net::{TcpListener, TcpStream},

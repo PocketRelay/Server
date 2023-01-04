@@ -1,9 +1,8 @@
 //! Modules contains the component definitions for the servers used throughout
 //! this application.
 
-use std::hash::Hash;
-
 use blaze_pk::define_components;
+use std::hash::Hash;
 
 define_components! {
     Authentication (0x1) {

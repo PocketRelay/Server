@@ -1,9 +1,8 @@
-use std::sync::Arc;
-
 use crate::{blaze::components::Components, env};
 use blaze_pk::router::Router;
 use log::{error, info};
 use session::Session;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 
 mod models;

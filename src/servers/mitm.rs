@@ -1,8 +1,6 @@
 //! Module for the Redirector server which handles redirecting the clients
 //! to the correct address for the main server.
 
-use std::io;
-
 use crate::{
     blaze::{append_packet_decoded, components::Components},
     env,
@@ -12,6 +10,7 @@ use crate::{
 use blaze_pk::packet::{Packet, PacketType};
 use blaze_ssl_async::stream::BlazeStream;
 use log::{debug, error, info, log_enabled};
+use std::io;
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
