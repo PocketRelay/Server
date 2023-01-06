@@ -172,9 +172,8 @@ impl Session {
         Some(GamePlayer::new(player, self.net.clone(), self.addr.clone()))
     }
 
-    /// Handles processing a recieved packet from the `process` function. This includes a
-    /// component for routing and the actual packet itself. The buffer is flushed after
-    /// routing is complete.
+    /// Handles processing a recieved packet from the `process` function.
+    /// The buffer is flushed after routing is complete.
     ///
     /// `session`   The session to process the packet for
     /// `component` The component of the packet for routing
