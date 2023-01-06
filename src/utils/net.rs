@@ -1,18 +1,72 @@
+use std::time::{Duration, SystemTime};
+
 use reqwest;
 use serde::Deserialize;
+use tokio::sync::RwLock;
 
-/// Retrieves the public IPv4 address of this machine using the ip4.seeip.org
-/// API trimming the response to remove new lines.
+/// Caching structure for the public address value
+enum PublicAddrCache {
+    /// The value hasn't yet been computed
+    Unset,
+    /// The value has been computed
+    Set {
+        /// The public address value
+        value: String,
+        /// The system time the cache expires at
+        expires: SystemTime,
+    },
+}
+
+/// Cache value for storing the public address
+static PUBLIC_ADDR_CACHE: RwLock<PublicAddrCache> = RwLock::const_new(PublicAddrCache::Unset);
+
+/// Cache public address for 2 hours
+const ADDR_CACHE_TIME: Duration = Duration::from_secs(60 * 60 * 2);
+
+/// Retrieves the public address of the server either using the cached
+/// value if its not expired or fetching the new value from the API using
+/// `fetch_public_addr`
 pub async fn public_address() -> Option<String> {
-    let result = reqwest::get("https://ipv4.icanhazip.com/")
-        .await
-        .ok()?
-        .text()
-        .await
-        .ok()?;
-    let result = result.trim();
-    let result = result.replace('\n', "");
-    Some(result)
+    {
+        let cached = &*PUBLIC_ADDR_CACHE.read().await;
+        match cached {
+            PublicAddrCache::Unset => {}
+            PublicAddrCache::Set { value, expires } => {
+                let time = SystemTime::now();
+                if time.lt(expires) {
+                    return Some(value.clone());
+                }
+            }
+        };
+    }
+
+    // API addresses for IP lookup
+    let addresses = ["https://api.ipify.org/", "https://ipv4.icanhazip.com/"];
+    let mut value: Option<String> = None;
+
+    // Try all addresses using the first valid value
+    for address in addresses {
+        if let Ok(response) = reqwest::get(address).await {
+            if let Ok(ip) = response.text().await {
+                let ip = ip.trim().replace('\n', "");
+                value = Some(ip);
+                break;
+            }
+        }
+    }
+
+    let value = value?;
+
+    // Update cached value with the new address
+    {
+        let cached = &mut *PUBLIC_ADDR_CACHE.write().await;
+        *cached = PublicAddrCache::Set {
+            value: value.clone(),
+            expires: SystemTime::now() + ADDR_CACHE_TIME,
+        };
+    }
+
+    Some(value)
 }
 
 /// Structure for the lookup responses from the google DNS API
