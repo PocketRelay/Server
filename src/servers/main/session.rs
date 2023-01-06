@@ -7,10 +7,14 @@ use crate::{
         append_packet_decoded,
         codec::{NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
         components::{self, Components, UserSessions},
+        errors::{ServerError, ServerResult},
     },
     game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
-    utils::types::{GameID, SessionID},
+    utils::{
+        random::generate_random_string,
+        types::{GameID, SessionID},
+    },
 };
 use blaze_pk::{
     packet::{Packet, PacketComponents, PacketType},
@@ -108,7 +112,7 @@ impl Session {
     ) {
         let (sender, receiver) = mpsc::unbounded_channel();
         let session = Session::new(id, values.0, values.1, sender, router);
-        tokio::spawn(async move { session.process(receiver).await });
+        tokio::spawn(session.process(receiver));
     }
 
     /// Creates a new session with the provided values.
@@ -392,8 +396,31 @@ impl Session {
         self.push(packet);
     }
 
-    pub fn update_self(&mut self) {
-        let Some(player) = self.player.as_ref() else {return;};
+    pub async fn set_player(&mut self, player: Player) -> ServerResult<(&Player, String)> {
+        // Obtain a token associated to this player
+        let (player, session_token) = match player
+            .with_token(GlobalState::database(), generate_random_string)
+            .await
+        {
+            Ok(value) => value,
+            Err(err) => {
+                error!("Unable to create session token for player: {err:?}");
+                return Err(ServerError::ServerUnavailable);
+            }
+        };
+
+        // Update the player value
+        let player = self.player.insert(player);
+        Ok((player, session_token))
+    }
+
+    pub fn push_details(&mut self) {
+        let player = match self.player.as_ref() {
+            Some(value) => value,
+            None => return,
+        };
+
+        // Create the details packets
         let a = Packet::notify(
             Components::UserSessions(UserSessions::SessionDetails),
             SessionUpdate {
@@ -402,6 +429,7 @@ impl Session {
                 display_name: &player.display_name,
             },
         );
+
         let b = Packet::notify(
             Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
             UpdateExtDataAttr {
@@ -409,6 +437,8 @@ impl Session {
                 player_id: player.id,
             },
         );
+
+        // Push the packets
         self.push(a);
         self.push(b);
     }

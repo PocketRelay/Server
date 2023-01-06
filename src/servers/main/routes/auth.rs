@@ -8,12 +8,14 @@ use crate::{
     utils::{
         env,
         hashing::{hash_password, verify_password},
-        random::generate_random_string,
         types::PlayerID,
         validate::is_email,
     },
 };
-use blaze_pk::router::Router;
+use blaze_pk::{
+    packet::{Request, Response},
+    router::Router,
+};
 use database::{DatabaseConnection, Player};
 use log::{debug, error, warn};
 use std::borrow::Cow;
@@ -100,28 +102,25 @@ pub fn route(router: &mut Router<C, Session>) {
 /// ```
 async fn handle_auth_request(
     session: &mut Session,
-    req: AuthRequest,
-) -> ServerResult<AuthResponse> {
+    req: Request<AuthRequest>,
+) -> ServerResult<Response> {
     let silent = req.is_silent();
     let db = GlobalState::database();
-    let player: Player = match req {
-        AuthRequest::Silent { token, player_id } => handle_login_token(db, token, player_id).await,
+    let player: Player = match &req.req {
+        AuthRequest::Silent { token, player_id } => handle_login_token(db, token, *player_id).await,
         AuthRequest::Login { email, password } => handle_login_email(db, email, password).await,
         AuthRequest::Origin { token } => handle_login_origin(db, token).await,
     }?;
 
-    let (player, session_token) = player
-        .with_token(db, generate_random_string)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?;
+    let (player, session_token) = session.set_player(player).await?;
 
-    session.player = Some(player.clone());
-
-    Ok(AuthResponse {
+    let res = AuthResponse {
         player,
         session_token,
         silent,
-    })
+    };
+
+    Ok(req.response(res))
 }
 
 /// Handles finding a player through an authentication token and a player ID
@@ -132,10 +131,10 @@ async fn handle_auth_request(
 /// `player_id` The player ID
 async fn handle_login_token(
     db: &DatabaseConnection,
-    token: String,
+    token: &str,
     player_id: PlayerID,
 ) -> ServerResult<Player> {
-    Player::by_id_with_token(db, player_id, &token)
+    Player::by_id_with_token(db, player_id, token)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::InvalidSession)
@@ -149,22 +148,22 @@ async fn handle_login_token(
 /// `password` The password to check the hash against
 async fn handle_login_email(
     db: &DatabaseConnection,
-    email: String,
-    password: String,
+    email: &str,
+    password: &str,
 ) -> ServerResult<Player> {
     // Ensure the email is actually valid
-    if !is_email(&email) {
+    if !is_email(email) {
         return Err(ServerError::InvalidEmail);
     }
 
     // Find a non origin player with that email
-    let player: Player = Player::by_email(db, &email, false)
+    let player: Player = Player::by_email(db, email, false)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::EmailNotFound)?;
 
     // Ensure passwords match
-    if !verify_password(&password, &player.password) {
+    if !verify_password(password, &player.password) {
         return Err(ServerError::WrongPassword);
     }
 
@@ -177,10 +176,7 @@ async fn handle_login_email(
 ///
 /// `db`    The database connection
 /// `token` The origin authentication token
-async fn handle_login_origin(
-    db: &'static DatabaseConnection,
-    token: String,
-) -> ServerResult<Player> {
+async fn handle_login_origin(db: &'static DatabaseConnection, token: &str) -> ServerResult<Player> {
     // Only continue if Origin Fetch is actually enabled
     if !env::from_env(env::ORIGIN_FETCH) {
         return Err(ServerError::ServerUnavailable);
@@ -199,7 +195,7 @@ async fn handle_login_origin(
     };
 
     // Authenticate with the official servers
-    let Some(details) = flow.authenticate(token).await else {
+    let Some(details) = flow.authenticate(token.to_string()).await else {
         error!("Unable to authenticate Origin: Failed to retrieve details from official server");
         return Err(ServerError::ServerUnavailable);
     };
@@ -342,20 +338,20 @@ async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-async fn handle_login_persona(session: &mut Session) -> ServerResult<PersonaResponse> {
-    let player: Player = session
+async fn handle_login_persona(session: &mut Session, req: Request<()>) -> ServerResult<Response> {
+    let player: &Player = session
         .player
         .as_ref()
-        .cloned()
         .ok_or(ServerError::FailedNoLoginAction)?;
     let session_token = player
         .session_token
-        .clone()
+        .as_ref()
         .ok_or(ServerError::FailedNoLoginAction)?;
-    Ok(PersonaResponse {
+    let res = PersonaResponse {
         player,
         session_token,
-    })
+    };
+    Ok(req.response(res))
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -412,9 +408,9 @@ async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> 
 ///
 async fn handle_create_account(
     session: &mut Session,
-    req: CreateAccountRequest,
-) -> ServerResult<AuthResponse> {
-    let email = req.email;
+    req: Request<CreateAccountRequest>,
+) -> ServerResult<Response> {
+    let email = &req.email;
     if !is_email(&email) {
         return Err(ServerError::InvalidEmail);
     }
@@ -446,31 +442,24 @@ async fn handle_create_account(
     let display_name: String = email.chars().take(99).collect::<String>();
 
     // Create a new player
-    let player: Player = match Player::create(db, email, display_name, hashed_password, false).await
-    {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Failed to create player: {err:?}");
-            return Err(ServerError::ServerUnavailable);
-        }
-    };
+    let player: Player =
+        match Player::create(db, email.to_string(), display_name, hashed_password, false).await {
+            Ok(value) => value,
+            Err(err) => {
+                error!("Failed to create player: {err:?}");
+                return Err(ServerError::ServerUnavailable);
+            }
+        };
 
-    // Generate a session token for the player
-    let (player, session_token) = match player.with_token(db, generate_random_string).await {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Failed to create session token: {err:?}");
-            return Err(ServerError::ServerUnavailable);
-        }
-    };
+    let (player, session_token) = session.set_player(player).await?;
 
-    session.player = Some(player.clone());
-
-    Ok(AuthResponse {
+    let res = AuthResponse {
         player,
         session_token,
         silent: false,
-    })
+    };
+
+    Ok(req.response(res))
 }
 
 /// Expected to be getting information about the legal docs however the exact meaning

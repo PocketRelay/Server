@@ -13,7 +13,10 @@ use crate::{
     state::GlobalState,
     utils::net::public_address,
 };
-use blaze_pk::router::Router;
+use blaze_pk::{
+    packet::{Request, Response},
+    router::Router,
+};
 use database::Player;
 use log::error;
 
@@ -42,8 +45,8 @@ pub fn route(router: &mut Router<C, Session>) {
 /// ```
 async fn handle_resume_session(
     session: &mut Session,
-    req: ResumeSessionRequest,
-) -> ServerResult<AuthResponse> {
+    req: Request<ResumeSessionRequest>,
+) -> ServerResult<Response> {
     let db = GlobalState::database();
 
     // Find the player that the token is for
@@ -59,13 +62,15 @@ async fn handle_resume_session(
         }
     };
 
-    session.player = Some(player.clone());
+    let (player, session_token) = session.set_player(player).await?;
 
-    Ok(AuthResponse {
+    let res = AuthResponse {
         player,
-        session_token: req.session_token,
+        session_token,
         silent: true,
-    })
+    };
+
+    Ok(req.response(res))
 }
 
 /// Handles updating the stored networking information for the current session

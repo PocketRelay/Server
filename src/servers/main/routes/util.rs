@@ -118,7 +118,8 @@ async fn handle_post_auth(session: &mut Session) -> ServerResult<PostAuthRespons
         .map(|value| value.id)
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    session.update_self();
+    session.push_details();
+
     Ok(PostAuthResponse {
         telemetry: TelemetryServer {
             port: env::from_env(env::TELEMETRY_PORT),
