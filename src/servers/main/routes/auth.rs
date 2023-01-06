@@ -411,13 +411,13 @@ async fn handle_create_account(
     req: Request<CreateAccountRequest>,
 ) -> ServerResult<Response> {
     let email = &req.email;
-    if !is_email(&email) {
+    if !is_email(email) {
         return Err(ServerError::InvalidEmail);
     }
 
     let db = GlobalState::database();
 
-    match Player::is_email_taken(db, &email).await {
+    match Player::is_email_taken(db, email).await {
         // Continue normally for non taken emails
         Ok(false) => {}
         // Handle email address is already in use

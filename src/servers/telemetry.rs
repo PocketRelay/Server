@@ -34,20 +34,22 @@ pub async fn start_server() {
                 continue;
             }
         };
+
         tokio::spawn(async move {
             let mut stream = stream;
-            loop {
-                let message = match read_message(&mut stream).await {
-                    Ok(value) => value,
-                    Err(_) => break,
-                };
+            while let Ok(message) = read_message(&mut stream).await {
                 debug!("[TELEMETRY] {:?}", message);
             }
         });
     }
 }
 
-pub async fn read_message(stream: &mut TcpStream) -> io::Result<HashMap<String, String>> {
+/// Reads a telemetry message from the provided stream returning
+/// the result as a HashMap of key value pairs or an IO error if
+/// End of file was reached early
+///
+/// `stream` The stream to read from
+async fn read_message(stream: &mut TcpStream) -> io::Result<HashMap<String, String>> {
     let length = {
         // Buffer for reading the header + padding + legnth bytes
         let mut header = [0u8; 12];

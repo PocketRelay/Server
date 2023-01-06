@@ -38,17 +38,12 @@ pub async fn start_server() {
             let mut stream = stream;
             // Buffer for reading data
             let mut buffer = [0u8; 1024];
-            loop {
-                match stream.read(&mut buffer).await {
-                    Ok(count) => {
-                        if count == 0 {
-                            break;
-                        }
-                        let slice = &buffer[..count];
-                        debug!("[TICKER] {:?}", slice)
-                    }
-                    Err(_) => break,
+            while let Ok(count) = stream.read(&mut buffer).await {
+                if count == 0 {
+                    break;
                 }
+                let slice = &buffer[..count];
+                debug!("[TICKER] {:?}", slice)
             }
         });
     }
