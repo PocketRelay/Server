@@ -1,5 +1,3 @@
-use std::net::{IpAddr, SocketAddr};
-
 use crate::{
     servers::main::{
         models::{
@@ -10,11 +8,7 @@ use crate::{
         session::Session,
     },
     state::GlobalState,
-    utils::{
-        components::{Components as C, UserSessions as U},
-        models::NetAddress,
-        net::public_address,
-    },
+    utils::components::{Components as C, UserSessions as U},
 };
 use blaze_pk::{
     packet::{Request, Response},
@@ -106,36 +100,7 @@ async fn handle_resume_session(
 /// }
 /// ```
 async fn handle_update_network(session: &mut Session, req: UpdateNetworkRequest) {
-    let mut groups = req.address;
-    let external = &mut groups.external;
-    if external.0.is_invalid() || external.1 == 0 {
-        // Match port with internal address
-        external.1 = groups.internal.1;
-        external.0 = get_network_address(&session.socket_addr).await;
-    }
-
-    session.set_network_info(groups, req.qos);
-}
-
-/// Obtains the networking address from the provided SocketAddr
-/// if the address is a loopback or private address then the
-/// public IP address of the network is used instead.
-///
-/// `value` The socket address
-async fn get_network_address(addr: &SocketAddr) -> NetAddress {
-    let ip = addr.ip();
-    if let IpAddr::V4(value) = ip {
-        // Address is already a public address
-        if value.is_loopback() || value.is_private() {
-            if let Some(public_addr) = public_address().await {
-                return NetAddress::from_ipv4(&public_addr);
-            }
-        }
-        let value = format!("{}", value);
-        NetAddress::from_ipv4(&value)
-    } else {
-        NetAddress(0)
-    }
+    session.set_network_info(req.address, req.qos);
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag

@@ -50,8 +50,7 @@ async fn qos(Query(query): Query<QosQuery>) -> Xml {
         .map(|value| NetAddress::from_ipv4(&value))
         .unwrap_or_default();
 
-    // let ip: u32 = 2130706433 /* NetAddress::from_ipv4("127.0.0.1") */;
-    let port: u16 = env::from_env(env::TELEMETRY_PORT);
+    let port: u16 = env::from_env(env::QOS_PORT);
 
     let response = format!(
         r"<qos> <numprobes>0</numprobes>

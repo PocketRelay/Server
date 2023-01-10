@@ -1,4 +1,7 @@
-use std::time::{Duration, SystemTime};
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    time::{Duration, SystemTime},
+};
 
 use reqwest;
 use serde::Deserialize;
@@ -11,7 +14,7 @@ enum PublicAddrCache {
     /// The value has been computed
     Set {
         /// The public address value
-        value: String,
+        value: Ipv4Addr,
         /// The system time the cache expires at
         expires: SystemTime,
     },
@@ -26,7 +29,7 @@ const ADDR_CACHE_TIME: Duration = Duration::from_secs(60 * 60 * 2);
 /// Retrieves the public address of the server either using the cached
 /// value if its not expired or fetching the new value from the API using
 /// `fetch_public_addr`
-pub async fn public_address() -> Option<String> {
+pub async fn public_address() -> Option<Ipv4Addr> {
     {
         let cached = &*PUBLIC_ADDR_CACHE.read().await;
         match cached {
@@ -42,16 +45,26 @@ pub async fn public_address() -> Option<String> {
 
     // API addresses for IP lookup
     let addresses = ["https://api.ipify.org/", "https://ipv4.icanhazip.com/"];
-    let mut value: Option<String> = None;
+    let mut value: Option<Ipv4Addr> = None;
 
     // Try all addresses using the first valid value
     for address in addresses {
         if let Ok(response) = reqwest::get(address).await {
             if let Ok(ip) = response.text().await {
                 let ip = ip.trim().replace('\n', "");
-                value = Some(ip);
-                break;
+                if let Ok(parsed) = ip.parse() {
+                    value = Some(parsed);
+                    break;
+                }
             }
+        }
+    }
+
+    // If we couldn't connect to any IP services its likely
+    // we don't have internet lets try using our local address
+    {
+        if let Ok(IpAddr::V4(addr)) = local_ip_address::local_ip() {
+            value = Some(addr)
         }
     }
 
@@ -154,29 +167,4 @@ async fn lookup_tokio(value: &str) -> Option<String> {
     }
 
     Some(format!("{}", ip))
-}
-
-#[cfg(test)]
-mod test {
-    use super::public_address;
-
-    /// Test function for ensuring that the public address returned
-    /// from `public_address` is actually an IPv4 address
-    #[tokio::test]
-    async fn test_public_address() {
-        let value = public_address()
-            .await
-            .expect("Failed to retriever public address");
-
-        let parts = value.split('.').collect::<Vec<_>>();
-
-        assert_eq!(parts.len(), 4);
-
-        let parts = parts
-            .iter()
-            .filter_map(|value| value.parse::<u8>().ok())
-            .collect::<Vec<_>>();
-
-        assert_eq!(parts.len(), 4);
-    }
 }

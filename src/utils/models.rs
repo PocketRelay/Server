@@ -11,7 +11,7 @@ use blaze_pk::{
 use serde::{ser::SerializeStruct, Serialize};
 use std::{
     fmt::{Debug, Display},
-    str::Split,
+    net::Ipv4Addr,
 };
 
 /// Networking information for an instance. Contains the
@@ -59,8 +59,8 @@ pub enum InstanceHost {
 /// Host is used.
 impl From<String> for InstanceHost {
     fn from(value: String) -> Self {
-        if let Some(address) = NetAddress::try_from_ipv4(&value) {
-            Self::Address(address)
+        if let Ok(value) = value.parse::<Ipv4Addr>() {
+            Self::Address(NetAddress::from_ipv4(&value))
         } else {
             Self::Host(value)
         }
@@ -410,42 +410,10 @@ impl Serialize for NetAddress {
 }
 
 impl NetAddress {
-    /// Addresses where the value is zero are considered to be
-    /// invalid addresses that could not be parsed. Parsing these
-    /// addresses would result in the address 0.0.0.0
-    pub fn is_invalid(&self) -> bool {
-        self.0 == 0
-    }
-
-    /// Converts the provided IPv4 string into a NetAddress
-    pub fn from_ipv4(value: &str) -> NetAddress {
-        if let Some(value) = Self::try_from_ipv4(value) {
-            value
-        } else {
-            NetAddress(0)
-        }
-    }
-
-    /// Attempts to convert the provided IP address string into a
-    /// NetAddress value. If the value is not a valid IPv4 address
-    /// then None will be returned.
-    pub fn try_from_ipv4(value: &str) -> Option<NetAddress> {
-        let mut parts = value.split('.');
-        let a = Self::next_ip_chunk(&mut parts)?;
-        let b = Self::next_ip_chunk(&mut parts)?;
-        let c = Self::next_ip_chunk(&mut parts)?;
-        let d = Self::next_ip_chunk(&mut parts)?;
-
-        let value = a << 24 | b << 16 | c << 8 | d;
-        Some(NetAddress(value))
-    }
-
-    /// Obtains the next IPv4 (u8) chunk value from the provided
-    /// split iterator
-    fn next_ip_chunk(iter: &mut Split<char>) -> Option<u32> {
-        iter.next()?
-            .parse::<u32>()
-            .ok()
-            .filter(|value| 255.ge(value))
+    /// Converts the provided IPv4 addr into a NetAddress by
+    /// converting its bytes into a u32 value
+    pub fn from_ipv4(value: &Ipv4Addr) -> NetAddress {
+        let bytes = value.octets();
+        NetAddress(u32::from_be_bytes(bytes))
     }
 }

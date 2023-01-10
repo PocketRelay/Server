@@ -97,9 +97,7 @@ pub async fn log_connection_urls() {
         if !output.is_empty() {
             output.push_str(", ");
         }
-
-        output.push_str("WAN: ");
-        output.push_str(&public_address);
+        output.push_str(&format!("WAN: {}", public_address));
         if http_port != 80 {
             output.push(':');
             output.push_str(&http_port.to_string());

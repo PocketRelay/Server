@@ -34,6 +34,7 @@ async fn main() {
         // Start the MITM server
         tokio::spawn(mitm::start_server());
     } else {
+        tokio::spawn(qos::start_server());
         // Spawn the HTTP server in its own task
         tokio::spawn(http::start_server());
         // Spawn the Main server in its own task

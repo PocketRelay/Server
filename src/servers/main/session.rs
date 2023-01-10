@@ -366,9 +366,7 @@ impl Session {
         let net = &mut &mut self.net;
         net.is_set = true;
         net.qos = ext;
-        if net.groups.external.0.is_invalid() && !groups.external.0.is_invalid() {
-            net.groups = groups;
-        }
+        net.groups = groups;
         self.update_client();
     }
 
