@@ -389,10 +389,7 @@ impl Debug for NetAddress {
 impl Display for NetAddress {
     /// Converts the value stored in this NetAddress to an IPv4 string
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let a: u8 = ((self.0 >> 24) & 0xFF) as u8;
-        let b: u8 = ((self.0 >> 16) & 0xFF) as u8;
-        let c: u8 = ((self.0 >> 8) & 0xFF) as u8;
-        let d: u8 = (self.0 & 0xFF) as u8;
+        let [a, b, c, d] = self.0.to_be_bytes();
         write!(f, "{a}.{b}.{c}.{d}")
     }
 }
