@@ -67,6 +67,23 @@ This is the port of the *HTTP* server this is used for things like Galaxy At War
 accessing through the API and means the clients wont need to specify the port in the 
 connection URL
 
+## Telemetry Port
+```
+ENV     : PR_HTTP_PORT
+TYPE    : PORT
+DEFAULT : 9988
+```
+
+This is the port of the *Telemetry* server this server is not a required portion of the game but it log telemetry recieved from the client if debug logging is enabled
+
+## QOS Port
+```
+ENV     : PR_HTTP_PORT
+TYPE    : PORT
+DEFAULT : 17499
+```
+
+This is the port of the *Quality Of Service* server this is used to obtain your public IP address so that other players outside of your network can make a connection to you
 
 # Menu 
 
@@ -84,11 +101,11 @@ and there are variables you can use to insert information about the session
 
 ### Variables
 
-| Variable | Description               |
-| -------- | ------------------------- |
-| {v}      | The server verison number |
-| {n}      | The player name           |
-| {ip}     | The IP address of the player
+| Variable | Description                  |
+| -------- | ---------------------------- |
+| {v}      | The server verison number    |
+| {n}      | The player name              |
+| {ip}     | The IP address of the player |
 
 # Galaxy at War 
 
@@ -154,6 +171,7 @@ DEFAULT : true
 
 This environment variable determines whether old logs should be compressed using Gzip 
 to save space on the drive 
+
 > Log files are not allowed to exceed 5mb before rolling over to the next file so this 
 > won't make a very large difference
 
