@@ -34,15 +34,14 @@ async fn main() {
         // Start the MITM server
         tokio::spawn(mitm::start_server());
     } else {
+        // Spawn QOS server in its own task
         tokio::spawn(qos::start_server());
         // Spawn the HTTP server in its own task
         tokio::spawn(http::start_server());
         // Spawn the Main server in its own task
         tokio::spawn(main::start_server());
-        // Spawn the Main server in its own task
+        // Spawn the Telemetry server in its own task
         tokio::spawn(telemetry::start_server());
-        // Spawn the Main server in its own task
-        tokio::spawn(ticker::start_server());
     }
 
     signal::ctrl_c().await.ok();

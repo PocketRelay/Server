@@ -12,7 +12,7 @@ use crate::{
 use blaze_pk::packet::Packet;
 use blaze_ssl_async::{BlazeAccept, BlazeListener};
 use log::{debug, error, info};
-use std::{io, net::Ipv4Addr, time::Duration};
+use std::{io, time::Duration};
 use tokio::{io::AsyncWriteExt, select, time::sleep};
 
 /// Starts the Redirector server this server is what the Mass Effect 3 game

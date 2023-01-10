@@ -7,7 +7,6 @@ pub const REDIRECTOR_PORT: (&str, Port) = ("PR_REDIRECTOR_PORT", 42127);
 pub const MAIN_PORT: (&str, Port) = ("PR_MAIN_PORT", 14219);
 pub const HTTP_PORT: (&str, Port) = ("PR_HTTP_PORT", 80);
 pub const TELEMETRY_PORT: (&str, Port) = ("PR_TELEMETRY_PORT", 9988);
-pub const TICKER_PORT: (&str, Port) = ("PR_TICKER_PORT", 8999);
 pub const QOS_PORT: (&str, Port) = ("PR_QOS_PORT", 17499);
 
 pub const MENU_MESSAGE: (&str, &str) = (

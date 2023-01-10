@@ -60,6 +60,8 @@ async fn handle_get_telemetry_server() -> TelemetryServer {
     }
 }
 
+const TICKER_PORT: Port = 8999;
+
 /// Handles retrieving the details about the ticker server
 ///
 /// ```
@@ -69,9 +71,7 @@ async fn handle_get_telemetry_server() -> TelemetryServer {
 /// ```
 ///
 async fn handle_get_ticker_server() -> TickerServer {
-    TickerServer {
-        port: env::from_env(env::TICKER_PORT),
-    }
+    TickerServer { port: TICKER_PORT }
 }
 
 /// Handles responding to pre-auth requests which is the first request
@@ -131,9 +131,7 @@ async fn handle_post_auth(session: &mut Session) -> ServerResult<PostAuthRespons
         telemetry: TelemetryServer {
             port: env::from_env(env::TELEMETRY_PORT),
         },
-        ticker: TickerServer {
-            port: env::from_env(env::TICKER_PORT),
-        },
+        ticker: TickerServer { port: TICKER_PORT },
         player_id,
     })
 }
