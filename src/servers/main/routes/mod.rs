@@ -1,6 +1,6 @@
 use blaze_pk::router::Router;
 
-use crate::blaze::components::Components;
+use crate::utils::components::Components;
 
 use super::session::Session;
 

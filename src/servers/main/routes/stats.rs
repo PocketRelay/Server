@@ -1,8 +1,8 @@
 use crate::{
-    blaze::components::{Components as C, Stats as S},
     leaderboard::{models::*, LeaderboardQuery},
     servers::main::{models::stats::*, session::Session},
     state::GlobalState,
+    utils::components::{Components as C, Stats as S},
 };
 use blaze_pk::router::Router;
 use log::error;

@@ -2,6 +2,7 @@
 //! the routes module and any dependencies for those
 
 pub mod auth;
+pub mod errors;
 pub mod game_manager;
 pub mod messaging;
 pub mod other;

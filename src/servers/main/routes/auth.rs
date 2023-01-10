@@ -1,11 +1,14 @@
 use crate::{
-    blaze::{
-        components::{Authentication as A, Components as C},
-        errors::{ServerError, ServerResult},
+    servers::main::{
+        models::{
+            auth::*,
+            errors::{ServerError, ServerResult},
+        },
+        session::Session,
     },
-    servers::main::{models::auth::*, session::Session},
     state::GlobalState,
     utils::{
+        components::{Authentication as A, Components as C},
         env,
         hashing::{hash_password, verify_password},
         types::PlayerID,

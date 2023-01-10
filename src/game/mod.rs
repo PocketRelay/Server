@@ -1,7 +1,7 @@
 use self::rules::RuleSet;
-use crate::{
-    blaze::components::{Components, GameManager, UserSessions},
-    utils::types::{GameID, GameSlot, PlayerID, SessionID},
+use crate::utils::{
+    components::{Components, GameManager, UserSessions},
+    types::{GameID, GameSlot, PlayerID, SessionID},
 };
 use blaze_pk::{codec::Encodable, packet::Packet, types::TdfMap};
 use codec::*;

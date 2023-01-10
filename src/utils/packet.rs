@@ -1,10 +1,5 @@
 use blaze_pk::{packet::Packet, reader::TdfReader};
 
-pub mod codec;
-#[allow(clippy::enum_variant_names)]
-pub mod components;
-pub mod errors;
-
 /// Decodes the provided packet into its string representation and appends
 /// the value to the provided output prefixed by Content: if an error
 /// occurs while decoding the raw values and decoding error will

@@ -2,12 +2,12 @@
 //! to the correct address for the main server.
 
 use crate::{
-    blaze::{
-        codec::{InstanceDetails, InstanceNet},
-        components::{Components, Redirector},
-    },
     env,
-    utils::constants,
+    utils::{
+        components::{Components, Redirector},
+        constants,
+        models::{InstanceDetails, InstanceNet},
+    },
 };
 use blaze_pk::packet::Packet;
 use blaze_ssl_async::{BlazeAccept, BlazeListener};

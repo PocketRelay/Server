@@ -2,7 +2,7 @@ use super::{
     models::{OriginLoginRequest, OriginLoginResponse, SettingsResponse},
     RetSession, Retriever,
 };
-use crate::blaze::components::{Authentication, Components, Util};
+use crate::utils::components::{Authentication, Components, Util};
 use blaze_pk::types::TdfMap;
 use log::debug;
 

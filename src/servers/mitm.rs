@@ -2,10 +2,9 @@
 //! to the correct address for the main server.
 
 use crate::{
-    blaze::{append_packet_decoded, components::Components},
-    env,
     retriever::Retriever,
     state::GlobalState,
+    utils::{components::Components, env, packet::append_packet_decoded},
 };
 use blaze_pk::packet::{Packet, PacketType};
 use blaze_ssl_async::stream::BlazeStream;

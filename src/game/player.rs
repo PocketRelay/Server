@@ -1,11 +1,11 @@
 use super::codec::PlayerState;
 use crate::{
-    blaze::{
-        codec::{NetData, UpdateExtDataAttr},
-        components::{Components, UserSessions},
-    },
     servers::main::session::SessionAddr,
-    utils::types::{GameID, PlayerID, SessionID},
+    utils::{
+        components::{Components, UserSessions},
+        models::{NetData, UpdateExtDataAttr},
+        types::{GameID, PlayerID, SessionID},
+    },
 };
 use blaze_pk::{codec::Encodable, packet::Packet, tag::TdfType, writer::TdfWriter};
 use database::Player;

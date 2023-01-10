@@ -1,4 +1,4 @@
-use crate::{blaze::components::Components, env};
+use crate::utils::{components::Components, env};
 use blaze_pk::router::Router;
 use log::{error, info};
 use session::Session;

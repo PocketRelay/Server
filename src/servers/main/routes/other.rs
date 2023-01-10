@@ -1,6 +1,6 @@
 use crate::{
-    blaze::components::{AssociationLists as A, Components as C, GameReporting as G},
     servers::main::{models::other::*, session::Session},
+    utils::components::{AssociationLists as A, Components as C, GameReporting as G},
 };
 use blaze_pk::{packet::Packet, router::Router};
 

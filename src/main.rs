@@ -5,7 +5,6 @@ use state::GlobalState;
 use tokio::signal;
 use utils::{constants::VERSION, env, logging};
 
-mod blaze;
 mod game;
 mod leaderboard;
 mod retriever;

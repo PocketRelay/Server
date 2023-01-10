@@ -1,17 +1,17 @@
 //! Sessions are client connections to the main server with associated
 //! data such as player data for when they become authenticated and
 //! networking data.
-use super::models::session::{SessionUpdate, SetSession};
+use super::models::{
+    errors::{ServerError, ServerResult},
+    session::{SessionUpdate, SetSession},
+};
 use crate::{
-    blaze::{
-        append_packet_decoded,
-        codec::{NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
-        components::{self, Components, UserSessions},
-        errors::{ServerError, ServerResult},
-    },
     game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
     utils::{
+        components::{self, Components, UserSessions},
+        models::{NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
+        packet::append_packet_decoded,
         random::generate_random_string,
         types::{GameID, SessionID},
     },

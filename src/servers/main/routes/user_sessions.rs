@@ -1,17 +1,20 @@
 use std::net::{IpAddr, SocketAddr};
 
 use crate::{
-    blaze::{
-        codec::NetAddress,
-        components::{Components as C, UserSessions as U},
-        errors::{ServerError, ServerResult},
-    },
     servers::main::{
-        models::{auth::AuthResponse, user_sessions::*},
+        models::{
+            auth::AuthResponse,
+            errors::{ServerError, ServerResult},
+            user_sessions::*,
+        },
         session::Session,
     },
     state::GlobalState,
-    utils::net::public_address,
+    utils::{
+        components::{Components as C, UserSessions as U},
+        models::NetAddress,
+        net::public_address,
+    },
 };
 use blaze_pk::{
     packet::{Request, Response},

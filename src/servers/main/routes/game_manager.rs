@@ -1,12 +1,17 @@
 use crate::{
-    blaze::{
-        components::{Components as C, GameManager as G},
-        errors::{ServerError, ServerResult},
-    },
     game::{player::GamePlayer, GameModifyAction, RemovePlayerType},
-    servers::main::{models::game_manager::*, session::Session},
+    servers::main::{
+        models::{
+            errors::{ServerError, ServerResult},
+            game_manager::*,
+        },
+        session::Session,
+    },
     state::GlobalState,
-    utils::types::GameID,
+    utils::{
+        components::{Components as C, GameManager as G},
+        types::GameID,
+    },
 };
 use blaze_pk::router::Router;
 use log::info;

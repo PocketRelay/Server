@@ -1,13 +1,13 @@
 //! Module for retrieving data from the official Mass Effect 3 Servers
 use crate::{
-    blaze::{
-        append_packet_decoded,
-        codec::{InstanceDetails, Port},
-        components::{Components, Redirector},
-    },
     env,
     retriever::models::InstanceRequest,
-    utils::net::lookup_host,
+    utils::{
+        components::{Components, Redirector},
+        models::{InstanceDetails, Port},
+        net::lookup_host,
+        packet::append_packet_decoded,
+    },
 };
 use blaze_pk::{
     codec::{Decodable, Encodable},

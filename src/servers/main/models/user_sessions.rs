@@ -1,4 +1,4 @@
-use crate::blaze::codec::{NetGroups, QosNetworkData};
+use crate::utils::models::{NetGroups, QosNetworkData};
 use blaze_pk::{
     codec::Decodable,
     error::{DecodeError, DecodeResult},

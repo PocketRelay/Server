@@ -1,6 +1,6 @@
-use crate::{
-    blaze::components::{Components, UserSessions},
-    utils::types::PlayerID,
+use crate::utils::{
+    components::{Components, UserSessions},
+    types::PlayerID,
 };
 use blaze_pk::{codec::Encodable, packet::PacketComponents, tag::TdfType, writer::TdfWriter};
 
