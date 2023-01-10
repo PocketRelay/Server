@@ -62,7 +62,7 @@ pub async fn public_address() -> Option<Ipv4Addr> {
 
     // If we couldn't connect to any IP services its likely
     // we don't have internet lets try using our local address
-    {
+    if value.is_none() {
         if let Ok(IpAddr::V4(addr)) = local_ip_address::local_ip() {
             value = Some(addr)
         }

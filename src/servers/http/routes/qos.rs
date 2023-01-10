@@ -45,22 +45,17 @@ struct QosQuery {
 async fn qos(Query(query): Query<QosQuery>) -> Xml {
     debug!("Recieved QOS query: (Port: {})", query.port);
 
-    let public_ip = public_address()
-        .await
-        .map(|value| NetAddress::from_ipv4(&value))
-        .unwrap_or_default();
-
     let port: u16 = env::from_env(env::QOS_PORT);
 
     let response = format!(
         r"<qos> <numprobes>0</numprobes>
     <qosport>{}</qosport>
     <probesize>0</probesize>
-    <qosip>{}</qosip>
+    <qoshost>gosredirector.ea.com</qoshost>
     <requestid>1</requestid>
     <reqsecret>0</reqsecret>
 </qos>",
-        port, public_ip.0
+        port,
     );
     Xml(response)
 }
