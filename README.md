@@ -134,6 +134,8 @@ The following is a list of the servers and how stable they are for production us
 | ---------- | -------- | -------------------------------------------------------------------------------------------------------- |
 | Redirector | 🟢        | The redirector server is quite simple and is fully implemented and function                              |
 | MITM       | 🟢        | The MITM server only needs to pass packets onto the official server so this is complete                  |
+| TELEMETRY  | 🟡        | The telemetry server doesn't actual interract with anything meaningful so at this stage its semi stable  |
+| QOS        | 🟢        | The QOS server is fully implemented so is consider to be stable                                          |
 | HTTP       | 🟡        | The HTTP server is mostly stable and implements the features it needs but needs to be tested             |
 | Main       | 🟡        | The Main server is mostly stable however changes are expected and not all functionality works correectly |
 
