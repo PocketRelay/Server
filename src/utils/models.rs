@@ -60,7 +60,7 @@ pub enum InstanceHost {
 impl From<String> for InstanceHost {
     fn from(value: String) -> Self {
         if let Ok(value) = value.parse::<Ipv4Addr>() {
-            Self::Address(NetAddress::from_ipv4(&value))
+            Self::Address(NetAddress(value))
         } else {
             Self::Host(value)
         }
@@ -82,7 +82,7 @@ impl Encodable for InstanceHost {
     fn encode(&self, writer: &mut TdfWriter) {
         match self {
             InstanceHost::Host(value) => writer.tag_str(b"HOST", value),
-            InstanceHost::Address(value) => writer.tag_u32(b"IP", value.0),
+            InstanceHost::Address(value) => writer.tag_value(b"IP", value),
         }
     }
 }
@@ -328,7 +328,7 @@ pub struct NetGroup(pub NetAddress, pub Port);
 
 impl Encodable for NetGroup {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"IP", self.0 .0);
+        writer.tag_value(b"IP", &self.0);
         writer.tag_u16(b"PORT", self.1);
         writer.tag_group_end();
     }
@@ -358,19 +358,29 @@ impl Serialize for NetGroup {
 }
 
 /// Structure for wrapping a Blaze networking address
-#[derive(Copy, Clone, Default, Eq, PartialEq)]
-pub struct NetAddress(pub u32);
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct NetAddress(pub Ipv4Addr);
+
+impl Default for NetAddress {
+    fn default() -> Self {
+        Self(Ipv4Addr::LOCALHOST)
+    }
+}
 
 impl Encodable for NetAddress {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.write_u32(self.0);
+        let bytes = self.0.octets();
+        let value = u32::from_be_bytes(bytes);
+        writer.write_u32(value);
     }
 }
 
 impl Decodable for NetAddress {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
         let value = reader.read_u32()?;
-        Ok(Self(value))
+        let bytes = value.to_be_bytes();
+        let addr = Ipv4Addr::from(bytes);
+        Ok(Self(addr))
     }
 }
 
@@ -389,8 +399,7 @@ impl Debug for NetAddress {
 impl Display for NetAddress {
     /// Converts the value stored in this NetAddress to an IPv4 string
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let [a, b, c, d] = self.0.to_be_bytes();
-        write!(f, "{a}.{b}.{c}.{d}")
+        write!(f, "{}", self.0)
     }
 }
 
@@ -403,14 +412,5 @@ impl Serialize for NetAddress {
     {
         let value = self.to_string();
         serializer.serialize_str(&value)
-    }
-}
-
-impl NetAddress {
-    /// Converts the provided IPv4 addr into a NetAddress by
-    /// converting its bytes into a u32 value
-    pub fn from_ipv4(value: &Ipv4Addr) -> NetAddress {
-        let bytes = value.octets();
-        NetAddress(u32::from_be_bytes(bytes))
     }
 }
