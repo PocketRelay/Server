@@ -4,14 +4,14 @@ use crate::utils::{
     types::{GameID, GameSlot, PlayerID, SessionID},
 };
 use blaze_pk::{codec::Encodable, packet::Packet, types::TdfMap};
-use codec::*;
 use log::debug;
+use models::*;
 use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
 
-pub mod codec;
 pub mod manager;
+pub mod models;
 pub mod player;
 pub mod rules;
 

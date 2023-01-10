@@ -1,4 +1,4 @@
-use super::codec::PlayerState;
+use super::models::PlayerState;
 use crate::{
     servers::main::session::SessionAddr,
     utils::{

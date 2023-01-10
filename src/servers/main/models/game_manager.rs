@@ -1,6 +1,6 @@
 use crate::{
     game::{
-        codec::{GameState, PlayerState, RemoveReason},
+        models::{GameState, PlayerState, RemoveReason},
         rules::RuleSet,
         AttrMap, GameModifyAction,
     },
