@@ -37,7 +37,7 @@ pub async fn public_address() -> Option<Ipv4Addr> {
             PublicAddrCache::Set { value, expires } => {
                 let time = SystemTime::now();
                 if time.lt(expires) {
-                    return Some(value.clone());
+                    return Some(*value);
                 }
             }
         };
@@ -74,7 +74,7 @@ pub async fn public_address() -> Option<Ipv4Addr> {
     {
         let cached = &mut *PUBLIC_ADDR_CACHE.write().await;
         *cached = PublicAddrCache::Set {
-            value: value.clone(),
+            value,
             expires: SystemTime::now() + ADDR_CACHE_TIME,
         };
     }

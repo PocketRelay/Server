@@ -47,13 +47,13 @@ pub async fn start_server() {
         let address = address.octets();
 
         // Copy the heading from the read buffer
-        (&mut output[..20]).copy_from_slice(&buffer);
+        output[..20].copy_from_slice(&buffer);
 
         // Copy the address bytes
-        (&mut output[20..24]).copy_from_slice(&address);
+        output[20..24].copy_from_slice(&address);
 
         // Fill remaining contents
-        (&mut output[24..]).copy_from_slice(&[246, 162, 0, 0, 0, 0]);
+        output[24..].copy_from_slice(&[246, 162, 0, 0, 0, 0]);
 
         // Send output response
         match socket.send_to(&output, addr).await {
