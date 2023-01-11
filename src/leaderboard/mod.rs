@@ -1,13 +1,13 @@
 //! Module for leaderboard related logic
 
-use std::{future::Future, pin::Pin};
-
 use self::models::*;
 use crate::{
     state::GlobalState,
     utils::parsing::{parse_player_character, parse_player_class},
 };
 use database::{DatabaseConnection, DbResult, Player};
+use log::error;
+use std::{future::Future, pin::Pin};
 use tokio::{sync::RwLock, task::JoinSet, try_join};
 
 pub mod models;
@@ -23,31 +23,34 @@ pub struct Leaderboard {
 }
 
 impl Leaderboard {
-    /// Updates the provided leaderboard type. If the contents are
-    /// expired then they are computed again. Returns a cloned list of
-    /// entires matching the provided query or None if the query was not
-    /// valid
+    /// Retrieves a lock to the leaderboard group of the provided type.
+    /// Checks if the stored group is expired and if it is the new ranking
+    /// values will be computed before returning the lock.
     ///
     /// `ty` The leaderboard type
-    pub async fn get(
-        &'static self,
-        ty: LeaderboardType,
-    ) -> DbResult<&'static RwLock<LeaderboardGroup>> {
+    pub async fn get(&self, ty: LeaderboardType) -> &RwLock<LeaderboardGroup> {
         let lock = match &ty {
             LeaderboardType::N7Rating => &self.n7_group,
             LeaderboardType::ChallengePoints => &self.cp_group,
         };
-        {
-            let entity = lock.read().await;
-            if !entity.is_valid() {
-                drop(entity);
 
-                let ranking = self.compute(ty).await?;
-                let entity = &mut *lock.write().await;
-                entity.update(ranking);
-            }
+        // Check if the data is expired
+        let is_expired = {
+            let group = lock.read().await;
+            group.is_expired()
+        };
+
+        // if expired compute the data again
+        if is_expired {
+            // Hold the write lock while compute so others don't try and compute
+            let group = &mut *lock.write().await;
+
+            // Compute the rankings and update the group
+            let ranking = self.compute(ty).await;
+            group.update(ranking);
         }
-        Ok(lock)
+
+        lock
     }
 
     /// Computes the ranking values for the provided `ty` this consists of
@@ -56,14 +59,14 @@ impl Leaderboard {
     /// on their value.
     ///
     /// `ty` The leaderboard type
-    async fn compute(&self, ty: LeaderboardType) -> DbResult<Vec<LeaderboardEntry>> {
+    async fn compute(&self, ty: LeaderboardType) -> Vec<LeaderboardEntry> {
         // The amount of players to process in each database request
         const BATCH_COUNT: u64 = 20;
 
         let db = GlobalState::database();
 
+        // The current database batch offset position
         let mut offset = 0;
-
         let mut values: Vec<LeaderboardEntry> = Vec::new();
 
         // Decide the ranking function to use based on the type
@@ -75,10 +78,14 @@ impl Leaderboard {
         let mut join_set = JoinSet::new();
 
         loop {
-            let (players, more) = Player::all(db, offset, BATCH_COUNT).await?;
-            if players.is_empty() {
-                break;
-            }
+            let (players, more) = match Player::all(db, offset, BATCH_COUNT).await {
+                Ok((ref players, _)) if players.is_empty() => break,
+                Ok(value) => value,
+                Err(err) => {
+                    error!("Unable to load players for leaderboard: {:?}", err);
+                    break;
+                }
+            };
 
             // Add the futures for all the players
             for player in players {
@@ -95,23 +102,25 @@ impl Leaderboard {
             if !more {
                 break;
             }
+
             offset += BATCH_COUNT;
         }
 
         // Sort the values based on their value
         values.sort_by(|a, b| b.value.cmp(&a.value));
 
-        // Apply the new rank order
+        // Apply the new rank order to the rank values
         let mut rank = 1;
-        for value in values.iter_mut() {
+        for value in &mut values {
             value.rank = rank;
             rank += 1;
         }
 
-        Ok(values)
+        values
     }
 }
 
+/// Type alias for pinned boxed futures that return a leaderboard entry inside DbResult
 type RankerFut = Pin<Box<dyn Future<Output = DbResult<LeaderboardEntry>> + Send + 'static>>;
 
 /// Trait implemented by things that can be used to return futures

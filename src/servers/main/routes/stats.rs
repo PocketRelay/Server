@@ -9,7 +9,6 @@ use blaze_pk::{
     packet::{Request, Response},
     router::Router,
 };
-use log::error;
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
@@ -88,16 +87,9 @@ async fn handle_leaderboard_entity_count(req: EntityCountRequest) -> EntityCount
     let leaderboard = GlobalState::leaderboard();
     let ty = LeaderboardType::from_value(&req.name);
 
-    let count = match leaderboard.get(ty).await {
-        Ok(value) => {
-            let group = value.read().await;
-            group.values.len()
-        }
-        Err(err) => {
-            error!("Unable to compute leaderboard size: {err:?}");
-            0
-        }
-    };
+    let lock = leaderboard.get(ty).await;
+    let group = lock.read().await;
+    let count = group.values.len();
 
     EntityCountResponse { count }
 }
@@ -114,13 +106,7 @@ async fn handle_leaderboard_query<R: Decodable>(
 ) -> Response {
     let leaderboard = GlobalState::leaderboard();
     let ty = LeaderboardType::from_value(name);
-    let lock = match leaderboard.get(ty).await {
-        Ok(lock) => lock,
-        Err(err) => {
-            error!("Failed to compute leaderboard: {err:?}");
-            return req.response(LeaderboardResponse::Empty);
-        }
-    };
+    let lock = leaderboard.get(ty).await;
     let group = lock.read().await;
     let response = match group.resolve(query) {
         LResult::Many(values, _) => LeaderboardResponse::Many(values),

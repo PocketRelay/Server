@@ -73,7 +73,7 @@ async fn get_leaderboard(
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
 
-    let leaderboard: &'static Leaderboard = GlobalState::leaderboard();
+    let leaderboard: &Leaderboard = GlobalState::leaderboard();
 
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
@@ -83,10 +83,7 @@ async fn get_leaderboard(
     // Calculate the start and ending indexes
     let start: usize = query.offset * count;
 
-    let lock = leaderboard
-        .get(ty)
-        .await
-        .map_err(|_| LeaderboardError::ServerError)?;
+    let lock = leaderboard.get(ty).await;
 
     let group = lock.read().await;
 
@@ -116,12 +113,9 @@ async fn get_player_ranking(
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-    let leaderboard: &'static Leaderboard = GlobalState::leaderboard();
+    let leaderboard: &Leaderboard = GlobalState::leaderboard();
 
-    let lock = leaderboard
-        .get(ty)
-        .await
-        .map_err(|_| LeaderboardError::ServerError)?;
+    let lock = leaderboard.get(ty).await;
 
     let group = lock.read().await;
 

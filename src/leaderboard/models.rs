@@ -77,11 +77,14 @@ impl LeaderboardGroup {
     /// Leaderboard contents are cached for 1 hour
     const LIFETIME: Duration = Duration::from_secs(60 * 60);
 
-    pub fn is_valid(&self) -> bool {
+    /// Checks whether this group is expired
+    pub fn is_expired(&self) -> bool {
         let now = SystemTime::now();
-        now.lt(&self.expires)
+        now.ge(&self.expires)
     }
 
+    /// Updates the stored values for this group and sets a new
+    /// expiry time for the value
     pub fn update(&mut self, values: Vec<LeaderboardEntry>) {
         self.expires = SystemTime::now() + Self::LIFETIME;
         self.values = values;
@@ -166,6 +169,12 @@ impl LeaderboardType {
         }
     }
 
+    /// Gets the leaderboard type from the value provided
+    /// by a Mass Effect client this would be either N7Rating
+    /// or ChallangePoints along with the locale which in this
+    /// case is ignored
+    ///
+    /// `value` The value to parse from
     pub fn from_value(value: &str) -> Self {
         if value.starts_with("N7Rating") {
             Self::N7Rating
