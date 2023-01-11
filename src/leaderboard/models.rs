@@ -174,9 +174,3 @@ impl LeaderboardType {
         }
     }
 }
-
-impl From<String> for LeaderboardType {
-    fn from(value: String) -> Self {
-        Self::from_value(&value)
-    }
-}

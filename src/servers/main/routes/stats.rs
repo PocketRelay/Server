@@ -86,7 +86,7 @@ async fn handle_filtered_leaderboard(req: Request<FilteredLeaderboardRequest>) -
 /// ```
 async fn handle_leaderboard_entity_count(req: EntityCountRequest) -> EntityCountResponse {
     let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(req.name);
+    let ty = LeaderboardType::from_value(&req.name);
 
     let count = match leaderboard.get(ty).await {
         Ok(value) => {
