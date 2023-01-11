@@ -14,7 +14,6 @@ WORKDIR /pocket-relay
 COPY ./Cargo.toml .
 COPY ./Cargo.lock .
 COPY ./database/Cargo.toml ./database/Cargo.toml
-COPY ./database/Cargo.lock ./database/Cargo.lock
 
 # Create dummy contents for main source & for migration lib
 RUN mkdir ./src && echo 'fn main() { println!("Dummy!"); }' > ./src/main.rs
@@ -53,6 +52,8 @@ ENV PR_EXT_HOST=gosredirector.ea.com
 ENV PR_REDIRECTOR_PORT=42127
 ENV PR_MAIN_PORT=14219
 ENV PR_HTTP_PORT=80
+ENV PR_TELEMETRY_PORT=9988
+ENV PR_QOS_PORT=17499
 
 ENV PR_LOG_LEVEL=info
 ENV PR_DATABASE_FILE=data/app.db
@@ -65,5 +66,7 @@ VOLUME /app/data
 EXPOSE $PR_REDIRECTOR_PORT
 EXPOSE $PR_MAIN_PORT
 EXPOSE $PR_HTTP_PORT
+EXPOSE $PR_TELEMETRY_PORT
+EXPOSE $PR_QOS_PORT
 
 CMD ["/app/pocket-relay"]
