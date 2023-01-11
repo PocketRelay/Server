@@ -37,6 +37,42 @@ impl Default for LeaderboardEntityGroup {
     }
 }
 
+/// Different query types for querying the leaderboards
+/// in different ways
+pub enum LQuery {
+    /// Normal query
+    Normal {
+        /// Offset amount to start at
+        start: usize,
+        /// Number of items to retrieve
+        count: usize,
+    },
+    /// Query where the center is a specific player
+    Centered {
+        /// The ID of the player to center
+        player_id: PlayerID,
+        /// The number of players to query
+        count: usize,
+    },
+    /// Returning a leaderboard filtered for
+    /// a specific player
+    Filtered {
+        /// The ID of the player to get
+        player_id: PlayerID,
+    },
+}
+
+/// Result of a query from the leaderboard contains borrowed values
+/// from the leaderboard group
+pub enum LResult<'a> {
+    // Query resulted in nothing being found
+    Empty,
+    // Query resulted in a single item response
+    One(&'a LeaderboardEntry),
+    // Query resulted in a many item response
+    Many(&'a [LeaderboardEntry], bool),
+}
+
 impl LeaderboardEntityGroup {
     /// Leaderboard contents are cached for 1 hour
     const LIFETIME: Duration = Duration::from_secs(60 * 60);
@@ -49,6 +85,55 @@ impl LeaderboardEntityGroup {
     pub fn update(&mut self, values: Vec<LeaderboardEntry>) {
         self.expires = SystemTime::now() + Self::LIFETIME;
         self.values = values;
+    }
+
+    /// Resolves the provided query on this entity group returning the LResult if it
+    /// was able be resolved or None if it was unable to resolve
+    ///
+    /// `query` The query to resolve
+    pub fn resolve(&self, query: LQuery) -> LResult {
+        let values = &self.values;
+        let values_len = values.len();
+        match query {
+            LQuery::Normal { start, count } => {
+                // The index to stop at
+                let end_index = count.min(values_len);
+
+                values
+                    .get(start..end_index)
+                    .map(|value| LResult::Many(value, values_len > end_index))
+            }
+            LQuery::Centered { player_id, count } => {
+                // The number of items before the center index
+                let before = if count % 2 == 0 {
+                    count / 2 + 1
+                } else {
+                    count / 2
+                };
+                // The number of items after the center index
+                let after = count / 2;
+
+                // The index of the centered player
+                let player_index =
+                    match values.iter().position(|value| value.player_id == player_id) {
+                        Some(value) => value,
+                        None => return LResult::Empty,
+                    };
+
+                // The index of the first item
+                let start_index = player_index - before.min(player_index);
+                // The index of the last item
+                let end_index = (player_index + after).min(values_len);
+                values
+                    .get(start_index..end_index)
+                    .map(|value| LResult::Many(value, values_len > end_index))
+            }
+            LQuery::Filtered { player_id } => values
+                .iter()
+                .find(|value| value.player_id == player_id)
+                .map(|entry| LResult::One(entry)),
+        }
+        .unwrap_or(LResult::Empty)
     }
 }
 
@@ -80,14 +165,18 @@ impl LeaderboardType {
             None
         }
     }
-}
 
-impl From<String> for LeaderboardType {
-    fn from(value: String) -> Self {
+    pub fn from_value(value: &str) -> Self {
         if value.starts_with("N7Rating") {
             Self::N7Rating
         } else {
             Self::ChallengePoints
         }
+    }
+}
+
+impl From<String> for LeaderboardType {
+    fn from(value: String) -> Self {
+        Self::from_value(&value)
     }
 }
