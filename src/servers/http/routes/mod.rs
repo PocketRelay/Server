@@ -5,11 +5,11 @@ use super::{
 use crate::env;
 use axum::{middleware, Router};
 
+mod content;
 mod games;
 mod gaw;
 mod leaderboard;
 mod players;
-mod content;
 mod qos;
 mod server;
 mod token;

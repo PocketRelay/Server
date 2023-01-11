@@ -9,6 +9,8 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 
+/// Starts the telemetry server which collects telemetry messages from the
+/// game clients and logs them to the debug log
 pub async fn start_server() {
     // Initializing the underlying TCP listener
     let listener = {

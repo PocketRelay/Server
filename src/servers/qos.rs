@@ -7,6 +7,8 @@ use crate::{env, utils::net::public_address};
 use log::{error, info};
 use tokio::net::UdpSocket;
 
+/// Starts the Quality Of Service server which handles providing the public
+/// address values to the clients that connect.
 pub async fn start_server() {
     let socket = {
         let port = env::from_env(env::QOS_PORT);
@@ -65,6 +67,11 @@ pub async fn start_server() {
     }
 }
 
+/// Gets the public address for the provided socket address. Non Ipv4 addresses
+/// fail returning None. Loopback and private addresses use the resolved public
+/// address of the server and the rest are used directly
+///
+/// `addr` The address to get the public addr for
 async fn get_address(addr: &SocketAddr) -> Option<Ipv4Addr> {
     let ip = addr.ip();
     if let IpAddr::V4(value) = ip {
