@@ -7,6 +7,7 @@
 ![License](https://img.shields.io/github/license/PocketRelay/ServerRust?style=for-the-badge)
 ![Cargo Version](https://img.shields.io/crates/v/pocket-relay?style=for-the-badge)
 ![Cargo Downloads](https://img.shields.io/crates/d/pocket-relay?style=for-the-badge)
+![Build](https://img.shields.io/github/actions/workflow/status/PocketRelay/ServerRust/rust.yml?style=for-the-badge)
 
 Development on this implementation has made great strides and has surpassed the original Kotlin server in terms of performance
 reliabality, functionality and actual parody to the official server. However as this implementation is still considered to be
