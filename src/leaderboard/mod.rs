@@ -15,9 +15,9 @@ pub mod models;
 #[derive(Default)]
 pub struct Leaderboard {
     /// Leaderboard entity group for n7 ratings
-    n7_group: RwLock<LeaderboardEntityGroup>,
+    n7_group: RwLock<LeaderboardGroup>,
     /// Leaderboard entity group for challenge points
-    cp_group: RwLock<LeaderboardEntityGroup>,
+    cp_group: RwLock<LeaderboardGroup>,
 }
 
 impl Leaderboard {
@@ -25,10 +25,7 @@ impl Leaderboard {
     /// provided leaderboard type
     ///
     /// `ty` The leaderboard type
-    fn get_type_lock(
-        &'static self,
-        ty: &LeaderboardType,
-    ) -> &'static RwLock<LeaderboardEntityGroup> {
+    fn get_type_lock(&'static self, ty: &LeaderboardType) -> &'static RwLock<LeaderboardGroup> {
         match ty {
             LeaderboardType::N7Rating => &self.n7_group,
             LeaderboardType::ChallengePoints => &self.cp_group,
@@ -44,7 +41,7 @@ impl Leaderboard {
     pub async fn get(
         &'static self,
         ty: LeaderboardType,
-    ) -> DbResult<&'static RwLock<LeaderboardEntityGroup>> {
+    ) -> DbResult<&'static RwLock<LeaderboardGroup>> {
         let lock = self.get_type_lock(&ty);
         {
             let entity = lock.read().await;

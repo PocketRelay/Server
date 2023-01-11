@@ -6,7 +6,7 @@ use std::{
 };
 
 /// Structure for an entry in a leaderboard group
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct LeaderboardEntry {
     /// The ID of the player this entry is for
     pub player_id: PlayerID,
@@ -21,14 +21,14 @@ pub struct LeaderboardEntry {
 /// Structure for a group of leaderboard entities ranked based
 /// on a certain value the expires indicates when the value will
 /// no longer be considered valid
-pub struct LeaderboardEntityGroup {
+pub struct LeaderboardGroup {
     /// The values stored in this entity group
     pub values: Vec<LeaderboardEntry>,
     /// The time at which this entity group will become expired
     pub expires: SystemTime,
 }
 
-impl Default for LeaderboardEntityGroup {
+impl Default for LeaderboardGroup {
     fn default() -> Self {
         Self {
             values: Vec::with_capacity(0),
@@ -73,7 +73,7 @@ pub enum LResult<'a> {
     Many(&'a [LeaderboardEntry], bool),
 }
 
-impl LeaderboardEntityGroup {
+impl LeaderboardGroup {
     /// Leaderboard contents are cached for 1 hour
     const LIFETIME: Duration = Duration::from_secs(60 * 60);
 
@@ -131,7 +131,7 @@ impl LeaderboardEntityGroup {
             LQuery::Filtered { player_id } => values
                 .iter()
                 .find(|value| value.player_id == player_id)
-                .map(|entry| LResult::One(entry)),
+                .map(LResult::One),
         }
         .unwrap_or(LResult::Empty)
     }
