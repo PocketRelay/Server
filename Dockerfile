@@ -14,7 +14,6 @@ WORKDIR /pocket-relay
 COPY ./Cargo.toml .
 COPY ./Cargo.lock .
 COPY ./database/Cargo.toml ./database/Cargo.toml
-COPY ./database/Cargo.lock ./database/Cargo.lock
 
 # Create dummy contents for main source & for migration lib
 RUN mkdir ./src && echo 'fn main() { println!("Dummy!"); }' > ./src/main.rs
