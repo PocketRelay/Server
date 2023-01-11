@@ -73,7 +73,7 @@ async fn get_leaderboard(
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
 
-    let leaderboard: &Leaderboard = GlobalState::leaderboard();
+    let leaderboard: &'static Leaderboard = GlobalState::leaderboard();
 
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
@@ -116,7 +116,7 @@ async fn get_player_ranking(
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-    let leaderboard: &Leaderboard = GlobalState::leaderboard();
+    let leaderboard: &'static Leaderboard = GlobalState::leaderboard();
 
     let lock = leaderboard
         .get(ty)
