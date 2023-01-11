@@ -1,10 +1,7 @@
 //! Routes for the Quality of Service server. Unknown whether any of the
 //! response address and ports are correct however this request must succeed
 //! or the client doesn't seem to know its external IP
-use crate::{
-    servers::http::ext::Xml,
-    utils::{env, models::NetAddress, net::public_address},
-};
+use crate::{servers::http::ext::Xml, utils::env};
 use axum::{extract::Query, routing::get, Router};
 use log::debug;
 use serde::Deserialize;

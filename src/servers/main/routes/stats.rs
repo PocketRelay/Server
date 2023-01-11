@@ -1,11 +1,14 @@
 use crate::{
-    leaderboard::{models::*, LeaderboardQuery},
+    leaderboard::models::*,
     servers::main::{models::stats::*, session::Session},
     state::GlobalState,
     utils::components::{Components as C, Stats as S},
 };
-use blaze_pk::router::Router;
-use log::error;
+use blaze_pk::{
+    codec::Decodable,
+    packet::{Request, Response},
+    router::Router,
+};
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
@@ -16,34 +19,53 @@ pub fn route(router: &mut Router<C, Session>) {
         C::Stats(S::GetLeaderboardEntityCount),
         handle_leaderboard_entity_count,
     );
-    router.route(C::Stats(S::GetLeaderboard), |req: LeaderboardRequest| {
-        handle_leaderboard_query(
-            req.name,
-            LeaderboardQuery::Normal {
-                start: req.start,
-                count: req.count,
-            },
-        )
-    });
+    router.route(C::Stats(S::GetLeaderboard), handle_normal_leaderboard);
     router.route(
         C::Stats(S::GetCenteredLeaderboard),
-        |req: CenteredLeaderboardRequest| {
-            handle_leaderboard_query(
-                req.name,
-                LeaderboardQuery::Centered {
-                    player_id: req.center,
-                    count: req.count,
-                },
-            )
-        },
+        handle_centered_leaderboard,
     );
     router.route(
         C::Stats(S::GetFilteredLeaderboard),
-        |req: FilteredLeaderboardRequest| {
-            handle_leaderboard_query(req.name, LeaderboardQuery::Filtered { player_id: req.id })
-        },
+        handle_filtered_leaderboard,
     );
     router.route(C::Stats(S::GetLeaderboardGroup), handle_leaderboard_group);
+}
+
+async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> Response {
+    let query = &*req;
+    handle_leaderboard_query(
+        &query.name,
+        LQuery::Normal {
+            start: query.start,
+            count: query.count,
+        },
+        &req,
+    )
+    .await
+}
+
+async fn handle_centered_leaderboard(req: Request<CenteredLeaderboardRequest>) -> Response {
+    let query = &*req;
+    handle_leaderboard_query(
+        &query.name,
+        LQuery::Centered {
+            player_id: query.center,
+            count: query.count,
+        },
+        &req,
+    )
+    .await
+}
+async fn handle_filtered_leaderboard(req: Request<FilteredLeaderboardRequest>) -> Response {
+    let query = &*req;
+    handle_leaderboard_query(
+        &query.name,
+        LQuery::Filtered {
+            player_id: query.id,
+        },
+        &req,
+    )
+    .await
 }
 
 /// Handles returning the number of leaderboard objects present.
@@ -63,14 +85,12 @@ pub fn route(router: &mut Router<C, Session>) {
 /// ```
 async fn handle_leaderboard_entity_count(req: EntityCountRequest) -> EntityCountResponse {
     let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(req.name);
-    let count = match leaderboard.get_size(ty).await {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Unable to compute leaderboard size: {err:?}");
-            0
-        }
-    };
+    let ty = LeaderboardType::from_value(&req.name);
+
+    let lock = leaderboard.get(ty).await;
+    let group = lock.read().await;
+    let count = group.values.len();
+
     EntityCountResponse { count }
 }
 
@@ -79,20 +99,22 @@ async fn handle_leaderboard_entity_count(req: EntityCountRequest) -> EntityCount
 ///
 /// `name`  The name of the leaderboard
 /// `query` The query to resolve
-async fn handle_leaderboard_query(name: String, query: LeaderboardQuery) -> LeaderboardResponse {
+async fn handle_leaderboard_query<R: Decodable>(
+    name: &str,
+    query: LQuery,
+    req: &Request<R>,
+) -> Response {
     let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from(name);
-    match leaderboard.get(ty, query).await {
-        // Values response
-        Ok(Some((values, _))) => LeaderboardResponse::Values(values),
-        // Empty query response
-        Ok(None) => LeaderboardResponse::Empty,
-        // Error handling
-        Err(err) => {
-            error!("Failed to compute leaderboard: {err:?}");
-            LeaderboardResponse::Empty
-        }
-    }
+    let ty = LeaderboardType::from_value(name);
+    let lock = leaderboard.get(ty).await;
+    let group = lock.read().await;
+    let response = match group.resolve(query) {
+        LResult::Many(values, _) => LeaderboardResponse::Many(values),
+        LResult::One(value) => LeaderboardResponse::One(value),
+        LResult::Empty => LeaderboardResponse::Empty,
+    };
+
+    req.response(response)
 }
 
 fn get_locale_name(code: &str) -> &str {
