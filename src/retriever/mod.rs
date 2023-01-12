@@ -74,16 +74,16 @@ impl Retriever {
     /// Returns a new stream to the mian server
     pub async fn stream_to(host: &String, port: Port) -> Option<BlazeStream> {
         let addr = (host.clone(), port);
-        BlazeStream::connect(addr)
-            .await
-            .map_err(|err| {
+        match BlazeStream::connect(addr).await {
+            Ok(value) => Some(value),
+            Err(err) => {
                 error!(
                     "Failed to connect to server at {}:{}; Cause: {err:?}",
                     host, port
                 );
-                err
-            })
-            .ok()
+                None
+            }
+        }
     }
 
     /// Returns a new stream to the main server
