@@ -49,14 +49,19 @@ pub async fn public_address() -> Option<Ipv4Addr> {
 
     // Try all addresses using the first valid value
     for address in addresses {
-        if let Ok(response) = reqwest::get(address).await {
-            if let Ok(ip) = response.text().await {
-                let ip = ip.trim().replace('\n', "");
-                if let Ok(parsed) = ip.parse() {
-                    value = Some(parsed);
-                    break;
-                }
-            }
+        let response = match reqwest::get(address).await {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        let ip = match response.text().await {
+            Ok(value) => value.trim().replace('\n', ""),
+            Err(_) => continue,
+        };
+
+        if let Ok(parsed) = ip.parse() {
+            value = Some(parsed);
+            break;
         }
     }
 
@@ -134,17 +139,31 @@ struct Answer {
     data: String,
 }
 
-/// Attempts to resolve the DNS host value of the provided hostname
-/// uses the tokio lookup host function first but if the returned address
-/// is a local address then the Google DNS lookup is used instead.
-pub async fn lookup_host(value: &str) -> Option<String> {
+/// Attempts to resolve the address value of the provided host. First attempts
+/// to use the system DNS with tokio but if the resolved address is loopback it
+/// is ignored and the google HTTP DNS will be attempted instead
+///
+/// `host` The host to lookup
+pub async fn lookup_host(host: &str) -> Option<String> {
+    // Attempt to lookup using the system DNS
     {
-        let internal = lookup_tokio(value).await;
-        if internal.is_some() {
-            return internal;
+        let tokio = tokio::net::lookup_host(host)
+            .await
+            .ok()
+            .and_then(|mut value| value.next());
+
+        if let Some(tokio) = tokio {
+            let ip = tokio.ip();
+            // Loopback value means it was probbably redirected in the hosts file
+            // so those are ignored
+            if !ip.is_loopback() {
+                return Some(format!("{}", ip));
+            }
         }
     }
-    let url = format!("https://dns.google/resolve?name={value}&type=A");
+
+    // Attempt to lookup using google HTTP DNS
+    let url = format!("https://dns.google/resolve?name={host}&type=A");
     let mut request = reqwest::get(url)
         .await
         .ok()?
@@ -152,19 +171,6 @@ pub async fn lookup_host(value: &str) -> Option<String> {
         .await
         .ok()?;
 
-    request.answer.pop().map(|value| value.data)
-}
-
-/// Attempts to resolve the provided DNS entry using tokios function.
-async fn lookup_tokio(value: &str) -> Option<String> {
-    let internal = tokio::net::lookup_host(value).await.ok()?.next()?;
-    let ip = internal.ip();
-
-    // If the address is loopback then its probbably been overwritten in the
-    // system hosts file.
-    if ip.is_loopback() {
-        return None;
-    }
-
-    Some(format!("{}", ip))
+    let answer = request.answer.pop()?;
+    Some(answer.data)
 }

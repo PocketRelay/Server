@@ -46,6 +46,7 @@ impl Retriever {
         }
 
         let redirector_host = lookup_host(Self::REDIRECTOR_HOST).await?;
+        debug!("Completed host lookup: {}", &redirector_host);
         let (host, port) = Self::get_main_host(redirector_host).await?;
         debug!("Retriever setup complete. (Host: {} Port: {})", &host, port);
         Some(Retriever { host, port })
