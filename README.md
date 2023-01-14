@@ -10,8 +10,7 @@
 ![Build](https://img.shields.io/github/actions/workflow/status/PocketRelay/ServerRust/rust.yml?style=for-the-badge)
 
 Development on this implementation has made great strides and has surpassed the original Kotlin server in terms of performance
-reliabality, functionality and actual parody to the official server. However as this implementation is still considered to be
-in active development.
+reliabality, functionality and actual parody to the official server.
 
 # 📖 Setting up a server
 
