@@ -10,21 +10,12 @@
 ![Build](https://img.shields.io/github/actions/workflow/status/PocketRelay/ServerRust/rust.yml?style=for-the-badge)
 
 Development on this implementation has made great strides and has surpassed the original Kotlin server in terms of performance
-reliabality, functionality and actual parody to the official server. However as this implementation is still considered to be
-in active development.
+reliabality, functionality and actual parody to the official server.
 
 # 📖 Setting up a server
 
 For a guide on how to setup a Pocket Relay server see [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_SERVER.md)
 and for connecting to a server see [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_CLIENT.md)
-
-
-# 🎮 Pre Release
-
-You can find pre-release downloads in the [Releases (https://github.com/PocketRelay/ServerRust/releases)](https://github.com/PocketRelay/ServerRust/releases). The most recent pre release is 
-mostly stable but may have unknown bugs or features that are expecting to change 
-
-Latest pre release is available  [Here](https://github.com/PocketRelay/ServerRust/releases/latest)
 
 # ❔ What
 
@@ -47,11 +38,19 @@ configuration documentation [Here (docs/CONFIG.md)](docs/CONFIG.md)
 
 # 📦 Releases
 
-As this implementation is still under active development there will be no 
-stable releases until its closer to being considered user ready. However you can
-still use this server early by building manually with the instructions below
+**SQLite**:
 
-The latest available release can be found [Here](https://github.com/PocketRelay/ServerRust/releases/latest)
+| Platform | Download                                                                                                |
+| -------- | ------------------------------------------------------------------------------------------------------- |
+| Windows  | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-windows.exe) |
+| Linux    | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-linux)       |
+
+**MySQL**:
+
+| Platform | Download                                                                                                      |
+| -------- | ------------------------------------------------------------------------------------------------------------- |
+| Windows  | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-windows-mysql.exe) |
+| Linux    | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-linux-mysql)       |
 
 # 🚀 Building
 
@@ -67,9 +66,8 @@ Instructions for building the server can be found [Here](https://github.com/Pock
 **Origin Fetching** This server supports copying over Origin credits, classes, characters, weapons, levels, etc from the official servers. This is enabled by default and can
 be changed using the PR_ORIGIN_FETCH_DATA environment variable.
 
-**API** This portion of the server is currently experimental and its an API which allows 
-querying the server for information such as the active Games and querying the database for
-player information.
+**API** The server includes an optional API that you can enable which allows querying and modifying 
+player data on the server along with querying the active games on the server.
 
 **Man-In-The-Middle Server** This server has a built in Man-In-The-Middle server for proxying your connection to the Official servers while logging all the packets that travel
 between the client and the server. 
@@ -109,25 +107,6 @@ taken to a login screen where you can create a new account with Pocket Relay.
 
 > The only way to solve this issue would be to delete or move the Local_Profile.sav file
 > whenever switching servers in order to clear the token.
-  
-# 🚧 Stablity 
-
-The following is a list of the servers and how stable they are for production use. The table below describes each level of stablity
-
-| Level         | Description                                                                                                       |
-| ------------- | ----------------------------------------------------------------------------------------------------------------- |
-| 🟢 STABLE      | The server is stable for use in production                                                                        |
-| 🟡 SEMI-STABLE | The server is mostly stable but is not fully tested and may have edge cases or unknown issues. Needs more testing |
-| 🟠 UNSTABLE    | The server is not stable and should not be used in production                                                     |
-
-| Server     | Stablity | Details                                                                                                  |
-| ---------- | -------- | -------------------------------------------------------------------------------------------------------- |
-| Redirector | 🟢        | The redirector server is quite simple and is fully implemented and function                              |
-| MITM       | 🟢        | The MITM server only needs to pass packets onto the official server so this is complete                  |
-| TELEMETRY  | 🟡        | The telemetry server doesn't actual interract with anything meaningful so at this stage its semi stable  |
-| QOS        | 🟢        | The QOS server is fully implemented so is consider to be stable                                          |
-| HTTP       | 🟡        | The HTTP server is mostly stable and implements the features it needs but needs to be tested             |
-| Main       | 🟡        | The Main server is mostly stable however changes are expected and not all functionality works correectly |
 
 
 # 📌 EA / BioWare Notice

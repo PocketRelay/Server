@@ -24,7 +24,7 @@ impl OriginFlow {
     /// return Origin details if the authentication process went without error
     ///
     /// `token` The token to authenticate with
-    pub async fn authenticate(&mut self, token: String) -> Option<OriginDetails> {
+    pub async fn authenticate(&mut self, token: &str) -> Option<OriginDetails> {
         let value = self
             .session
             .request::<OriginLoginRequest, OriginLoginResponse>(

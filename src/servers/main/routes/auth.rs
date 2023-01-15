@@ -198,7 +198,7 @@ async fn handle_login_origin(db: &'static DatabaseConnection, token: &str) -> Se
     };
 
     // Authenticate with the official servers
-    let Some(details) = flow.authenticate(token.to_string()).await else {
+    let Some(details) = flow.authenticate(token).await else {
         error!("Unable to authenticate Origin: Failed to retrieve details from official server");
         return Err(ServerError::ServerUnavailable);
     };

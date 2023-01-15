@@ -57,14 +57,14 @@ impl Decodable for OriginLoginResponse {
 
 /// Structure for a request to login with Origin using
 /// the Origin token that was provided by the client
-pub struct OriginLoginRequest {
+pub struct OriginLoginRequest<'a> {
     /// The origin token provided by the client
-    pub token: String,
+    pub token: &'a str,
 }
 
-impl Encodable for OriginLoginRequest {
+impl Encodable for OriginLoginRequest<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_str(b"AUTH", &self.token);
+        writer.tag_str(b"AUTH", self.token);
         writer.tag_u8(b"TYPE", 0x1);
     }
 }
