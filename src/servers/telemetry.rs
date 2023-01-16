@@ -103,7 +103,7 @@ const TLM3_KEY: &[u8] = b"The truth is back in style.";
 /// `value` The slice to split
 /// `split` The byte to split at
 fn split_at_byte(value: &mut [u8], split: u8) -> Option<(&mut [u8], &mut [u8])> {
-    let mut parts = value.split_mut(|value| split.eq(value));
+    let mut parts = value.splitn_mut(2, |value| split.eq(value));
     let first = parts.next()?;
     let second = parts.next()?;
     Some((first, second))
