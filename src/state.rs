@@ -6,7 +6,9 @@ use tokio::join;
 /// will be unset until the value is initialized then it will be
 /// set
 pub enum GlobalState {
+    // Default state before the application is initialized
     Unset,
+    // Actual application state
     Set {
         games: Games,
         db: DatabaseConnection,
@@ -19,9 +21,10 @@ pub enum GlobalState {
 static mut GLOBAL_STATE: GlobalState = GlobalState::Unset;
 
 impl GlobalState {
-    /// Initializes the global state storing it in
-    /// the option GLOBAL_STATE after everything is
-    /// initialized.
+    /// Initializes the global state updating the value stored in
+    /// GLOBAL_STATE with a new set state. This function MUST be
+    /// called before this state is accessed or else the app will
+    /// panic and must not be called more than once.
     pub async fn init() {
         let (db, retriever) = join!(Self::init_database(), Retriever::new());
 
@@ -86,7 +89,7 @@ impl GlobalState {
         }
     }
 
-    /// Obtains a option to the static reference of the leaderboard
+    /// Obtains a static reference to the leaderboard
     /// stored on the global state if one exists
     pub fn leaderboard() -> &'static Leaderboard {
         unsafe {
