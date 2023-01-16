@@ -85,7 +85,7 @@ async fn read_message(stream: &mut TcpStream) -> io::Result<HashMap<String, Stri
         let value = if key.eq("TLM3") {
             decode_tlm3(value)
         } else {
-            String::from_utf8_lossy(value).to_string()
+            format!("{:?}", value)
         };
         map.insert(key.to_string(), value);
     }
