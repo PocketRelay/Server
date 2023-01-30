@@ -16,6 +16,11 @@ serde = { version = "1", features = ["derive"] }
 # Logging facade
 log = "0.4"
 
+[workspace.dependencies.chrono]
+version = "0.4"
+default-features = false
+features = ["std", "serde"]
+
 [package]
 name = "pocket-relay"
 description = "Pocket Relay Server"
@@ -38,6 +43,7 @@ database-mysql = ["database/mysql"]
 [dependencies]
 log = { workspace = true }
 serde = { workspace = true }
+chrono = { workspace = true }
 
 # Blaze packet system 
 blaze-pk = "^0.8"
@@ -61,6 +67,7 @@ dotenvy = "0.15"
 
 # Library for obtaining the local IP address of the device
 local-ip-address = "0.5.0"
+jsonwebtoken = "8"
 
 # Tokio async runtime
 [dependencies.tokio]

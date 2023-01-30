@@ -1,4 +1,6 @@
-use crate::{env, game::manager::Games, leaderboard::Leaderboard, retriever::Retriever};
+use crate::{
+    env, game::manager::Games, leaderboard::Leaderboard, retriever::Retriever, utils::jwt::Jwt,
+};
 use database::{self, DatabaseConnection, DatabaseType};
 use tokio::join;
 
@@ -14,6 +16,7 @@ pub enum GlobalState {
         db: DatabaseConnection,
         retriever: Option<Retriever>,
         leaderboard: Leaderboard,
+        jwt: Jwt,
     },
 }
 
@@ -26,7 +29,7 @@ impl GlobalState {
     /// called before this state is accessed or else the app will
     /// panic and must not be called more than once.
     pub async fn init() {
-        let (db, retriever) = join!(Self::init_database(), Retriever::new());
+        let (db, retriever, jwt) = join!(Self::init_database(), Retriever::new(), Jwt::new());
 
         let games: Games = Games::default();
         let leaderboard: Leaderboard = Leaderboard::default();
@@ -37,6 +40,7 @@ impl GlobalState {
                 games,
                 retriever,
                 leaderboard,
+                jwt,
             };
         }
     }
@@ -95,6 +99,17 @@ impl GlobalState {
         unsafe {
             match &GLOBAL_STATE {
                 GlobalState::Set { leaderboard, .. } => leaderboard,
+                GlobalState::Unset => panic!("Global state not initialized"),
+            }
+        }
+    }
+
+    /// Obtains a static reference to the jwt sate
+    /// stored on the global state if one exists
+    pub fn jwt() -> &'static Jwt {
+        unsafe {
+            match &GLOBAL_STATE {
+                GlobalState::Set { jwt, .. } => jwt,
                 GlobalState::Unset => panic!("Global state not initialized"),
             }
         }

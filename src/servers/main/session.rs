@@ -12,7 +12,6 @@ use crate::{
         components::{self, Components, UserSessions},
         models::{NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
         packet::append_packet_decoded,
-        random::generate_random_string,
         types::{GameID, SessionID},
     },
 };
@@ -41,6 +40,9 @@ pub struct Session {
     /// If the session is authenticated it will have a linked
     /// player model from the database
     pub player: Option<Player>,
+
+    /// Authentication token for this session
+    pub token: Option<String>,
 
     /// Networking information
     pub net: NetData,
@@ -138,6 +140,7 @@ impl Session {
             flush_queued: false,
             router,
             addr: SessionAddr { id, sender },
+            token: None,
         }
     }
 
@@ -394,21 +397,20 @@ impl Session {
     }
 
     pub async fn set_player(&mut self, player: Player) -> ServerResult<(&Player, String)> {
-        // Obtain a token associated to this player
-        let (player, session_token) = match player
-            .with_token(GlobalState::database(), generate_random_string)
-            .await
-        {
+        // Update the player value
+        let player = self.player.insert(player);
+
+        let jwt = GlobalState::jwt();
+
+        let token = match jwt.claim(player) {
             Ok(value) => value,
             Err(err) => {
-                error!("Unable to create session token for player: {err:?}");
+                error!("Unable to create session token for player: {:?}", err);
                 return Err(ServerError::ServerUnavailable);
             }
         };
-
-        // Update the player value
-        let player = self.player.insert(player);
-        Ok((player, session_token))
+        self.token = Some(token.clone());
+        Ok((player, token))
     }
 
     pub fn push_details(&mut self) {

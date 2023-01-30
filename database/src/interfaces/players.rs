@@ -11,9 +11,6 @@ use sea_orm::{
 use std::iter::Iterator;
 
 impl Player {
-    /// The length of player session tokens
-    const TOKEN_LENGTH: usize = 128;
-
     /// Takes all the player models using a cursor starting at the offset row
     /// and finding the count number of values will check the count + 1 rows
     /// in order to determine if there are more entires to come.
@@ -234,22 +231,6 @@ impl Player {
         players::Entity::find_by_id(id).one(db).await
     }
 
-    /// Attempts to find a player with the provided ID and matching session
-    /// token will return none if there was no players with that ID
-    ///
-    /// `db` The database instance
-    /// `id` The ID of the player to find
-    pub async fn by_id_with_token(
-        db: &DatabaseConnection,
-        id: u32,
-        token: &str,
-    ) -> DbResult<Option<Self>> {
-        players::Entity::find_by_id(id)
-            .filter(players::Column::SessionToken.eq(token))
-            .one(db)
-            .await
-    }
-
     /// Attempts to find a player with the provided email. Conditional
     /// check for whether to allow origin accounts in the search.
     ///
@@ -281,52 +262,5 @@ impl Player {
             .one(db)
             .await
             .map(|value| value.is_some())
-    }
-
-    /// Attempts to find a player by the provided session token
-    ///
-    /// `db`    The database instance
-    /// `token` The session token to search for
-    pub async fn by_token(db: &DatabaseConnection, token: &str) -> DbResult<Option<Self>> {
-        players::Entity::find()
-            .filter(players::Column::SessionToken.eq(token))
-            .one(db)
-            .await
-    }
-
-    /// Sets the token for the provided player returning both
-    /// the player model and token that was set.
-    ///
-    /// `db`     The database instance
-    /// `player` The player to set the token for
-    /// `token`  The token to set
-    async fn set_token(self, db: &DatabaseConnection, token: String) -> DbResult<(Self, String)> {
-        let mut player = self.into_active_model();
-        player.session_token = Set(Some(token.clone()));
-        let player = player.update(db).await?;
-        Ok((player, token))
-    }
-
-    /// Attempts to get the existing session token for the provided
-    /// player or creates a new session token if there is not already
-    /// one will return both the player model and session token
-    ///
-    /// `db`     The database instance
-    /// `player` The player to get the token for
-    /// `gen_fn` Function for generating a new token if there is not one
-    pub async fn with_token(
-        self,
-        db: &DatabaseConnection,
-        gen_fn: fn(usize) -> String,
-    ) -> DbResult<(Self, String)> {
-        let token = match &self.session_token {
-            None => {
-                let token = gen_fn(Self::TOKEN_LENGTH);
-                let out = self.set_token(db, token).await?;
-                return Ok(out);
-            }
-            Some(value) => value.clone(),
-        };
-        Ok((self, token))
     }
 }

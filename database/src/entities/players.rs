@@ -13,9 +13,6 @@ pub struct Model {
     pub email: String,
     /// Display name / Username of the player
     pub display_name: String,
-    /// Sesssion token. Omitted from serialization
-    #[serde(skip)]
-    pub session_token: Option<String>,
     /// Flag for whether the account is created from origin
     pub origin: bool,
     /// Hashed password which is omitted from serialization
