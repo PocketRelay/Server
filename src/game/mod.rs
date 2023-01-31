@@ -8,6 +8,7 @@ use log::debug;
 use models::*;
 use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
 pub mod manager;
@@ -69,7 +70,7 @@ impl GameAddr {
         reciever.await.unwrap_or(true)
     }
 
-    pub async fn check_joinable(&self, rules: Option<RuleSet>) -> GameJoinableState {
+    pub async fn check_joinable(&self, rules: Arc<RuleSet>) -> GameJoinableState {
         let (sender, reciever) = oneshot::channel();
         if self
             .sender
@@ -113,9 +114,9 @@ pub enum GameModifyAction {
     /// whether the game is empty now or not
     RemovePlayer(RemovePlayerType, oneshot::Sender<bool>),
 
-    /// Request for checking if the game is joinable optionally with
+    /// Request for checking if the game is joinable with
     /// a ruleset for checking attributes against
-    CheckJoinable(Option<RuleSet>, oneshot::Sender<GameJoinableState>),
+    CheckJoinable(Arc<RuleSet>, oneshot::Sender<GameJoinableState>),
 
     /// Requests a snapshot of the current game state
     Snapshot(oneshot::Sender<GameSnapshot>),
@@ -182,13 +183,12 @@ impl Game {
         }
     }
 
-    fn check_joinable(&self, rules: Option<RuleSet>) -> GameJoinableState {
+    fn check_joinable(&self, rules: Arc<RuleSet>) -> GameJoinableState {
         let is_joinable = self.next_slot < Self::MAX_PLAYERS;
-        if let Some(rules) = rules {
-            if !rules.matches(&self.attributes) {
-                return GameJoinableState::NotMatch;
-            }
+        if !rules.matches(&self.attributes) {
+            return GameJoinableState::NotMatch;
         }
+
         if is_joinable {
             GameJoinableState::Joinable
         } else {

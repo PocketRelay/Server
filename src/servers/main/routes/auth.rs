@@ -134,7 +134,7 @@ async fn handle_auth_request(
 async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
     let jwt = GlobalState::jwt();
 
-    let player = match jwt.verify(&token) {
+    let player = match jwt.verify(token) {
         Ok(value) => value,
         Err(err) => {
             error!("Error while attempt to resume invalid session: {err:?}");
