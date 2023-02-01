@@ -351,14 +351,7 @@ async fn handle_login_persona(session: &mut Session, req: Request<()>) -> Server
         .player
         .as_ref()
         .ok_or(ServerError::FailedNoLoginAction)?;
-    let session_token = session
-        .token
-        .as_ref()
-        .ok_or(ServerError::FailedNoLoginAction)?;
-    let res = PersonaResponse {
-        player,
-        session_token,
-    };
+    let res = PersonaResponse { player };
     Ok(req.response(res))
 }
 

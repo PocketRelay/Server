@@ -115,7 +115,7 @@ impl Encodable for AuthResponse<'_> {
                 writer.tag_group(b"SESS");
                 writer.tag_u32(b"BUID", self.player.id);
                 writer.tag_zero(b"FRST");
-                writer.tag_str(b"KEY", &self.session_token); // Session Token
+                writer.tag_str(b"KEY", &format!("{:X}", self.player.id)); // Session Token
                 writer.tag_zero(b"LLOG");
                 writer.tag_str(b"MAIL", &self.player.email); // Player Email
                 {
@@ -130,7 +130,7 @@ impl Encodable for AuthResponse<'_> {
             writer.tag_list_start(b"PLST", TdfType::Group, 1);
             encode_persona(writer, self.player.id, &self.player.display_name);
             writer.tag_str_empty(b"PRIV");
-            writer.tag_str(b"SKEY", &self.session_token);
+            writer.tag_str(b"SKEY", &format!("{:X}", self.player.id));
         }
         writer.tag_zero(b"SPAM");
         writer.tag_str_empty(b"THST");
@@ -165,16 +165,13 @@ impl Decodable for CreateAccountRequest {
 pub struct PersonaResponse<'a> {
     /// The player
     pub player: &'a Player,
-
-    /// The players current session token
-    pub session_token: &'a String,
 }
 
 impl Encodable for PersonaResponse<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_u32(b"BUID", self.player.id);
         writer.tag_zero(b"FRST");
-        writer.tag_str(b"KEY", self.session_token);
+        writer.tag_str(b"KEY", &format!("{:X}", self.player.id));
         writer.tag_zero(b"LLOG");
         writer.tag_str(b"MAIL", &self.player.email);
 

@@ -41,9 +41,6 @@ pub struct Session {
     /// player model from the database
     pub player: Option<Player>,
 
-    /// Authentication token for this session
-    pub token: Option<String>,
-
     /// Networking information
     pub net: NetData,
 
@@ -140,7 +137,6 @@ impl Session {
             flush_queued: false,
             router,
             addr: SessionAddr { id, sender },
-            token: None,
         }
     }
 
@@ -410,7 +406,6 @@ impl Session {
             }
         };
 
-        self.token = Some(token.clone());
         Ok((player, token))
     }
 
