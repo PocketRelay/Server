@@ -396,7 +396,7 @@ impl Session {
         self.push(packet);
     }
 
-    pub async fn set_player(&mut self, player: Player) -> ServerResult<(&Player, String)> {
+    pub fn set_player(&mut self, player: Player) -> ServerResult<(&Player, String)> {
         // Update the player value
         let player = self.player.insert(player);
 
@@ -409,6 +409,7 @@ impl Session {
                 return Err(ServerError::ServerUnavailable);
             }
         };
+
         self.token = Some(token.clone());
         Ok((player, token))
     }

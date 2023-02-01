@@ -68,7 +68,7 @@ async fn handle_resume_session(
         }
     };
 
-    let (player, session_token) = session.set_player(player).await?;
+    let (player, session_token) = session.set_player(player)?;
 
     let res = AuthResponse {
         player,

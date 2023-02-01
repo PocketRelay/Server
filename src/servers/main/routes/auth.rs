@@ -114,7 +114,7 @@ async fn handle_auth_request(
         AuthRequest::Origin { token } => handle_login_origin(db, token).await,
     }?;
 
-    let (player, session_token) = session.set_player(player).await?;
+    let (player, session_token) = session.set_player(player)?;
 
     let res = AuthResponse {
         player,
@@ -459,7 +459,7 @@ async fn handle_create_account(
             }
         };
 
-    let (player, session_token) = session.set_player(player).await?;
+    let (player, session_token) = session.set_player(player)?;
 
     let res = AuthResponse {
         player,
