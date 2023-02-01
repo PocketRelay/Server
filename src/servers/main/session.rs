@@ -73,7 +73,7 @@ pub struct SessionAddr {
     /// The ID this session is linked to
     pub id: SessionID,
     /// The sender for sending message to this session
-    sender: mpsc::UnboundedSender<SessionMessage>,
+    sender: mpsc::UnboundedSender<Message>,
 }
 
 impl SessionAddr {
@@ -81,21 +81,21 @@ impl SessionAddr {
     ///
     /// `packet` The packet to write
     pub fn push(&self, packet: Packet) {
-        self.sender.send(SessionMessage::Write(packet)).ok();
+        self.sender.send(Message::Write(packet)).ok();
     }
 
     /// Sets the game that the session is apart of
     ///
     /// `game` The game
     pub fn set_game(&self, game: Option<GameID>) {
-        self.sender.send(SessionMessage::SetGame(game)).ok();
+        self.sender.send(Message::SetGame(game)).ok();
     }
 }
 
-/// Enum of different messages that can be sent to this
-/// session in order to change it in different ways
+/// Message for communicating with the spawned session
+/// using cloned the sender present on cloned addresses
 #[derive(Debug)]
-pub enum SessionMessage {
+enum Message {
     /// Changes the active game value
     SetGame(Option<GameID>),
 
@@ -126,7 +126,7 @@ impl Session {
         id: SessionID,
         stream: TcpStream,
         addr: SocketAddr,
-        sender: mpsc::UnboundedSender<SessionMessage>,
+        sender: mpsc::UnboundedSender<Message>,
         router: Arc<Router<Components, Session>>,
     ) -> Self {
         Self {
@@ -149,7 +149,7 @@ impl Session {
     /// owns the session.
     ///
     /// `message` The receiver for receiving session messages
-    async fn process(mut self, mut receiver: mpsc::UnboundedReceiver<SessionMessage>) {
+    async fn process(mut self, mut receiver: mpsc::UnboundedReceiver<Message>) {
         loop {
             select! {
                 // Recieve session instruction messages
@@ -200,11 +200,11 @@ impl Session {
     /// Handles a message recieved for the session
     ///
     /// `message` The message that was recieved
-    async fn handle_message(&mut self, message: SessionMessage) {
+    async fn handle_message(&mut self, message: Message) {
         match message {
-            SessionMessage::SetGame(game) => self.set_game(game),
-            SessionMessage::Write(packet) => self.push(packet),
-            SessionMessage::Flush => self.flush().await,
+            Message::SetGame(game) => self.set_game(game),
+            Message::Write(packet) => self.push(packet),
+            Message::Flush => self.flush().await,
         }
     }
 
@@ -311,7 +311,7 @@ impl Session {
     fn queue_flush(&mut self) {
         if !self.flush_queued {
             self.flush_queued = true;
-            self.addr.sender.send(SessionMessage::Flush).ok();
+            self.addr.sender.send(Message::Flush).ok();
         }
     }
 
