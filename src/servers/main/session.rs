@@ -363,9 +363,8 @@ impl Session {
     /// `ext`    The networking ext
     pub fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
         let net = &mut &mut self.net;
-        net.is_set = true;
         net.qos = ext;
-        net.groups = groups;
+        net.groups = Some(groups);
         self.update_client();
     }
 

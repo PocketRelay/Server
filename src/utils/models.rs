@@ -276,10 +276,9 @@ pub type Port = u16;
 
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct NetData {
-    pub groups: NetGroups,
+    pub groups: Option<NetGroups>,
     pub qos: QosNetworkData,
     pub hardware_flags: u16,
-    pub is_set: bool,
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -313,11 +312,11 @@ value_type!(NetGroups, TdfType::Group);
 
 impl NetData {
     pub fn tag_groups(&self, tag: &[u8], writer: &mut TdfWriter) {
-        if !self.is_set {
+        if let Some(groups) = &self.groups {
+            writer.tag_union_value(tag, NetworkAddressType::Pair.into(), b"VALU", groups);
+        } else {
             writer.tag_union_unset(tag);
-            return;
         }
-        writer.tag_union_value(tag, NetworkAddressType::Pair.into(), b"VALU", &self.groups);
     }
 }
 
