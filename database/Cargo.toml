@@ -15,11 +15,7 @@ mysql = ["sea-orm/sqlx-mysql", "sea-orm-migration/sqlx-mysql"]
 [dependencies]
 log = { workspace = true }
 serde = { workspace = true }
-
-[dependencies.chrono]
-version = "0.4"
-default-features = false
-features = ["std", "serde"]
+chrono = { workspace = true }
 
 [dependencies.sea-orm]
 version = "^0"

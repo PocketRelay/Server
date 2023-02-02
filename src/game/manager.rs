@@ -7,7 +7,10 @@ use blaze_pk::types::TdfMap;
 use log::debug;
 use std::{
     collections::{HashMap, VecDeque},
-    sync::atomic::{AtomicU32, Ordering},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
     time::SystemTime,
 };
 use tokio::{
@@ -31,7 +34,7 @@ struct QueueEntry {
     player: GamePlayer,
     /// The rules that games must meet for this
     /// queue entry to join.
-    rules: RuleSet,
+    rules: Arc<RuleSet>,
     /// The time that the queue entry was created at
     time: SystemTime,
 }
@@ -137,7 +140,7 @@ impl Games {
         if !queue.is_empty() {
             let mut unmatched = VecDeque::new();
             while let Some(entry) = queue.pop_front() {
-                let join_state = game.check_joinable(Some(entry.rules.clone())).await;
+                let join_state = game.check_joinable(entry.rules.clone()).await;
                 match join_state {
                     GameJoinableState::Full => {
                         // If the game is not joinable push the entry back to the
@@ -176,9 +179,10 @@ impl Games {
     /// `rules`   The rules the game must match to be valid
     pub fn add_or_queue(&'static self, player: GamePlayer, rules: RuleSet) {
         tokio::spawn(async move {
+            let rules = Arc::new(rules);
             let games = &*self.games.read().await;
             for (id, game) in games.iter() {
-                let join_state = game.check_joinable(Some(rules.clone())).await;
+                let join_state = game.check_joinable(rules.clone()).await;
                 if let GameJoinableState::Joinable = join_state {
                     debug!("Found matching game (GID: {})", id);
                     game.send(GameModifyAction::AddPlayer(player));

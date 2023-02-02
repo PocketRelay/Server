@@ -3,7 +3,7 @@
 
 use crate::env;
 use log::{debug, error, info};
-use std::{collections::HashMap, io};
+use std::io;
 use tokio::{
     io::AsyncReadExt,
     net::{TcpListener, TcpStream},
@@ -40,18 +40,18 @@ pub async fn start_server() {
         tokio::spawn(async move {
             let mut stream = stream;
             while let Ok(message) = read_message(&mut stream).await {
+                let message: TelemetryMessage = decode_message(message);
                 debug!("[TELEMETRY] {:?}", message);
             }
         });
     }
 }
 
-/// Reads a telemetry message from the provided stream returning
-/// the result as a HashMap of key value pairs or an IO error if
-/// End of file was reached early
+/// Reads a telemetry message buffer from the provided input
+/// stream returning the buffer that was read.
 ///
 /// `stream` The stream to read from
-async fn read_message(stream: &mut TcpStream) -> io::Result<HashMap<String, String>> {
+async fn read_message(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
     let length = {
         // Buffer for reading the header + padding + legnth bytes
         let mut header = [0u8; 12];
@@ -64,33 +64,42 @@ async fn read_message(stream: &mut TcpStream) -> io::Result<HashMap<String, Stri
     // Remove the header size from the message length
     let length = (length - 12.min(length)) as usize;
 
-    // Empty no-op map for a zero length
-    if length == 0 {
-        return Ok(HashMap::new());
-    }
-
     // Create a new buffer of the expected size
     let mut buffer = vec![0u8; length];
     stream.read_exact(&mut buffer).await?;
+    Ok(buffer)
+}
 
+// Structure containing key value pairs for telemetry messages
+#[derive(Debug)]
+pub struct TelemetryMessage {
+    // Vec of key values
+    pub values: Vec<(String, String)>,
+}
+
+/// Decodes the telemetry message from the message buffer into
+/// a telemetry message structure
+///
+/// `message` The raw message bytes
+fn decode_message(mut message: Vec<u8>) -> TelemetryMessage {
     // Split the buffer into pairs of values
-    let pairs = buffer
+    let pairs = message
         .split_mut(|value| b'\n'.eq(value))
         .filter_map(|slice| split_at_byte(slice, b'='));
 
-    let mut map = HashMap::new();
+    let mut values = Vec::new();
 
     for (key, value) in pairs {
         let key = String::from_utf8_lossy(key);
         let value = if key.eq("TLM3") {
             decode_tlm3(value)
         } else {
-            String::from_utf8_lossy(value).to_string()
+            format!("{:?}", value)
         };
-        map.insert(key.to_string(), value);
+        values.push((key.to_string(), value))
     }
 
-    Ok(map)
+    TelemetryMessage { values }
 }
 
 /// TLM3 key for decoding the TML3 line
@@ -103,7 +112,7 @@ const TLM3_KEY: &[u8] = b"The truth is back in style.";
 /// `value` The slice to split
 /// `split` The byte to split at
 fn split_at_byte(value: &mut [u8], split: u8) -> Option<(&mut [u8], &mut [u8])> {
-    let mut parts = value.split_mut(|value| split.eq(value));
+    let mut parts = value.splitn_mut(2, |value| split.eq(value));
     let first = parts.next()?;
     let second = parts.next()?;
     Some((first, second))

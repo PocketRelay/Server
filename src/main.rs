@@ -12,8 +12,13 @@ mod servers;
 mod state;
 mod utils;
 
-#[tokio::main]
-async fn main() {
+fn main() {
+    // Create the tokio runtime
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed building the tokio Runtime");
+
     // Load environment variables from nearest .env
     dotenv().ok();
 
@@ -22,28 +27,31 @@ async fn main() {
 
     info!("Starting Pocket Relay v{}", VERSION);
 
-    logging::log_connection_urls().await;
-
     // Initialize global state
-    GlobalState::init().await;
+    runtime.block_on(GlobalState::init());
+
+    // Display the connection urls message
+    runtime.block_on(logging::log_connection_urls());
 
     // Spawn redirector in its own task
-    tokio::spawn(redirector::start_server());
+    runtime.spawn(redirector::start_server());
 
     if env::from_env(env::MITM_ENABLED) {
         // Start the MITM server
-        tokio::spawn(mitm::start_server());
+        runtime.spawn(mitm::start_server());
     } else {
         // Spawn QOS server in its own task
-        tokio::spawn(qos::start_server());
+        runtime.spawn(qos::start_server());
         // Spawn the HTTP server in its own task
-        tokio::spawn(http::start_server());
+        runtime.spawn(http::start_server());
         // Spawn the Main server in its own task
-        tokio::spawn(main::start_server());
+        runtime.spawn(main::start_server());
         // Spawn the Telemetry server in its own task
-        tokio::spawn(telemetry::start_server());
+        runtime.spawn(telemetry::start_server());
     }
 
-    signal::ctrl_c().await.ok();
+    // Block until shutdown is recieved
+    runtime.block_on(signal::ctrl_c()).ok();
+
     info!("Shutting down...");
 }

@@ -1,40 +1,42 @@
-use crate::{env, game::manager::Games, leaderboard::Leaderboard, retriever::Retriever};
+use crate::{
+    env, game::manager::Games, leaderboard::Leaderboard, retriever::Retriever, utils::jwt::Jwt,
+};
 use database::{self, DatabaseConnection, DatabaseType};
 use tokio::join;
 
 /// Global state that is shared throughout the application this
 /// will be unset until the value is initialized then it will be
 /// set
-pub enum GlobalState {
-    Unset,
-    Set {
-        games: Games,
-        db: DatabaseConnection,
-        retriever: Option<Retriever>,
-        leaderboard: Leaderboard,
-    },
+pub struct GlobalState {
+    pub games: Games,
+    pub db: DatabaseConnection,
+    pub retriever: Option<Retriever>,
+    pub leaderboard: Leaderboard,
+    pub jwt: Jwt,
 }
 
 /// Static global state value
-static mut GLOBAL_STATE: GlobalState = GlobalState::Unset;
+static mut GLOBAL_STATE: Option<GlobalState> = None;
 
 impl GlobalState {
-    /// Initializes the global state storing it in
-    /// the option GLOBAL_STATE after everything is
-    /// initialized.
+    /// Initializes the global state updating the value stored in
+    /// GLOBAL_STATE with a new set state. This function MUST be
+    /// called before this state is accessed or else the app will
+    /// panic and must not be called more than once.
     pub async fn init() {
-        let (db, retriever) = join!(Self::init_database(), Retriever::new());
+        let (db, retriever, jwt) = join!(Self::init_database(), Retriever::new(), Jwt::new());
 
         let games: Games = Games::default();
         let leaderboard: Leaderboard = Leaderboard::default();
 
         unsafe {
-            GLOBAL_STATE = GlobalState::Set {
+            GLOBAL_STATE = Some(GlobalState {
                 db,
                 games,
                 retriever,
                 leaderboard,
-            };
+                jwt,
+            });
         }
     }
 
@@ -58,8 +60,8 @@ impl GlobalState {
     pub fn database() -> &'static DatabaseConnection {
         unsafe {
             match &GLOBAL_STATE {
-                GlobalState::Set { db, .. } => db,
-                GlobalState::Unset => panic!("Global state not initialized"),
+                Some(value) => &value.db,
+                None => panic!("Global state not initialized"),
             }
         }
     }
@@ -69,8 +71,8 @@ impl GlobalState {
     pub fn games() -> &'static Games {
         unsafe {
             match &GLOBAL_STATE {
-                GlobalState::Set { games, .. } => games,
-                GlobalState::Unset => panic!("Global state not initialized"),
+                Some(value) => &value.games,
+                None => panic!("Global state not initialized"),
             }
         }
     }
@@ -80,19 +82,30 @@ impl GlobalState {
     pub fn retriever() -> Option<&'static Retriever> {
         unsafe {
             match &GLOBAL_STATE {
-                GlobalState::Set { retriever, .. } => retriever.as_ref(),
-                GlobalState::Unset => panic!("Global state not initialized"),
+                Some(value) => value.retriever.as_ref(),
+                None => panic!("Global state not initialized"),
             }
         }
     }
 
-    /// Obtains a option to the static reference of the leaderboard
+    /// Obtains a static reference to the leaderboard
     /// stored on the global state if one exists
     pub fn leaderboard() -> &'static Leaderboard {
         unsafe {
             match &GLOBAL_STATE {
-                GlobalState::Set { leaderboard, .. } => leaderboard,
-                GlobalState::Unset => panic!("Global state not initialized"),
+                Some(value) => &value.leaderboard,
+                None => panic!("Global state not initialized"),
+            }
+        }
+    }
+
+    /// Obtains a static reference to the jwt sate
+    /// stored on the global state if one exists
+    pub fn jwt() -> &'static Jwt {
+        unsafe {
+            match &GLOBAL_STATE {
+                Some(value) => &value.jwt,
+                None => panic!("Global state not initialized"),
             }
         }
     }

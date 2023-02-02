@@ -265,7 +265,9 @@ pub fn encode_game_data(writer: &mut TdfWriter, game: &Game, player: &GamePlayer
     {
         writer.tag_list_start(b"HNET", TdfType::Group, 1);
         writer.write_byte(2);
-        host_player.net.groups.encode(writer);
+        if let Some(groups) = &host_player.net.groups {
+            groups.encode(writer);
+        }
     }
 
     writer.tag_u32(b"HSES", host_player.addr.id);

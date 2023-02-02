@@ -11,7 +11,6 @@ use crate::{
         components::{Authentication as A, Components as C},
         env,
         hashing::{hash_password, verify_password},
-        types::PlayerID,
         validate::is_email,
     },
 };
@@ -110,12 +109,12 @@ async fn handle_auth_request(
     let silent = req.is_silent();
     let db = GlobalState::database();
     let player: Player = match &req.req {
-        AuthRequest::Silent { token, player_id } => handle_login_token(db, token, *player_id).await,
+        AuthRequest::Silent { token, .. } => handle_login_token(db, token).await,
         AuthRequest::Login { email, password } => handle_login_email(db, email, password).await,
         AuthRequest::Origin { token } => handle_login_origin(db, token).await,
     }?;
 
-    let (player, session_token) = session.set_player(player).await?;
+    let (player, session_token) = session.set_player(player)?;
 
     let res = AuthResponse {
         player,
@@ -132,12 +131,18 @@ async fn handle_auth_request(
 /// `db`        The database connection
 /// `token`     The authentication token
 /// `player_id` The player ID
-async fn handle_login_token(
-    db: &DatabaseConnection,
-    token: &str,
-    player_id: PlayerID,
-) -> ServerResult<Player> {
-    Player::by_id_with_token(db, player_id, token)
+async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
+    let jwt = GlobalState::jwt();
+
+    let player = match jwt.verify(token) {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Error while attempt to resume invalid session: {err:?}");
+            return Err(ServerError::InvalidSession);
+        }
+    };
+
+    Player::by_id(db, player.id)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::InvalidSession)
@@ -346,14 +351,7 @@ async fn handle_login_persona(session: &mut Session, req: Request<()>) -> Server
         .player
         .as_ref()
         .ok_or(ServerError::FailedNoLoginAction)?;
-    let session_token = player
-        .session_token
-        .as_ref()
-        .ok_or(ServerError::FailedNoLoginAction)?;
-    let res = PersonaResponse {
-        player,
-        session_token,
-    };
+    let res = PersonaResponse { player };
     Ok(req.response(res))
 }
 
@@ -454,7 +452,7 @@ async fn handle_create_account(
             }
         };
 
-    let (player, session_token) = session.set_player(player).await?;
+    let (player, session_token) = session.set_player(player)?;
 
     let res = AuthResponse {
         player,

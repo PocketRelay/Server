@@ -45,9 +45,18 @@ async fn handle_resume_session(
     req: Request<ResumeSessionRequest>,
 ) -> ServerResult<Response> {
     let db = GlobalState::database();
+    let jwt = GlobalState::jwt();
+
+    let player = match jwt.verify(&req.session_token) {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Error while attempt to resume invalid session: {err:?}");
+            return Err(ServerError::InvalidSession);
+        }
+    };
 
     // Find the player that the token is for
-    let player: Player = match Player::by_token(db, &req.session_token).await {
+    let player: Player = match Player::by_id(db, player.id).await {
         // Valid session token
         Ok(Some(player)) => player,
         // Session that was attempted to resume is expired
@@ -59,7 +68,7 @@ async fn handle_resume_session(
         }
     };
 
-    let (player, session_token) = session.set_player(player).await?;
+    let (player, session_token) = session.set_player(player)?;
 
     let res = AuthResponse {
         player,
