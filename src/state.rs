@@ -55,12 +55,12 @@ impl GlobalState {
         database::connect(ty).await
     }
 
-    /// Obtains a static reference to the database connection
-    /// stored on the global state.
-    pub fn database() -> &'static DatabaseConnection {
+    /// Obtains a database connection by cloning the global
+    /// database pool
+    pub fn database() -> DatabaseConnection {
         unsafe {
             match &GLOBAL_STATE {
-                Some(value) => &value.db,
+                Some(value) => value.db.clone(),
                 None => panic!("Global state not initialized"),
             }
         }

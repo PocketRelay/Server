@@ -100,7 +100,7 @@ async fn get_players(Query(query): Query<PlayersQuery>) -> PlayersResult<Players
     let db = GlobalState::database();
     let count = query.count.unwrap_or(DEFAULT_COUNT);
     let offset = query.offset as u64 * count as u64;
-    let (players, more) = Player::all(db, offset, count as u64).await?;
+    let (players, more) = Player::all(&db, offset, count as u64).await?;
 
     Ok(Json(PlayersResponse { players, more }))
 }
@@ -111,7 +111,7 @@ async fn get_players(Query(query): Query<PlayersQuery>) -> PlayersResult<Players
 /// `path` The route path with the ID for the player to find
 async fn get_player(Path(player_id): Path<PlayerID>) -> PlayersResult<Player> {
     let db = GlobalState::database();
-    let player = find_player(db, player_id).await?;
+    let player = find_player(&db, player_id).await?;
     Ok(Json(player))
 }
 
@@ -140,7 +140,7 @@ async fn modify_player(
     Json(req): Json<ModifyPlayerRequest>,
 ) -> PlayersResult<Player> {
     let db = GlobalState::database();
-    let player: Player = find_player(db, player_id).await?;
+    let player: Player = find_player(&db, player_id).await?;
 
     let email = if let Some(email) = req.email {
         // Ensure the email is valid email format
@@ -153,7 +153,10 @@ async fn modify_player(
             None
         } else {
             // Ensure the email is not already taken
-            if Player::by_email(db, &email, player.origin).await?.is_some() {
+            if Player::by_email(&db, &email, player.origin)
+                .await?
+                .is_some()
+            {
                 return Err(PlayersError::EmailTaken);
             }
             Some(email)
@@ -176,7 +179,7 @@ async fn modify_player(
     };
 
     let player = player
-        .update_http(db, email, display_name, req.origin, password)
+        .update_http(&db, email, display_name, req.origin, password)
         .await?;
 
     Ok(Json(player))
@@ -203,12 +206,12 @@ async fn create_player(Json(req): Json<CreatePlayerRequest>) -> PlayersResult<Pl
     if !is_email(&email) {
         return Err(PlayersError::InvalidEmail);
     }
-    let exists = Player::is_email_taken(db, &email).await?;
+    let exists = Player::is_email_taken(&db, &email).await?;
     if exists {
         return Err(PlayersError::EmailTaken);
     }
     let password = hash_password(&req.password).map_err(|_| PlayersError::ServerError)?;
-    let player: Player = Player::create(db, email, req.display_name, password, false).await?;
+    let player: Player = Player::create(&db, email, req.display_name, password, false).await?;
     Ok(Json(player))
 }
 
@@ -217,8 +220,8 @@ async fn create_player(Json(req): Json<CreatePlayerRequest>) -> PlayersResult<Pl
 /// `path` The route path with the ID for the player to find
 async fn delete_player(Path(player_id): Path<PlayerID>) -> Result<Response, PlayersError> {
     let db = GlobalState::database();
-    let player: Player = find_player(db, player_id).await?;
-    player.delete(db).await?;
+    let player: Player = find_player(&db, player_id).await?;
+    player.delete(&db).await?;
     Ok(StatusCode::OK.into_response())
 }
 
@@ -245,16 +248,16 @@ impl Serialize for PlayerDataMap {
 /// `path` The route path with the ID for the player to find the classes for
 async fn all_data(Path(player_id): Path<PlayerID>) -> PlayersResult<PlayerDataMap> {
     let db = GlobalState::database();
-    let player: Player = find_player(db, player_id).await?;
-    let data = player.all_data(db).await?;
+    let player: Player = find_player(&db, player_id).await?;
+    let data = player.all_data(&db).await?;
     Ok(Json(PlayerDataMap(data)))
 }
 
 async fn get_data(Path((player_id, key)): Path<(PlayerID, String)>) -> PlayersResult<PlayerData> {
     let db = GlobalState::database();
-    let player: Player = find_player(db, player_id).await?;
+    let player: Player = find_player(&db, player_id).await?;
     let value = player
-        .get_data(db, &key)
+        .get_data(&db, &key)
         .await?
         .ok_or(PlayersError::DataNotFound)?;
     Ok(Json(value))
@@ -277,8 +280,8 @@ async fn set_data(
     Json(req): Json<SetDataRequest>,
 ) -> PlayersResult<PlayerData> {
     let db = GlobalState::database();
-    let player: Player = find_player(db, player_id).await?;
-    let data = player.set_data(db, key, req.value).await?;
+    let player: Player = find_player(&db, player_id).await?;
+    let data = player.set_data(&db, key, req.value).await?;
     Ok(Json(data))
 }
 /// Route for updating the class for a player with the provided {id}
@@ -288,8 +291,8 @@ async fn set_data(
 /// `req`  The update class request
 async fn delete_data(Path((player_id, key)): Path<(PlayerID, String)>) -> PlayersResult<()> {
     let db = GlobalState::database();
-    let player: Player = find_player(db, player_id).await?;
-    player.delete_data(db, &key).await?;
+    let player: Player = find_player(&db, player_id).await?;
+    player.delete_data(&db, &key).await?;
     Ok(Json(()))
 }
 
@@ -299,8 +302,8 @@ async fn delete_data(Path((player_id, key)): Path<(PlayerID, String)>) -> Player
 /// `path` The route path with the ID for the player to find the characters for
 async fn get_player_gaw(Path(player_id): Path<PlayerID>) -> PlayersResult<GalaxyAtWar> {
     let db = GlobalState::database();
-    let player = find_player(db, player_id).await?;
-    let galax_at_war = GalaxyAtWar::find_or_create(db, &player, 0.0).await?;
+    let player = find_player(&db, player_id).await?;
+    let galax_at_war = GalaxyAtWar::find_or_create(&db, &player, 0.0).await?;
     Ok(Json(galax_at_war))
 }
 

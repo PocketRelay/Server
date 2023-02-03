@@ -78,7 +78,7 @@ impl Leaderboard {
         let mut join_set = JoinSet::new();
 
         loop {
-            let (players, more) = match Player::all(db, offset, BATCH_COUNT).await {
+            let (players, more) = match Player::all(&db, offset, BATCH_COUNT).await {
                 Ok((ref players, _)) if players.is_empty() => break,
                 Ok(value) => value,
                 Err(err) => {
@@ -89,7 +89,7 @@ impl Leaderboard {
 
             // Add the futures for all the players
             for player in players {
-                join_set.spawn(ranking_fn.compute_ranking(db, player));
+                join_set.spawn(ranking_fn.compute_ranking(db.clone(), player));
             }
 
             // Await computed results
@@ -127,7 +127,7 @@ type RankerFut = Pin<Box<dyn Future<Output = DbResult<LeaderboardEntry>> + Send 
 trait Ranker: Send {
     /// Function for producing the future that on completion will result
     /// in the leaderboard entry value
-    fn compute_ranking(&self, db: &'static DatabaseConnection, player: Player) -> RankerFut;
+    fn compute_ranking(&self, db: DatabaseConnection, player: Player) -> RankerFut;
 }
 
 /// Ranker implementaion for function types
@@ -139,10 +139,10 @@ trait Ranker: Send {
 /// ```
 impl<F, Fut> Ranker for F
 where
-    F: Fn(&'static DatabaseConnection, Player) -> Fut + Send,
+    F: Fn(DatabaseConnection, Player) -> Fut + Send,
     Fut: Future<Output = DbResult<LeaderboardEntry>> + Send + 'static,
 {
-    fn compute_ranking(&self, db: &'static DatabaseConnection, player: Player) -> RankerFut {
+    fn compute_ranking(&self, db: DatabaseConnection, player: Player) -> RankerFut {
         Box::pin(self(db, player))
     }
 }
@@ -152,10 +152,10 @@ where
 ///
 /// `db`     The database connection
 /// `player` The player to rank
-async fn compute_n7_player(db: &DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
+async fn compute_n7_player(db: DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
     let mut total_promotions = 0;
     let mut total_level: u32 = 0;
-    let (classes, characters) = try_join!(player.get_classes(db), player.get_characters(db),)?;
+    let (classes, characters) = try_join!(player.get_classes(&db), player.get_characters(&db),)?;
 
     let classes: Vec<_> = classes
         .into_iter()
@@ -193,8 +193,8 @@ async fn compute_n7_player(db: &DatabaseConnection, player: Player) -> DbResult<
 ///
 /// `db`     The database connection
 /// `player` The player to rank
-async fn compute_cp_player(db: &DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
-    let value = player.get_challenge_points(db).await.unwrap_or(0);
+async fn compute_cp_player(db: DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
+    let value = player.get_challenge_points(&db).await.unwrap_or(0);
     Ok(LeaderboardEntry {
         player_id: player.id,
         player_name: player.display_name,

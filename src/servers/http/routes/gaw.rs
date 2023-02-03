@@ -136,7 +136,7 @@ async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u3
 /// `id` The hex encoded ID of the player
 async fn get_ratings(Path(id): Path<String>) -> Result<Xml, GAWError> {
     let db = GlobalState::database();
-    let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
+    let (gaw_data, promotions) = get_player_gaw_data(&db, &id).await?;
     Ok(ratings_response(gaw_data, promotions))
 }
 
@@ -172,9 +172,9 @@ async fn increase_ratings(
     Query(query): Query<IncreaseQuery>,
 ) -> Result<Xml, GAWError> {
     let db = GlobalState::database();
-    let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
+    let (gaw_data, promotions) = get_player_gaw_data(&db, &id).await?;
     let gaw_data = gaw_data
-        .increase(db, (query.a, query.b, query.c, query.d, query.e))
+        .increase(&db, (query.a, query.b, query.c, query.d, query.e))
         .await?;
     Ok(ratings_response(gaw_data, promotions))
 }

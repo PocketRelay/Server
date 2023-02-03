@@ -539,7 +539,7 @@ async fn handle_user_settings_save(
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let db = GlobalState::database();
-    if let Err(err) = player.set_data(db, req.key, req.value).await {
+    if let Err(err) = player.set_data(&db, req.key, req.value).await {
         warn!("Failed to update player data: {err:?}");
         Err(ServerError::ServerUnavailable)
     } else {
@@ -564,7 +564,7 @@ async fn handle_load_settings(session: &mut Session) -> ServerResult<SettingsRes
     let db = GlobalState::database();
 
     // Load the player data from the database
-    let data: Vec<PlayerData> = match player.all_data(db).await {
+    let data: Vec<PlayerData> = match player.all_data(&db).await {
         Ok(value) => value,
         Err(err) => {
             error!("Failed to load player data: {err:?}");

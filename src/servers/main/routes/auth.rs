@@ -109,9 +109,9 @@ async fn handle_auth_request(
     let silent = req.is_silent();
     let db = GlobalState::database();
     let player: Player = match &req.req {
-        AuthRequest::Silent { token, .. } => handle_login_token(db, token).await,
-        AuthRequest::Login { email, password } => handle_login_email(db, email, password).await,
-        AuthRequest::Origin { token } => handle_login_origin(db, token).await,
+        AuthRequest::Silent { token, .. } => handle_login_token(&db, token).await,
+        AuthRequest::Login { email, password } => handle_login_email(&db, email, password).await,
+        AuthRequest::Origin { token } => handle_login_origin(&db, token).await,
     }?;
 
     let (player, session_token) = session.set_player(player)?;
@@ -184,7 +184,7 @@ async fn handle_login_email(
 ///
 /// `db`    The database connection
 /// `token` The origin authentication token
-async fn handle_login_origin(db: &'static DatabaseConnection, token: &str) -> ServerResult<Player> {
+async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
     // Only continue if Origin Fetch is actually enabled
     if !env::from_env(env::ORIGIN_FETCH) {
         return Err(ServerError::ServerUnavailable);
@@ -418,7 +418,7 @@ async fn handle_create_account(
 
     let db = GlobalState::database();
 
-    match Player::is_email_taken(db, email).await {
+    match Player::is_email_taken(&db, email).await {
         // Continue normally for non taken emails
         Ok(false) => {}
         // Handle email address is already in use
@@ -444,7 +444,7 @@ async fn handle_create_account(
 
     // Create a new player
     let player: Player =
-        match Player::create(db, email.to_string(), display_name, hashed_password, false).await {
+        match Player::create(&db, email.to_string(), display_name, hashed_password, false).await {
             Ok(value) => value,
             Err(err) => {
                 error!("Failed to create player: {err:?}");

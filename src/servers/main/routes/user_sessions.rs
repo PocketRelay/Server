@@ -56,7 +56,7 @@ async fn handle_resume_session(
     };
 
     // Find the player that the token is for
-    let player: Player = match Player::by_id(db, player.id).await {
+    let player: Player = match Player::by_id(&db, player.id).await {
         // Valid session token
         Ok(Some(player)) => player,
         // Session that was attempted to resume is expired
