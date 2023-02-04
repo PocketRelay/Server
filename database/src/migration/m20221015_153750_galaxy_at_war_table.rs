@@ -1,4 +1,7 @@
-//! Migration logic for generating galaxy at war table
+//! Migration logic for generating galaxy at war table which
+//! stores the galaxy at war progress in each region for a
+//! specific player
+
 use super::m20221015_142649_players_table::Players;
 use sea_orm_migration::prelude::*;
 

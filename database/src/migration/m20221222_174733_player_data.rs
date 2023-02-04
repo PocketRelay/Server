@@ -1,3 +1,6 @@
+//! Migration to create the `player_data` table which stores the
+//! associated player data for each player as key value pairs
+
 use sea_orm_migration::prelude::*;
 
 use super::m20221015_142649_players_table::Players;
