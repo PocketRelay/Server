@@ -1,4 +1,7 @@
-use crate::{game::GameSnapshot, state::GlobalState, utils::types::GameID};
+use crate::{
+    game::GameSnapshot, servers::http::middleware::auth::AdminAuth, state::GlobalState,
+    utils::types::GameID,
+};
 use axum::{
     extract::{Path, Query},
     http::StatusCode,
@@ -44,7 +47,7 @@ struct GamesResponse {
 /// Will take a snapshot of all the games.
 ///
 /// `query` The query containing the offset and count
-async fn get_games(Query(query): Query<GamesQuery>) -> Json<GamesResponse> {
+async fn get_games(Query(query): Query<GamesQuery>, _: AdminAuth) -> Json<GamesResponse> {
     /// The default number of games to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 20;
 
@@ -66,7 +69,10 @@ struct GameNotFound;
 /// Route for retrieving the details of a game with a specific game ID
 ///
 /// `game_id` The ID of the game
-async fn get_game(Path(game_id): Path<GameID>) -> Result<Json<GameSnapshot>, GameNotFound> {
+async fn get_game(
+    Path(game_id): Path<GameID>,
+    _: AdminAuth,
+) -> Result<Json<GameSnapshot>, GameNotFound> {
     let games = GlobalState::games()
         .snapshot_id(game_id)
         .await

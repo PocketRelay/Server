@@ -1,10 +1,8 @@
-use super::{
-    middleware::{cors::cors_layer, token::token_auth_layer},
-    stores::token::TokenStore,
-};
+use super::middleware::cors::cors_layer;
 use crate::env;
 use axum::{middleware, Router};
 
+mod auth;
 mod content;
 mod games;
 mod gaw;
@@ -12,7 +10,6 @@ mod leaderboard;
 mod players;
 mod qos;
 mod server;
-mod token;
 
 /// Function for configuring the provided service config with all the
 /// application routes.
@@ -35,12 +32,8 @@ fn api_router() -> Router {
             .nest("/games", games::router())
             // Players routing
             .nest("/players", players::router())
-            // Apply the token auth middleware
-            .layer(middleware::from_fn(token_auth_layer))
             // Routes that require token store access but arent protected
-            .nest("/token", token::router())
-            // Provide token store to API routes
-            .layer(TokenStore::extension())
+            .nest("/auth", auth::router())
             // Non protected API routes
             .nest("/leaderboard", leaderboard::router())
     } else {

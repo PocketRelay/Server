@@ -1,5 +1,5 @@
 use crate::{
-    servers::http::ext::ErrorStatusCode,
+    servers::http::{ext::ErrorStatusCode, middleware::auth::AdminAuth},
     state::GlobalState,
     utils::{hashing::hash_password, types::PlayerID, validate::is_email},
 };
@@ -93,7 +93,10 @@ struct PlayersResponse {
 /// is the number of rows to collect. Offset = offset * count
 ///
 /// `query` The query containing the offset and count values
-async fn get_players(Query(query): Query<PlayersQuery>) -> PlayersResult<PlayersResponse> {
+async fn get_players(
+    Query(query): Query<PlayersQuery>,
+    _: AdminAuth,
+) -> PlayersResult<PlayersResponse> {
     const DEFAULT_COUNT: u8 = 20;
     const DEFAULT_OFFSET: u16 = 0;
 
@@ -109,7 +112,7 @@ async fn get_players(Query(query): Query<PlayersQuery>) -> PlayersResult<Players
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find
-async fn get_player(Path(player_id): Path<PlayerID>) -> PlayersResult<Player> {
+async fn get_player(Path(player_id): Path<PlayerID>, _: AdminAuth) -> PlayersResult<Player> {
     let db = GlobalState::database();
     let player = find_player(&db, player_id).await?;
     Ok(Json(player))
@@ -137,6 +140,7 @@ struct ModifyPlayerRequest {
 /// `req`  The request body
 async fn modify_player(
     Path(player_id): Path<PlayerID>,
+    _: AdminAuth,
     Json(req): Json<ModifyPlayerRequest>,
 ) -> PlayersResult<Player> {
     let db = GlobalState::database();
@@ -200,7 +204,10 @@ struct CreatePlayerRequest {
 /// request.
 ///
 /// `req` The request containing the player details
-async fn create_player(Json(req): Json<CreatePlayerRequest>) -> PlayersResult<Player> {
+async fn create_player(
+    _: AdminAuth,
+    Json(req): Json<CreatePlayerRequest>,
+) -> PlayersResult<Player> {
     let db = GlobalState::database();
     let email = req.email;
     if !is_email(&email) {
@@ -218,7 +225,10 @@ async fn create_player(Json(req): Json<CreatePlayerRequest>) -> PlayersResult<Pl
 /// Route for deleting a player using its Player ID
 ///
 /// `path` The route path with the ID for the player to find
-async fn delete_player(Path(player_id): Path<PlayerID>) -> Result<Response, PlayersError> {
+async fn delete_player(
+    _: AdminAuth,
+    Path(player_id): Path<PlayerID>,
+) -> Result<Response, PlayersError> {
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
     player.delete(&db).await?;
@@ -246,14 +256,17 @@ impl Serialize for PlayerDataMap {
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find the classes for
-async fn all_data(Path(player_id): Path<PlayerID>) -> PlayersResult<PlayerDataMap> {
+async fn all_data(Path(player_id): Path<PlayerID>, _: AdminAuth) -> PlayersResult<PlayerDataMap> {
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
     let data = player.all_data(&db).await?;
     Ok(Json(PlayerDataMap(data)))
 }
 
-async fn get_data(Path((player_id, key)): Path<(PlayerID, String)>) -> PlayersResult<PlayerData> {
+async fn get_data(
+    Path((player_id, key)): Path<(PlayerID, String)>,
+    _: AdminAuth,
+) -> PlayersResult<PlayerData> {
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
     let value = player
@@ -277,6 +290,7 @@ struct SetDataRequest {
 /// `req`  The update class request
 async fn set_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
+    _: AdminAuth,
     Json(req): Json<SetDataRequest>,
 ) -> PlayersResult<PlayerData> {
     let db = GlobalState::database();
@@ -289,7 +303,10 @@ async fn set_data(
 ///
 /// `path` The route path with the ID for the player to find the classes for and class index
 /// `req`  The update class request
-async fn delete_data(Path((player_id, key)): Path<(PlayerID, String)>) -> PlayersResult<()> {
+async fn delete_data(
+    Path((player_id, key)): Path<(PlayerID, String)>,
+    _: AdminAuth,
+) -> PlayersResult<()> {
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
     player.delete_data(&db, &key).await?;
@@ -300,7 +317,10 @@ async fn delete_data(Path((player_id, key)): Path<(PlayerID, String)>) -> Player
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find the characters for
-async fn get_player_gaw(Path(player_id): Path<PlayerID>) -> PlayersResult<GalaxyAtWar> {
+async fn get_player_gaw(
+    Path(player_id): Path<PlayerID>,
+    _: AdminAuth,
+) -> PlayersResult<GalaxyAtWar> {
     let db = GlobalState::database();
     let player = find_player(&db, player_id).await?;
     let galax_at_war = GalaxyAtWar::find_or_create(&db, &player, 0.0).await?;
