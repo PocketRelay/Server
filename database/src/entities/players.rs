@@ -3,6 +3,8 @@
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
 
+use crate::data::user::PlayerRole;
+
 #[derive(Serialize, Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "players")]
 pub struct Model {
@@ -18,6 +20,8 @@ pub struct Model {
     /// Hashed password which is omitted from serialization
     #[serde(skip)]
     pub password: String,
+    /// The role of the player
+    pub role: PlayerRole,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

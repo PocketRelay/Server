@@ -6,6 +6,7 @@ use std::{
     path::Path,
 };
 
+mod data;
 mod entities;
 pub mod interfaces;
 mod migration;
