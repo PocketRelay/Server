@@ -1,20 +1,15 @@
 //! This module contains routes that handle the authentication tokens
 //! for dealing with the server API
 
-use crate::{servers::http::stores::token::TokenStore, state::GlobalState};
+use crate::state::GlobalState;
 use axum::{
-    extract::Query,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
-    Extension, Json, Router,
+    Json, Router,
 };
 use database::Player;
 use serde::{Deserialize, Serialize};
-use std::{
-    sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
 use thiserror::Error;
 use validator::Validate;
 
