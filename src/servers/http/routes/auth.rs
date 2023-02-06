@@ -18,9 +18,8 @@ use validator::Validate;
 ///
 /// Prefix: /api/auth
 pub fn router() -> Router {
-    Router::new()
-        .route("/login", get(login))
-        .route("/register", get(register))
+    Router::new().route("/login", get(login))
+    // .route("/register", get(register))
 }
 
 #[derive(Debug, Error)]
@@ -64,30 +63,30 @@ async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, Aut
     Ok(Json(TokenResponse { token }))
 }
 
-#[derive(Deserialize, Validate)]
-pub struct RegisterRequest {
-    username: String,
-    /// The email address of the account to login with
-    #[validate(email)]
-    email: String,
-    /// The plain-text password to login with
-    password: String,
-}
+// #[derive(Deserialize, Validate)]
+// pub struct RegisterRequest {
+//     username: String,
+//     /// The email address of the account to login with
+//     #[validate(email)]
+//     email: String,
+//     /// The plain-text password to login with
+//     password: String,
+// }
 
-/// Route for logging into a non origin account
-async fn register(Json(req): Json<RegisterRequest>) -> Result<Json<TokenResponse>, AuthError> {
-    let db = GlobalState::database();
-    let player = Player::by_email(&db, &req.email, false)
-        .await
-        .map_err(|_| AuthError::ServerError)?
-        .ok_or(AuthError::InvalidCredentails)?;
+// /// Route for logging into a non origin account
+// async fn register(Json(req): Json<RegisterRequest>) -> Result<Json<TokenResponse>, AuthError> {
+//     let db = GlobalState::database();
+//     let player = Player::by_email(&db, &req.email, false)
+//         .await
+//         .map_err(|_| AuthError::ServerError)?
+//         .ok_or(AuthError::InvalidCredentails)?;
 
-    let jwt = GlobalState::jwt();
+//     let jwt = GlobalState::jwt();
 
-    let token = jwt.claim(&player).map_err(|_| AuthError::ServerError)?;
+//     let token = jwt.claim(&player).map_err(|_| AuthError::ServerError)?;
 
-    Ok(Json(TokenResponse { token }))
-}
+//     Ok(Json(TokenResponse { token }))
+// }
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
