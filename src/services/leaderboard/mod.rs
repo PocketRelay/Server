@@ -7,50 +7,72 @@ use crate::{
 };
 use database::{DatabaseConnection, DbResult, Player};
 use log::error;
-use std::{future::Future, pin::Pin};
-use tokio::{sync::RwLock, task::JoinSet, try_join};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinSet,
+    try_join,
+};
 
 pub mod models;
 
-/// Structure for storing the leaderboard values on the global
-/// state.
-#[derive(Default)]
-pub struct Leaderboard {
-    /// Leaderboard entity group for n7 ratings
-    n7_group: RwLock<LeaderboardGroup>,
-    /// Leaderboard entity group for challenge points
-    cp_group: RwLock<LeaderboardGroup>,
+struct Leaderboard {
+    /// Map between the group types and the actual leaderboard group content
+    groups: HashMap<LeaderboardType, Arc<LeaderboardGroup>>,
+    /// Receiver for handling requests for leaderboard groups
+    rx: mpsc::UnboundedReceiver<GetRequest>,
+}
+
+/// Request message for retrie
+struct GetRequest {
+    ty: LeaderboardType,
+    tx: oneshot::Sender<Arc<LeaderboardGroup>>,
+}
+
+#[derive(Clone)]
+pub struct LeaderboardAddr(mpsc::UnboundedSender<GetRequest>);
+
+impl LeaderboardAddr {
+    pub fn spawn() -> LeaderboardAddr {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let this = Leaderboard {
+            groups: Default::default(),
+            rx,
+        };
+        let addr = LeaderboardAddr(tx);
+        tokio::spawn(this.process());
+        addr
+    }
+
+    pub async fn get(&self, ty: LeaderboardType) -> Option<Arc<LeaderboardGroup>> {
+        let (tx, rx) = oneshot::channel();
+        if let Err(_) = self.0.send(GetRequest { ty, tx }) {
+            return None;
+        }
+        rx.await.ok()
+    }
 }
 
 impl Leaderboard {
-    /// Retrieves a lock to the leaderboard group of the provided type.
-    /// Checks if the stored group is expired and if it is the new ranking
-    /// values will be computed before returning the lock.
-    ///
-    /// `ty` The leaderboard type
-    pub async fn get(&self, ty: LeaderboardType) -> &RwLock<LeaderboardGroup> {
-        let lock = match &ty {
-            LeaderboardType::N7Rating => &self.n7_group,
-            LeaderboardType::ChallengePoints => &self.cp_group,
-        };
+    pub async fn process(mut self) {
+        while let Some(message) = self.rx.recv().await {
+            // If the group already exists and is not expired we can respond with it
+            if let Some(group) = self.groups.get(&message.ty) {
+                if !group.is_expired() {
+                    // Value is not expire respond immediately
+                    message.tx.send(group.clone()).ok();
+                    return;
+                }
+            }
 
-        // Check if the data is expired
-        let is_expired = {
-            let group = lock.read().await;
-            group.is_expired()
-        };
+            // Compute the leaderboard
+            let values = self.compute(&message.ty).await;
+            let group = Arc::new(LeaderboardGroup::new(values));
 
-        // if expired compute the data again
-        if is_expired {
-            // Hold the write lock while compute so others don't try and compute
-            let group = &mut *lock.write().await;
-
-            // Compute the rankings and update the group
-            let ranking = self.compute(ty).await;
-            group.update(ranking);
+            // Store the group and respond to the request
+            self.groups.insert(message.ty, group.clone());
+            message.tx.send(group).ok();
         }
-
-        lock
     }
 
     /// Computes the ranking values for the provided `ty` this consists of
@@ -59,7 +81,7 @@ impl Leaderboard {
     /// on their value.
     ///
     /// `ty` The leaderboard type
-    async fn compute(&self, ty: LeaderboardType) -> Vec<LeaderboardEntry> {
+    async fn compute(&self, ty: &LeaderboardType) -> Vec<LeaderboardEntry> {
         // The amount of players to process in each database request
         const BATCH_COUNT: u64 = 20;
 
@@ -70,10 +92,7 @@ impl Leaderboard {
         let mut values: Vec<LeaderboardEntry> = Vec::new();
 
         // Decide the ranking function to use based on the type
-        let ranking_fn: Box<dyn Ranker> = match ty {
-            LeaderboardType::N7Rating => Box::new(compute_n7_player),
-            LeaderboardType::ChallengePoints => Box::new(compute_cp_player),
-        };
+        let ranking_fn: Box<dyn Ranker> = ty.into();
 
         let mut join_set = JoinSet::new();
 
@@ -117,6 +136,15 @@ impl Leaderboard {
         }
 
         values
+    }
+}
+
+impl From<&LeaderboardType> for Box<dyn Ranker> {
+    fn from(value: &LeaderboardType) -> Self {
+        match value {
+            LeaderboardType::N7Rating => Box::new(compute_n7_player),
+            LeaderboardType::ChallengePoints => Box::new(compute_cp_player),
+        }
     }
 }
 

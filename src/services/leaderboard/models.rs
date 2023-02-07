@@ -1,12 +1,12 @@
 use crate::utils::types::PlayerID;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::{
     fmt::Display,
     time::{Duration, SystemTime},
 };
 
 /// Structure for an entry in a leaderboard group
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct LeaderboardEntry {
     /// The ID of the player this entry is for
     pub player_id: PlayerID,
@@ -26,15 +26,6 @@ pub struct LeaderboardGroup {
     pub values: Vec<LeaderboardEntry>,
     /// The time at which this entity group will become expired
     pub expires: SystemTime,
-}
-
-impl Default for LeaderboardGroup {
-    fn default() -> Self {
-        Self {
-            values: Vec::with_capacity(0),
-            expires: SystemTime::now(),
-        }
-    }
 }
 
 /// Different query types for querying the leaderboards
@@ -77,17 +68,17 @@ impl LeaderboardGroup {
     /// Leaderboard contents are cached for 1 hour
     const LIFETIME: Duration = Duration::from_secs(60 * 60);
 
+    /// Creates a new leaderboard group which has an expiry time set
+    /// to the LIFETIME and uses the provided values
+    pub fn new(values: Vec<LeaderboardEntry>) -> Self {
+        let expires = SystemTime::now() + Self::LIFETIME;
+        Self { expires, values }
+    }
+
     /// Checks whether this group is expired
     pub fn is_expired(&self) -> bool {
         let now = SystemTime::now();
         now.ge(&self.expires)
-    }
-
-    /// Updates the stored values for this group and sets a new
-    /// expiry time for the value
-    pub fn update(&mut self, values: Vec<LeaderboardEntry>) {
-        self.expires = SystemTime::now() + Self::LIFETIME;
-        self.values = values;
     }
 
     /// Resolves the provided query on this entity group returning the LResult if it
@@ -141,6 +132,7 @@ impl LeaderboardGroup {
 }
 
 /// Type of leaderboard entity
+#[derive(Debug, Hash, PartialEq, Eq)]
 pub enum LeaderboardType {
     N7Rating,
     ChallengePoints,

@@ -1,7 +1,5 @@
 use crate::{
-    servers::http::ext::ErrorStatusCode,
-    services::leaderboard::{models::*, Leaderboard},
-    state::GlobalState,
+    servers::http::ext::ErrorStatusCode, services::leaderboard::models::*, state::GlobalState,
     utils::types::PlayerID,
 };
 use axum::{
@@ -73,7 +71,7 @@ async fn get_leaderboard(
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
     let services = GlobalState::services();
-    let leaderboard: &Leaderboard = &services.leaderboard;
+    let leaderboard = &services.leaderboard;
 
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
@@ -83,9 +81,10 @@ async fn get_leaderboard(
     // Calculate the start and ending indexes
     let start: usize = query.offset * count;
 
-    let lock = leaderboard.get(ty).await;
-
-    let group = lock.read().await;
+    let group = leaderboard
+        .get(ty)
+        .await
+        .ok_or(LeaderboardError::ServerError)?;
 
     let (entries, more) = match group.resolve(LQuery::Normal { start, count }) {
         LResult::Many(many, more) => (many, more),
@@ -114,11 +113,12 @@ async fn get_player_ranking(
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
     let services = GlobalState::services();
-    let leaderboard: &Leaderboard = &services.leaderboard;
+    let leaderboard = &services.leaderboard;
 
-    let lock = leaderboard.get(ty).await;
-
-    let group = lock.read().await;
+    let group = leaderboard
+        .get(ty)
+        .await
+        .ok_or(LeaderboardError::ServerError)?;
 
     let entry = match group.resolve(LQuery::Filtered { player_id }) {
         LResult::One(value) => Ok(value),

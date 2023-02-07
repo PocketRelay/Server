@@ -1,5 +1,11 @@
 use crate::{
-    servers::main::{models::stats::*, session::SessionAddr},
+    servers::main::{
+        models::{
+            errors::{ServerError, ServerResult},
+            stats::*,
+        },
+        session::SessionAddr,
+    },
     services::leaderboard::models::*,
     state::GlobalState,
     utils::components::{Components as C, Stats as S},
@@ -31,7 +37,7 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
     router.route(C::Stats(S::GetLeaderboardGroup), handle_leaderboard_group);
 }
 
-async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> Response {
+async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> ServerResult<Response> {
     let query = &*req;
     handle_leaderboard_query(
         &query.name,
@@ -44,7 +50,9 @@ async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> Response
     .await
 }
 
-async fn handle_centered_leaderboard(req: Request<CenteredLeaderboardRequest>) -> Response {
+async fn handle_centered_leaderboard(
+    req: Request<CenteredLeaderboardRequest>,
+) -> ServerResult<Response> {
     let query = &*req;
     handle_leaderboard_query(
         &query.name,
@@ -56,7 +64,9 @@ async fn handle_centered_leaderboard(req: Request<CenteredLeaderboardRequest>) -
     )
     .await
 }
-async fn handle_filtered_leaderboard(req: Request<FilteredLeaderboardRequest>) -> Response {
+async fn handle_filtered_leaderboard(
+    req: Request<FilteredLeaderboardRequest>,
+) -> ServerResult<Response> {
     let query = &*req;
     handle_leaderboard_query(
         &query.name,
@@ -83,16 +93,21 @@ async fn handle_filtered_leaderboard(req: Request<FilteredLeaderboardRequest>) -
 ///     "POFF": 0
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(req: EntityCountRequest) -> EntityCountResponse {
+async fn handle_leaderboard_entity_count(
+    req: EntityCountRequest,
+) -> ServerResult<EntityCountResponse> {
     let services = GlobalState::services();
     let leaderboard = &services.leaderboard;
     let ty = LeaderboardType::from_value(&req.name);
 
-    let lock = leaderboard.get(ty).await;
-    let group = lock.read().await;
+    let group = leaderboard
+        .get(ty)
+        .await
+        .ok_or(ServerError::ServerUnavailableFinal)?;
+
     let count = group.values.len();
 
-    EntityCountResponse { count }
+    Ok(EntityCountResponse { count })
 }
 
 /// Handler function for handling leaderboard querys and returning the resulting
@@ -104,19 +119,21 @@ async fn handle_leaderboard_query<R: Decodable>(
     name: &str,
     query: LQuery,
     req: &Request<R>,
-) -> Response {
+) -> ServerResult<Response> {
     let services = GlobalState::services();
     let leaderboard = &services.leaderboard;
     let ty = LeaderboardType::from_value(name);
-    let lock = leaderboard.get(ty).await;
-    let group = lock.read().await;
+    let group = leaderboard
+        .get(ty)
+        .await
+        .ok_or(ServerError::ServerUnavailableFinal)?;
     let response = match group.resolve(query) {
         LResult::Many(values, _) => LeaderboardResponse::Many(values),
         LResult::One(value) => LeaderboardResponse::One(value),
         LResult::Empty => LeaderboardResponse::Empty,
     };
 
-    req.response(response)
+    Ok(req.response(response))
 }
 
 fn get_locale_name(code: &str) -> &str {
