@@ -2,7 +2,6 @@ use super::AttrMap;
 
 /// Rulesets are fairly cheap to clone. Rule values are not usually
 /// very long.
-#[derive(Clone)]
 pub struct RuleSet {
     /// Map rule provided in the matchmaking request
     map_rule: Option<String>,

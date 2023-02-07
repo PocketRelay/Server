@@ -132,9 +132,9 @@ async fn handle_auth_request(
 /// `token`     The authentication token
 /// `player_id` The player ID
 async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
-    let jwt = GlobalState::jwt();
+    let services = GlobalState::services();
 
-    let player = match jwt.verify(token) {
+    let player = match services.jwt.verify(token) {
         Ok(value) => value,
         Err(err) => {
             error!("Error while attempt to resume invalid session: {err:?}");
@@ -190,8 +190,10 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
         return Err(ServerError::ServerUnavailable);
     }
 
+    let services = GlobalState::services();
+
     // Ensure the retriever is enabled
-    let Some(retriever) = GlobalState::retriever() else {
+    let Some(retriever) = &services.retriever else {
         error!("Unable to authenticate Origin: Retriever is disabled or unavailable");
         return Err(ServerError::ServerUnavailable);
     };

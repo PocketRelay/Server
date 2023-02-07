@@ -22,7 +22,7 @@ pub trait AuthVerifier {
 }
 
 impl AuthVerifier for () {
-    fn verify(player: &Player) -> bool {
+    fn verify(_player: &Player) -> bool {
         true
     }
 }
@@ -63,9 +63,9 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
                 return Err(TokenError::InvalidToken);
             }
 
-            let jwt = GlobalState::jwt();
+            let services = GlobalState::services();
 
-            let claim = match jwt.verify(token) {
+            let claim = match services.jwt.verify(token) {
                 Ok(value) => value,
                 Err(err) => {
                     return Err(match err.kind() {

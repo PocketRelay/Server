@@ -1,6 +1,4 @@
-use crate::{
-    env, game::manager::Games, leaderboard::Leaderboard, retriever::Retriever, utils::jwt::Jwt,
-};
+use crate::{env, services::Services};
 use database::{self, DatabaseConnection, DatabaseType};
 use tokio::join;
 
@@ -8,11 +6,8 @@ use tokio::join;
 /// will be unset until the value is initialized then it will be
 /// set
 pub struct GlobalState {
-    pub games: Games,
     pub db: DatabaseConnection,
-    pub retriever: Option<Retriever>,
-    pub leaderboard: Leaderboard,
-    pub jwt: Jwt,
+    pub services: Services,
 }
 
 /// Static global state value
@@ -24,19 +19,9 @@ impl GlobalState {
     /// called before this state is accessed or else the app will
     /// panic and must not be called more than once.
     pub async fn init() {
-        let (db, retriever, jwt) = join!(Self::init_database(), Retriever::new(), Jwt::new());
-
-        let games: Games = Games::default();
-        let leaderboard: Leaderboard = Leaderboard::default();
-
+        let (db, services) = join!(Self::init_database(), Services::init());
         unsafe {
-            GLOBAL_STATE = Some(GlobalState {
-                db,
-                games,
-                retriever,
-                leaderboard,
-                jwt,
-            });
+            GLOBAL_STATE = Some(GlobalState { db, services });
         }
     }
 
@@ -66,45 +51,10 @@ impl GlobalState {
         }
     }
 
-    /// Obtains a static reference to the games manager stored
-    /// on the global state
-    pub fn games() -> &'static Games {
+    pub fn services() -> &'static Services {
         unsafe {
             match &GLOBAL_STATE {
-                Some(value) => &value.games,
-                None => panic!("Global state not initialized"),
-            }
-        }
-    }
-
-    /// Obtains a option to the static reference of the retriever
-    /// stored on the global state if one exists
-    pub fn retriever() -> Option<&'static Retriever> {
-        unsafe {
-            match &GLOBAL_STATE {
-                Some(value) => value.retriever.as_ref(),
-                None => panic!("Global state not initialized"),
-            }
-        }
-    }
-
-    /// Obtains a static reference to the leaderboard
-    /// stored on the global state if one exists
-    pub fn leaderboard() -> &'static Leaderboard {
-        unsafe {
-            match &GLOBAL_STATE {
-                Some(value) => &value.leaderboard,
-                None => panic!("Global state not initialized"),
-            }
-        }
-    }
-
-    /// Obtains a static reference to the jwt sate
-    /// stored on the global state if one exists
-    pub fn jwt() -> &'static Jwt {
-        unsafe {
-            match &GLOBAL_STATE {
-                Some(value) => &value.jwt,
+                Some(value) => &value.services,
                 None => panic!("Global state not initialized"),
             }
         }

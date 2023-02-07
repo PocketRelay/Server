@@ -1,5 +1,5 @@
 use crate::{
-    game::{
+    services::game::{
         models::{GameState, PlayerState, RemoveReason},
         rules::RuleSet,
         AttrMap, GameModifyAction,

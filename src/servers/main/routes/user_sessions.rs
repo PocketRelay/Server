@@ -45,9 +45,9 @@ async fn handle_resume_session(
     req: Request<ResumeSessionRequest>,
 ) -> ServerResult<Response> {
     let db = GlobalState::database();
-    let jwt = GlobalState::jwt();
+    let services = GlobalState::services();
 
-    let player = match jwt.verify(&req.session_token) {
+    let player = match services.jwt.verify(&req.session_token) {
         Ok(value) => value,
         Err(err) => {
             error!("Error while attempt to resume invalid session: {err:?}");

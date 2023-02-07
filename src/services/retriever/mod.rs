@@ -1,7 +1,6 @@
 //! Module for retrieving data from the official Mass Effect 3 Servers
 use crate::{
     env,
-    retriever::models::InstanceRequest,
     utils::{
         components::{Components, Redirector},
         models::{InstanceDetails, Port},
@@ -17,6 +16,8 @@ use blaze_pk::{
 use blaze_ssl_async::stream::BlazeStream;
 use log::{debug, error, log_enabled};
 use tokio::io::{self, AsyncWriteExt};
+
+use models::InstanceRequest;
 
 mod models;
 pub mod origin;

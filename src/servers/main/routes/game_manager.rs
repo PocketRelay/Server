@@ -1,5 +1,6 @@
+use std::sync::Arc;
+
 use crate::{
-    game::{player::GamePlayer, GameModifyAction, RemovePlayerType},
     servers::main::{
         models::{
             errors::{ServerError, ServerResult},
@@ -7,11 +8,11 @@ use crate::{
         },
         session::Session,
     },
-    state::GlobalState,
-    utils::{
-        components::{Components as C, GameManager as G},
-        types::GameID,
+    services::game::{
+        manager::TryAddResult, player::GamePlayer, GameAddr, GameModifyAction, RemovePlayerType,
     },
+    state::GlobalState,
+    utils::components::{Components as C, GameManager as G},
 };
 use blaze_pk::router::Router;
 use log::info;
@@ -99,9 +100,21 @@ async fn handle_create_game(
     let player: GamePlayer = session
         .try_into_player()
         .ok_or(ServerError::FailedNoLoginAction)?;
+    let services = GlobalState::services();
 
-    let games = GlobalState::games();
-    let game_id: GameID = games.create_game(req.attributes, req.setting, player).await;
+    let addr: GameAddr = match services
+        .game_manager
+        .create(req.attributes, req.setting, player)
+        .await
+    {
+        Some(value) => value,
+        None => return Err(ServerError::ServerUnavailable),
+    };
+
+    let game_id = addr.id;
+
+    services.matchmaking.created(addr);
+
     Ok(CreateGameResponse { game_id })
 }
 
@@ -147,8 +160,8 @@ async fn handle_create_game(
 /// }
 /// ```
 async fn handle_game_modify(req: GameModifyRequest) {
-    let games = GlobalState::games();
-    games.modify_game(req.game_id, req.action);
+    let services = GlobalState::services();
+    services.game_manager.modify(req.game_id, req.action);
 }
 
 /// Handles removing a player from a game
@@ -165,8 +178,8 @@ async fn handle_game_modify(req: GameModifyRequest) {
 /// }
 /// ```
 async fn handle_remove_player(req: RemovePlayerRequest) {
-    let games = GlobalState::games();
-    games.remove_player(
+    let services = GlobalState::services();
+    services.game_manager.remove_player(
         req.game_id,
         RemovePlayerType::Player(req.player_id, req.reason),
     );
@@ -194,8 +207,9 @@ async fn handle_update_mesh_connection(session: &mut Session, req: UpdateMeshReq
         None => return,
     };
 
-    let games = GlobalState::games();
-    games.modify_game(
+    let services = GlobalState::services();
+
+    services.game_manager.modify(
         req.game_id,
         GameModifyAction::UpdateMeshConnection {
             session: session.id,
@@ -336,8 +350,20 @@ async fn handle_start_matchmaking(
 
     info!("Player {} started matchmaking", player.player.display_name);
 
-    let games = GlobalState::games();
-    games.add_or_queue(player, req.rules);
+    let services = GlobalState::services();
+
+    let rule_set = Arc::new(req.rules);
+    match services
+        .game_manager
+        .try_add(player, rule_set.clone())
+        .await
+    {
+        Some(TryAddResult::Success) => {}
+        Some(TryAddResult::Failure(player)) => {
+            services.matchmaking.queue(player, rule_set);
+        }
+        None => return Err(ServerError::ServerUnavailable),
+    };
 
     Ok(MatchmakingResponse { id: session.id })
 }

@@ -55,10 +55,12 @@ async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, Aut
         .await
         .map_err(|_| AuthError::ServerError)?
         .ok_or(AuthError::InvalidCredentails)?;
+    let services = GlobalState::services();
 
-    let jwt = GlobalState::jwt();
-
-    let token = jwt.claim(&player).map_err(|_| AuthError::ServerError)?;
+    let token = services
+        .jwt
+        .claim(&player)
+        .map_err(|_| AuthError::ServerError)?;
 
     Ok(Json(TokenResponse { token }))
 }

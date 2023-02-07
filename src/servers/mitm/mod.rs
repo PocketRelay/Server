@@ -2,7 +2,7 @@
 //! to the correct address for the main server.
 
 use crate::{
-    retriever::Retriever,
+    services::retriever::Retriever,
     state::GlobalState,
     utils::{components::Components, env, packet::append_packet_decoded},
 };
@@ -21,8 +21,10 @@ use tokio::{
 /// recieved by this server are forwarded to the official servers and are logged
 /// using the debug logging.
 pub async fn start_server() {
+    let services = GlobalState::services();
+
     // MITM server is unable to start if the retriever is disabled or fails to connect
-    let Some(retriever) = GlobalState::retriever() else {
+    let Some(retriever) = services.retriever.as_ref() else {
         error!("Server is in MITM mode but was unable to connect to the official servers. Stopping server.");
         panic!();
     };

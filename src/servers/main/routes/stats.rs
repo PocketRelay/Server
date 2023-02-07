@@ -1,6 +1,6 @@
 use crate::{
-    leaderboard::models::*,
     servers::main::{models::stats::*, session::Session},
+    services::leaderboard::models::*,
     state::GlobalState,
     utils::components::{Components as C, Stats as S},
 };
@@ -84,7 +84,8 @@ async fn handle_filtered_leaderboard(req: Request<FilteredLeaderboardRequest>) -
 /// }
 /// ```
 async fn handle_leaderboard_entity_count(req: EntityCountRequest) -> EntityCountResponse {
-    let leaderboard = GlobalState::leaderboard();
+    let services = GlobalState::services();
+    let leaderboard = &services.leaderboard;
     let ty = LeaderboardType::from_value(&req.name);
 
     let lock = leaderboard.get(ty).await;
@@ -104,7 +105,8 @@ async fn handle_leaderboard_query<R: Decodable>(
     query: LQuery,
     req: &Request<R>,
 ) -> Response {
-    let leaderboard = GlobalState::leaderboard();
+    let services = GlobalState::services();
+    let leaderboard = &services.leaderboard;
     let ty = LeaderboardType::from_value(name);
     let lock = leaderboard.get(ty).await;
     let group = lock.read().await;

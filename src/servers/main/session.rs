@@ -6,7 +6,7 @@ use super::models::{
     session::{SessionUpdate, SetSession},
 };
 use crate::{
-    game::{player::GamePlayer, RemovePlayerType},
+    services::game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
     utils::{
         components::{self, Components, UserSessions},
@@ -395,9 +395,9 @@ impl Session {
         // Update the player value
         let player = self.player.insert(player);
 
-        let jwt = GlobalState::jwt();
+        let services = GlobalState::services();
 
-        let token = match jwt.claim(player) {
+        let token = match services.jwt.claim(player) {
             Ok(value) => value,
             Err(err) => {
                 error!("Unable to create session token for player: {:?}", err);
@@ -441,11 +441,13 @@ impl Session {
     /// matchmaking queue
     pub fn remove_games(&mut self) {
         let game = self.game.take();
-        let games = GlobalState::games();
+        let services = GlobalState::services();
         if let Some(game_id) = game {
-            games.remove_player(game_id, RemovePlayerType::Session(self.id));
+            services
+                .game_manager
+                .remove_player(game_id, RemovePlayerType::Session(self.id))
         } else {
-            games.unqueue_session(self.id);
+            services.matchmaking.unqueue_session(self.id);
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
-    leaderboard::{models::*, Leaderboard},
     servers::http::ext::ErrorStatusCode,
+    services::leaderboard::{models::*, Leaderboard},
     state::GlobalState,
     utils::types::PlayerID,
 };
@@ -72,8 +72,8 @@ async fn get_leaderboard(
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-
-    let leaderboard: &Leaderboard = GlobalState::leaderboard();
+    let services = GlobalState::services();
+    let leaderboard: &Leaderboard = &services.leaderboard;
 
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
@@ -113,7 +113,8 @@ async fn get_player_ranking(
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-    let leaderboard: &Leaderboard = GlobalState::leaderboard();
+    let services = GlobalState::services();
+    let leaderboard: &Leaderboard = &services.leaderboard;
 
     let lock = leaderboard.get(ty).await;
 

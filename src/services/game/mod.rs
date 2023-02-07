@@ -12,6 +12,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
 pub mod manager;
+pub mod matchmaking;
 pub mod models;
 pub mod player;
 pub mod rules;
@@ -53,9 +54,29 @@ pub struct GameAddr {
 }
 
 impl GameAddr {
+    pub fn spawn(id: GameID, attributes: AttrMap, setting: u16) -> GameAddr {
+        let (sender, reciever) = mpsc::unbounded_channel();
+        let this = Game {
+            id,
+            state: GameState::Init,
+            setting,
+            attributes,
+            players: Vec::new(),
+            next_slot: 0,
+            reciever,
+        };
+        // Spawn the game processing loop
+        tokio::spawn(this.process());
+        GameAddr { id, sender }
+    }
+
     #[inline]
     pub fn send(&self, action: GameModifyAction) {
         self.sender.send(action).ok();
+    }
+
+    pub fn add_player(&self, player: GamePlayer) {
+        self.sender.send(GameModifyAction::AddPlayer(player)).ok();
     }
 
     pub async fn remove_player(&self, ty: RemovePlayerType) -> bool {
@@ -136,49 +157,30 @@ impl Game {
     /// a game at one time. Used to determine a games full state
     const MAX_PLAYERS: usize = 4;
 
-    pub fn spawn(id: GameID, attributes: AttrMap, setting: u16) -> GameAddr {
-        let (sender, reciever) = mpsc::unbounded_channel();
-        let game = Self {
-            id,
-            state: GameState::Init,
-            setting,
-            attributes,
-            players: Vec::new(),
-            next_slot: 0,
-            reciever,
-        };
-        // Spawn the game processing loop
-        tokio::spawn(async move {
-            let mut game = game;
-            while let Some(action) = game.reciever.recv().await {
-                game.handle(action);
-            }
-        });
-        GameAddr { id, sender }
-    }
-
-    fn handle(&mut self, action: GameModifyAction) {
-        match action {
-            GameModifyAction::AddPlayer(player) => self.add_player(player),
-            GameModifyAction::SetState(state) => self.set_state(state),
-            GameModifyAction::SetSetting(setting) => self.set_setting(setting),
-            GameModifyAction::SetAttributes(attributes) => self.set_attributes(attributes),
-            GameModifyAction::UpdateMeshConnection {
-                session,
-                target,
-                state,
-            } => self.update_mesh_connection(session, target, state),
-            GameModifyAction::RemovePlayer(ty, sender) => {
-                let is_empty = self.remove_player(ty);
-                sender.send(is_empty).ok();
-            }
-            GameModifyAction::CheckJoinable(rules, sender) => {
-                let join_state = self.check_joinable(rules);
-                sender.send(join_state).ok();
-            }
-            GameModifyAction::Snapshot(sender) => {
-                let snapshot = self.snapshot();
-                sender.send(snapshot).ok();
+    async fn process(mut self) {
+        while let Some(action) = self.reciever.recv().await {
+            match action {
+                GameModifyAction::AddPlayer(player) => self.add_player(player),
+                GameModifyAction::SetState(state) => self.set_state(state),
+                GameModifyAction::SetSetting(setting) => self.set_setting(setting),
+                GameModifyAction::SetAttributes(attributes) => self.set_attributes(attributes),
+                GameModifyAction::UpdateMeshConnection {
+                    session,
+                    target,
+                    state,
+                } => self.update_mesh_connection(session, target, state),
+                GameModifyAction::RemovePlayer(ty, sender) => {
+                    let is_empty = self.remove_player(ty);
+                    sender.send(is_empty).ok();
+                }
+                GameModifyAction::CheckJoinable(rules, sender) => {
+                    let join_state = self.check_joinable(rules);
+                    sender.send(join_state).ok();
+                }
+                GameModifyAction::Snapshot(sender) => {
+                    let snapshot = self.snapshot();
+                    sender.send(snapshot).ok();
+                }
             }
         }
     }
