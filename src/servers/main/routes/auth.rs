@@ -11,7 +11,6 @@ use crate::{
         components::{Authentication as A, Components as C},
         env,
         hashing::{hash_password, verify_password},
-        validate::is_email,
     },
 };
 use blaze_pk::{
@@ -23,6 +22,7 @@ use log::{debug, error, warn};
 use std::borrow::Cow;
 use std::path::Path;
 use tokio::fs::read_to_string;
+use validator::validate_email;
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
@@ -160,7 +160,7 @@ async fn handle_login_email(
     password: &str,
 ) -> ServerResult<Player> {
     // Ensure the email is actually valid
-    if !is_email(email) {
+    if !validate_email(email) {
         return Err(ServerError::InvalidEmail);
     }
 
@@ -372,7 +372,7 @@ async fn handle_login_persona(
 /// }
 /// ```
 async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> {
-    if !is_email(&req.email) {
+    if !validate_email(&req.email) {
         return Err(ServerError::InvalidEmail);
     }
     debug!("Got request for password rest for email: {}", &req.email);
@@ -417,7 +417,7 @@ async fn handle_create_account(
     req: Request<CreateAccountRequest>,
 ) -> ServerResult<Response> {
     let email = &req.email;
-    if !is_email(email) {
+    if !validate_email(email) {
         return Err(ServerError::InvalidEmail);
     }
 

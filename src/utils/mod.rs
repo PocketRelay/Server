@@ -11,4 +11,3 @@ pub mod packet;
 pub mod parsing;
 pub mod random;
 pub mod types;
-pub mod validate;

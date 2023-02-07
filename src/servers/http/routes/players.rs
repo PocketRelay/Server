@@ -1,7 +1,7 @@
 use crate::{
     servers::http::{ext::ErrorStatusCode, middleware::auth::AdminAuth},
     state::GlobalState,
-    utils::{hashing::hash_password, types::PlayerID, validate::is_email},
+    utils::{hashing::hash_password, types::PlayerID},
 };
 use axum::{
     extract::{Path, Query},
@@ -13,6 +13,7 @@ use axum::{
 use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use std::fmt::Display;
+use validator::validate_email;
 
 /// Router function creates a new router with all the underlying
 /// routes for this file.
@@ -148,7 +149,7 @@ async fn modify_player(
 
     let email = if let Some(email) = req.email {
         // Ensure the email is valid email format
-        if !is_email(&email) {
+        if !validate_email(&email) {
             return Err(PlayersError::InvalidEmail);
         }
 
@@ -210,7 +211,7 @@ async fn create_player(
 ) -> PlayersResult<Player> {
     let db = GlobalState::database();
     let email = req.email;
-    if !is_email(&email) {
+    if !validate_email(&email) {
         return Err(PlayersError::InvalidEmail);
     }
     let exists = Player::is_email_taken(&db, &email).await?;

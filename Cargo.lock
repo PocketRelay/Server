@@ -1463,7 +1463,6 @@ dependencies = [
  "log",
  "log4rs",
  "pocket-relay-database",
- "regex",
  "reqwest",
  "rust-embed",
  "serde",
