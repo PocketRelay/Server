@@ -9,9 +9,7 @@ use crate::{
     state::GlobalState,
     utils::{
         components::{Components as C, Util as U},
-        constants,
-        dmap::load_dmap,
-        env,
+        constants, env,
         models::Port,
     },
 };
@@ -179,7 +177,7 @@ async fn handle_fetch_client_config(req: FetchConfigRequest) -> ServerResult<Fet
     let config = match req.id.as_ref() {
         "ME3_DATA" => data_config(),
         "ME3_MSG" => messages(),
-        "ME3_ENT" => load_dmap(ME3_ENT),
+        "ME3_ENT" => load_entitlements(),
         "ME3_DIME" => {
             let mut map = TdfMap::with_capacity(1);
             map.insert("Config", ME3_DIME);
@@ -202,6 +200,16 @@ async fn handle_fetch_client_config(req: FetchConfigRequest) -> ServerResult<Fet
     };
 
     Ok(FetchConfigResponse { config })
+}
+
+/// Loads the entitlements from the entitlements file and parses
+/// it as a
+fn load_entitlements() -> TdfMap<String, String> {
+    let mut map = TdfMap::<String, String>::new();
+    for (key, value) in ME3_ENT.lines().filter_map(|line| line.split_once('=')) {
+        map.insert(key, value)
+    }
+    map
 }
 
 /// Loads the local coalesced if one is present falling back
