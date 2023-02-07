@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::utils::random::generate_random_string;
+use crate::utils::random::random_string;
 use database::Player;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use log::error;
@@ -34,7 +34,7 @@ impl Jwt {
         let secret = match secret {
             Some(value) => value,
             None => {
-                let value = generate_random_string(64);
+                let value = random_string(64);
                 if let Err(err) = write(token_path, &value).await {
                     error!("Failed to write secret token to secret.bin: {:?}", err);
                 }

@@ -33,14 +33,14 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::utils::random::generate_random_string;
+    use crate::utils::random::random_string;
 
     use super::{hash_password, verify_password};
 
     /// Tests that password hashing works correctly
     #[test]
     fn test_password_hashing() {
-        let value = generate_random_string(50);
+        let value = random_string(50);
         let hash = hash_password(&value).unwrap();
         let valid = verify_password(&value, &hash);
         assert_eq!(valid, true)

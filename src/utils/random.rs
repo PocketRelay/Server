@@ -1,6 +1,6 @@
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 
-pub fn generate_random_string(len: usize) -> String {
+pub fn random_string(len: usize) -> String {
     const RANGE: u32 = 26 + 26 + 10;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                 abcdefghijklmnopqrstuvwxyz\
@@ -26,11 +26,11 @@ pub fn generate_random_string(len: usize) -> String {
 
 #[cfg(test)]
 mod test {
-    use super::generate_random_string;
+    use super::random_string;
 
     #[test]
     fn test_random() {
-        let value = generate_random_string(128);
+        let value = random_string(128);
         println!("Generated: {value:?}");
         assert!(value.len() == 128)
     }
