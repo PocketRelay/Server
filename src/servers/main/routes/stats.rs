@@ -1,5 +1,5 @@
 use crate::{
-    servers::main::{models::stats::*, session::Session},
+    servers::main::{models::stats::*, session::SessionAddr},
     services::leaderboard::models::*,
     state::GlobalState,
     utils::components::{Components as C, Stats as S},
@@ -14,7 +14,7 @@ use blaze_pk::{
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Session>) {
+pub fn route(router: &mut Router<C, SessionAddr>) {
     router.route(
         C::Stats(S::GetLeaderboardEntityCount),
         handle_leaderboard_entity_count,

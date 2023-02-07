@@ -259,7 +259,7 @@ impl Serialize for PlayerDataMap {
 async fn all_data(Path(player_id): Path<PlayerID>, _: AdminAuth) -> PlayersResult<PlayerDataMap> {
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
-    let data = player.all_data(&db).await?;
+    let data = Player::all_data(player.id, &db).await?;
     Ok(Json(PlayerDataMap(data)))
 }
 
@@ -294,8 +294,7 @@ async fn set_data(
     Json(req): Json<SetDataRequest>,
 ) -> PlayersResult<PlayerData> {
     let db = GlobalState::database();
-    let player: Player = find_player(&db, player_id).await?;
-    let data = player.set_data(&db, key, req.value).await?;
+    let data = Player::set_data(player_id, &db, key, req.value).await?;
     Ok(Json(data))
 }
 /// Route for updating the class for a player with the provided {id}

@@ -5,7 +5,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
-        session::Session,
+        session::SessionAddr,
     },
     state::GlobalState,
     utils::components::{Components as C, UserSessions as U},
@@ -21,7 +21,7 @@ use log::error;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Session>) {
+pub fn route(router: &mut Router<C, SessionAddr>) {
     router.route(C::UserSessions(U::ResumeSession), handle_resume_session);
     router.route(C::UserSessions(U::UpdateNetworkInfo), handle_update_network);
     router.route(
@@ -41,7 +41,7 @@ pub fn route(router: &mut Router<C, Session>) {
 /// }
 /// ```
 async fn handle_resume_session(
-    session: &mut Session,
+    session: &mut SessionAddr,
     req: Request<ResumeSessionRequest>,
 ) -> ServerResult<Response> {
     let db = GlobalState::database();
@@ -68,7 +68,7 @@ async fn handle_resume_session(
         }
     };
 
-    let (player, session_token) = session.set_player(player)?;
+    let (player, session_token) = session.set_player(player).await?;
 
     let res = AuthResponse {
         player,
@@ -108,7 +108,7 @@ async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-async fn handle_update_network(session: &mut Session, req: UpdateNetworkRequest) {
+async fn handle_update_network(session: &mut SessionAddr, req: UpdateNetworkRequest) {
     session.set_network_info(req.address, req.qos);
 }
 
@@ -121,6 +121,6 @@ async fn handle_update_network(session: &mut Session, req: UpdateNetworkRequest)
 ///     "HWFG": 0
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: &mut Session, req: HardwareFlagRequest) {
+async fn handle_update_hardware_flag(session: &mut SessionAddr, req: HardwareFlagRequest) {
     session.set_hardware_flag(req.hardware_flag);
 }

@@ -4,7 +4,7 @@ use crate::{
             auth::*,
             errors::{ServerError, ServerResult},
         },
-        session::Session,
+        session::SessionAddr,
     },
     state::GlobalState,
     utils::{
@@ -28,7 +28,7 @@ use tokio::fs::read_to_string;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Session>) {
+pub fn route(router: &mut Router<C, SessionAddr>) {
     router.route(C::Authentication(A::Logout), handle_logout);
     router.route(C::Authentication(A::SilentLogin), handle_auth_request);
     router.route(C::Authentication(A::OriginLogin), handle_auth_request);
@@ -103,7 +103,7 @@ pub fn route(router: &mut Router<C, Session>) {
 /// }
 /// ```
 async fn handle_auth_request(
-    session: &mut Session,
+    session: &mut SessionAddr,
     req: Request<AuthRequest>,
 ) -> ServerResult<Response> {
     let silent = req.is_silent();
@@ -114,7 +114,7 @@ async fn handle_auth_request(
         AuthRequest::Origin { token } => handle_login_origin(&db, token).await,
     }?;
 
-    let (player, session_token) = session.set_player(player)?;
+    let (player, session_token) = session.set_player(player).await?;
 
     let res = AuthResponse {
         player,
@@ -254,8 +254,8 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
 /// ID: 8
 /// Content: {}
 /// ```
-async fn handle_logout(session: &mut Session) {
-    session.player = None;
+async fn handle_logout(session: &mut SessionAddr) {
+    session.clear_player();
 }
 
 /// Handles list user entitlements 2 responses requests which contains information
@@ -348,10 +348,13 @@ async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-async fn handle_login_persona(session: &mut Session, req: Request<()>) -> ServerResult<Response> {
-    let player: &Player = session
-        .player
-        .as_ref()
+async fn handle_login_persona(
+    session: &mut SessionAddr,
+    req: Request<()>,
+) -> ServerResult<Response> {
+    let player: Player = session
+        .get_player()
+        .await?
         .ok_or(ServerError::FailedNoLoginAction)?;
     let res = PersonaResponse { player };
     Ok(req.response(res))
@@ -410,7 +413,7 @@ async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> 
 /// ```
 ///
 async fn handle_create_account(
-    session: &mut Session,
+    session: &mut SessionAddr,
     req: Request<CreateAccountRequest>,
 ) -> ServerResult<Response> {
     let email = &req.email;
@@ -454,7 +457,7 @@ async fn handle_create_account(
             }
         };
 
-    let (player, session_token) = session.set_player(player)?;
+    let (player, session_token) = session.set_player(player).await?;
 
     let res = AuthResponse {
         player,
@@ -554,11 +557,11 @@ async fn handle_legal_content(ty: LegalType) -> LegalContent {
 /// ID: 35
 /// Content: {}
 /// ```
-async fn handle_get_auth_token(session: &mut Session) -> ServerResult<GetTokenResponse> {
+async fn handle_get_auth_token(session: &mut SessionAddr) -> ServerResult<GetTokenResponse> {
     let token: String = session
-        .player
-        .as_ref()
-        .map(|player| format!("{:X}", player.id))
+        .get_player_id()
+        .await
+        .map(|player| format!("{:X}", player))
         .ok_or(ServerError::FailedNoLoginAction)?;
     Ok(GetTokenResponse { token })
 }

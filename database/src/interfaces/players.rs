@@ -72,8 +72,11 @@ impl Player {
     }
 
     /// Retrieves all the player data for this player
-    pub async fn all_data(&self, db: &DatabaseConnection) -> DbResult<Vec<PlayerData>> {
-        self.find_related(player_data::Entity).all(db).await
+    pub async fn all_data(id: u32, db: &DatabaseConnection) -> DbResult<Vec<PlayerData>> {
+        player_data::Entity::find()
+            .filter(player_data::Column::PlayerId.eq(id))
+            .all(db)
+            .await
     }
 
     /// Sets the key value data for the provided player. If the data exists then
@@ -84,14 +87,17 @@ impl Player {
     /// `key`   The data key
     /// `value` The data value
     pub async fn set_data(
-        &self,
+        id: u32,
         db: &DatabaseConnection,
         key: String,
         value: String,
     ) -> DbResult<PlayerData> {
-        match self
-            .find_related(player_data::Entity)
-            .filter(player_data::Column::Key.eq(key.clone()))
+        match player_data::Entity::find()
+            .filter(
+                player_data::Column::PlayerId
+                    .eq(id)
+                    .and(player_data::Column::Key.eq(&key as &str)),
+            )
             .one(db)
             .await?
         {
@@ -103,7 +109,7 @@ impl Player {
             }
             None => {
                 player_data::ActiveModel {
-                    player_id: Set(self.id),
+                    player_id: Set(id),
                     key: Set(key),
                     value: Set(value),
                     ..Default::default()

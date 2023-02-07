@@ -1,10 +1,8 @@
 //! Sessions are client connections to the main server with associated
 //! data such as player data for when they become authenticated and
 //! networking data.
-use super::models::{
-    errors::{ServerError, ServerResult},
-    session::{SessionUpdate, SetSession},
-};
+use super::models::errors::{ServerError, ServerResult};
+use crate::utils::types::PlayerID;
 use crate::{
     services::game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
@@ -15,6 +13,7 @@ use crate::{
         types::{GameID, SessionID},
     },
 };
+use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
 use blaze_pk::{
     packet::{Packet, PacketComponents, PacketType},
     router::{Router, State},
@@ -22,7 +21,11 @@ use blaze_pk::{
 use database::Player;
 use log::{debug, error, log_enabled};
 use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
-use tokio::{net::TcpStream, select, sync::mpsc};
+use tokio::{
+    net::TcpStream,
+    select,
+    sync::{mpsc, oneshot},
+};
 
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
@@ -35,17 +38,17 @@ pub struct Session {
     stream: TcpStream,
 
     /// The socket connection address of the client
-    pub socket_addr: SocketAddr,
+    socket_addr: SocketAddr,
 
     /// If the session is authenticated it will have a linked
     /// player model from the database
-    pub player: Option<Player>,
+    player: Option<Player>,
 
     /// Networking information
-    pub net: NetData,
+    net: NetData,
 
     /// The id of the game if connected to one
-    pub game: Option<GameID>,
+    game: Option<GameID>,
 
     /// The queue of packets that need to be written
     queue: VecDeque<Packet>,
@@ -55,13 +58,13 @@ pub struct Session {
     flush_queued: bool,
 
     /// Arc to router to use for routing
-    router: Arc<Router<Components, Session>>,
+    router: Arc<Router<Components, SessionAddr>>,
 
     /// Internal address used for routing can be cloned and used elsewhere
     addr: SessionAddr,
 }
 
-impl State for Session {}
+impl State for SessionAddr {}
 
 /// Address to a session which allows manipulating sessions asyncronously
 /// using mpsc channels without actually having access to the session itself
@@ -87,11 +90,83 @@ impl SessionAddr {
     pub fn set_game(&self, game: Option<GameID>) {
         self.sender.send(Message::SetGame(game)).ok();
     }
+
+    pub fn push_details(&self) {
+        self.sender.send(Message::PushDetails).ok();
+    }
+    pub fn clear_player(&self) {
+        self.sender.send(Message::ClearPlayer).ok();
+    }
+    pub fn remove_games(&self) {
+        self.sender.send(Message::RemoveGames).ok();
+    }
+
+    pub async fn try_into_player(&self) -> Option<GamePlayer> {
+        let (tx, rx) = oneshot::channel();
+        if let Err(_) = self.sender.send(Message::TryIntoPlayer(tx)) {
+            return None;
+        }
+
+        rx.await.ok().flatten()
+    }
+
+    pub fn set_network_info(&self, groups: NetGroups, ext: QosNetworkData) {
+        self.sender
+            .send(Message::SetNetworkInfo { groups, ext })
+            .ok();
+    }
+    pub fn set_hardware_flag(&self, value: u16) {
+        self.sender.send(Message::SetHardwareFlag(value)).ok();
+    }
+
+    pub async fn set_player(&self, player: Player) -> ServerResult<(Player, String)> {
+        let (tx, rx) = oneshot::channel();
+        if let Err(_) = self.sender.send(Message::SetPlayer { player, tx }) {
+            return Err(ServerError::ServerUnavailable);
+        }
+
+        rx.await.map_err(|_| ServerError::ServerUnavailable)?
+    }
+
+    pub async fn get_player(&self) -> ServerResult<Option<Player>> {
+        let (tx, rx) = oneshot::channel();
+        if let Err(_) = self.sender.send(Message::GetPlayer(tx)) {
+            return Err(ServerError::ServerUnavailable);
+        }
+
+        rx.await.map_err(|_| ServerError::ServerUnavailable)
+    }
+    pub async fn get_player_id(&self) -> Option<u32> {
+        let (tx, rx) = oneshot::channel();
+        if let Err(_) = self.sender.send(Message::GetPlayerId(tx)) {
+            return None;
+        }
+
+        rx.await.ok().flatten()
+    }
+
+    pub async fn socket_string(&self) -> Option<String> {
+        let (tx, rx) = oneshot::channel();
+        if let Err(_) = self.sender.send(Message::SocketString(tx)) {
+            return None;
+        }
+
+        rx.await.ok()
+    }
+
+    pub fn spawn(
+        id: SessionID,
+        values: (TcpStream, SocketAddr),
+        router: Arc<Router<Components, SessionAddr>>,
+    ) {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        let session = Session::new(id, values.0, values.1, sender, router);
+        tokio::spawn(session.process(receiver));
+    }
 }
 
 /// Message for communicating with the spawned session
 /// using cloned the sender present on cloned addresses
-#[derive(Debug)]
 enum Message {
     /// Changes the active game value
     SetGame(Option<GameID>),
@@ -101,19 +176,34 @@ enum Message {
 
     /// Flushes the outbound queue
     Flush,
+
+    TryIntoPlayer(oneshot::Sender<Option<GamePlayer>>),
+
+    SetNetworkInfo {
+        groups: NetGroups,
+        ext: QosNetworkData,
+    },
+
+    SetHardwareFlag(u16),
+
+    PushDetails,
+
+    RemoveGames,
+
+    GetPlayer(oneshot::Sender<Option<Player>>),
+    GetPlayerId(oneshot::Sender<Option<u32>>),
+
+    SetPlayer {
+        player: Player,
+        tx: oneshot::Sender<ServerResult<(Player, String)>>,
+    },
+
+    ClearPlayer,
+
+    SocketString(oneshot::Sender<String>),
 }
 
 impl Session {
-    pub fn spawn(
-        id: SessionID,
-        values: (TcpStream, SocketAddr),
-        router: Arc<Router<Components, Session>>,
-    ) {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        let session = Session::new(id, values.0, values.1, sender, router);
-        tokio::spawn(session.process(receiver));
-    }
-
     /// Creates a new session with the provided values.
     ///
     /// `id`             The unique session ID
@@ -124,7 +214,7 @@ impl Session {
         stream: TcpStream,
         addr: SocketAddr,
         sender: mpsc::UnboundedSender<Message>,
-        router: Arc<Router<Components, Session>>,
+        router: Arc<Router<Components, SessionAddr>>,
     ) -> Self {
         Self {
             id,
@@ -166,7 +256,7 @@ impl Session {
 
     /// Attempts to obtain a game player from this session will return None
     /// if this session is not authenticated
-    pub fn try_into_player(&self) -> Option<GamePlayer> {
+    fn try_into_player(&self) -> Option<GamePlayer> {
         let player = self.player.clone()?;
         Some(GamePlayer::new(player, self.net.clone(), self.addr.clone()))
     }
@@ -177,20 +267,20 @@ impl Session {
     /// `session`   The session to process the packet for
     /// `component` The component of the packet for routing
     /// `packet`    The packet itself
-    async fn handle_packet(&mut self, packet: Packet) -> io::Result<()> {
+    fn handle_packet(&mut self, packet: Packet) {
         self.debug_log_packet("Read", &packet);
         let router = self.router.clone();
-
-        match router.handle(self, packet).await {
-            Ok(packet) => {
-                self.write(packet).await?;
+        let mut addr = self.addr.clone();
+        tokio::spawn(async move {
+            match router.handle(&mut addr, packet).await {
+                Ok(packet) => {
+                    addr.push(packet);
+                }
+                Err(err) => {
+                    error!("Error occurred while decoding packet: {:?}", err);
+                }
             }
-            Err(err) => {
-                error!("Error occurred while decoding packet: {:?}", err);
-            }
-        }
-        self.flush().await;
-        Ok(())
+        });
     }
 
     /// Handles a message recieved for the session
@@ -201,6 +291,33 @@ impl Session {
             Message::SetGame(game) => self.set_game(game),
             Message::Write(packet) => self.push(packet),
             Message::Flush => self.flush().await,
+            Message::TryIntoPlayer(tx) => {
+                let player = self.try_into_player();
+                tx.send(player).ok();
+            }
+            Message::SetNetworkInfo { groups, ext } => self.set_network_info(groups, ext),
+            Message::SetHardwareFlag(value) => self.set_hardware_flag(value),
+            Message::PushDetails => self.push_details(),
+            Message::RemoveGames => self.remove_games(),
+            Message::SetPlayer { player, tx } => {
+                let result = self.set_player(player);
+                tx.send(result).ok();
+            }
+            Message::GetPlayer(tx) => {
+                let player = self.player.clone();
+                tx.send(player).ok();
+            }
+            Message::SocketString(tx) => {
+                let value = self.socket_addr.to_string();
+                tx.send(value).ok();
+            }
+            Message::GetPlayerId(tx) => {
+                let player = self.player.as_ref().map(|value| value.id);
+                tx.send(player).ok();
+            }
+            Message::ClearPlayer => {
+                self.player = None;
+            }
         }
     }
 
@@ -211,15 +328,6 @@ impl Session {
     pub fn push(&mut self, packet: Packet) {
         self.queue.push_back(packet);
         self.queue_flush();
-    }
-    /// Writes the provided packet directly to the underlying stream
-    /// rather than pushing to the buffer. Only use when handling
-    /// responses will cause long blocks because will wait for all
-    /// the data to be written.
-    async fn write(&mut self, packet: Packet) -> io::Result<()> {
-        packet.write_async(&mut self.stream).await?;
-        self.debug_log_packet("Wrote", &packet);
-        Ok(())
     }
 
     /// Logs the contents of the provided packet to the debug output along with
@@ -342,7 +450,8 @@ impl Session {
     /// onto `handle_packet` awaiting the result of that
     async fn read(&mut self) -> io::Result<()> {
         let packet: Packet = Packet::read_async(&mut self.stream).await?;
-        self.handle_packet(packet).await
+        self.handle_packet(packet);
+        Ok(())
     }
 
     /// Sets the game details for the current session and updates
@@ -361,7 +470,7 @@ impl Session {
     ///
     /// `groups` The networking groups
     /// `ext`    The networking ext
-    pub fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
+    fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
         let net = &mut &mut self.net;
         net.qos = ext;
         net.groups = Some(groups);
@@ -372,7 +481,7 @@ impl Session {
     /// updates the client with the changes
     ///
     /// `value` The new hardware flag value
-    pub fn set_hardware_flag(&mut self, value: u16) {
+    fn set_hardware_flag(&mut self, value: u16) {
         self.net.hardware_flags = value;
         self.update_client();
     }
@@ -391,13 +500,14 @@ impl Session {
         self.push(packet);
     }
 
-    pub fn set_player(&mut self, player: Player) -> ServerResult<(&Player, String)> {
+    fn set_player(&mut self, player: Player) -> ServerResult<(Player, String)> {
         // Update the player value
         let player = self.player.insert(player);
+        let player = player.clone();
 
         let services = GlobalState::services();
 
-        let token = match services.jwt.claim(player) {
+        let token = match services.jwt.claim(&player) {
             Ok(value) => value,
             Err(err) => {
                 error!("Unable to create session token for player: {:?}", err);
@@ -408,7 +518,7 @@ impl Session {
         Ok((player, token))
     }
 
-    pub fn push_details(&mut self) {
+    fn push_details(&mut self) {
         let player = match self.player.as_ref() {
             Some(value) => value,
             None => return,
@@ -439,7 +549,7 @@ impl Session {
 
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    pub fn remove_games(&mut self) {
+    fn remove_games(&mut self) {
         let game = self.game.take();
         let services = GlobalState::services();
         if let Some(game_id) = game {
@@ -456,5 +566,78 @@ impl Drop for Session {
     fn drop(&mut self) {
         self.remove_games();
         debug!("Session dropped (SID: {})", self.id);
+    }
+}
+
+/// Encodes the session details for the provided session using
+/// the provided writer
+///
+/// `session` The session to encode
+/// `writer`  The writer to encode with
+fn encode_session(session: &Session, writer: &mut TdfWriter) {
+    session.net.tag_groups(b"ADDR", writer);
+    writer.tag_str(b"BPS", "ea-sjc");
+    writer.tag_str_empty(b"CTY");
+    writer.tag_var_int_list_empty(b"CVAR");
+    {
+        writer.tag_map_start(b"DMAP", TdfType::VarInt, TdfType::VarInt, 1);
+        writer.write_u32(0x70001);
+        writer.write_u16(0x409a);
+    }
+    writer.tag_u16(b"HWFG", session.net.hardware_flags);
+    {
+        // Ping latency to the Quality of service servers
+        writer.tag_list_start(b"PSLM", TdfType::VarInt, 1);
+        0xfff0fff.encode(writer);
+    }
+    writer.tag_value(b"QDAT", &session.net.qos);
+    writer.tag_u8(b"UATT", 0);
+    if let Some(game_id) = &session.game {
+        writer.tag_list_start(b"ULST", TdfType::Triple, 1);
+        (4, 1, *game_id).encode(writer);
+    }
+    writer.tag_group_end();
+}
+
+/// Session update for a session other than ourselves
+/// which contains the details for that session
+pub struct SessionUpdate<'a> {
+    /// The session this update is for
+    pub session: &'a Session,
+    /// The player ID the update is for
+    pub player_id: PlayerID,
+    /// The display name of the player the update is
+    pub display_name: &'a str,
+}
+
+impl Encodable for SessionUpdate<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_group(b"DATA");
+        encode_session(self.session, writer);
+
+        writer.tag_group(b"USER");
+        writer.tag_u32(b"AID", self.player_id);
+        writer.tag_u32(b"ALOC", 0x64654445);
+        writer.tag_empty_blob(b"EXBB");
+        writer.tag_u8(b"EXID", 0);
+        writer.tag_u32(b"ID", self.player_id);
+        writer.tag_str(b"NAME", self.display_name);
+        writer.tag_group_end();
+    }
+}
+
+/// Session update for ourselves
+pub struct SetSession<'a> {
+    /// The player ID the update is for
+    pub player_id: PlayerID,
+    /// The session this update is for
+    pub session: &'a Session,
+}
+
+impl Encodable for SetSession<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_group(b"DATA");
+        encode_session(self.session, writer);
+        writer.tag_u32(b"USID", self.player_id);
     }
 }

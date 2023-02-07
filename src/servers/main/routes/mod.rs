@@ -2,7 +2,7 @@ use blaze_pk::router::Router;
 
 use crate::utils::components::Components;
 
-use super::session::Session;
+use super::session::SessionAddr;
 
 mod auth;
 mod game_manager;
@@ -13,7 +13,7 @@ mod user_sessions;
 mod util;
 
 /// Function which creates a router for sessions to use
-pub fn router() -> Router<Components, Session> {
+pub fn router() -> Router<Components, SessionAddr> {
     let mut router = Router::new();
     auth::route(&mut router);
     game_manager::route(&mut router);

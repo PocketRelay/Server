@@ -1,5 +1,5 @@
 use crate::{
-    servers::main::{models::messaging::*, session::Session},
+    servers::main::{models::messaging::*, session::SessionAddr},
     utils::{
         components::{Components as C, Messaging as M},
         constants, env,
@@ -11,7 +11,7 @@ use blaze_pk::{packet::Packet, router::Router};
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Session>) {
+pub fn route(router: &mut Router<C, SessionAddr>) {
     router.route(C::Messaging(M::FetchMessages), handle_fetch_messages);
 }
 
@@ -35,12 +35,12 @@ pub fn route(router: &mut Router<C, Session>) {
 /// }
 /// ```
 ///
-async fn handle_fetch_messages(session: &mut Session) -> FetchMessageResponse {
-    let Some(player) = session.player.as_ref() else {
+async fn handle_fetch_messages(session: &mut SessionAddr) -> FetchMessageResponse {
+    let Ok(Some(player)) = session.get_player().await else {
         // Not authenticated return empty count
-        return  FetchMessageResponse { count: 0 };
+        return FetchMessageResponse { count: 0 };
     };
-    let message = get_menu_message(session, &player.display_name);
+    let message = get_menu_message(session, &player.display_name).await;
     let notify = Packet::notify(
         C::Messaging(M::SendMessage),
         MessageNotify {
@@ -60,7 +60,7 @@ async fn handle_fetch_messages(session: &mut Session) -> FetchMessageResponse {
 /// - {v} = Server Version
 /// - {n} = Player Display Name
 /// - {ip} = Session IP Address
-fn get_menu_message(session: &Session, player_name: &str) -> String {
+async fn get_menu_message(session: &SessionAddr, player_name: &str) -> String {
     let mut message = env::env(env::MENU_MESSAGE);
     if message.contains("{v}") {
         message = message.replace("{v}", constants::VERSION);
@@ -69,7 +69,9 @@ fn get_menu_message(session: &Session, player_name: &str) -> String {
         message = message.replace("{n}", player_name);
     }
     if message.contains("{ip}") {
-        message = message.replace("{ip}", &session.socket_addr.to_string());
+        if let Some(addr) = session.socket_string().await {
+            message = message.replace("{ip}", &addr);
+        }
     }
     // Line terminator for the end of the message
     message.push(char::from(0x0A));
