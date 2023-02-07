@@ -29,31 +29,11 @@ impl MigrationTrait for Migration {
                             .date_time()
                             .not_null(),
                     )
-                    .col(
-                        ColumnDef::new(GalaxyAtWar::GroupA)
-                            .integer_len(8)
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(GalaxyAtWar::GroupB)
-                            .integer_len(8)
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(GalaxyAtWar::GroupC)
-                            .integer_len(8)
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(GalaxyAtWar::GroupD)
-                            .integer_len(8)
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(GalaxyAtWar::GroupE)
-                            .integer_len(8)
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(GalaxyAtWar::GroupA).integer().not_null())
+                    .col(ColumnDef::new(GalaxyAtWar::GroupB).integer().not_null())
+                    .col(ColumnDef::new(GalaxyAtWar::GroupC).integer().not_null())
+                    .col(ColumnDef::new(GalaxyAtWar::GroupD).integer().not_null())
+                    .col(ColumnDef::new(GalaxyAtWar::GroupE).integer().not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .from(GalaxyAtWar::Table, GalaxyAtWar::PlayerId)
