@@ -4,7 +4,6 @@ pub mod constants;
 pub mod dmap;
 pub mod env;
 pub mod hashing;
-pub mod jwt;
 pub mod logging;
 pub mod models;
 pub mod net;

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::random::generate_random_string;
+use crate::utils::random::generate_random_string;
 use database::Player;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use log::error;

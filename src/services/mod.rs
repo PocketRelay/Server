@@ -1,14 +1,13 @@
-use tokio::join;
-
-use crate::utils::jwt::Jwt;
-
 use self::{
     game::{manager::GameManagerAddr, matchmaking::MatchmakingAddr},
+    jwt::Jwt,
     leaderboard::Leaderboard,
     retriever::Retriever,
 };
+use tokio::join;
 
 pub mod game;
+pub mod jwt;
 pub mod leaderboard;
 pub mod retriever;
 
