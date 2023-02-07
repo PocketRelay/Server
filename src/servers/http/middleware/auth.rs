@@ -41,14 +41,14 @@ impl AuthVerifier for AdminVerify {
 impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
     type Rejection = TokenError;
 
-    fn from_request_parts<'life0, 'life1, 'async_trait>(
-        parts: &'life0 mut axum::http::request::Parts,
-        state: &'life1 S,
-    ) -> Pin<Box<dyn Future<Output = Result<Self, Self::Rejection>> + Send + 'async_trait>>
+    fn from_request_parts<'a, 'b, 'c>(
+        parts: &'a mut axum::http::request::Parts,
+        _state: &'b S,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Self::Rejection>> + Send + 'c>>
     where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        Self: 'async_trait,
+        'a: 'c,
+        'b: 'c,
+        Self: 'c,
     {
         Box::pin(async move {
             let token = parts
