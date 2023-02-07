@@ -32,7 +32,7 @@ use tokio::{
 /// other session state.
 pub struct Session {
     /// Unique identifier for this session.
-    pub id: SessionID,
+    id: SessionID,
 
     /// Underlying connection stream to client
     stream: TcpStream,
