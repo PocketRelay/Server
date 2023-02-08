@@ -88,22 +88,25 @@ impl SessionAddr {
     ///
     /// `game` The game
     pub fn set_game(&self, game: Option<GameID>) {
-        self.sender.send(Message::SetGame(game)).ok();
+        self.sender.send(Message::Game(GameMessage::Set(game))).ok();
     }
 
     pub fn push_details(&self) {
         self.sender.send(Message::PushDetails).ok();
     }
     pub fn clear_player(&self) {
-        self.sender.send(Message::ClearPlayer).ok();
+        self.sender.send(Message::Player(PlayerMessage::Clear)).ok();
     }
     pub fn remove_games(&self) {
-        self.sender.send(Message::RemoveGames).ok();
+        self.sender.send(Message::Game(GameMessage::Remove)).ok();
     }
 
     pub async fn try_into_player(&self) -> Option<GamePlayer> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.sender.send(Message::TryIntoPlayer(tx)) {
+        if let Err(_) = self
+            .sender
+            .send(Message::Player(PlayerMessage::CreateGamePlayer(tx)))
+        {
             return None;
         }
 
@@ -112,16 +115,21 @@ impl SessionAddr {
 
     pub fn set_network_info(&self, groups: NetGroups, ext: QosNetworkData) {
         self.sender
-            .send(Message::SetNetworkInfo { groups, ext })
+            .send(Message::Net(NetMessage::Set(groups, ext)))
             .ok();
     }
     pub fn set_hardware_flag(&self, value: u16) {
-        self.sender.send(Message::SetHardwareFlag(value)).ok();
+        self.sender
+            .send(Message::Net(NetMessage::SetHardwareFlag(value)))
+            .ok();
     }
 
     pub async fn set_player(&self, player: Player) -> ServerResult<(Player, String)> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.sender.send(Message::SetPlayer { player, tx }) {
+        if let Err(_) = self
+            .sender
+            .send(Message::Player(PlayerMessage::Set(player, tx)))
+        {
             return Err(ServerError::ServerUnavailable);
         }
 
@@ -130,7 +138,7 @@ impl SessionAddr {
 
     pub async fn get_player(&self) -> ServerResult<Option<Player>> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.sender.send(Message::GetPlayer(tx)) {
+        if let Err(_) = self.sender.send(Message::Player(PlayerMessage::Get(tx))) {
             return Err(ServerError::ServerUnavailable);
         }
 
@@ -138,16 +146,16 @@ impl SessionAddr {
     }
     pub async fn get_player_id(&self) -> Option<u32> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.sender.send(Message::GetPlayerId(tx)) {
+        if let Err(_) = self.sender.send(Message::Player(PlayerMessage::GetId(tx))) {
             return None;
         }
 
         rx.await.ok().flatten()
     }
 
-    pub async fn socket_string(&self) -> Option<String> {
+    pub async fn socket_addr(&self) -> Option<SocketAddr> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.sender.send(Message::SocketString(tx)) {
+        if let Err(_) = self.sender.send(Message::Net(NetMessage::SocketAddr(tx))) {
             return None;
         }
 
@@ -168,39 +176,68 @@ impl SessionAddr {
 /// Message for communicating with the spawned session
 /// using cloned the sender present on cloned addresses
 enum Message {
-    /// Changes the active game value
-    SetGame(Option<GameID>),
-
-    /// Writes a new packet to the outbound queue
+    /// Queues a packet to be written to the outbound queue
     Write(Packet),
 
-    /// Flushes the outbound queue
+    /// Request to tell the session to flush any outbound
+    /// packets actually writing them to the socket
     Flush,
 
-    TryIntoPlayer(oneshot::Sender<Option<GamePlayer>>),
-
-    SetNetworkInfo {
-        groups: NetGroups,
-        ext: QosNetworkData,
-    },
-
-    SetHardwareFlag(u16),
-
+    /// Request to push the details for the session to the
+    /// associated client
     PushDetails,
 
-    RemoveGames,
+    /// Group of messages relating to networking
+    Net(NetMessage),
 
-    GetPlayer(oneshot::Sender<Option<Player>>),
-    GetPlayerId(oneshot::Sender<Option<u32>>),
+    /// Group of messages relating to games
+    Game(GameMessage),
 
-    SetPlayer {
-        player: Player,
-        tx: oneshot::Sender<ServerResult<(Player, String)>>,
-    },
+    /// Group of messages relating to players
+    Player(PlayerMessage),
+}
 
-    ClearPlayer,
+enum NetMessage {
+    /// Request to set the net groups and QOS networking data
+    Set(NetGroups, QosNetworkData),
 
-    SocketString(oneshot::Sender<String>),
+    /// Request to set the hardware flag for this session
+    SetHardwareFlag(u16),
+
+    /// Request to obtain the socket address associated with
+    /// the session
+    SocketAddr(oneshot::Sender<SocketAddr>),
+}
+
+enum GameMessage {
+    /// Request to set the current game ID
+    Set(Option<GameID>),
+
+    /// Request to remove the player from any games and the
+    /// matchmaking queue
+    Remove,
+}
+
+enum PlayerMessage {
+    /// Request to create a game player from the authenticated
+    /// session
+    CreateGamePlayer(oneshot::Sender<Option<GamePlayer>>),
+
+    /// Requests a copy of the player that this session is
+    /// authenticated as
+    Get(oneshot::Sender<Option<Player>>),
+
+    /// Requests a copy of the ID of the player that this
+    /// session is authenticated as
+    GetId(oneshot::Sender<Option<u32>>),
+
+    /// Sets the current authenticated player for this session
+    /// returning a copy of the player and a session token for
+    /// authentication
+    Set(Player, oneshot::Sender<ServerResult<(Player, String)>>),
+
+    /// Request to clear the current active player
+    Clear,
 }
 
 impl Session {
@@ -288,36 +325,42 @@ impl Session {
     /// `message` The message that was recieved
     async fn handle_message(&mut self, message: Message) {
         match message {
-            Message::SetGame(game) => self.set_game(game),
             Message::Write(packet) => self.push(packet),
             Message::Flush => self.flush().await,
-            Message::TryIntoPlayer(tx) => {
-                let player = self.try_into_player();
-                tx.send(player).ok();
-            }
-            Message::SetNetworkInfo { groups, ext } => self.set_network_info(groups, ext),
-            Message::SetHardwareFlag(value) => self.set_hardware_flag(value),
             Message::PushDetails => self.push_details(),
-            Message::RemoveGames => self.remove_games(),
-            Message::SetPlayer { player, tx } => {
-                let result = self.set_player(player);
-                tx.send(result).ok();
-            }
-            Message::GetPlayer(tx) => {
-                let player = self.player.clone();
-                tx.send(player).ok();
-            }
-            Message::SocketString(tx) => {
-                let value = self.socket_addr.to_string();
-                tx.send(value).ok();
-            }
-            Message::GetPlayerId(tx) => {
-                let player = self.player.as_ref().map(|value| value.id);
-                tx.send(player).ok();
-            }
-            Message::ClearPlayer => {
-                self.player = None;
-            }
+            Message::Player(message) => match message {
+                PlayerMessage::Get(tx) => {
+                    let player = self.player.clone();
+                    tx.send(player).ok();
+                }
+                PlayerMessage::GetId(tx) => {
+                    let player = self.player.as_ref().map(|value| value.id);
+                    tx.send(player).ok();
+                }
+                PlayerMessage::Set(player, tx) => {
+                    let result = self.set_player(player);
+                    tx.send(result).ok();
+                }
+                PlayerMessage::Clear => {
+                    self.player = None;
+                }
+                PlayerMessage::CreateGamePlayer(tx) => {
+                    let player = self.try_into_player();
+                    tx.send(player).ok();
+                }
+            },
+            Message::Game(message) => match message {
+                GameMessage::Set(game) => self.set_game(game),
+                GameMessage::Remove => self.remove_games(),
+            },
+            Message::Net(message) => match message {
+                NetMessage::Set(groups, ext) => self.set_network_info(groups, ext),
+                NetMessage::SetHardwareFlag(value) => self.set_hardware_flag(value),
+                NetMessage::SocketAddr(tx) => {
+                    let value = self.socket_addr.clone();
+                    tx.send(value).ok();
+                }
+            },
         }
     }
 

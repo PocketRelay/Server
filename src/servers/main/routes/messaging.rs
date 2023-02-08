@@ -69,8 +69,8 @@ async fn get_menu_message(session: &SessionAddr, player_name: &str) -> String {
         message = message.replace("{n}", player_name);
     }
     if message.contains("{ip}") {
-        if let Some(addr) = session.socket_string().await {
-            message = message.replace("{ip}", &addr);
+        if let Some(addr) = session.socket_addr().await {
+            message = message.replace("{ip}", &addr.to_string());
         }
     }
     // Line terminator for the end of the message
