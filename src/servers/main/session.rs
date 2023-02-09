@@ -19,12 +19,12 @@ use blaze_pk::{
     router::{Router, State},
 };
 use database::Player;
+use futures::future::BoxFuture;
 use log::{debug, error, log_enabled};
-use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
+use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::{
     net::TcpStream,
-    select,
     sync::{mpsc, oneshot},
 };
 
@@ -184,7 +184,7 @@ impl SessionAddr {
         let addr = SessionAddr { id, tx: sender };
 
         let (read, write) = values.0.into_split();
-        Self::spawn_reader(addr.clone(), read);
+        tokio::spawn(Self::spawn_reader(addr.clone(), read));
 
         let session = Session::new(id, write, values.1, router, addr);
         tokio::spawn(session.process(receiver));
@@ -195,7 +195,6 @@ impl SessionAddr {
             let packet: Packet = match Packet::read_async(&mut read).await {
                 Ok(value) => value,
                 Err(err) => {
-                    error!("Error while reading from session: {:?}", err);
                     addr.stop();
                     break;
                 }
@@ -206,6 +205,10 @@ impl SessionAddr {
             }
         }
     }
+}
+
+trait HandleProxy {
+    fn handle(&mut self, ctx: Session);
 }
 
 /// Message for communicating with the spawned session
@@ -286,6 +289,80 @@ enum PlayerMessage {
     Clear,
 }
 
+trait Handler<'a, T> {
+    type Result;
+
+    fn handle(&'a mut self, msg: T) -> Self::Result;
+}
+
+impl Handler<'_, PlayerMessage> for Session {
+    type Result = ();
+
+    fn handle(&mut self, msg: PlayerMessage) {
+        match msg {
+            PlayerMessage::Get(tx) => {
+                let player = self.player.clone();
+                tx.send(player).ok();
+            }
+            PlayerMessage::GetId(tx) => {
+                let player = self.player.as_ref().map(|value| value.id);
+                tx.send(player).ok();
+            }
+            PlayerMessage::Set(player, tx) => {
+                let result = self.set_player(player);
+                tx.send(result).ok();
+            }
+            PlayerMessage::Clear => {
+                self.player = None;
+            }
+            PlayerMessage::CreateGamePlayer(tx) => {
+                let player = self.try_into_player();
+                tx.send(player).ok();
+            }
+        }
+    }
+}
+
+impl<'a> Handler<'a, PacketMessage> for Session {
+    type Result = BoxFuture<'a, ()>;
+
+    fn handle(&'a mut self, msg: PacketMessage) -> Self::Result {
+        Box::pin(async move {
+            match msg {
+                PacketMessage::Read(packet) => self.handle_packet(packet),
+                PacketMessage::Write(packet) => self.push(packet),
+                PacketMessage::Flush => self.flush().await,
+            }
+        })
+    }
+}
+
+impl Handler<'_, NetMessage> for Session {
+    type Result = ();
+
+    fn handle(&mut self, msg: NetMessage) {
+        match msg {
+            NetMessage::Set(groups, ext) => self.set_network_info(groups, ext),
+            NetMessage::SetHardwareFlag(value) => self.set_hardware_flag(value),
+            NetMessage::SocketAddr(tx) => {
+                let value = self.socket_addr.clone();
+                tx.send(value).ok();
+            }
+        }
+    }
+}
+
+impl Handler<'_, GameMessage> for Session {
+    type Result = ();
+
+    fn handle(&mut self, msg: GameMessage) {
+        match msg {
+            GameMessage::Set(game) => self.set_game(game),
+            GameMessage::Remove => self.remove_games(),
+        }
+    }
+}
+
 impl Session {
     /// Creates a new session with the provided values.
     ///
@@ -319,47 +396,13 @@ impl Session {
     ///
     /// `message` The receiver for receiving session messages
     async fn process(mut self, mut receiver: mpsc::UnboundedReceiver<Message>) {
-        while let Some(message) = receiver.recv().await {
-            match message {
-                Message::Packet(message) => match message {
-                    PacketMessage::Read(packet) => self.handle_packet(packet),
-                    PacketMessage::Write(packet) => self.push(packet),
-                    PacketMessage::Flush => self.flush().await,
-                },
+        while let Some(msg) = receiver.recv().await {
+            match msg {
                 Message::PushDetails => self.push_details(),
-                Message::Player(message) => match message {
-                    PlayerMessage::Get(tx) => {
-                        let player = self.player.clone();
-                        tx.send(player).ok();
-                    }
-                    PlayerMessage::GetId(tx) => {
-                        let player = self.player.as_ref().map(|value| value.id);
-                        tx.send(player).ok();
-                    }
-                    PlayerMessage::Set(player, tx) => {
-                        let result = self.set_player(player);
-                        tx.send(result).ok();
-                    }
-                    PlayerMessage::Clear => {
-                        self.player = None;
-                    }
-                    PlayerMessage::CreateGamePlayer(tx) => {
-                        let player = self.try_into_player();
-                        tx.send(player).ok();
-                    }
-                },
-                Message::Game(message) => match message {
-                    GameMessage::Set(game) => self.set_game(game),
-                    GameMessage::Remove => self.remove_games(),
-                },
-                Message::Net(message) => match message {
-                    NetMessage::Set(groups, ext) => self.set_network_info(groups, ext),
-                    NetMessage::SetHardwareFlag(value) => self.set_hardware_flag(value),
-                    NetMessage::SocketAddr(tx) => {
-                        let value = self.socket_addr.clone();
-                        tx.send(value).ok();
-                    }
-                },
+                Message::Packet(msg) => self.handle(msg).await,
+                Message::Player(msg) => self.handle(msg),
+                Message::Game(msg) => self.handle(msg),
+                Message::Net(msg) => self.handle(msg),
                 Message::Stop => break,
             }
         }
