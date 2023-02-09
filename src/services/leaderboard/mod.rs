@@ -3,7 +3,10 @@
 use self::models::*;
 use crate::{
     state::GlobalState,
-    utils::parsing::{parse_player_character, parse_player_class},
+    utils::{
+        parsing::{parse_player_character, parse_player_class},
+        types::BoxFuture,
+    },
 };
 use database::{DatabaseConnection, DbResult, Player};
 use log::error;
@@ -149,7 +152,7 @@ impl From<&LeaderboardType> for Box<dyn Ranker> {
 }
 
 /// Type alias for pinned boxed futures that return a leaderboard entry inside DbResult
-type RankerFut = Pin<Box<dyn Future<Output = DbResult<LeaderboardEntry>> + Send + 'static>>;
+type RankerFut = BoxFuture<'static, DbResult<LeaderboardEntry>>;
 
 /// Trait implemented by things that can be used to return futures
 trait Ranker: Send {

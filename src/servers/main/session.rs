@@ -2,7 +2,7 @@
 //! data such as player data for when they become authenticated and
 //! networking data.
 use super::models::errors::{ServerError, ServerResult};
-use crate::utils::types::PlayerID;
+use crate::utils::types::{BoxFuture, PlayerID};
 use crate::{
     services::game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
@@ -19,7 +19,6 @@ use blaze_pk::{
     router::{Router, State},
 };
 use database::Player;
-use futures::future::BoxFuture;
 use log::{debug, error, log_enabled};
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -194,7 +193,7 @@ impl SessionAddr {
         loop {
             let packet: Packet = match Packet::read_async(&mut read).await {
                 Ok(value) => value,
-                Err(err) => {
+                Err(_) => {
                     addr.stop();
                     break;
                 }

@@ -1,4 +1,4 @@
-use crate::{servers::http::ext::ErrorStatusCode, state::GlobalState};
+use crate::{servers::http::ext::ErrorStatusCode, state::GlobalState, utils::types::BoxFuture};
 use axum::{
     body::boxed,
     extract::FromRequestParts,
@@ -7,7 +7,7 @@ use axum::{
 };
 use database::{Player, PlayerRole};
 use jsonwebtoken::errors::ErrorKind;
-use std::{fmt::Display, future::Future, marker::PhantomData, pin::Pin};
+use std::{fmt::Display, marker::PhantomData};
 
 /// Extractor for extracting authentication from a request
 /// authorization header Bearer token
@@ -44,7 +44,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
     fn from_request_parts<'a, 'b, 'c>(
         parts: &'a mut axum::http::request::Parts,
         _state: &'b S,
-    ) -> Pin<Box<dyn Future<Output = Result<Self, Self::Rejection>> + Send + 'c>>
+    ) -> BoxFuture<'c, Result<Self, Self::Rejection>>
     where
         'a: 'c,
         'b: 'c,
