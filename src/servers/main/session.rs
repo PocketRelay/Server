@@ -21,6 +21,7 @@ use blaze_pk::{
 use database::Player;
 use log::{debug, error, log_enabled};
 use std::{collections::VecDeque, io, net::SocketAddr, sync::Arc};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::{
     net::TcpStream,
     select,
@@ -35,7 +36,7 @@ pub struct Session {
     id: SessionID,
 
     /// Underlying connection stream to client
-    stream: TcpStream,
+    write: OwnedWriteHalf,
 
     /// The socket connection address of the client
     socket_addr: SocketAddr,
@@ -73,7 +74,7 @@ pub struct SessionAddr {
     /// The ID this session is linked to
     pub id: SessionID,
     /// The sender for sending message to this session
-    sender: mpsc::UnboundedSender<Message>,
+    tx: mpsc::UnboundedSender<Message>,
 }
 
 impl SessionAddr {
@@ -81,30 +82,42 @@ impl SessionAddr {
     ///
     /// `packet` The packet to write
     pub fn push(&self, packet: Packet) {
-        self.sender.send(Message::Write(packet)).ok();
+        self.tx
+            .send(Message::Packet(PacketMessage::Write(packet)))
+            .ok();
+    }
+
+    pub fn read(&self, packet: Packet) -> bool {
+        self.tx
+            .send(Message::Packet(PacketMessage::Read(packet)))
+            .is_ok()
     }
 
     /// Sets the game that the session is apart of
     ///
     /// `game` The game
     pub fn set_game(&self, game: Option<GameID>) {
-        self.sender.send(Message::Game(GameMessage::Set(game))).ok();
+        self.tx.send(Message::Game(GameMessage::Set(game))).ok();
     }
 
     pub fn push_details(&self) {
-        self.sender.send(Message::PushDetails).ok();
+        self.tx.send(Message::PushDetails).ok();
     }
     pub fn clear_player(&self) {
-        self.sender.send(Message::Player(PlayerMessage::Clear)).ok();
+        self.tx.send(Message::Player(PlayerMessage::Clear)).ok();
     }
     pub fn remove_games(&self) {
-        self.sender.send(Message::Game(GameMessage::Remove)).ok();
+        self.tx.send(Message::Game(GameMessage::Remove)).ok();
+    }
+
+    pub fn stop(&self) {
+        self.tx.send(Message::Stop).ok();
     }
 
     pub async fn try_into_player(&self) -> Option<GamePlayer> {
         let (tx, rx) = oneshot::channel();
         if let Err(_) = self
-            .sender
+            .tx
             .send(Message::Player(PlayerMessage::CreateGamePlayer(tx)))
         {
             return None;
@@ -114,12 +127,12 @@ impl SessionAddr {
     }
 
     pub fn set_network_info(&self, groups: NetGroups, ext: QosNetworkData) {
-        self.sender
+        self.tx
             .send(Message::Net(NetMessage::Set(groups, ext)))
             .ok();
     }
     pub fn set_hardware_flag(&self, value: u16) {
-        self.sender
+        self.tx
             .send(Message::Net(NetMessage::SetHardwareFlag(value)))
             .ok();
     }
@@ -127,7 +140,7 @@ impl SessionAddr {
     pub async fn set_player(&self, player: Player) -> ServerResult<(Player, String)> {
         let (tx, rx) = oneshot::channel();
         if let Err(_) = self
-            .sender
+            .tx
             .send(Message::Player(PlayerMessage::Set(player, tx)))
         {
             return Err(ServerError::ServerUnavailable);
@@ -138,7 +151,7 @@ impl SessionAddr {
 
     pub async fn get_player(&self) -> ServerResult<Option<Player>> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.sender.send(Message::Player(PlayerMessage::Get(tx))) {
+        if let Err(_) = self.tx.send(Message::Player(PlayerMessage::Get(tx))) {
             return Err(ServerError::ServerUnavailable);
         }
 
@@ -146,7 +159,7 @@ impl SessionAddr {
     }
     pub async fn get_player_id(&self) -> Option<u32> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.sender.send(Message::Player(PlayerMessage::GetId(tx))) {
+        if let Err(_) = self.tx.send(Message::Player(PlayerMessage::GetId(tx))) {
             return None;
         }
 
@@ -155,7 +168,7 @@ impl SessionAddr {
 
     pub async fn socket_addr(&self) -> Option<SocketAddr> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.sender.send(Message::Net(NetMessage::SocketAddr(tx))) {
+        if let Err(_) = self.tx.send(Message::Net(NetMessage::SocketAddr(tx))) {
             return None;
         }
 
@@ -168,24 +181,45 @@ impl SessionAddr {
         router: Arc<Router<Components, SessionAddr>>,
     ) {
         let (sender, receiver) = mpsc::unbounded_channel();
-        let session = Session::new(id, values.0, values.1, sender, router);
+        let addr = SessionAddr { id, tx: sender };
+
+        let (read, write) = values.0.into_split();
+        Self::spawn_reader(addr.clone(), read);
+
+        let session = Session::new(id, write, values.1, router, addr);
         tokio::spawn(session.process(receiver));
+    }
+
+    pub async fn spawn_reader(addr: Self, mut read: OwnedReadHalf) {
+        loop {
+            let packet: Packet = match Packet::read_async(&mut read).await {
+                Ok(value) => value,
+                Err(err) => {
+                    error!("Error while reading from session: {:?}", err);
+                    addr.stop();
+                    break;
+                }
+            };
+
+            if !addr.read(packet) {
+                break;
+            }
+        }
     }
 }
 
 /// Message for communicating with the spawned session
 /// using cloned the sender present on cloned addresses
 enum Message {
-    /// Queues a packet to be written to the outbound queue
-    Write(Packet),
-
-    /// Request to tell the session to flush any outbound
-    /// packets actually writing them to the socket
-    Flush,
-
     /// Request to push the details for the session to the
     /// associated client
     PushDetails,
+
+    /// Request to stop the session
+    Stop,
+
+    /// Group of messages relating to packets
+    Packet(PacketMessage),
 
     /// Group of messages relating to networking
     Net(NetMessage),
@@ -195,6 +229,18 @@ enum Message {
 
     /// Group of messages relating to players
     Player(PlayerMessage),
+}
+
+enum PacketMessage {
+    /// Request a read packet to be processed
+    Read(Packet),
+
+    /// Queues a packet to be written to the outbound queue
+    Write(Packet),
+
+    /// Request to tell the session to flush any outbound
+    /// packets actually writing them to the socket
+    Flush,
 }
 
 enum NetMessage {
@@ -248,22 +294,22 @@ impl Session {
     /// `message_sender` The message sender for session messages
     fn new(
         id: SessionID,
-        stream: TcpStream,
-        addr: SocketAddr,
-        sender: mpsc::UnboundedSender<Message>,
+        write: OwnedWriteHalf,
+        socket_addr: SocketAddr,
         router: Arc<Router<Components, SessionAddr>>,
+        addr: SessionAddr,
     ) -> Self {
         Self {
             id,
-            stream,
-            socket_addr: addr,
+            write,
+            socket_addr,
             queue: VecDeque::new(),
             player: None,
             net: NetData::default(),
             game: None,
             flush_queued: false,
             router,
-            addr: SessionAddr { id, sender },
+            addr,
         }
     }
 
@@ -273,21 +319,49 @@ impl Session {
     ///
     /// `message` The receiver for receiving session messages
     async fn process(mut self, mut receiver: mpsc::UnboundedReceiver<Message>) {
-        loop {
-            select! {
-                // Recieve session instruction messages
-                message = receiver.recv() => {
-                    if let Some(message) = message {
-                        self.handle_message(message).await;
+        while let Some(message) = receiver.recv().await {
+            match message {
+                Message::Packet(message) => match message {
+                    PacketMessage::Read(packet) => self.handle_packet(packet),
+                    PacketMessage::Write(packet) => self.push(packet),
+                    PacketMessage::Flush => self.flush().await,
+                },
+                Message::PushDetails => self.push_details(),
+                Message::Player(message) => match message {
+                    PlayerMessage::Get(tx) => {
+                        let player = self.player.clone();
+                        tx.send(player).ok();
                     }
-                }
-                // Handle packet reads
-                result = self.read() => {
-                    if result.is_err() {
-                        break;
+                    PlayerMessage::GetId(tx) => {
+                        let player = self.player.as_ref().map(|value| value.id);
+                        tx.send(player).ok();
                     }
-                }
-            };
+                    PlayerMessage::Set(player, tx) => {
+                        let result = self.set_player(player);
+                        tx.send(result).ok();
+                    }
+                    PlayerMessage::Clear => {
+                        self.player = None;
+                    }
+                    PlayerMessage::CreateGamePlayer(tx) => {
+                        let player = self.try_into_player();
+                        tx.send(player).ok();
+                    }
+                },
+                Message::Game(message) => match message {
+                    GameMessage::Set(game) => self.set_game(game),
+                    GameMessage::Remove => self.remove_games(),
+                },
+                Message::Net(message) => match message {
+                    NetMessage::Set(groups, ext) => self.set_network_info(groups, ext),
+                    NetMessage::SetHardwareFlag(value) => self.set_hardware_flag(value),
+                    NetMessage::SocketAddr(tx) => {
+                        let value = self.socket_addr.clone();
+                        tx.send(value).ok();
+                    }
+                },
+                Message::Stop => break,
+            }
         }
     }
 
@@ -318,50 +392,6 @@ impl Session {
                 }
             }
         });
-    }
-
-    /// Handles a message recieved for the session
-    ///
-    /// `message` The message that was recieved
-    async fn handle_message(&mut self, message: Message) {
-        match message {
-            Message::Write(packet) => self.push(packet),
-            Message::Flush => self.flush().await,
-            Message::PushDetails => self.push_details(),
-            Message::Player(message) => match message {
-                PlayerMessage::Get(tx) => {
-                    let player = self.player.clone();
-                    tx.send(player).ok();
-                }
-                PlayerMessage::GetId(tx) => {
-                    let player = self.player.as_ref().map(|value| value.id);
-                    tx.send(player).ok();
-                }
-                PlayerMessage::Set(player, tx) => {
-                    let result = self.set_player(player);
-                    tx.send(result).ok();
-                }
-                PlayerMessage::Clear => {
-                    self.player = None;
-                }
-                PlayerMessage::CreateGamePlayer(tx) => {
-                    let player = self.try_into_player();
-                    tx.send(player).ok();
-                }
-            },
-            Message::Game(message) => match message {
-                GameMessage::Set(game) => self.set_game(game),
-                GameMessage::Remove => self.remove_games(),
-            },
-            Message::Net(message) => match message {
-                NetMessage::Set(groups, ext) => self.set_network_info(groups, ext),
-                NetMessage::SetHardwareFlag(value) => self.set_hardware_flag(value),
-                NetMessage::SocketAddr(tx) => {
-                    let value = self.socket_addr.clone();
-                    tx.send(value).ok();
-                }
-            },
-        }
     }
 
     /// Pushes a new packet to the back of the packet buffer
@@ -458,7 +488,10 @@ impl Session {
     fn queue_flush(&mut self) {
         if !self.flush_queued {
             self.flush_queued = true;
-            self.addr.sender.send(Message::Flush).ok();
+            self.addr
+                .tx
+                .send(Message::Packet(PacketMessage::Flush))
+                .ok();
         }
     }
 
@@ -470,7 +503,7 @@ impl Session {
         let mut write_count = 0usize;
         while let Some(item) = self.queue.pop_front() {
             self.debug_log_packet("Wrote", &item);
-            match item.write_async(&mut self.stream).await {
+            match item.write_async(&mut self.write).await {
                 Ok(_) => {
                     write_count += 1;
                 }
@@ -487,14 +520,6 @@ impl Session {
         if write_count > 0 {
             debug!("Flushed session (SID: {}, Count: {})", self.id, write_count);
         }
-    }
-
-    /// Reads a packet from the stream and then passes the packet
-    /// onto `handle_packet` awaiting the result of that
-    async fn read(&mut self) -> io::Result<()> {
-        let packet: Packet = Packet::read_async(&mut self.stream).await?;
-        self.handle_packet(packet);
-        Ok(())
     }
 
     /// Sets the game details for the current session and updates
