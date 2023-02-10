@@ -9,17 +9,18 @@ use crate::{
     utils::{
         components::{self, Components, UserSessions},
         models::{NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
-        packet::append_packet_decoded,
         types::{GameID, SessionID},
     },
 };
+use blaze_pk::packet::PacketDebug;
 use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
 use blaze_pk::{
-    packet::{Packet, PacketComponents, PacketType},
+    packet::{Packet, PacketComponents},
     router::{Router, State},
 };
 use database::Player;
 use log::{debug, error, log_enabled};
+use std::fmt::Debug;
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::{
@@ -451,79 +452,33 @@ impl Session {
     /// `action` The name of the action this packet is undergoing.
     ///          (e.g. Writing or Reading)
     /// `packet` The packet that is being logged
-    fn debug_log_packet(&self, action: &str, packet: &Packet) {
+    fn debug_log_packet(&self, action: &'static str, packet: &Packet) {
         // Skip if debug logging is disabled
         if !log_enabled!(log::Level::Debug) {
             return;
         }
 
-        let header = &packet.header;
-        let component = Components::from_header(header);
-        if Self::is_debug_ignored(&component) {
+        let component = Components::from_header(&packet.header);
+
+        // Ping messages are ignored from debug logging as they are very frequent
+        let ignored = matches!(
+            component,
+            Components::Util(components::Util::Ping)
+                | Components::Util(components::Util::SuspendUserPing)
+        );
+
+        if ignored {
             return;
         }
 
-        let mut message = String::new();
-        message.push_str("\nSession ");
-        message.push_str(action);
-        message.push_str(" Packet");
+        let debug = SessionPacketDebug {
+            action,
+            packet,
+            component,
+            session: self,
+        };
 
-        {
-            message.push_str("\nInfo: (");
-
-            if let Some(player) = self.player.as_ref() {
-                message.push_str("Name: ");
-                message.push_str(&player.display_name);
-                message.push_str(", ID: ");
-                message.push_str(&player.id.to_string());
-                message.push_str(", SID: ");
-                message.push_str(&self.id.to_string());
-            } else {
-                message.push_str("SID: ");
-                message.push_str(&self.id.to_string());
-            }
-
-            message.push(')');
-        }
-
-        message.push_str(&format!("\nComponent: {:?}", component));
-        message.push_str(&format!("\nType: {:?}", header.ty));
-        if header.ty != PacketType::Notify {
-            message.push_str("\nID: ");
-            message.push_str(&header.id.to_string());
-        }
-
-        if header.ty == PacketType::Error {
-            message.push_str("\nERROR: ");
-            message.push_str(&header.error.to_string());
-        }
-
-        if !Self::is_debug_minified(&component) {
-            append_packet_decoded(packet, &mut message);
-        }
-
-        debug!("{}", message);
-    }
-
-    /// Checks whether the provided `component` is ignored completely
-    /// when debug logging. This is for packets such as Ping and SuspendUserPing
-    /// where they occur frequently but provide no useful data for debugging.
-    ///
-    /// `component` The component to check
-    fn is_debug_ignored(component: &Components) -> bool {
-        Components::Util(components::Util::Ping).eq(component)
-            || Components::Util(components::Util::SuspendUserPing).eq(component)
-    }
-
-    /// Checks whether the provided `component` should have its contents
-    /// hidden when being debug printed. Used to hide the contents of
-    /// larger packets.
-    ///
-    /// `component` The component to check
-    fn is_debug_minified(component: &Components) -> bool {
-        Components::Authentication(components::Authentication::ListUserEntitlements2).eq(component)
-            || Components::Util(components::Util::FetchClientConfig).eq(component)
-            || Components::Util(components::Util::UserSettingsLoadAll).eq(component)
+        debug!("\n{:?}", debug);
     }
 
     /// Queues a new flush if there is not already one queued
@@ -676,6 +631,47 @@ impl Drop for Session {
     fn drop(&mut self) {
         self.remove_games();
         debug!("Session dropped (SID: {})", self.id);
+    }
+}
+
+/// Structure for wrapping session details around a debug
+/// packet message for logging
+struct SessionPacketDebug<'a> {
+    action: &'static str,
+    packet: &'a Packet,
+    component: Components,
+    session: &'a Session,
+}
+
+impl Debug for SessionPacketDebug<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Session {} Packet", self.action)?;
+
+        let component = &self.component;
+
+        if let Some(player) = &self.session.player {
+            writeln!(
+                f,
+                "Info: (Name: {}, ID: {}, SID: {})",
+                &player.display_name, &player.id, &self.session.id
+            )?;
+        } else {
+            writeln!(f, "Info: ( SID: {})", &self.session.id)?;
+        }
+
+        let minified = matches!(
+            component,
+            Components::Authentication(components::Authentication::ListUserEntitlements2)
+                | Components::Util(components::Util::FetchClientConfig)
+                | Components::Util(components::Util::UserSettingsLoadAll)
+        );
+
+        PacketDebug {
+            packet: self.packet,
+            component,
+            minified,
+        }
+        .fmt(f)
     }
 }
 

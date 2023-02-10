@@ -5,13 +5,12 @@ use crate::{
         components::{Components, Redirector},
         models::{InstanceDetails, Port},
         net::lookup_host,
-        packet::append_packet_decoded,
     },
 };
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeError,
-    packet::{Packet, PacketComponents, PacketType},
+    packet::{Packet, PacketComponents, PacketDebug, PacketType},
 };
 use blaze_ssl_async::stream::BlazeStream;
 use log::{debug, error, log_enabled};
@@ -211,23 +210,13 @@ fn debug_log_packet(packet: &Packet, action: &str) {
     if !log_enabled!(log::Level::Debug) {
         return;
     }
-    let header = &packet.header;
-    let component = Components::from_header(header);
-    let mut message = String::new();
-    message.push('\n');
-    message.push_str(action);
-    message.push_str(&format!("\nComponent: {:?}", component));
-    message.push_str(&format!("\nType: {:?}", header.ty));
-    if header.ty != PacketType::Notify {
-        message.push_str("\nID: ");
-        message.push_str(&header.id.to_string());
-    }
-    if header.ty == PacketType::Error {
-        message.push_str("\nERROR: ");
-        message.push_str(&header.error.to_string());
-    }
-    append_packet_decoded(packet, &mut message);
-    debug!("{}", message);
+    let component = Components::from_header(&packet.header);
+    let debug = PacketDebug {
+        packet,
+        component: &component,
+        minified: false,
+    };
+    debug!("\n{}\n{:?}", action, debug);
 }
 
 impl From<DecodeError> for RetrieverError {

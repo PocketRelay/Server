@@ -4,9 +4,9 @@
 use crate::{
     services::retriever::Retriever,
     state::GlobalState,
-    utils::{components::Components, env, packet::append_packet_decoded},
+    utils::{components::Components, env},
 };
-use blaze_pk::packet::{Packet, PacketType};
+use blaze_pk::packet::{Packet, PacketDebug};
 use blaze_ssl_async::stream::BlazeStream;
 use log::{debug, error, info, log_enabled};
 use std::io;
@@ -80,14 +80,14 @@ async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> 
             // Read packets coming from the client
             result = Packet::read_async_typed::<Components, TcpStream>(&mut client) => {
                 let (component, packet) = result?;
-                debug_log_packet(component, &packet, "From Client");
+                debug_log_packet(&component, &packet, "From Client");
                 packet.write_async(&mut server).await?;
                 server.flush().await?;
             }
             // Read packets from the official server
             result = Packet::read_async_typed::<Components, BlazeStream>(&mut server) => {
                 let (component, packet) = result?;
-                debug_log_packet(component, &packet, "From Server");
+                debug_log_packet(&component, &packet, "From Server");
                 packet.write_async(&mut client).await?;
             }
         };
@@ -100,25 +100,15 @@ async fn handle_client(mut client: TcpStream, retriever: &'static Retriever) -> 
 /// `component` The component for the packet routing
 /// `packet`    The packet that is being logged
 /// `direction` The direction name for the packet
-fn debug_log_packet(component: Components, packet: &Packet, direction: &str) {
+fn debug_log_packet(component: &Components, packet: &Packet, direction: &str) {
     // Skip if debug logging is disabled
     if !log_enabled!(log::Level::Debug) {
         return;
     }
-    let header = &packet.header;
-    let mut message = String::new();
-    message.push_str("\nRecieved Packet ");
-    message.push_str(direction);
-    message.push_str(&format!("\nComponent: {:?}", component));
-    message.push_str(&format!("\nType: {:?}", header.ty));
-    if header.ty != PacketType::Notify {
-        message.push_str("\nID: ");
-        message.push_str(&header.id.to_string());
-    }
-    if header.ty == PacketType::Error {
-        message.push_str("\nERROR: ");
-        message.push_str(&header.error.to_string());
-    }
-    append_packet_decoded(packet, &mut message);
-    debug!("{}", message);
+    let debug = PacketDebug {
+        packet,
+        component,
+        minified: false,
+    };
+    debug!("\nRecieved Packet {}\n{:?}", direction, debug);
 }

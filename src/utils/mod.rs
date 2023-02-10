@@ -6,7 +6,6 @@ pub mod hashing;
 pub mod logging;
 pub mod models;
 pub mod net;
-pub mod packet;
 pub mod parsing;
 pub mod random;
 pub mod types;

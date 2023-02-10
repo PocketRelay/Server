@@ -10,7 +10,7 @@ use crate::{
 };
 use database::{DatabaseConnection, DbResult, Player};
 use log::error;
-use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+use std::{collections::HashMap, future::Future, sync::Arc};
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinSet,
