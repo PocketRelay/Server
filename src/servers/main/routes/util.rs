@@ -370,7 +370,7 @@ fn messages() -> TdfMap<String, String> {
             env::VERSION,
         ),
         priority: 1,
-        tracking_id: None,
+        tracking_id: Some(1),
         ty: MessageType::MenuTerminal,
     };
 
