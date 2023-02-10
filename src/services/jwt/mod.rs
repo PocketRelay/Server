@@ -1,10 +1,14 @@
 use std::path::Path;
 
 use crate::utils::random::random_string;
+use chrono::{Days, Utc};
 use database::Player;
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{
+    self as jwt, decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation,
+};
 use log::error;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tokio::fs::{read_to_string, write};
 
 pub struct Jwt {
@@ -60,9 +64,12 @@ impl Jwt {
     /// Creates a new claim using the provided claim value
     ///
     /// `claim` The token claim value
-    pub fn claim(&self, player: &Player) -> jsonwebtoken::errors::Result<String> {
-        let claim = PlayerClaim { id: player.id };
-
+    pub fn claim(&self, player: &Player) -> Result<String, ClaimError> {
+        let exp = Utc::now()
+            .checked_add_days(Days::new(30))
+            .ok_or(ClaimError::Timestamp)?
+            .timestamp();
+        let claim = PlayerClaim { id: player.id, exp };
         let token = encode(&self.header, &claim, &self.encoding)?;
         Ok(token)
     }
@@ -70,9 +77,17 @@ impl Jwt {
     /// Verifies a token claims returning the decoded claim structure
     ///
     /// `token` The token to verify
-    pub fn verify(&self, token: &str) -> jsonwebtoken::errors::Result<PlayerClaim> {
+    pub fn verify(&self, token: &str) -> jwt::errors::Result<PlayerClaim> {
         decode(token, &self.decoding, &self.validation).map(|value| value.claims)
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ClaimError {
+    #[error("{0}")]
+    Jwt(#[from] jwt::errors::Error),
+    #[error("Failed to create timestamp for message")]
+    Timestamp,
 }
 
 /// Claim for player authentication
@@ -81,4 +96,6 @@ pub struct PlayerClaim {
     /// The ID of the user this claim represents
     #[serde(rename = "sub")]
     pub id: u32,
+    /// Expiry date timestamp
+    pub exp: i64,
 }
