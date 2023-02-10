@@ -1,7 +1,7 @@
 //! This modules contains routes that handle serving information
 //! about the server such as the version and services running
 
-use crate::utils::constants;
+use crate::utils::env;
 use axum::{routing::get, Json, Router};
 use serde::Serialize;
 
@@ -28,6 +28,6 @@ struct ServerDetails {
 async fn server_details() -> Json<ServerDetails> {
     Json(ServerDetails {
         ident: "POCKET_RELAY_SERVER",
-        version: constants::VERSION,
+        version: env::VERSION,
     })
 }

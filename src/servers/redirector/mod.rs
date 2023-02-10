@@ -5,7 +5,6 @@ use crate::{
     env,
     utils::{
         components::{Components, Redirector},
-        constants,
         models::{InstanceDetails, InstanceNet},
     },
 };
@@ -83,7 +82,7 @@ async fn handle_client(accept: BlazeAccept) -> io::Result<()> {
         if component == REDIRECT_COMPONENT {
             debug!("Redirecting client (Addr: {addr:?})");
 
-            let host = constants::EXTERNAL_HOST;
+            let host = env::EXTERNAL_HOST;
             let port = env::from_env(env::MAIN_PORT);
             let instance = InstanceDetails {
                 net: InstanceNet::from((host.to_string(), port)),

@@ -2,7 +2,7 @@ use crate::{
     servers::main::{models::messaging::*, session::SessionAddr},
     utils::{
         components::{Components as C, Messaging as M},
-        constants, env,
+        env,
     },
 };
 use blaze_pk::{packet::Packet, router::Router};
@@ -63,7 +63,7 @@ async fn handle_fetch_messages(session: &mut SessionAddr) -> FetchMessageRespons
 async fn get_menu_message(session: &SessionAddr, player_name: &str) -> String {
     let mut message = env::env(env::MENU_MESSAGE);
     if message.contains("{v}") {
-        message = message.replace("{v}", constants::VERSION);
+        message = message.replace("{v}", env::VERSION);
     }
     if message.contains("{n}") {
         message = message.replace("{n}", player_name);

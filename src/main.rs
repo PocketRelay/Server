@@ -3,7 +3,7 @@ use log::info;
 use servers::*;
 use state::GlobalState;
 use tokio::signal;
-use utils::{constants::VERSION, env, logging};
+use utils::{env, logging};
 
 mod servers;
 mod services;
@@ -23,7 +23,7 @@ fn main() {
     // Initialize logging
     logging::setup();
 
-    info!("Starting Pocket Relay v{}", VERSION);
+    info!("Starting Pocket Relay v{}", env::VERSION);
 
     // Initialize global state
     runtime.block_on(GlobalState::init());

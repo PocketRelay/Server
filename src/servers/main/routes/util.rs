@@ -9,7 +9,7 @@ use crate::{
     state::GlobalState,
     utils::{
         components::{Components as C, Util as U},
-        constants, env,
+        env,
         models::Port,
     },
 };
@@ -367,7 +367,7 @@ fn messages() -> TdfMap<String, String> {
         title: Some("Pocket Relay".to_owned()),
         message: format!(
             "You are connected to Pocket Relay <font color='#FFFF66'>(v{})</font>",
-            constants::VERSION,
+            env::VERSION,
         ),
         priority: 1,
         tracking_id: None,
@@ -485,7 +485,7 @@ impl Message {
 fn data_config() -> TdfMap<String, String> {
     let http_port = env::from_env(env::HTTP_PORT);
     let tele_port = env::from_env(env::TELEMETRY_PORT);
-    let prefix = format!("http://{}:{}", constants::EXTERNAL_HOST, http_port);
+    let prefix = format!("http://{}:{}", env::EXTERNAL_HOST, http_port);
 
     let mut config = TdfMap::with_capacity(15);
     config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/gaw"));
@@ -503,7 +503,7 @@ fn data_config() -> TdfMap<String, String> {
     config.insert("TEL_PORT", tele_port.to_string());
     config.insert("TEL_SEND_DELAY", "15000");
     config.insert("TEL_SEND_PCT", "75");
-    config.insert("TEL_SERVER", constants::EXTERNAL_HOST);
+    config.insert("TEL_SERVER", env::EXTERNAL_HOST);
     config
 }
 
