@@ -277,24 +277,4 @@ DEFAULT : false
 ```
 
 This variable determines whether the API for accessing players on the server and currently
-running games. This API is disabled by default as not to expose the API with the default
-credentials. If you would like to use the API then set this to true and make sure to 
-change the Username and Password variables below
-
-## Username
-```
-ENV     : PR_API_USERNAME
-TYPE    : TEXT
-DEFAULT : admin
-```
-
-This is the username that is required in order to use the API
-
-## Password
-```
-ENV     : PR_API_PASSWORD
-TYPE    : TEXT
-DEFAULT : admin
-```
-
-This is the password that is required in order to use the API
+running games. This API is disabled by default
