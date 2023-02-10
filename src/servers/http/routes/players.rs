@@ -21,7 +21,7 @@ use validator::validate_email;
 /// Prefix: /api/players
 pub fn router() -> Router {
     Router::new()
-        .route("/", get(get_players).post(create_player))
+        .route("/", get(get_players))
         .route(
             "/:id",
             get(get_player).put(modify_player).delete(delete_player),
@@ -187,39 +187,6 @@ async fn modify_player(
         .update_http(&db, email, display_name, req.origin, password)
         .await?;
 
-    Ok(Json(player))
-}
-
-/// Request structure for a request to create a new player
-#[derive(Deserialize)]
-struct CreatePlayerRequest {
-    /// The email address of the player to create
-    email: String,
-    /// The display name of the player to create
-    display_name: String,
-    /// The plain text password for the player
-    password: String,
-}
-
-/// Route for creating a new player from the provided creation
-/// request.
-///
-/// `req` The request containing the player details
-async fn create_player(
-    _: AdminAuth,
-    Json(req): Json<CreatePlayerRequest>,
-) -> PlayersResult<Player> {
-    let db = GlobalState::database();
-    let email = req.email;
-    if !validate_email(&email) {
-        return Err(PlayersError::InvalidEmail);
-    }
-    let exists = Player::is_email_taken(&db, &email).await?;
-    if exists {
-        return Err(PlayersError::EmailTaken);
-    }
-    let password = hash_password(&req.password).map_err(|_| PlayersError::ServerError)?;
-    let player: Player = Player::create(&db, email, req.display_name, password, false).await?;
     Ok(Json(player))
 }
 
