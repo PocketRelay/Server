@@ -46,6 +46,7 @@ pub async fn start_server() {
             }
         };
 
+        let port = addr.port().to_be_bytes();
         let address = address.octets();
 
         // Copy the heading from the read buffer
@@ -54,8 +55,11 @@ pub async fn start_server() {
         // Copy the address bytes
         output[20..24].copy_from_slice(&address);
 
+        // Copy the port bytes
+        output[24..26].copy_from_slice(&port);
+
         // Fill remaining contents
-        output[24..].copy_from_slice(&[246, 162, 0, 0, 0, 0]);
+        output[26..].copy_from_slice(&[0, 0, 0, 0]);
 
         // Send output response
         match socket.send_to(&output, addr).await {
