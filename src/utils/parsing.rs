@@ -20,9 +20,9 @@ impl<'a> MEStringParser<'a> {
         Some(MEStringParser { split })
     }
 
-    pub fn next_str(&mut self) -> Option<String> {
+    pub fn next_str(&mut self) -> Option<&'a str> {
         let next = self.split.next()?;
-        Some(next.to_string())
+        Some(next)
     }
 
     pub fn parse_next<F: FromStr>(&mut self) -> Option<F> {
@@ -43,9 +43,9 @@ impl<'a> MEStringParser<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct PlayerClass {
+pub struct PlayerClass<'a> {
     /// The class name
-    pub name: String,
+    pub name: &'a str,
     /// The class level
     pub level: u8,
     /// The amount of exp the class has
@@ -63,8 +63,8 @@ pub struct PlayerClass {
 /// 20;4;Adept;20;0;50
 /// 20;4;NAME;LEVEL;EXP;PROMOTIONS
 /// ```
-pub fn parse_player_class(value: String) -> Option<PlayerClass> {
-    let mut parser = MEStringParser::new(&value)?;
+pub fn parse_player_class<'a>(value: &'a str) -> Option<PlayerClass<'a>> {
+    let mut parser = MEStringParser::new(value)?;
     let name = parser.next_str()?;
     let level = parser.parse_next()?;
     let exp = parser.parse_next()?;
@@ -79,11 +79,11 @@ pub fn parse_player_class(value: String) -> Option<PlayerClass> {
 
 /// Structure for a player character model stored in the database
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct PlayerCharacter {
+pub struct PlayerCharacter<'a> {
     /// The name of the character kit contains the name of the class
-    pub kit_name: String,
+    pub kit_name: &'a str,
     /// The name given to this character by the player
-    pub name: String,
+    pub name: &'a str,
     pub tint1: u16,
     pub tint2: u16,
     pub pattern: u16,
@@ -126,18 +126,18 @@ pub struct PlayerCharacter {
     /// Consumable_Shield 89 1.0000 0 0 0 0 0 0 5 False,
     /// Consumable_Ammo 86 1.0000 0 0 0 0 0 0 6 False
     /// ```
-    pub powers: String,
+    pub powers: &'a str,
     /// Hotkey configuration string
-    pub hotkeys: String,
+    pub hotkeys: &'a str,
     /// Weapon configuration string
     /// List of weapon IDs should not be more than two
     /// 135,25
-    pub weapons: String,
+    pub weapons: &'a str,
     /// Weapon mod configuration string
     /// List of weapon mods split by spaces for each
     /// gun. Can contain 1 or 2
     /// 135 34,25 47
-    pub weapon_mods: String,
+    pub weapon_mods: &'a str,
     /// Whether this character has been deployed before
     /// (Aka used)
     pub deployed: bool,
@@ -145,10 +145,10 @@ pub struct PlayerCharacter {
     pub leveled_up: bool,
 }
 
-pub fn parse_player_character(value: String) -> Option<PlayerCharacter> {
+pub fn parse_player_character<'a>(value: &'a str) -> Option<PlayerCharacter<'a>> {
     let mut parser = MEStringParser::new(&value)?;
-    let kit_name: String = parser.next_str()?;
-    let name: String = parser.parse_next()?;
+    let kit_name = parser.next_str()?;
+    let name = parser.next_str()?;
     let tint1: u16 = parser.parse_next()?;
     let tint2: u16 = parser.parse_next()?;
     let pattern: u16 = parser.parse_next()?;
@@ -161,10 +161,10 @@ pub fn parse_player_character(value: String) -> Option<PlayerCharacter> {
     let timestamp_month: u32 = parser.parse_next()?;
     let timestamp_day = parser.parse_next()?;
     let timestamp_seconds: u32 = parser.parse_next()?;
-    let powers: String = parser.next_str()?;
-    let hotkeys: String = parser.next_str()?;
-    let weapons: String = parser.next_str()?;
-    let weapon_mods: String = parser.next_str()?;
+    let powers = parser.next_str()?;
+    let hotkeys = parser.next_str()?;
+    let weapons = parser.next_str()?;
+    let weapon_mods = parser.next_str()?;
     let deployed: bool = parser.next_bool()?;
     let leveled_up: bool = parser.next_bool()?;
     Some(PlayerCharacter {

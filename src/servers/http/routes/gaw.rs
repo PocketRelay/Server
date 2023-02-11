@@ -124,8 +124,8 @@ async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u3
     Ok(player
         .get_classes(db)
         .await?
-        .into_iter()
-        .filter_map(|value| parse_player_class(value.value))
+        .iter()
+        .filter_map(|value| parse_player_class(&value.value))
         .map(|value| value.promotions)
         .sum())
 }

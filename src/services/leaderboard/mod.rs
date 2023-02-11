@@ -189,20 +189,20 @@ async fn compute_n7_player(db: DatabaseConnection, player: Player) -> DbResult<L
     let (classes, characters) = try_join!(player.get_classes(&db), player.get_characters(&db),)?;
 
     let classes: Vec<_> = classes
-        .into_iter()
-        .filter_map(|value| parse_player_class(value.value))
+        .iter()
+        .filter_map(|value| parse_player_class(&value.value))
         .collect();
 
     let characters: Vec<_> = characters
-        .into_iter()
-        .filter_map(|value| parse_player_character(value.value))
+        .iter()
+        .filter_map(|value| parse_player_character(&value.value))
         .collect();
 
     for class in classes {
         // Classes are active if atleast one character from the class is deployed
         let is_active = characters
             .iter()
-            .any(|char| char.kit_name.contains(&class.name) && char.deployed);
+            .any(|char| char.kit_name.contains(class.name) && char.deployed);
         if is_active {
             total_level += class.level as u32;
         }
