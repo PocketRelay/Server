@@ -32,16 +32,11 @@ pub fn setup() {
         return;
     }
     let logging_path = env::env(env::LOGGING_DIR);
-    let compression = env::from_env(env::LOG_COMPRESSION);
 
     let pattern = Box::new(PatternEncoder::new(LOGGING_PATTERN));
     let size_trigger = SizeTrigger::new(LOGGING_MAX_SIZE);
 
-    let mut file_pattern = format!("{}/log-{{}}.log", &logging_path);
-    // If compression is enable the file uses the .gz extension
-    if compression {
-        file_pattern.push_str(".gz")
-    }
+    let file_pattern = format!("{}/log-{{}}.log", &logging_path);
 
     let latest_path = format!("{}/log.log", &logging_path);
 

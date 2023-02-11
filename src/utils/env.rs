@@ -34,7 +34,6 @@ pub const ORIGIN_FETCH_DATA: (&str, bool) = ("PR_ORIGIN_FETCH_DATA", true);
 
 pub const LOGGING_LEVEL: (&str, LevelFilter) = ("PR_LOG_LEVEL", LevelFilter::Info);
 pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
-pub const LOG_COMPRESSION: (&str, bool) = ("PR_LOG_COMPRESSION", true);
 
 pub const API: (&str, bool) = ("PR_API", false);
 

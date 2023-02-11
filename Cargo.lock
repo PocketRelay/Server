@@ -1033,7 +1033,6 @@ dependencies = [
  "arc-swap",
  "chrono",
  "derivative",
- "flate2",
  "fnv",
  "libc",
  "log",
