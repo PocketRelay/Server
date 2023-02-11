@@ -5,7 +5,6 @@ use state::GlobalState;
 use tokio::signal;
 use utils::{env, logging};
 
-mod config;
 mod servers;
 mod services;
 mod state;

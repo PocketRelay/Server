@@ -185,11 +185,6 @@ async fn handle_login_email(
 /// `db`    The database connection
 /// `token` The origin authentication token
 async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
-    // Only continue if Origin Fetch is actually enabled
-    if !env::from_env(env::ORIGIN_FETCH) {
-        return Err(ServerError::ServerUnavailable);
-    }
-
     let services = GlobalState::services();
 
     // Ensure the retriever is enabled
@@ -198,8 +193,13 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
         return Err(ServerError::ServerUnavailable);
     };
 
+    let Some(service) = &retriever.origin_flow else {
+        error!("Origin authentication is disabled cannot authenticate origin client");
+        return Err(ServerError::ServerUnavailable);
+    };
+
     // Create an origin authentication flow
-    let Some(mut flow) = retriever.create_origin_flow().await else {
+    let Some(mut flow) = service.create(retriever).await else {
         error!("Unable to authenticate Origin: Unable to connect to official servers");
         return Err(ServerError::ServerUnavailable);
     };
@@ -225,7 +225,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
             .map_err(|_| ServerError::ServerUnavailable)?;
 
     // Early return created player if origin fetching is disabled
-    if !env::from_env(env::ORIGIN_FETCH_DATA) {
+    if !flow.data {
         return Ok(player);
     }
 

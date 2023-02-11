@@ -6,6 +6,24 @@ use crate::utils::components::{Authentication, Components, Util};
 use blaze_pk::types::TdfMap;
 use log::debug;
 
+/// Service for providing origin flows from a retriever
+/// instance if available
+pub struct OriginFlowService {
+    /// Whether data fetching is enabled within the
+    /// created origin flows
+    pub data: bool,
+}
+
+impl OriginFlowService {
+    pub async fn create(&self, retriever: &Retriever) -> Option<OriginFlow> {
+        let session = retriever.session().await?;
+        Some(OriginFlow {
+            session,
+            data: self.data,
+        })
+    }
+}
+
 /// Structure for the data return after retrieving the data
 /// from an Origin account using the official servers.
 pub struct OriginDetails {
@@ -17,6 +35,7 @@ pub struct OriginDetails {
 /// origin and optionally loading the player data
 pub struct OriginFlow {
     session: RetSession,
+    pub data: bool,
 }
 
 impl OriginFlow {
@@ -55,13 +74,5 @@ impl OriginFlow {
             .await
             .ok()?;
         Some(value.settings)
-    }
-}
-
-impl Retriever {
-    /// Creates a new origin flow
-    pub async fn create_origin_flow(&self) -> Option<OriginFlow> {
-        let session = self.session().await?;
-        Some(OriginFlow { session })
     }
 }

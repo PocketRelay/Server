@@ -1,11 +1,9 @@
 //! Module for retrieving data from the official Mass Effect 3 Servers
-use crate::{
+use crate::utils::{
+    components::{Components, Redirector},
     env,
-    utils::{
-        components::{Components, Redirector},
-        models::{InstanceDetails, Port},
-        net::lookup_host,
-    },
+    models::{InstanceDetails, Port},
+    net::lookup_host,
 };
 use blaze_pk::{
     codec::{Decodable, Encodable},
@@ -18,6 +16,8 @@ use tokio::io::{self, AsyncWriteExt};
 
 use models::InstanceRequest;
 
+use self::origin::OriginFlowService;
+
 mod models;
 pub mod origin;
 
@@ -28,6 +28,9 @@ pub struct Retriever {
     host: String,
     /// The port of the official server.
     port: u16,
+
+    /// Optional service for creating origin flows if enabled
+    pub origin_flow: Option<OriginFlowService>,
 }
 
 impl Retriever {
@@ -49,7 +52,20 @@ impl Retriever {
         debug!("Completed host lookup: {}", &redirector_host);
         let (host, port) = Self::get_main_host(redirector_host).await?;
         debug!("Retriever setup complete. (Host: {} Port: {})", &host, port);
-        Some(Retriever { host, port })
+
+        let origin_flow = if env::from_env(env::ORIGIN_FETCH) {
+            Some(OriginFlowService {
+                data: env::from_env(env::ORIGIN_FETCH_DATA),
+            })
+        } else {
+            None
+        };
+
+        Some(Retriever {
+            host,
+            port,
+            origin_flow,
+        })
     }
 
     /// Makes a instance request to the redirect server at the provided

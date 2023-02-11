@@ -1,4 +1,4 @@
-use crate::{env, utils::net::public_address};
+use crate::utils::{env, net::public_address};
 use log::{info, LevelFilter};
 use log4rs::{
     append::{
