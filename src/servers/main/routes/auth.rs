@@ -9,7 +9,6 @@ use crate::{
     state::GlobalState,
     utils::{
         components::{Authentication as A, Components as C},
-        env,
         hashing::{hash_password, verify_password},
     },
 };

@@ -207,10 +207,6 @@ impl SessionAddr {
     }
 }
 
-trait HandleProxy {
-    fn handle(&mut self, ctx: Session);
-}
-
 /// Message for communicating with the spawned session
 /// using cloned the sender present on cloned addresses
 enum Message {
