@@ -31,7 +31,7 @@ use tokio::{
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
 /// other session state.
-pub struct Session {
+struct Session {
     /// Unique identifier for this session.
     id: SessionID,
 
@@ -87,7 +87,7 @@ impl SessionAddr {
             .ok();
     }
 
-    pub fn read(&self, packet: Packet) -> bool {
+    fn read(&self, packet: Packet) -> bool {
         self.tx
             .send(Message::Packet(PacketMessage::Read(packet)))
             .is_ok()
@@ -707,13 +707,13 @@ fn encode_session(session: &Session, writer: &mut TdfWriter) {
 
 /// Session update for a session other than ourselves
 /// which contains the details for that session
-pub struct SessionUpdate<'a> {
+struct SessionUpdate<'a> {
     /// The session this update is for
-    pub session: &'a Session,
+    session: &'a Session,
     /// The player ID the update is for
-    pub player_id: PlayerID,
+    player_id: PlayerID,
     /// The display name of the player the update is
-    pub display_name: &'a str,
+    display_name: &'a str,
 }
 
 impl Encodable for SessionUpdate<'_> {
@@ -733,11 +733,11 @@ impl Encodable for SessionUpdate<'_> {
 }
 
 /// Session update for ourselves
-pub struct SetSession<'a> {
+struct SetSession<'a> {
     /// The player ID the update is for
-    pub player_id: PlayerID,
+    player_id: PlayerID,
     /// The session this update is for
-    pub session: &'a Session,
+    session: &'a Session,
 }
 
 impl Encodable for SetSession<'_> {
