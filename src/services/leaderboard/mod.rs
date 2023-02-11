@@ -64,7 +64,7 @@ impl Leaderboard {
                 if !group.is_expired() {
                     // Value is not expire respond immediately
                     message.tx.send(group.clone()).ok();
-                    return;
+                    continue;
                 }
             }
 
