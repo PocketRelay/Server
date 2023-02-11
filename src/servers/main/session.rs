@@ -116,9 +116,10 @@ impl SessionAddr {
 
     pub async fn try_into_player(&self) -> Option<GamePlayer> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self
+        if self
             .tx
             .send(Message::Player(PlayerMessage::CreateGamePlayer(tx)))
+            .is_err()
         {
             return None;
         }
@@ -139,9 +140,10 @@ impl SessionAddr {
 
     pub async fn set_player(&self, player: Player) -> ServerResult<(Player, String)> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self
+        if self
             .tx
             .send(Message::Player(PlayerMessage::Set(player, tx)))
+            .is_err()
         {
             return Err(ServerError::ServerUnavailable);
         }
@@ -151,7 +153,11 @@ impl SessionAddr {
 
     pub async fn get_player(&self) -> ServerResult<Option<Player>> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.tx.send(Message::Player(PlayerMessage::Get(tx))) {
+        if self
+            .tx
+            .send(Message::Player(PlayerMessage::Get(tx)))
+            .is_err()
+        {
             return Err(ServerError::ServerUnavailable);
         }
 
@@ -159,7 +165,11 @@ impl SessionAddr {
     }
     pub async fn get_player_id(&self) -> Option<u32> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.tx.send(Message::Player(PlayerMessage::GetId(tx))) {
+        if self
+            .tx
+            .send(Message::Player(PlayerMessage::GetId(tx)))
+            .is_err()
+        {
             return None;
         }
 
@@ -168,7 +178,11 @@ impl SessionAddr {
 
     pub async fn socket_addr(&self) -> Option<SocketAddr> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.tx.send(Message::Net(NetMessage::SocketAddr(tx))) {
+        if self
+            .tx
+            .send(Message::Net(NetMessage::SocketAddr(tx)))
+            .is_err()
+        {
             return None;
         }
 
@@ -341,8 +355,7 @@ impl Handler<'_, NetMessage> for Session {
             NetMessage::Set(groups, ext) => self.set_network_info(groups, ext),
             NetMessage::SetHardwareFlag(value) => self.set_hardware_flag(value),
             NetMessage::SocketAddr(tx) => {
-                let value = self.socket_addr.clone();
-                tx.send(value).ok();
+                tx.send(self.socket_addr).ok();
             }
         }
     }

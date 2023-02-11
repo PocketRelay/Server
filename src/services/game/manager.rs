@@ -84,12 +84,16 @@ impl GameManagerAddr {
     ) -> Option<GameAddr> {
         let (tx, rx) = oneshot::channel();
 
-        if let Err(_) = self.0.send(Message::Create {
-            attributes,
-            setting,
-            host,
-            tx,
-        }) {
+        if self
+            .0
+            .send(Message::Create {
+                attributes,
+                setting,
+                host,
+                tx,
+            })
+            .is_err()
+        {
             return None;
         }
 
@@ -103,7 +107,7 @@ impl GameManagerAddr {
     ) -> Option<TryAddResult> {
         let (tx, rx) = oneshot::channel();
 
-        if let Err(_) = self.0.send(Message::TryAdd(player, rule_set, tx)) {
+        if self.0.send(Message::TryAdd(player, rule_set, tx)).is_err() {
             return None;
         }
 
@@ -113,7 +117,7 @@ impl GameManagerAddr {
     pub async fn snapshot(&self, game_id: GameID) -> Option<GameSnapshot> {
         let (tx, rx) = oneshot::channel();
 
-        if let Err(_) = self.0.send(Message::Snapshot { game_id, tx }) {
+        if self.0.send(Message::Snapshot { game_id, tx }).is_err() {
             return None;
         }
 
@@ -127,7 +131,11 @@ impl GameManagerAddr {
     ) -> Option<(Vec<GameSnapshot>, bool)> {
         let (tx, rx) = oneshot::channel();
 
-        if let Err(_) = self.0.send(Message::SnapshotQuery { offset, count, tx }) {
+        if self
+            .0
+            .send(Message::SnapshotQuery { offset, count, tx })
+            .is_err()
+        {
             return None;
         }
 

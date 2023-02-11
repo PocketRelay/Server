@@ -49,7 +49,7 @@ impl LeaderboardAddr {
 
     pub async fn get(&self, ty: LeaderboardType) -> Option<Arc<LeaderboardGroup>> {
         let (tx, rx) = oneshot::channel();
-        if let Err(_) = self.0.send(GetRequest { ty, tx }) {
+        if self.0.send(GetRequest { ty, tx }).is_err() {
             return None;
         }
         rx.await.ok()

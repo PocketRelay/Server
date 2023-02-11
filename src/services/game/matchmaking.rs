@@ -45,7 +45,7 @@ impl MatchmakingAddr {
     ///
     /// `id` The Session ID of the player to remove
     pub fn unqueue_session(&self, id: SessionID) {
-        if let Err(_) = self.0.send(Message::RemovePlayer(id)) {
+        if self.0.send(Message::RemovePlayer(id)).is_err() {
             error!("Failed to remove player from matchmaking queue: {}", id);
         }
     }
@@ -54,7 +54,7 @@ impl MatchmakingAddr {
     ///
     /// `game` The addr to the created game
     pub fn created(&self, game: GameAddr) {
-        if let Err(_) = self.0.send(Message::GameCreated(game)) {
+        if self.0.send(Message::GameCreated(game)).is_err() {
             error!("Failed to handle game creation");
         }
     }
@@ -64,7 +64,7 @@ impl MatchmakingAddr {
     /// `player`   The player to add to the queue
     /// `rule_set` The player rule set
     pub fn queue(&self, player: GamePlayer, rule_set: Arc<RuleSet>) {
-        if let Err(_) = self.0.send(Message::QueuePlayer(player, rule_set)) {
+        if self.0.send(Message::QueuePlayer(player, rule_set)).is_err() {
             error!("Failed to queue player");
         }
     }

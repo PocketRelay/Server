@@ -31,10 +31,7 @@ pub struct AdminVerify;
 
 impl AuthVerifier for AdminVerify {
     fn verify(player: &Player) -> bool {
-        match player.role {
-            PlayerRole::Admin | PlayerRole::SuperAdmin => true,
-            _ => false,
-        }
+        matches!(player.role, PlayerRole::Admin | PlayerRole::SuperAdmin)
     }
 }
 

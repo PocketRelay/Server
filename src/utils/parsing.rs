@@ -63,7 +63,7 @@ pub struct PlayerClass<'a> {
 /// 20;4;Adept;20;0;50
 /// 20;4;NAME;LEVEL;EXP;PROMOTIONS
 /// ```
-pub fn parse_player_class<'a>(value: &'a str) -> Option<PlayerClass<'a>> {
+pub fn parse_player_class(value: &str) -> Option<PlayerClass<'_>> {
     let mut parser = MEStringParser::new(value)?;
     let name = parser.next_str()?;
     let level = parser.parse_next()?;
@@ -145,8 +145,8 @@ pub struct PlayerCharacter<'a> {
     pub leveled_up: bool,
 }
 
-pub fn parse_player_character<'a>(value: &'a str) -> Option<PlayerCharacter<'a>> {
-    let mut parser = MEStringParser::new(&value)?;
+pub fn parse_player_character(value: &str) -> Option<PlayerCharacter<'_>> {
+    let mut parser = MEStringParser::new(value)?;
     let kit_name = parser.next_str()?;
     let name = parser.next_str()?;
     let tint1: u16 = parser.parse_next()?;
