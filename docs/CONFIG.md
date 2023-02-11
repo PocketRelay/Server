@@ -249,22 +249,6 @@ DEFAULT : mysql://username:password@host/database
 If you are using the MySQL version of Pocket Relay then this variable
 determines the connection url for the database.
 
-# MITM
-
-This section contains the configuration for the Man-In-The-Middle server
-
-## Enabled
-```
-ENV     : PR_MITM_ENABLED
-TYPE    : BOOLEAN
-DEFAULT : false
-```
-
-This variable determines whether the MITM server will be used instead of the Main server. When enabled rather than locally handling your traffic clients will be proxied to the official game servers but the packets traveling between the connections will be logged to the log files. 
-
-This is more of a development feature and isn't really nessicary for use on a production server and would be useless for most common server use cases. This is more for collecting
-details from the official servers in order to further develop Pocket Relay
-
 # API
 
 This section contains the configuration for the API system

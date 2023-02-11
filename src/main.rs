@@ -5,6 +5,7 @@ use state::GlobalState;
 use tokio::signal;
 use utils::{env, logging};
 
+mod config;
 mod servers;
 mod services;
 mod state;
@@ -33,20 +34,14 @@ fn main() {
 
     // Spawn redirector in its own task
     runtime.spawn(redirector::start_server());
-
-    if env::from_env(env::MITM_ENABLED) {
-        // Start the MITM server
-        runtime.spawn(mitm::start_server());
-    } else {
-        // Spawn QOS server in its own task
-        runtime.spawn(qos::start_server());
-        // Spawn the HTTP server in its own task
-        runtime.spawn(http::start_server());
-        // Spawn the Main server in its own task
-        runtime.spawn(main::start_server());
-        // Spawn the Telemetry server in its own task
-        runtime.spawn(telemetry::start_server());
-    }
+    // Spawn QOS server in its own task
+    runtime.spawn(qos::start_server());
+    // Spawn the HTTP server in its own task
+    runtime.spawn(http::start_server());
+    // Spawn the Main server in its own task
+    runtime.spawn(main::start_server());
+    // Spawn the Telemetry server in its own task
+    runtime.spawn(telemetry::start_server());
 
     // Block until shutdown is recieved
     runtime.block_on(signal::ctrl_c()).ok();
