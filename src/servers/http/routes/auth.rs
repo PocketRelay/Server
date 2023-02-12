@@ -59,7 +59,7 @@ async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, Aut
 
     let token = services
         .jwt
-        .claim(&player)
+        .claim(player.id)
         .map_err(|_| AuthError::ServerError)?;
 
     Ok(Json(TokenResponse { token }))

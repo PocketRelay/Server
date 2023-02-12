@@ -557,10 +557,15 @@ async fn handle_legal_content(ty: LegalType) -> LegalContent {
 /// Content: {}
 /// ```
 async fn handle_get_auth_token(session: &mut SessionAddr) -> ServerResult<GetTokenResponse> {
-    let token: String = session
+    let player_id = session
         .get_player_id()
         .await
-        .map(|player| format!("{:X}", player))
         .ok_or(ServerError::FailedNoLoginAction)?;
+    // Create a new token claim for the player to use with the API
+    let services = GlobalState::services();
+    let token = services
+        .jwt
+        .claim(player_id)
+        .map_err(|_| ServerError::ServerUnavailable)?;
     Ok(GetTokenResponse { token })
 }

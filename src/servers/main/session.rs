@@ -581,7 +581,7 @@ impl Session {
 
         let services = GlobalState::services();
 
-        let token = match services.jwt.claim(&player) {
+        let token = match services.jwt.claim(player.id) {
             Ok(value) => value,
             Err(err) => {
                 error!("Unable to create session token for player: {:?}", err);

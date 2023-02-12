@@ -2,7 +2,6 @@ use std::path::Path;
 
 use crate::utils::random::random_string;
 use chrono::{Days, Utc};
-use database::Player;
 use jsonwebtoken::{
     self as jwt, decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation,
 };
@@ -64,12 +63,13 @@ impl Jwt {
     /// Creates a new claim using the provided claim value
     ///
     /// `claim` The token claim value
-    pub fn claim(&self, player: &Player) -> Result<String, ClaimError> {
+    /// `id`    The ID of the player to claim for
+    pub fn claim(&self, id: u32) -> Result<String, ClaimError> {
         let exp = Utc::now()
             .checked_add_days(Days::new(30))
             .ok_or(ClaimError::Timestamp)?
             .timestamp();
-        let claim = PlayerClaim { id: player.id, exp };
+        let claim = PlayerClaim { id, exp };
         let token = encode(&self.header, &claim, &self.encoding)?;
         Ok(token)
     }
