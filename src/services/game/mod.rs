@@ -289,8 +289,8 @@ impl Game {
     fn update_clients(&self, player: &GamePlayer) {
         debug!("Updating clients with new session details");
         self.players.iter().for_each(|value| {
-            value.write_updates(player);
-            player.write_updates(value);
+            value.addr.push_details(player.addr.clone());
+            player.addr.push_details(value.addr.clone());
         });
     }
 

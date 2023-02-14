@@ -122,7 +122,7 @@ async fn handle_post_auth(session: &mut SessionAddr) -> ServerResult<PostAuthRes
         .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    session.push_details();
+    session.push_details(session.clone());
 
     Ok(PostAuthResponse {
         telemetry: TelemetryServer {

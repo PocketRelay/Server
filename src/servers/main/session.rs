@@ -100,8 +100,8 @@ impl SessionAddr {
         self.tx.send(Message::Game(GameMessage::Set(game))).ok();
     }
 
-    pub fn push_details(&self) {
-        self.tx.send(Message::PushDetails).ok();
+    pub fn push_details(&self, addr: SessionAddr) {
+        self.tx.send(Message::PushDetails(addr)).ok();
     }
 
     pub fn clear_player(&self) {
@@ -235,7 +235,7 @@ impl SessionAddr {
 enum Message {
     /// Request to push the details for the session to the
     /// associated client
-    PushDetails,
+    PushDetails(SessionAddr),
 
     /// Request to stop the session
     Stop,
@@ -420,7 +420,7 @@ impl Session {
     async fn process(mut self, mut receiver: mpsc::UnboundedReceiver<Message>) {
         while let Some(msg) = receiver.recv().await {
             match msg {
-                Message::PushDetails => self.push_details(),
+                Message::PushDetails(addr) => self.push_details(addr),
                 Message::Packet(msg) => self.handle(msg).await,
                 Message::Player(msg) => self.handle(msg),
                 Message::Game(msg) => self.handle(msg),
@@ -587,7 +587,7 @@ impl Session {
         self.push(packet);
     }
 
-    fn push_details(&mut self) {
+    fn push_details(&mut self, addr: SessionAddr) {
         let player = match self.player.as_ref() {
             Some(value) => value,
             None => return,
@@ -612,8 +612,8 @@ impl Session {
         );
 
         // Push the packets
-        self.push(a);
-        self.push(b);
+        addr.push(a);
+        addr.push(b);
     }
 
     /// Removes the session from any connected games and the
