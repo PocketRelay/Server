@@ -332,7 +332,7 @@ impl Handler<'_, PlayerMessage> for Session {
                 tx.send(player).ok();
             }
             PlayerMessage::Set(player, tx) => {
-                self.set_player(player);
+                self.player = Some(player);
                 tx.send(()).ok();
             }
             PlayerMessage::Clear => {
@@ -585,11 +585,6 @@ impl Session {
             },
         );
         self.push(packet);
-    }
-
-    fn set_player(&mut self, player: Player) {
-        // Update the player value
-        self.player.insert(player);
     }
 
     fn push_details(&mut self) {
