@@ -32,7 +32,7 @@ use tokio::{
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
 /// other session state.
-struct Session {
+pub struct Session {
     /// Unique identifier for this session.
     id: SessionID,
 
@@ -44,7 +44,7 @@ struct Session {
 
     /// If the session is authenticated it will have a linked
     /// player model from the database
-    player: Option<Player>,
+    pub player: Option<Player>,
 
     /// Networking information
     net: NetData,
@@ -75,6 +75,59 @@ pub struct SessionAddr {
     tx: mpsc::UnboundedSender<Message>,
 }
 
+/// Trait representing an action that can be executed
+/// using the session
+trait SessionAction: Sized + Send + 'static {
+    /// Type for the resulting value created from this action
+    type Result;
+
+    fn handle(self, session: &mut Session) -> Self::Result;
+}
+
+impl<F, R> SessionAction for F
+where
+    F: FnOnce(&mut Session) -> R + Send + 'static,
+    R: 'static,
+{
+    type Result = R;
+
+    fn handle(self, session: &mut Session) -> Self::Result {
+        self(session)
+    }
+}
+
+struct ActionMessage<A, R> {
+    action: A,
+    tx: oneshot::Sender<R>,
+}
+
+struct LazyActionMessage<A> {
+    action: A,
+}
+
+trait ActionMessageProxy: Send {
+    fn handle(self: Box<Self>, session: &mut Session);
+}
+
+impl<A, R> ActionMessageProxy for ActionMessage<A, R>
+where
+    A: SessionAction<Result = R>,
+    R: Send + Sized + 'static,
+{
+    fn handle(self: Box<Self>, session: &mut Session) {
+        let result: R = self.action.handle(session);
+        self.tx.send(result).ok();
+    }
+}
+impl<A> ActionMessageProxy for LazyActionMessage<A>
+where
+    A: SessionAction<Result = ()>,
+{
+    fn handle(self: Box<Self>, session: &mut Session) {
+        self.action.handle(session);
+    }
+}
+
 impl SessionAddr {
     /// Writes a new packet ot the session
     ///
@@ -91,23 +144,40 @@ impl SessionAddr {
             .is_ok()
     }
 
-    /// Sets the game that the session is apart of
+    /// Executes the provided action on the actual session itself will
+    /// return an option if the session wasn't able to execute the action
+    /// likely because the session has ended.
     ///
-    /// `game` The game
-    pub fn set_game(&self, game: Option<GameID>) {
-        self.tx.send(Message::Game(GameMessage::Set(game))).ok();
+    /// `action` The action to execute
+    pub async fn exec<A, R>(&self, action: A) -> Option<R>
+    where
+        A: FnOnce(&mut Session) -> R + Send + 'static,
+        R: Send + Sized + 'static,
+    {
+        let (tx, rx) = oneshot::channel();
+
+        if self
+            .tx
+            .send(Message::Action(Box::new(ActionMessage { action, tx })))
+            .is_err()
+        {
+            return None;
+        }
+
+        rx.await.ok()
     }
 
-    pub fn push_details(&self, addr: SessionAddr) {
-        self.tx.send(Message::PushDetails(addr)).ok();
-    }
-
-    pub fn clear_player(&self) {
-        self.tx.send(Message::Player(PlayerMessage::Clear)).ok();
-    }
-
-    pub fn remove_games(&self) {
-        self.tx.send(Message::Game(GameMessage::Remove)).ok();
+    /// Executes the provided action lazily this doesn't require awaiting for
+    /// a result type
+    ///
+    /// `action` The action to execute
+    pub fn exec_lazy<A>(&self, action: A)
+    where
+        A: FnOnce(&mut Session) + Send + 'static,
+    {
+        self.tx
+            .send(Message::Action(Box::new(LazyActionMessage { action })))
+            .ok();
     }
 
     pub fn stop(&self) {
@@ -115,28 +185,16 @@ impl SessionAddr {
     }
 
     pub async fn try_into_player(&self) -> Option<GamePlayer> {
-        let (tx, rx) = oneshot::channel();
-        if self
-            .tx
-            .send(Message::Player(PlayerMessage::CreateGamePlayer(tx)))
-            .is_err()
-        {
-            return None;
-        }
-
-        rx.await.ok().flatten()
-    }
-
-    pub fn set_network_info(&self, groups: NetGroups, ext: QosNetworkData) {
-        self.tx
-            .send(Message::Net(NetMessage::Set(groups, ext)))
-            .ok();
-    }
-
-    pub fn set_hardware_flag(&self, value: u16) {
-        self.tx
-            .send(Message::Net(NetMessage::SetHardwareFlag(value)))
-            .ok();
+        self.exec(|session| {
+            let player = session.player.clone()?;
+            Some(GamePlayer::new(
+                player,
+                session.net.clone(),
+                session.addr.clone(),
+            ))
+        })
+        .await
+        .flatten()
     }
 
     /// Attempts to set the current player will return true if successful
@@ -144,56 +202,27 @@ impl SessionAddr {
     ///
     /// `player` The player to set for this session
     pub async fn set_player(&self, player: Player) -> bool {
-        let (tx, rx) = oneshot::channel();
-
-        if self
-            .tx
-            .send(Message::Player(PlayerMessage::Set(player, tx)))
-            .is_err()
-        {
-            return false;
-        }
-
-        rx.await.is_ok()
+        self.exec(|session| {
+            session.player = Some(player);
+        })
+        .await
+        .is_some()
     }
 
     pub async fn get_player(&self) -> ServerResult<Option<Player>> {
-        let (tx, rx) = oneshot::channel();
-        if self
-            .tx
-            .send(Message::Player(PlayerMessage::Get(tx)))
-            .is_err()
-        {
-            return Err(ServerError::ServerUnavailable);
-        }
-
-        rx.await.map_err(|_| ServerError::ServerUnavailable)
+        self.exec(|session| session.player.clone())
+            .await
+            .ok_or(ServerError::ServerUnavailable)
     }
 
     pub async fn get_player_id(&self) -> Option<u32> {
-        let (tx, rx) = oneshot::channel();
-        if self
-            .tx
-            .send(Message::Player(PlayerMessage::GetId(tx)))
-            .is_err()
-        {
-            return None;
-        }
-
-        rx.await.ok().flatten()
+        self.exec(|session| session.player.as_ref().map(|value| value.id))
+            .await
+            .flatten()
     }
 
     pub async fn socket_addr(&self) -> Option<SocketAddr> {
-        let (tx, rx) = oneshot::channel();
-        if self
-            .tx
-            .send(Message::Net(NetMessage::SocketAddr(tx)))
-            .is_err()
-        {
-            return None;
-        }
-
-        rx.await.ok()
+        self.exec(|session| session.socket_addr).await
     }
 
     pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr)) {
@@ -227,24 +256,14 @@ impl SessionAddr {
 /// Message for communicating with the spawned session
 /// using cloned the sender present on cloned addresses
 enum Message {
-    /// Request to push the details for the session to the
-    /// associated client
-    PushDetails(SessionAddr),
-
     /// Request to stop the session
     Stop,
 
+    /// Action execution
+    Action(Box<dyn ActionMessageProxy>),
+
     /// Group of messages relating to packets
     Packet(PacketMessage),
-
-    /// Group of messages relating to networking
-    Net(NetMessage),
-
-    /// Group of messages relating to games
-    Game(GameMessage),
-
-    /// Group of messages relating to players
-    Player(PlayerMessage),
 }
 
 /// Group of messages realting to packets
@@ -258,125 +277,6 @@ enum PacketMessage {
     /// Request to tell the session to flush any outbound
     /// packets actually writing them to the socket
     Flush,
-}
-
-/// Group of messages relating to networking
-enum NetMessage {
-    /// Request to set the net groups and QOS networking data
-    Set(NetGroups, QosNetworkData),
-
-    /// Request to set the hardware flag for this session
-    SetHardwareFlag(u16),
-
-    /// Request to obtain the socket address associated with
-    /// the session
-    SocketAddr(oneshot::Sender<SocketAddr>),
-}
-
-/// Group of messages related to games
-enum GameMessage {
-    /// Request to set the current game ID
-    Set(Option<GameID>),
-
-    /// Request to remove the player from any games and the
-    /// matchmaking queue
-    Remove,
-}
-
-/// Group of messages relating to players
-enum PlayerMessage {
-    /// Request to create a game player from the authenticated
-    /// session
-    CreateGamePlayer(oneshot::Sender<Option<GamePlayer>>),
-
-    /// Requests a copy of the player that this session is
-    /// authenticated as
-    Get(oneshot::Sender<Option<Player>>),
-
-    /// Requests a copy of the ID of the player that this
-    /// session is authenticated as
-    GetId(oneshot::Sender<Option<u32>>),
-
-    /// Sets the current authenticated player for this session
-    /// returning a copy of the player and a session token for
-    /// authentication
-    Set(Player, oneshot::Sender<()>),
-
-    /// Request to clear the current active player
-    Clear,
-}
-
-trait Handler<'a, T> {
-    type Result;
-
-    fn handle(&'a mut self, msg: T) -> Self::Result;
-}
-
-impl Handler<'_, PlayerMessage> for Session {
-    type Result = ();
-
-    fn handle(&mut self, msg: PlayerMessage) {
-        match msg {
-            PlayerMessage::Get(tx) => {
-                let player = self.player.clone();
-                tx.send(player).ok();
-            }
-            PlayerMessage::GetId(tx) => {
-                let player = self.player.as_ref().map(|value| value.id);
-                tx.send(player).ok();
-            }
-            PlayerMessage::Set(player, tx) => {
-                self.player = Some(player);
-                tx.send(()).ok();
-            }
-            PlayerMessage::Clear => {
-                self.player = None;
-            }
-            PlayerMessage::CreateGamePlayer(tx) => {
-                let player = self.try_into_player();
-                tx.send(player).ok();
-            }
-        }
-    }
-}
-
-impl<'a> Handler<'a, PacketMessage> for Session {
-    type Result = BoxFuture<'a, ()>;
-
-    fn handle(&'a mut self, msg: PacketMessage) -> Self::Result {
-        Box::pin(async move {
-            match msg {
-                PacketMessage::Read(packet) => self.handle_packet(packet),
-                PacketMessage::Write(packet) => self.push(packet),
-                PacketMessage::Flush => self.flush().await,
-            }
-        })
-    }
-}
-
-impl Handler<'_, NetMessage> for Session {
-    type Result = ();
-
-    fn handle(&mut self, msg: NetMessage) {
-        match msg {
-            NetMessage::Set(groups, ext) => self.set_network_info(groups, ext),
-            NetMessage::SetHardwareFlag(value) => self.set_hardware_flag(value),
-            NetMessage::SocketAddr(tx) => {
-                tx.send(self.socket_addr).ok();
-            }
-        }
-    }
-}
-
-impl Handler<'_, GameMessage> for Session {
-    type Result = ();
-
-    fn handle(&mut self, msg: GameMessage) {
-        match msg {
-            GameMessage::Set(game) => self.set_game(game),
-            GameMessage::Remove => self.remove_games(),
-        }
-    }
 }
 
 impl Session {
@@ -412,12 +312,15 @@ impl Session {
     async fn process(mut self, mut receiver: mpsc::UnboundedReceiver<Message>) {
         while let Some(msg) = receiver.recv().await {
             match msg {
-                Message::PushDetails(addr) => self.push_details(addr),
-                Message::Packet(msg) => self.handle(msg).await,
-                Message::Player(msg) => self.handle(msg),
-                Message::Game(msg) => self.handle(msg),
-                Message::Net(msg) => self.handle(msg),
+                Message::Packet(msg) => match msg {
+                    PacketMessage::Read(packet) => self.handle_packet(packet),
+                    PacketMessage::Write(packet) => self.push(packet),
+                    PacketMessage::Flush => self.flush().await,
+                },
                 Message::Stop => break,
+                Message::Action(action) => {
+                    action.handle(&mut self);
+                }
             }
         }
     }
@@ -538,7 +441,7 @@ impl Session {
     ///
     /// `game` The game the player has joined.
     /// `slot` The slot in the game the player is in.
-    fn set_game(&mut self, game: Option<GameID>) {
+    pub fn set_game(&mut self, game: Option<GameID>) {
         self.game = game;
         self.update_client();
     }
@@ -549,7 +452,7 @@ impl Session {
     ///
     /// `groups` The networking groups
     /// `ext`    The networking ext
-    fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
+    pub fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
         let net = &mut &mut self.net;
         net.qos = ext;
         net.groups = Some(groups);
@@ -560,7 +463,7 @@ impl Session {
     /// updates the client with the changes
     ///
     /// `value` The new hardware flag value
-    fn set_hardware_flag(&mut self, value: u16) {
+    pub fn set_hardware_flag(&mut self, value: u16) {
         self.net.hardware_flags = value;
         self.update_client();
     }
@@ -579,7 +482,7 @@ impl Session {
         self.push(packet);
     }
 
-    fn push_details(&mut self, addr: SessionAddr) {
+    pub fn push_details(&mut self, addr: SessionAddr) {
         let player = match self.player.as_ref() {
             Some(value) => value,
             None => return,
@@ -610,7 +513,7 @@ impl Session {
 
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    fn remove_games(&mut self) {
+    pub fn remove_games(&mut self) {
         let game = self.game.take();
         let services = GlobalState::services();
         if let Some(game_id) = game {

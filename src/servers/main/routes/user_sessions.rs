@@ -110,7 +110,9 @@ async fn handle_resume_session(
 /// }
 /// ```
 async fn handle_update_network(session: &mut SessionAddr, req: UpdateNetworkRequest) {
-    session.set_network_info(req.address, req.qos);
+    session
+        .exec(move |session| session.set_network_info(req.address, req.qos))
+        .await;
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
@@ -123,5 +125,7 @@ async fn handle_update_network(session: &mut SessionAddr, req: UpdateNetworkRequ
 /// }
 /// ```
 async fn handle_update_hardware_flag(session: &mut SessionAddr, req: HardwareFlagRequest) {
-    session.set_hardware_flag(req.hardware_flag);
+    session
+        .exec(move |session| session.set_hardware_flag(req.hardware_flag))
+        .await;
 }

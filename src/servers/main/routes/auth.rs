@@ -271,7 +271,11 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
 /// Content: {}
 /// ```
 async fn handle_logout(session: &mut SessionAddr) {
-    session.clear_player();
+    session
+        .exec(|session| {
+            session.player = None;
+        })
+        .await;
 }
 
 /// Handles list user entitlements 2 responses requests which contains information

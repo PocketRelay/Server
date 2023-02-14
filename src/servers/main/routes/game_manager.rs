@@ -6,7 +6,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             game_manager::*,
         },
-        session::SessionAddr,
+        session::{Session, SessionAddr},
     },
     services::game::{
         manager::TryAddResult, player::GamePlayer, GameAddr, GameModifyAction, RemovePlayerType,
@@ -381,5 +381,9 @@ async fn handle_start_matchmaking(
 /// }
 /// ```
 async fn handle_cancel_matchmaking(session: &mut SessionAddr) {
-    session.remove_games();
+    session
+        .exec(|session: &mut Session| {
+            session.remove_games();
+        })
+        .await;
 }

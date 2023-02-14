@@ -1,9 +1,9 @@
 use super::models::PlayerState;
 use crate::{
-    servers::main::session::SessionAddr,
+    servers::main::session::{Session, SessionAddr},
     utils::{
         components::{Components, UserSessions},
-        models::{NetData, UpdateExtDataAttr},
+        models::NetData,
         types::{GameID, PlayerID, SessionID},
     },
 };
@@ -113,7 +113,7 @@ impl GamePlayer {
 impl Drop for GamePlayer {
     fn drop(&mut self) {
         // Clear player game when game player is dropped
-        self.addr.set_game(None)
+        self.addr.exec_lazy(|session| session.set_game(None));
     }
 }
 

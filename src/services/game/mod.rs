@@ -289,8 +289,11 @@ impl Game {
     fn update_clients(&self, player: &GamePlayer) {
         debug!("Updating clients with new session details");
         self.players.iter().for_each(|value| {
-            value.addr.push_details(player.addr.clone());
-            player.addr.push_details(value.addr.clone());
+            let addr1 = player.addr.clone();
+            let addr2 = value.addr.clone();
+
+            value.addr.exec_lazy(|session| session.push_details(addr1));
+            player.addr.exec_lazy(|session| session.push_details(addr2));
         });
     }
 
@@ -330,7 +333,11 @@ impl Game {
         self.update_clients(&player);
         self.notify_game_setup(&player, slot);
 
-        player.addr.set_game(Some(self.id));
+        let id = self.id;
+
+        player
+            .addr
+            .exec_lazy(move |session| session.set_game(Some(id)));
 
         let packet = player.create_set_session();
         self.push_all(&packet);
@@ -503,7 +510,7 @@ impl Game {
             (player, index, reason, self.players.is_empty())
         };
 
-        player.addr.set_game(None);
+        player.addr.exec_lazy(|session| session.set_game(None));
         self.notify_player_removed(&player, reason);
         self.notify_fetch_data(&player);
         self.modify_admin_list(player.player.id, AdminListOperation::Remove);
