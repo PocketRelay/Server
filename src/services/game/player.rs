@@ -1,6 +1,6 @@
 use super::models::PlayerState;
 use crate::{
-    servers::main::session::{Session, SessionAddr},
+    servers::main::session::SessionAddr,
     utils::{
         components::{Components, UserSessions},
         models::NetData,

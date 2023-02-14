@@ -3,7 +3,7 @@
 //! networking data.
 use super::models::errors::{ServerError, ServerResult};
 use super::router;
-use crate::utils::types::{BoxFuture, PlayerID};
+use crate::utils::types::PlayerID;
 use crate::{
     services::game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
@@ -323,13 +323,6 @@ impl Session {
                 }
             }
         }
-    }
-
-    /// Attempts to obtain a game player from this session will return None
-    /// if this session is not authenticated
-    fn try_into_player(&self) -> Option<GamePlayer> {
-        let player = self.player.clone()?;
-        Some(GamePlayer::new(player, self.net.clone(), self.addr.clone()))
     }
 
     /// Handles processing a recieved packet from the `process` function.
