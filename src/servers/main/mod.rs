@@ -2,12 +2,22 @@ use self::session::SessionAddr;
 use crate::utils::{components::Components, env};
 use blaze_pk::router::Router;
 use log::{error, info};
-use std::sync::Arc;
 use tokio::net::TcpListener;
 
 mod models;
 mod routes;
 pub mod session;
+
+static mut ROUTER: Option<Router<Components, SessionAddr>> = None;
+
+fn router() -> &'static Router<Components, SessionAddr> {
+    unsafe {
+        match &ROUTER {
+            Some(value) => value,
+            None => panic!("Main server router not yet initialized"),
+        }
+    }
+}
 
 /// Starts the main server which is responsible for a majority of the
 /// game logic such as games, sessions, etc.
@@ -27,7 +37,10 @@ pub async fn start_server() {
         }
     };
 
-    let router: Arc<Router<Components, SessionAddr>> = Arc::new(routes::router());
+    unsafe {
+        ROUTER = Some(routes::router());
+    }
+
     let mut session_id = 1;
     // Accept incoming connections
     loop {
@@ -38,7 +51,7 @@ pub async fn start_server() {
                 continue;
             }
         };
-        SessionAddr::spawn(session_id, values, router.clone());
+        SessionAddr::spawn(session_id, values);
         session_id += 1;
     }
 }

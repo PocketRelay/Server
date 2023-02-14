@@ -2,6 +2,7 @@
 //! data such as player data for when they become authenticated and
 //! networking data.
 use super::models::errors::{ServerError, ServerResult};
+use super::router;
 use crate::utils::types::{BoxFuture, PlayerID};
 use crate::{
     services::game::{player::GamePlayer, RemovePlayerType},
@@ -16,12 +17,12 @@ use blaze_pk::packet::PacketDebug;
 use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
 use blaze_pk::{
     packet::{Packet, PacketComponents},
-    router::{Router, State},
+    router::State,
 };
 use database::Player;
 use log::{debug, error, log_enabled};
 use std::fmt::Debug;
-use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
+use std::{collections::VecDeque, net::SocketAddr};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::{
     net::TcpStream,
@@ -57,9 +58,6 @@ struct Session {
     /// State determining whether the session has a flush message
     /// already queued in the reciever
     flush_queued: bool,
-
-    /// Arc to router to use for routing
-    router: Arc<Router<Components, SessionAddr>>,
 
     /// Internal address used for routing can be cloned and used elsewhere
     addr: SessionAddr,
@@ -198,18 +196,14 @@ impl SessionAddr {
         rx.await.ok()
     }
 
-    pub fn spawn(
-        id: SessionID,
-        values: (TcpStream, SocketAddr),
-        router: Arc<Router<Components, SessionAddr>>,
-    ) {
+    pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr)) {
         let (sender, receiver) = mpsc::unbounded_channel();
         let addr = SessionAddr { id, tx: sender };
 
         let (read, write) = values.0.into_split();
         tokio::spawn(Self::spawn_reader(addr.clone(), read));
 
-        let session = Session::new(id, write, values.1, router, addr);
+        let session = Session::new(id, write, values.1, addr);
         tokio::spawn(session.process(receiver));
     }
 
@@ -395,7 +389,6 @@ impl Session {
         id: SessionID,
         write: OwnedWriteHalf,
         socket_addr: SocketAddr,
-        router: Arc<Router<Components, SessionAddr>>,
         addr: SessionAddr,
     ) -> Self {
         Self {
@@ -407,7 +400,6 @@ impl Session {
             net: NetData::default(),
             game: None,
             flush_queued: false,
-            router,
             addr,
         }
     }
@@ -445,9 +437,9 @@ impl Session {
     /// `packet`    The packet itself
     fn handle_packet(&mut self, packet: Packet) {
         self.debug_log_packet("Read", &packet);
-        let router = self.router.clone();
         let mut addr = self.addr.clone();
         tokio::spawn(async move {
+            let router = router();
             match router.handle(&mut addr, packet).await {
                 Ok(packet) => {
                     addr.push(packet);
