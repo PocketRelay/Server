@@ -103,9 +103,11 @@ impl SessionAddr {
     pub fn push_details(&self) {
         self.tx.send(Message::PushDetails).ok();
     }
+
     pub fn clear_player(&self) {
         self.tx.send(Message::Player(PlayerMessage::Clear)).ok();
     }
+
     pub fn remove_games(&self) {
         self.tx.send(Message::Game(GameMessage::Remove)).ok();
     }
@@ -132,6 +134,7 @@ impl SessionAddr {
             .send(Message::Net(NetMessage::Set(groups, ext)))
             .ok();
     }
+
     pub fn set_hardware_flag(&self, value: u16) {
         self.tx
             .send(Message::Net(NetMessage::SetHardwareFlag(value)))
@@ -163,6 +166,7 @@ impl SessionAddr {
 
         rx.await.map_err(|_| ServerError::ServerUnavailable)
     }
+
     pub async fn get_player_id(&self) -> Option<u32> {
         let (tx, rx) = oneshot::channel();
         if self
@@ -244,6 +248,7 @@ enum Message {
     Player(PlayerMessage),
 }
 
+/// Group of messages realting to packets
 enum PacketMessage {
     /// Request a read packet to be processed
     Read(Packet),
@@ -256,6 +261,7 @@ enum PacketMessage {
     Flush,
 }
 
+/// Group of messages relating to networking
 enum NetMessage {
     /// Request to set the net groups and QOS networking data
     Set(NetGroups, QosNetworkData),
@@ -268,6 +274,7 @@ enum NetMessage {
     SocketAddr(oneshot::Sender<SocketAddr>),
 }
 
+/// Group of messages related to games
 enum GameMessage {
     /// Request to set the current game ID
     Set(Option<GameID>),
@@ -277,6 +284,7 @@ enum GameMessage {
     Remove,
 }
 
+/// Group of messages relating to players
 enum PlayerMessage {
     /// Request to create a game player from the authenticated
     /// session
