@@ -141,17 +141,22 @@ impl SessionAddr {
             .ok();
     }
 
-    pub async fn set_player(&self, player: Player) -> ServerResult<(Player, String)> {
+    /// Attempts to set the current player will return true if successful
+    /// or false if the sesson is terminated or another error occurs
+    ///
+    /// `player` The player to set for this session
+    pub async fn set_player(&self, player: Player) -> bool {
         let (tx, rx) = oneshot::channel();
+
         if self
             .tx
             .send(Message::Player(PlayerMessage::Set(player, tx)))
             .is_err()
         {
-            return Err(ServerError::ServerUnavailable);
+            return false;
         }
 
-        rx.await.map_err(|_| ServerError::ServerUnavailable)?
+        rx.await.is_ok()
     }
 
     pub async fn get_player(&self) -> ServerResult<Option<Player>> {
@@ -301,7 +306,7 @@ enum PlayerMessage {
     /// Sets the current authenticated player for this session
     /// returning a copy of the player and a session token for
     /// authentication
-    Set(Player, oneshot::Sender<ServerResult<(Player, String)>>),
+    Set(Player, oneshot::Sender<()>),
 
     /// Request to clear the current active player
     Clear,
@@ -327,8 +332,8 @@ impl Handler<'_, PlayerMessage> for Session {
                 tx.send(player).ok();
             }
             PlayerMessage::Set(player, tx) => {
-                let result = self.set_player(player);
-                tx.send(result).ok();
+                self.set_player(player);
+                tx.send(()).ok();
             }
             PlayerMessage::Clear => {
                 self.player = None;
@@ -582,22 +587,9 @@ impl Session {
         self.push(packet);
     }
 
-    fn set_player(&mut self, player: Player) -> ServerResult<(Player, String)> {
+    fn set_player(&mut self, player: Player) {
         // Update the player value
-        let player = self.player.insert(player);
-        let player = player.clone();
-
-        let services = GlobalState::services();
-
-        let token = match services.jwt.claim(player.id) {
-            Ok(value) => value,
-            Err(err) => {
-                error!("Unable to create session token for player: {:?}", err);
-                return Err(ServerError::ServerUnavailable);
-            }
-        };
-
-        Ok((player, token))
+        self.player.insert(player);
     }
 
     fn push_details(&mut self) {

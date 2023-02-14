@@ -15,6 +15,9 @@ pub struct OriginFlowService {
 }
 
 impl OriginFlowService {
+    /// Creates a new origin flow from the provided retriever
+    ///
+    /// `retriever` The retriever to use to create the session for the flow
     pub async fn create(&self, retriever: &Retriever) -> Option<OriginFlow> {
         let session = retriever.session().await?;
         Some(OriginFlow {

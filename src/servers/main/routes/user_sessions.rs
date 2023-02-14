@@ -10,10 +10,7 @@ use crate::{
     state::GlobalState,
     utils::components::{Components as C, UserSessions as U},
 };
-use blaze_pk::{
-    packet::{Request, Response},
-    router::Router,
-};
+use blaze_pk::router::Router;
 use database::Player;
 use log::error;
 
@@ -42,12 +39,14 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 /// ```
 async fn handle_resume_session(
     session: &mut SessionAddr,
-    req: Request<ResumeSessionRequest>,
-) -> ServerResult<Response> {
+    req: ResumeSessionRequest,
+) -> ServerResult<AuthResponse> {
     let db = GlobalState::database();
     let services = GlobalState::services();
 
-    let player = match services.jwt.verify(&req.session_token) {
+    let session_token = req.session_token;
+
+    let player = match services.jwt.verify(&session_token) {
         Ok(value) => value,
         Err(err) => {
             error!("Error while attempt to resume invalid session: {err:?}");
@@ -68,15 +67,17 @@ async fn handle_resume_session(
         }
     };
 
-    let (player, session_token) = session.set_player(player).await?;
+    // Failing to set the player likely the player disconnected or
+    // the server is shutting down
+    if !session.set_player(player.clone()).await {
+        return Err(ServerError::ServerUnavailable);
+    }
 
-    let res = AuthResponse {
+    Ok(AuthResponse {
         player,
         session_token,
         silent: true,
-    };
-
-    Ok(req.response(res))
+    })
 }
 
 /// Handles updating the stored networking information for the current session

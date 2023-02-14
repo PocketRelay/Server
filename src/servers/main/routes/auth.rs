@@ -12,10 +12,7 @@ use crate::{
         hashing::{hash_password, verify_password},
     },
 };
-use blaze_pk::{
-    packet::{Request, Response},
-    router::Router,
-};
+use blaze_pk::router::Router;
 use database::{DatabaseConnection, Player};
 use log::{debug, error, warn};
 use std::borrow::Cow;
@@ -103,25 +100,45 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 /// ```
 async fn handle_auth_request(
     session: &mut SessionAddr,
-    req: Request<AuthRequest>,
-) -> ServerResult<Response> {
+    req: AuthRequest,
+) -> ServerResult<AuthResponse> {
     let silent = req.is_silent();
     let db = GlobalState::database();
-    let player: Player = match &req.req {
+    let player: Player = match &req {
         AuthRequest::Silent { token, .. } => handle_login_token(&db, token).await,
         AuthRequest::Login { email, password } => handle_login_email(&db, email, password).await,
         AuthRequest::Origin { token } => handle_login_origin(&db, token).await,
     }?;
 
-    let (player, session_token) = session.set_player(player).await?;
+    // Failing to set the player likely the player disconnected or
+    // the server is shutting down
+    if !session.set_player(player.clone()).await {
+        return Err(ServerError::ServerUnavailable);
+    }
 
-    let res = AuthResponse {
+    // Handle reusing existing tokens from silent login
+    let session_token = match req {
+        AuthRequest::Silent { token, .. } => token,
+        _ => {
+            let services = GlobalState::services();
+            match services.jwt.claim(player.id) {
+                Ok(value) => value,
+                Err(err) => {
+                    error!(
+                        "Unable to create session token for player (AUTH): {:?}",
+                        err
+                    );
+                    return Err(ServerError::ServerUnavailable);
+                }
+            }
+        }
+    };
+
+    Ok(AuthResponse {
         player,
         session_token,
         silent,
-    };
-
-    Ok(req.response(res))
+    })
 }
 
 /// Handles finding a player through an authentication token and a player ID
@@ -347,16 +364,12 @@ async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-async fn handle_login_persona(
-    session: &mut SessionAddr,
-    req: Request<()>,
-) -> ServerResult<Response> {
+async fn handle_login_persona(session: &mut SessionAddr) -> ServerResult<PersonaResponse> {
     let player: Player = session
         .get_player()
         .await?
         .ok_or(ServerError::FailedNoLoginAction)?;
-    let res = PersonaResponse { player };
-    Ok(req.response(res))
+    Ok(PersonaResponse { player })
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -413,16 +426,16 @@ async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> 
 ///
 async fn handle_create_account(
     session: &mut SessionAddr,
-    req: Request<CreateAccountRequest>,
-) -> ServerResult<Response> {
-    let email = &req.email;
-    if !validate_email(email) {
+    req: CreateAccountRequest,
+) -> ServerResult<AuthResponse> {
+    let email = req.email;
+    if !validate_email(&email) {
         return Err(ServerError::InvalidEmail);
     }
 
     let db = GlobalState::database();
 
-    match Player::is_email_taken(&db, email).await {
+    match Player::is_email_taken(&db, &email).await {
         // Continue normally for non taken emails
         Ok(false) => {}
         // Handle email address is already in use
@@ -448,7 +461,7 @@ async fn handle_create_account(
 
     // Create a new player
     let player: Player =
-        match Player::create(&db, email.to_string(), display_name, hashed_password, false).await {
+        match Player::create(&db, email, display_name, hashed_password, false).await {
             Ok(value) => value,
             Err(err) => {
                 error!("Failed to create player: {err:?}");
@@ -456,15 +469,29 @@ async fn handle_create_account(
             }
         };
 
-    let (player, session_token) = session.set_player(player).await?;
+    // Failing to set the player likely the player disconnected or
+    // the server is shutting down
+    if !session.set_player(player.clone()).await {
+        return Err(ServerError::ServerUnavailable);
+    }
 
-    let res = AuthResponse {
+    let services = GlobalState::services();
+    let session_token = match services.jwt.claim(player.id) {
+        Ok(value) => value,
+        Err(err) => {
+            error!(
+                "Unable to create session token for player (AUTH): {:?}",
+                err
+            );
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
+
+    Ok(AuthResponse {
         player,
         session_token,
         silent: false,
-    };
-
-    Ok(req.response(res))
+    })
 }
 
 /// Expected to be getting information about the legal docs however the exact meaning
