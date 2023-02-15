@@ -4,10 +4,11 @@ use crate::{
             errors::{ServerError, ServerResult},
             util::*,
         },
-        session::SessionAddr,
+        session::Session,
     },
     state::GlobalState,
     utils::{
+        actor::Addr,
         components::{Components as C, Util as U},
         env,
         models::Port,
@@ -32,7 +33,7 @@ use tokio::fs::read;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionAddr>) {
+pub fn route(router: &mut Router<C, Addr<Session>>) {
     router.route(C::Util(U::PreAuth), handle_pre_auth);
     router.route(C::Util(U::PostAuth), handle_post_auth);
     router.route(C::Util(U::Ping), handle_ping);
@@ -116,14 +117,13 @@ async fn handle_pre_auth() -> PreAuthResponse {
 /// ID: 27
 /// Content: {}
 /// ```
-async fn handle_post_auth(session: &mut SessionAddr) -> ServerResult<PostAuthResponse> {
+async fn handle_post_auth(session: &mut Addr<Session>) -> ServerResult<PostAuthResponse> {
     let player_id = session
         .get_player_id()
         .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    let addr = session.clone();
-    session.exec_lazy(move |session| session.push_details(addr));
+    session.do_exec(move |session, ctx| session.push_details(ctx.addr()));
 
     Ok(PostAuthResponse {
         telemetry: TelemetryServer {
@@ -538,7 +538,7 @@ async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
 /// }
 /// ```
 async fn handle_user_settings_save(
-    session: &mut SessionAddr,
+    session: &mut Addr<Session>,
     req: SettingsSaveRequest,
 ) -> ServerResult<()> {
     let player = session
@@ -563,7 +563,7 @@ async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-async fn handle_load_settings(session: &mut SessionAddr) -> ServerResult<SettingsResponse> {
+async fn handle_load_settings(session: &mut Addr<Session>) -> ServerResult<SettingsResponse> {
     let player = session
         .get_player_id()
         .await

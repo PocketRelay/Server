@@ -3,6 +3,7 @@
 //! networking data.
 use super::models::errors::{ServerError, ServerResult};
 use super::router;
+use crate::utils::actor::{Actor, ActorContext, Addr, Handler, Message};
 use crate::utils::types::PlayerID;
 use crate::{
     services::game::{player::GamePlayer, RemovePlayerType},
@@ -22,12 +23,9 @@ use blaze_pk::{
 use database::Player;
 use log::{debug, error, log_enabled};
 use std::fmt::Debug;
-use std::{collections::VecDeque, net::SocketAddr};
+use std::net::SocketAddr;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use tokio::{
-    net::TcpStream,
-    sync::{mpsc, oneshot},
-};
+use tokio::sync::mpsc;
 
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
@@ -36,8 +34,7 @@ pub struct Session {
     /// Unique identifier for this session.
     id: SessionID,
 
-    /// Underlying connection stream to client
-    write: OwnedWriteHalf,
+    writer: WriterAddr,
 
     /// The socket connection address of the client
     socket_addr: SocketAddr,
@@ -51,149 +48,26 @@ pub struct Session {
 
     /// The id of the game if connected to one
     game: Option<GameID>,
-
-    /// The queue of packets that need to be written
-    queue: VecDeque<Packet>,
-
-    /// State determining whether the session has a flush message
-    /// already queued in the reciever
-    flush_queued: bool,
-
-    /// Internal address used for routing can be cloned and used elsewhere
-    addr: SessionAddr,
 }
 
-impl State for SessionAddr {}
+impl State for Addr<Session> {}
 
-/// Address to a session which allows manipulating sessions asyncronously
-/// using mpsc channels without actually having access to the session itself
-#[derive(Clone)]
-pub struct SessionAddr {
-    /// The ID this session is linked to
-    pub id: SessionID,
-    /// The sender for sending message to this session
-    tx: mpsc::UnboundedSender<Message>,
-}
-
-/// Trait representing an action that can be executed
-/// using the session
-trait SessionAction: Sized + Send + 'static {
-    /// Type for the resulting value created from this action
-    type Result;
-
-    fn handle(self, session: &mut Session) -> Self::Result;
-}
-
-impl<F, R> SessionAction for F
-where
-    F: FnOnce(&mut Session) -> R + Send + 'static,
-    R: 'static,
-{
-    type Result = R;
-
-    fn handle(self, session: &mut Session) -> Self::Result {
-        self(session)
-    }
-}
-
-struct ActionMessage<A, R> {
-    action: A,
-    tx: oneshot::Sender<R>,
-}
-
-struct LazyActionMessage<A> {
-    action: A,
-}
-
-trait ActionMessageProxy: Send {
-    fn handle(self: Box<Self>, session: &mut Session);
-}
-
-impl<A, R> ActionMessageProxy for ActionMessage<A, R>
-where
-    A: SessionAction<Result = R>,
-    R: Send + Sized + 'static,
-{
-    fn handle(self: Box<Self>, session: &mut Session) {
-        let result: R = self.action.handle(session);
-        self.tx.send(result).ok();
-    }
-}
-impl<A> ActionMessageProxy for LazyActionMessage<A>
-where
-    A: SessionAction<Result = ()>,
-{
-    fn handle(self: Box<Self>, session: &mut Session) {
-        self.action.handle(session);
-    }
-}
-
-impl SessionAddr {
-    /// Writes a new packet ot the session
-    ///
-    /// `packet` The packet to write
+impl Addr<Session> {
     pub fn push(&self, packet: Packet) {
-        self.tx
-            .send(Message::Packet(PacketMessage::Write(packet)))
-            .ok();
+        self.do_send(PacketMessage::Write(packet));
     }
 
-    fn read(&self, packet: Packet) -> bool {
-        self.tx
-            .send(Message::Packet(PacketMessage::Read(packet)))
-            .is_ok()
-    }
-
-    /// Executes the provided action on the actual session itself will
-    /// return an option if the session wasn't able to execute the action
-    /// likely because the session has ended.
-    ///
-    /// `action` The action to execute
-    pub async fn exec<A, R>(&self, action: A) -> Option<R>
-    where
-        A: FnOnce(&mut Session) -> R + Send + 'static,
-        R: Send + Sized + 'static,
-    {
-        let (tx, rx) = oneshot::channel();
-
-        if self
-            .tx
-            .send(Message::Action(Box::new(ActionMessage { action, tx })))
-            .is_err()
-        {
-            return None;
-        }
-
-        rx.await.ok()
-    }
-
-    /// Executes the provided action lazily this doesn't require awaiting for
-    /// a result type
-    ///
-    /// `action` The action to execute
-    pub fn exec_lazy<A>(&self, action: A)
-    where
-        A: FnOnce(&mut Session) + Send + 'static,
-    {
-        self.tx
-            .send(Message::Action(Box::new(LazyActionMessage { action })))
-            .ok();
-    }
-
-    pub fn stop(&self) {
-        self.tx.send(Message::Stop).ok();
+    pub fn read(&self, packet: Packet) -> bool {
+        self.do_send(PacketMessage::Read(packet))
     }
 
     pub async fn try_into_player(&self) -> Option<GamePlayer> {
-        self.exec(|session| {
+        self.exec(|session, ctx| {
             let player = session.player.clone()?;
-            Some(GamePlayer::new(
-                player,
-                session.net.clone(),
-                session.addr.clone(),
-            ))
+            Some(GamePlayer::new(player, session.net.clone(), ctx.addr()))
         })
         .await
+        .ok()
         .flatten()
     }
 
@@ -202,81 +76,130 @@ impl SessionAddr {
     ///
     /// `player` The player to set for this session
     pub async fn set_player(&self, player: Player) -> bool {
-        self.exec(|session| {
+        self.exec(|session, _| {
             session.player = Some(player);
         })
         .await
-        .is_some()
+        .is_ok()
     }
 
     pub async fn get_player(&self) -> ServerResult<Option<Player>> {
-        self.exec(|session| session.player.clone())
+        self.exec(|session, _| session.player.clone())
             .await
-            .ok_or(ServerError::ServerUnavailable)
+            .map_err(|_| ServerError::ServerUnavailable)
     }
 
     pub async fn get_player_id(&self) -> Option<u32> {
-        self.exec(|session| session.player.as_ref().map(|value| value.id))
+        self.exec(|session, _| session.player.as_ref().map(|value| value.id))
             .await
+            .ok()
             .flatten()
     }
 
     pub async fn socket_addr(&self) -> Option<SocketAddr> {
-        self.exec(|session| session.socket_addr).await
+        self.exec(|session, _| session.socket_addr).await.ok()
+    }
+}
+
+impl Actor for Session {
+    fn id(&self) -> u32 {
+        self.id
     }
 
-    pub fn spawn(id: SessionID, values: (TcpStream, SocketAddr)) {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        let addr = SessionAddr { id, tx: sender };
+    fn stopping(&mut self) {
+        self.remove_games();
+        debug!("Session dropped (SID: {})", self.id);
+    }
+}
 
-        let (read, write) = values.0.into_split();
-        tokio::spawn(Self::spawn_reader(addr.clone(), read));
+pub struct SessionReader {
+    /// Underlying writable
+    read: OwnedReadHalf,
+    /// Address to the session for stopping
+    addr: Addr<Session>,
+}
 
-        let session = Session::new(id, write, values.1, addr);
-        tokio::spawn(session.process(receiver));
+impl SessionReader {
+    pub fn new(read: OwnedReadHalf, addr: Addr<Session>) {
+        tokio::spawn(Self { read, addr }.process());
     }
 
-    pub async fn spawn_reader(addr: Self, mut read: OwnedReadHalf) {
+    /// TODO: When taking in packets write them to a buffer and then
+    /// handle polling writes from the buffer
+    pub async fn process(mut self) {
         loop {
-            let packet: Packet = match Packet::read_async(&mut read).await {
+            let packet: Packet = match Packet::read_async(&mut self.read).await {
                 Ok(value) => value,
                 Err(_) => {
-                    addr.stop();
+                    self.addr.stop();
                     break;
                 }
             };
 
-            if !addr.read(packet) {
+            if !self.addr.read(packet) {
                 break;
             }
         }
     }
 }
 
-/// Message for communicating with the spawned session
-/// using cloned the sender present on cloned addresses
-enum Message {
-    /// Request to stop the session
-    Stop,
-
-    /// Action execution
-    Action(Box<dyn ActionMessageProxy>),
-
-    /// Group of messages relating to packets
-    Packet(PacketMessage),
+pub struct SessionWriter {
+    /// Underlying connection stream to client
+    write: OwnedWriteHalf,
+    /// Receiver for handling messages for this writer
+    rx: mpsc::UnboundedReceiver<Packet>,
+    /// Address to the session for stopping
+    addr: Addr<Session>,
 }
 
-/// Group of messages realting to packets
+impl SessionWriter {
+    pub fn new(write: OwnedWriteHalf, addr: Addr<Session>) -> WriterAddr {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let writer_addr = WriterAddr { tx };
+        tokio::spawn(Self { write, rx, addr }.process());
+        writer_addr
+    }
+
+    /// TODO: When taking in packets write them to a buffer and then
+    /// handle polling writes from the buffer
+    pub async fn process(mut self) {
+        while let Some(packet) = self.rx.recv().await {
+            if let Err(err) = packet.write_async(&mut self.write).await {
+                error!(
+                    "Error occurred while flushing session (SID: {}): {:?}",
+                    self.addr.id, err
+                );
+                self.addr.stop();
+                break;
+            }
+        }
+    }
+}
+
+pub struct WriterAddr {
+    /// Sender for writing packets
+    tx: mpsc::UnboundedSender<Packet>,
+}
+
+impl Handler<PacketMessage> for Session {
+    fn handle(&mut self, msg: PacketMessage, ctx: &mut ActorContext<Self>) {
+        match msg {
+            PacketMessage::Read(packet) => self.handle_packet(ctx, packet),
+            PacketMessage::Write(packet) => self.push(packet),
+        }
+    }
+}
+
 enum PacketMessage {
     /// Request a read packet to be processed
     Read(Packet),
 
     /// Queues a packet to be written to the outbound queue
     Write(Packet),
+}
 
-    /// Request to tell the session to flush any outbound
-    /// packets actually writing them to the socket
-    Flush,
+impl Message for PacketMessage {
+    type Result = ();
 }
 
 impl Session {
@@ -285,43 +208,14 @@ impl Session {
     /// `id`             The unique session ID
     /// `values`         The networking TcpStream and address
     /// `message_sender` The message sender for session messages
-    fn new(
-        id: SessionID,
-        write: OwnedWriteHalf,
-        socket_addr: SocketAddr,
-        addr: SessionAddr,
-    ) -> Self {
+    pub fn new(id: SessionID, socket_addr: SocketAddr, writer: WriterAddr) -> Self {
         Self {
             id,
-            write,
             socket_addr,
-            queue: VecDeque::new(),
+            writer,
             player: None,
             net: NetData::default(),
             game: None,
-            flush_queued: false,
-            addr,
-        }
-    }
-
-    /// Processing function which handles recieving messages, flush notifications,
-    /// reading packets, and handling safe shutdowns for this session. This function
-    /// owns the session.
-    ///
-    /// `message` The receiver for receiving session messages
-    async fn process(mut self, mut receiver: mpsc::UnboundedReceiver<Message>) {
-        while let Some(msg) = receiver.recv().await {
-            match msg {
-                Message::Packet(msg) => match msg {
-                    PacketMessage::Read(packet) => self.handle_packet(packet),
-                    PacketMessage::Write(packet) => self.push(packet),
-                    PacketMessage::Flush => self.flush().await,
-                },
-                Message::Stop => break,
-                Message::Action(action) => {
-                    action.handle(&mut self);
-                }
-            }
         }
     }
 
@@ -331,9 +225,9 @@ impl Session {
     /// `session`   The session to process the packet for
     /// `component` The component of the packet for routing
     /// `packet`    The packet itself
-    fn handle_packet(&mut self, packet: Packet) {
+    fn handle_packet(&mut self, ctx: &mut ActorContext<Self>, packet: Packet) {
         self.debug_log_packet("Read", &packet);
-        let mut addr = self.addr.clone();
+        let mut addr = ctx.addr();
         tokio::spawn(async move {
             let router = router();
             match router.handle(&mut addr, packet).await {
@@ -352,8 +246,10 @@ impl Session {
     ///
     /// `packet` The packet to push to the buffer
     pub fn push(&mut self, packet: Packet) {
-        self.queue.push_back(packet);
-        self.queue_flush();
+        self.debug_log_packet("Queued Write", &packet);
+        if self.writer.tx.send(packet).is_err() {
+            // TODO: Handle failing to send contents to writer
+        }
     }
 
     /// Logs the contents of the provided packet to the debug output along with
@@ -389,44 +285,6 @@ impl Session {
         };
 
         debug!("\n{:?}", debug);
-    }
-
-    /// Queues a new flush if there is not already one queued
-    fn queue_flush(&mut self) {
-        if !self.flush_queued {
-            self.flush_queued = true;
-            self.addr
-                .tx
-                .send(Message::Packet(PacketMessage::Flush))
-                .ok();
-        }
-    }
-
-    /// Flushes the output buffer
-    async fn flush(&mut self) {
-        self.flush_queued = false;
-
-        // Counter for the number of items written
-        let mut write_count = 0usize;
-        while let Some(item) = self.queue.pop_front() {
-            self.debug_log_packet("Wrote", &item);
-            match item.write_async(&mut self.write).await {
-                Ok(_) => {
-                    write_count += 1;
-                }
-                Err(err) => {
-                    error!(
-                        "Error occurred while flushing session (SID: {}): {:?}",
-                        self.id, err
-                    );
-                    return;
-                }
-            }
-        }
-
-        if write_count > 0 {
-            debug!("Flushed session (SID: {}, Count: {})", self.id, write_count);
-        }
     }
 
     /// Sets the game details for the current session and updates
@@ -475,7 +333,7 @@ impl Session {
         self.push(packet);
     }
 
-    pub fn push_details(&mut self, addr: SessionAddr) {
+    pub fn push_details(&mut self, addr: Addr<Session>) {
         let player = match self.player.as_ref() {
             Some(value) => value,
             None => return,
@@ -516,13 +374,6 @@ impl Session {
         } else {
             services.matchmaking.unqueue_session(self.id);
         }
-    }
-}
-
-impl Drop for Session {
-    fn drop(&mut self) {
-        self.remove_games();
-        debug!("Session dropped (SID: {})", self.id);
     }
 }
 

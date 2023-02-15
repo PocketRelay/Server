@@ -1,5 +1,9 @@
-use self::session::SessionAddr;
-use crate::utils::{components::Components, env};
+use self::session::{Session, SessionReader, SessionWriter};
+use crate::utils::{
+    actor::{Actor, Addr},
+    components::Components,
+    env,
+};
 use blaze_pk::router::Router;
 use log::{error, info};
 use tokio::net::TcpListener;
@@ -8,9 +12,9 @@ mod models;
 mod routes;
 pub mod session;
 
-static mut ROUTER: Option<Router<Components, SessionAddr>> = None;
+static mut ROUTER: Option<Router<Components, Addr<Session>>> = None;
 
-fn router() -> &'static Router<Components, SessionAddr> {
+fn router() -> &'static Router<Components, Addr<Session>> {
     unsafe {
         match &ROUTER {
             Some(value) => value,
@@ -44,14 +48,26 @@ pub async fn start_server() {
     let mut session_id = 1;
     // Accept incoming connections
     loop {
-        let values = match listener.accept().await {
+        let (stream, socket_addr) = match listener.accept().await {
             Ok(value) => value,
             Err(err) => {
                 error!("Failed to accept Main connection: {err:?}");
                 continue;
             }
         };
-        SessionAddr::spawn(session_id, values);
+
+        Session::create(
+            |ctx| {
+                // Attach reader and writers to the session context
+                let (read, write) = stream.into_split();
+                let writer = SessionWriter::new(write, ctx.addr());
+                SessionReader::new(read, ctx.addr());
+
+                Session::new(session_id, socket_addr, writer)
+            },
+            session_id,
+        );
+
         session_id += 1;
     }
 }

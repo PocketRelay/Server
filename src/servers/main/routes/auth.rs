@@ -4,10 +4,11 @@ use crate::{
             auth::*,
             errors::{ServerError, ServerResult},
         },
-        session::SessionAddr,
+        session::Session,
     },
     state::GlobalState,
     utils::{
+        actor::Addr,
         components::{Authentication as A, Components as C},
         hashing::{hash_password, verify_password},
     },
@@ -24,7 +25,7 @@ use validator::validate_email;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionAddr>) {
+pub fn route(router: &mut Router<C, Addr<Session>>) {
     router.route(C::Authentication(A::Logout), handle_logout);
     router.route(C::Authentication(A::SilentLogin), handle_auth_request);
     router.route(C::Authentication(A::OriginLogin), handle_auth_request);
@@ -99,7 +100,7 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 /// }
 /// ```
 async fn handle_auth_request(
-    session: &mut SessionAddr,
+    session: &mut Addr<Session>,
     req: AuthRequest,
 ) -> ServerResult<AuthResponse> {
     let silent = req.is_silent();
@@ -270,12 +271,13 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
 /// ID: 8
 /// Content: {}
 /// ```
-async fn handle_logout(session: &mut SessionAddr) {
+async fn handle_logout(session: &mut Addr<Session>) {
     session
-        .exec(|session| {
+        .exec(|session, _| {
             session.player = None;
         })
-        .await;
+        .await
+        .ok();
 }
 
 /// Handles list user entitlements 2 responses requests which contains information
@@ -368,7 +370,7 @@ async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-async fn handle_login_persona(session: &mut SessionAddr) -> ServerResult<PersonaResponse> {
+async fn handle_login_persona(session: &mut Addr<Session>) -> ServerResult<PersonaResponse> {
     let player: Player = session
         .get_player()
         .await?
@@ -429,7 +431,7 @@ async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> 
 /// ```
 ///
 async fn handle_create_account(
-    session: &mut SessionAddr,
+    session: &mut Addr<Session>,
     req: CreateAccountRequest,
 ) -> ServerResult<AuthResponse> {
     let email = req.email;
@@ -587,7 +589,7 @@ async fn handle_legal_content(ty: LegalType) -> LegalContent {
 /// ID: 35
 /// Content: {}
 /// ```
-async fn handle_get_auth_token(session: &mut SessionAddr) -> ServerResult<GetTokenResponse> {
+async fn handle_get_auth_token(session: &mut Addr<Session>) -> ServerResult<GetTokenResponse> {
     let player_id = session
         .get_player_id()
         .await

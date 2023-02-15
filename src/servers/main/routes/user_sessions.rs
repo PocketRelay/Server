@@ -5,10 +5,13 @@ use crate::{
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
-        session::SessionAddr,
+        session::Session,
     },
     state::GlobalState,
-    utils::components::{Components as C, UserSessions as U},
+    utils::{
+        actor::Addr,
+        components::{Components as C, UserSessions as U},
+    },
 };
 use blaze_pk::router::Router;
 use database::Player;
@@ -18,7 +21,7 @@ use log::error;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionAddr>) {
+pub fn route(router: &mut Router<C, Addr<Session>>) {
     router.route(C::UserSessions(U::ResumeSession), handle_resume_session);
     router.route(C::UserSessions(U::UpdateNetworkInfo), handle_update_network);
     router.route(
@@ -38,7 +41,7 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 /// }
 /// ```
 async fn handle_resume_session(
-    session: &mut SessionAddr,
+    session: &mut Addr<Session>,
     req: ResumeSessionRequest,
 ) -> ServerResult<AuthResponse> {
     let db = GlobalState::database();
@@ -109,10 +112,11 @@ async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-async fn handle_update_network(session: &mut SessionAddr, req: UpdateNetworkRequest) {
+async fn handle_update_network(session: &mut Addr<Session>, req: UpdateNetworkRequest) {
     session
-        .exec(move |session| session.set_network_info(req.address, req.qos))
-        .await;
+        .exec(move |session, _| session.set_network_info(req.address, req.qos))
+        .await
+        .ok();
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
@@ -124,8 +128,9 @@ async fn handle_update_network(session: &mut SessionAddr, req: UpdateNetworkRequ
 ///     "HWFG": 0
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: &mut SessionAddr, req: HardwareFlagRequest) {
+async fn handle_update_hardware_flag(session: &mut Addr<Session>, req: HardwareFlagRequest) {
     session
-        .exec(move |session| session.set_hardware_flag(req.hardware_flag))
-        .await;
+        .exec(move |session, _| session.set_hardware_flag(req.hardware_flag))
+        .await
+        .ok();
 }

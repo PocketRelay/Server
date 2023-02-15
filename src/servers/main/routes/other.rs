@@ -1,6 +1,9 @@
 use crate::{
-    servers::main::{models::other::*, session::SessionAddr},
-    utils::components::{AssociationLists as A, Components as C, GameReporting as G},
+    servers::main::{models::other::*, session::Session},
+    utils::{
+        actor::Addr,
+        components::{AssociationLists as A, Components as C, GameReporting as G},
+    },
 };
 use blaze_pk::{packet::Packet, router::Router};
 
@@ -8,7 +11,7 @@ use blaze_pk::{packet::Packet, router::Router};
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionAddr>) {
+pub fn route(router: &mut Router<C, Addr<Session>>) {
     router.route(
         C::GameReporting(G::SubmitOfflineGameReport),
         handle_submit_offline,
@@ -41,7 +44,7 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 ///     "GTYP": "massEffectReport"
 /// }
 /// ```
-async fn handle_submit_offline(session: &mut SessionAddr) {
+async fn handle_submit_offline(session: &mut Addr<Session>) {
     session.push(Packet::notify(
         C::GameReporting(G::GameReportSubmitted),
         GameReportResponse,

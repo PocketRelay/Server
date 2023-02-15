@@ -1,3 +1,4 @@
+pub mod actor;
 #[allow(clippy::enum_variant_names)]
 pub mod components;
 pub mod env;

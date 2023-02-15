@@ -6,13 +6,16 @@ use crate::{
             errors::{ServerError, ServerResult},
             game_manager::*,
         },
-        session::{Session, SessionAddr},
+        session::Session,
     },
     services::game::{
         manager::TryAddResult, player::GamePlayer, GameAddr, GameModifyAction, RemovePlayerType,
     },
     state::GlobalState,
-    utils::components::{Components as C, GameManager as G},
+    utils::{
+        actor::Addr,
+        components::{Components as C, GameManager as G},
+    },
 };
 use blaze_pk::router::Router;
 use log::info;
@@ -21,7 +24,7 @@ use log::info;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionAddr>) {
+pub fn route(router: &mut Router<C, Addr<Session>>) {
     router.route(C::GameManager(G::CreateGame), handle_create_game);
     router.route(C::GameManager(G::AdvanceGameState), handle_game_modify);
     router.route(C::GameManager(G::SetGameSettings), handle_game_modify);
@@ -94,7 +97,7 @@ pub fn route(router: &mut Router<C, SessionAddr>) {
 /// }
 /// ```
 async fn handle_create_game(
-    session: &mut SessionAddr,
+    session: &mut Addr<Session>,
     req: CreateGameRequest,
 ) -> ServerResult<CreateGameResponse> {
     let player: GamePlayer = session
@@ -202,7 +205,7 @@ async fn handle_remove_player(req: RemovePlayerRequest) {
 ///     ]
 /// }
 /// ```
-async fn handle_update_mesh_connection(session: &mut SessionAddr, req: UpdateMeshRequest) {
+async fn handle_update_mesh_connection(session: &mut Addr<Session>, req: UpdateMeshRequest) {
     let target = match req.target {
         Some(value) => value,
         None => return,
@@ -342,7 +345,7 @@ async fn handle_update_mesh_connection(session: &mut SessionAddr, req: UpdateMes
 /// }
 /// ```
 async fn handle_start_matchmaking(
-    session: &mut SessionAddr,
+    session: &mut Addr<Session>,
     req: MatchmakingRequest,
 ) -> ServerResult<MatchmakingResponse> {
     let player: GamePlayer = session
@@ -380,10 +383,11 @@ async fn handle_start_matchmaking(
 ///     "MSID": 1
 /// }
 /// ```
-async fn handle_cancel_matchmaking(session: &mut SessionAddr) {
+async fn handle_cancel_matchmaking(session: &mut Addr<Session>) {
     session
-        .exec(|session: &mut Session| {
+        .exec(|session, _| {
             session.remove_games();
         })
-        .await;
+        .await
+        .ok();
 }
