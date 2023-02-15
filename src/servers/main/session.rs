@@ -64,7 +64,12 @@ impl Addr<Session> {
     pub async fn try_into_player(&self) -> Option<GamePlayer> {
         self.exec(|session, ctx| {
             let player = session.player.clone()?;
-            Some(GamePlayer::new(player, session.net.clone(), ctx.addr()))
+            Some(GamePlayer::new(
+                session.id,
+                player,
+                session.net.clone(),
+                ctx.addr(),
+            ))
         })
         .await
         .ok()
@@ -95,6 +100,9 @@ impl Addr<Session> {
             .ok()
             .flatten()
     }
+    pub async fn id(&self) -> Option<u32> {
+        self.exec(|session, _| session.id).await.ok()
+    }
 
     pub async fn socket_addr(&self) -> Option<SocketAddr> {
         self.exec(|session, _| session.socket_addr).await.ok()
@@ -102,13 +110,9 @@ impl Addr<Session> {
 }
 
 impl Actor for Session {
-    fn id(&self) -> u32 {
-        self.id
-    }
-
     fn stopping(&mut self) {
         self.remove_games();
-        debug!("Session dropped (SID: {})", self.id);
+        debug!("Session stopped (SID: {})", self.id);
     }
 }
 
@@ -165,10 +169,7 @@ impl SessionWriter {
     pub async fn process(mut self) {
         while let Some(packet) = self.rx.recv().await {
             if let Err(err) = packet.write_async(&mut self.write).await {
-                error!(
-                    "Error occurred while flushing session (SID: {}): {:?}",
-                    self.addr.id, err
-                );
+                error!("Error occurred while flushing session: {:?}", err);
                 self.addr.stop();
                 break;
             }

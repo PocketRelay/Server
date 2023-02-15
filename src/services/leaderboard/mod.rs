@@ -4,6 +4,7 @@ use self::models::*;
 use crate::{
     state::GlobalState,
     utils::{
+        actor::Actor,
         parsing::{parse_player_character, parse_player_class},
         types::BoxFuture,
     },
@@ -25,6 +26,8 @@ struct Leaderboard {
     /// Receiver for handling requests for leaderboard groups
     rx: mpsc::UnboundedReceiver<GetRequest>,
 }
+
+impl Actor for Leaderboard {}
 
 /// Request message for retrie
 struct GetRequest {

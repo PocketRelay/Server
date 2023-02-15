@@ -56,17 +56,14 @@ pub async fn start_server() {
             }
         };
 
-        Session::create(
-            |ctx| {
-                // Attach reader and writers to the session context
-                let (read, write) = stream.into_split();
-                let writer = SessionWriter::new(write, ctx.addr());
-                SessionReader::new(read, ctx.addr());
+        Session::create(|ctx| {
+            // Attach reader and writers to the session context
+            let (read, write) = stream.into_split();
+            let writer = SessionWriter::new(write, ctx.addr());
+            SessionReader::new(read, ctx.addr());
 
-                Session::new(session_id, socket_addr, writer)
-            },
-            session_id,
-        );
+            Session::new(session_id, socket_addr, writer)
+        });
 
         session_id += 1;
     }

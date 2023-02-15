@@ -303,7 +303,7 @@ impl Game {
     ///
     /// `session` The session to check for
     fn is_player_sid(&self, sid: SessionID) -> bool {
-        self.players.iter().any(|value| value.addr.id == sid)
+        self.players.iter().any(|value| value.session_id == sid)
     }
 
     /// Checks whether this game contains a player with the provided
@@ -311,7 +311,7 @@ impl Game {
     ///
     /// `pid` The player ID
     fn is_player_pid(&self, pid: PlayerID) -> bool {
-        self.players.iter().any(|value| value.player.id == pid)
+        self.players.iter().any(|value| value.session_id == pid)
     }
 
     fn aquire_slot(&mut self) -> usize {
@@ -396,7 +396,7 @@ impl Game {
             let player = self
                 .players
                 .iter_mut()
-                .find(|value| value.addr.id == session)?;
+                .find(|value| value.session_id == session)?;
             let old_state = player.state;
             player.state = state;
             (player.player.id, old_state)
@@ -471,7 +471,7 @@ impl Game {
     ///
     /// `session` The session that completed joining
     fn on_join_complete(&self, session: SessionID) {
-        let Some(player) = self.players.iter().find(|value| value.addr.id == session) else {
+        let Some(player) = self.players.iter().find(|value| value.session_id == session) else {
             return;
         };
         let packet = Packet::notify(
@@ -500,7 +500,7 @@ impl Game {
                 RemovePlayerType::Session(session_id) => (
                     self.players
                         .iter()
-                        .position(|value| value.addr.id == session_id),
+                        .position(|value| value.session_id == session_id),
                     RemoveReason::Generic,
                 ),
             };

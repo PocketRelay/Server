@@ -3,17 +3,14 @@ use std::marker::PhantomData;
 use tokio::sync::{mpsc, oneshot};
 
 pub trait Actor: Sized + Send + 'static {
-    // Unique ID for the actor provided to the address type
-    fn id(&self) -> u32;
-
     fn started(&mut self, _ctx: &mut ActorContext<Self>) {}
 
-    fn create<F>(action: F, id: u32) -> Addr<Self>
+    fn create<F>(action: F) -> Addr<Self>
     where
         F: FnOnce(&mut ActorContext<Self>) -> Self,
     {
         let (tx, rx) = mpsc::unbounded_channel();
-        let addr = Addr { tx, id };
+        let addr = Addr { tx };
         let mut ctx = ActorContext {
             rx,
             addr: addr.clone(),
@@ -25,7 +22,7 @@ pub trait Actor: Sized + Send + 'static {
 
     fn start(self) -> Addr<Self> {
         let (tx, rx) = mpsc::unbounded_channel();
-        let addr = Addr { tx, id: self.id() };
+        let addr = Addr { tx };
         let ctx = ActorContext {
             rx,
             addr: addr.clone(),
@@ -104,7 +101,6 @@ where
 /// Trait implemented by something that can be used as
 /// an address for sending messages to its actor
 pub struct Addr<A: Actor> {
-    pub id: u32,
     tx: mpsc::UnboundedSender<Box<dyn EnvelopeProxy<A>>>,
 }
 
@@ -114,7 +110,6 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            id: self.id,
             tx: self.tx.clone(),
         }
     }

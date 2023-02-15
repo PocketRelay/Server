@@ -206,6 +206,11 @@ async fn handle_remove_player(req: RemovePlayerRequest) {
 /// }
 /// ```
 async fn handle_update_mesh_connection(session: &mut Addr<Session>, req: UpdateMeshRequest) {
+    let id = match session.id().await {
+        Some(value) => value,
+        None => return,
+    };
+
     let target = match req.target {
         Some(value) => value,
         None => return,
@@ -216,7 +221,7 @@ async fn handle_update_mesh_connection(session: &mut Addr<Session>, req: UpdateM
     services.game_manager.modify(
         req.game_id,
         GameModifyAction::UpdateMeshConnection {
-            session: session.id,
+            session: id,
             target: target.player_id,
             state: target.state,
         },
@@ -353,6 +358,8 @@ async fn handle_start_matchmaking(
         .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
+    let session_id = player.session_id;
+
     info!("Player {} started matchmaking", player.player.display_name);
 
     let services = GlobalState::services();
@@ -370,7 +377,7 @@ async fn handle_start_matchmaking(
         None => return Err(ServerError::ServerUnavailable),
     };
 
-    Ok(MatchmakingResponse { id: session.id })
+    Ok(MatchmakingResponse { id: session_id })
 }
 
 /// Handles cancelling matchmaking for the current session removing

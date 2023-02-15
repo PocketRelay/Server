@@ -145,6 +145,6 @@ impl Matchmaking {
     }
 
     fn handle_remove_player(&mut self, id: SessionID) {
-        self.queue.retain(|value| value.player.addr.id != id);
+        self.queue.retain(|value| value.player.session_id != id);
     }
 }

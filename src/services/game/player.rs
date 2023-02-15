@@ -13,6 +13,9 @@ use database::Player;
 use serde::Serialize;
 
 pub struct GamePlayer {
+    /// ID of the session associated to this player
+    pub session_id: SessionID,
+    /// ID of the game this player is apart of
     pub game_id: GameID,
     /// Session player
     pub player: Player,
@@ -42,8 +45,9 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(player: Player, net: NetData, addr: Addr<Session>) -> Self {
+    pub fn new(session_id: SessionID, player: Player, net: NetData, addr: Addr<Session>) -> Self {
         Self {
+            session_id,
             player,
             addr,
             net,
@@ -56,7 +60,7 @@ impl GamePlayer {
     /// for serialization
     pub fn snapshot(&self) -> GamePlayerSnapshot {
         GamePlayerSnapshot {
-            session_id: self.addr.id,
+            session_id: self.session_id,
             player_id: self.player.id,
             display_name: self.player.display_name.clone(),
             net: self.net.clone(),
@@ -84,7 +88,7 @@ impl GamePlayer {
         writer.tag_u16(b"TIDX", 0xffff);
         writer.tag_u8(b"TIME", 0);
         writer.tag_triple(b"UGID", (0, 0, 0));
-        writer.tag_u32(b"UID", self.addr.id);
+        writer.tag_u32(b"UID", self.session_id);
         writer.tag_group_end();
     }
 

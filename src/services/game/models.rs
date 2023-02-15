@@ -270,7 +270,7 @@ pub fn encode_game_data(writer: &mut TdfWriter, game: &Game, player: &GamePlayer
         }
     }
 
-    writer.tag_u32(b"HSES", host_player.addr.id);
+    writer.tag_u32(b"HSES", host_player.session_id);
     writer.tag_zero(b"IGNO");
     writer.tag_u8(b"MCAP", 4);
     writer.tag_value(b"NQOS", &host_player.net.qos);
@@ -335,7 +335,7 @@ impl Encodable for GameDetails<'_> {
                 writer.tag_u8(b"DCTX", 0x0);
             }
             GameDetailsType::Joined => {
-                let session_id = self.player.addr.id;
+                let session_id = self.player.session_id;
                 writer.tag_u16(b"FIT", 0x3f7a);
                 writer.tag_u16(b"MAXF", 0x5460);
                 writer.tag_u32(b"MSID", session_id);
