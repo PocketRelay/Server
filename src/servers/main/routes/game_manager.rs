@@ -10,6 +10,7 @@ use crate::{
     },
     services::game::{
         manager::{CreateMessage, ModifyMessage, RemovePlayerMessage, TryAddMessage, TryAddResult},
+        matchmaking::{GameCreatedMessage, QueuePlayerMessage},
         player::GamePlayer,
         GameAddr, GameModifyAction, RemovePlayerType,
     },
@@ -105,7 +106,7 @@ async fn handle_create_game(
         .ok_or(ServerError::FailedNoLoginAction)?;
     let services = GlobalState::services();
 
-    let addr: GameAddr = match services
+    let link: GameAddr = match services
         .game_manager
         .send(CreateMessage {
             attributes: req.attributes,
@@ -118,9 +119,10 @@ async fn handle_create_game(
         Err(_) => return Err(ServerError::ServerUnavailable),
     };
 
-    let game_id = addr.id;
+    let game_id = link.id;
 
-    services.matchmaking.created(addr);
+    // Notify matchmaking of the new game
+    let _ = services.matchmaking.do_send(GameCreatedMessage { link });
 
     Ok(CreateGameResponse { game_id })
 }
@@ -380,7 +382,8 @@ async fn handle_start_matchmaking(
     let services = GlobalState::services();
 
     let rule_set = Arc::new(req.rules);
-    match services
+
+    let result = match services
         .game_manager
         .send(TryAddMessage {
             player,
@@ -388,12 +391,21 @@ async fn handle_start_matchmaking(
         })
         .await
     {
-        Ok(TryAddResult::Success) => {}
-        Ok(TryAddResult::Failure(player)) => {
-            services.matchmaking.queue(player, rule_set);
-        }
-        Err(_) => return Err(ServerError::ServerUnavailable),
+        Ok(value) => value,
+        Err(err) => return Err(ServerError::ServerUnavailable),
     };
+
+    // If adding failed attempt to queue instead
+    if let TryAddResult::Failure(player) = result {
+        if services
+            .matchmaking
+            .send(QueuePlayerMessage { player, rule_set })
+            .await
+            .is_err()
+        {
+            return Err(ServerError::ServerUnavailable);
+        }
+    }
 
     Ok(MatchmakingResponse { id: session_id })
 }

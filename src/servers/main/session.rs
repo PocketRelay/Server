@@ -4,6 +4,7 @@
 use super::models::errors::{ServerError, ServerResult};
 use super::router;
 use crate::services::game::manager::RemovePlayerMessage;
+use crate::services::game::matchmaking::RemoveQueueMessage;
 use crate::utils::types::PlayerID;
 use crate::{
     services::game::{player::GamePlayer, RemovePlayerType},
@@ -328,14 +329,16 @@ impl Session {
     pub fn remove_games(&mut self) {
         let game = self.game.take();
         let services = GlobalState::services();
-        if let Some(game_id) = game {
-            let _ = services.game_manager.do_send(RemovePlayerMessage {
+        let _ = if let Some(game_id) = game {
+            services.game_manager.do_send(RemovePlayerMessage {
                 game_id,
                 ty: RemovePlayerType::Session(self.id),
-            });
+            })
         } else {
-            services.matchmaking.unqueue_session(self.id);
-        }
+            services.matchmaking.do_send(RemoveQueueMessage {
+                session_id: self.id,
+            })
+        };
     }
 }
 

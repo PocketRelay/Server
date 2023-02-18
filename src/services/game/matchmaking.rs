@@ -1,13 +1,26 @@
 use super::{player::GamePlayer, rules::RuleSet, GameAddr, GameJoinableState};
 use crate::utils::types::SessionID;
 use futures::FutureExt;
-use interlink::{msg::ServiceFutureResponse, prelude::*};
+use interlink::{
+    msg::{MessageResponse, ServiceFutureResponse},
+    prelude::*,
+};
 use log::debug;
 use std::{collections::VecDeque, sync::Arc, time::SystemTime};
 
-struct Matchmaking {
+pub struct Matchmaking {
     /// The queue of matchmaking entries
     queue: VecDeque<QueueEntry>,
+}
+
+impl Matchmaking {
+    /// Starts a new matchmaking service returning its link
+    pub fn start() -> Link<Matchmaking> {
+        let this = Matchmaking {
+            queue: Default::default(),
+        };
+        this.start()
+    }
 }
 
 impl Service for Matchmaking {}
@@ -20,68 +33,34 @@ struct QueueEntry {
     /// The set of rules the game must match in
     /// order for this player to be removed from
     /// the queue and placed into a game
-    rules: Arc<RuleSet>,
+    rule_set: Arc<RuleSet>,
     /// The system time of when the player was added
     /// to the matchmaking queue
     time: SystemTime,
 }
-
-#[derive(Clone)]
-pub struct MatchmakingLink(Link<Matchmaking>);
-
-impl MatchmakingLink {
-    pub fn start() -> MatchmakingLink {
-        let this = Matchmaking {
-            queue: Default::default(),
-        };
-        let link = this.start();
-        MatchmakingLink(link)
-    }
-
-    /// Attempts to remove the player with the provided Session ID from
-    /// the matchmaking queue
-    ///
-    /// `id` The Session ID of the player to remove
-    pub fn unqueue_session(&self, id: SessionID) {
-        self.0.do_send(RemovePlayer { session_id: id }).ok();
-    }
-
-    /// Handles the creation of a new game
-    ///
-    /// `game` The addr to the created game
-    pub fn created(&self, game: GameAddr) {
-        self.0.do_send(GameCreated { addr: game }).ok();
-    }
-
-    /// Handles the creation of a new game
-    ///
-    /// `player`   The player to add to the queue
-    /// `rule_set` The player rule set
-    pub fn queue(&self, player: GamePlayer, rule_set: Arc<RuleSet>) {
-        self.0
-            .do_send(QueuePlayer {
-                player,
-                rules: rule_set,
-            })
-            .ok();
-    }
+/// Message for handling when a game is created and attempting
+/// to add players from the queue into the game
+pub struct GameCreatedMessage {
+    /// The link to the game
+    pub link: GameAddr,
 }
 
-struct GameCreated {
-    addr: GameAddr,
-}
-
-impl Message for GameCreated {
+impl Message for GameCreatedMessage {
+    /// Empty response from future
     type Response = ();
 }
 
-impl Handler<GameCreated> for Matchmaking {
-    type Response = ServiceFutureResponse<Self, GameCreated>;
+impl Handler<GameCreatedMessage> for Matchmaking {
+    type Response = ServiceFutureResponse<Self, GameCreatedMessage>;
 
-    fn handle(&mut self, msg: GameCreated, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(
+        &mut self,
+        msg: GameCreatedMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
         ServiceFutureResponse::new(move |service: &mut Matchmaking, _ctx| {
             async move {
-                let addr = msg.addr;
+                let addr = msg.link;
                 let queue = &mut service.queue;
                 if queue.is_empty() {
                     return;
@@ -89,7 +68,7 @@ impl Handler<GameCreated> for Matchmaking {
 
                 let checking_queue = queue.split_off(0);
                 for entry in checking_queue {
-                    let join_state = addr.check_joinable(entry.rules.clone()).await;
+                    let join_state = addr.check_joinable(entry.rule_set.clone()).await;
                     match join_state {
                         GameJoinableState::Joinable => {
                             debug!(
@@ -122,40 +101,54 @@ impl Handler<GameCreated> for Matchmaking {
     }
 }
 
-struct QueuePlayer {
-    player: GamePlayer,
-    rules: Arc<RuleSet>,
+/// Message to add a new player to the matchmaking queue
+pub struct QueuePlayerMessage {
+    /// The player to add to the queue
+    pub player: GamePlayer,
+    /// The rules for the player
+    pub rule_set: Arc<RuleSet>,
 }
 
-impl Message for QueuePlayer {
+impl Message for QueuePlayerMessage {
+    /// Empty response type
     type Response = ();
 }
 
-impl Handler<QueuePlayer> for Matchmaking {
-    type Response = ();
+impl Handler<QueuePlayerMessage> for Matchmaking {
+    /// Empty response type
+    type Response = MessageResponse<QueuePlayerMessage>;
 
-    fn handle(&mut self, msg: QueuePlayer, _ctx: &mut ServiceContext<Self>) {
+    fn handle(
+        &mut self,
+        msg: QueuePlayerMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
         let time = SystemTime::now();
         self.queue.push_back(QueueEntry {
             player: msg.player,
-            rules: msg.rules,
+            rule_set: msg.rule_set,
             time,
-        })
+        });
+        MessageResponse(())
     }
 }
 
-struct RemovePlayer {
-    session_id: SessionID,
+/// Message to remove a player from the matchmaking queue
+pub struct RemoveQueueMessage {
+    /// The session ID of the player to remove
+    pub session_id: SessionID,
 }
 
-impl Message for RemovePlayer {
+impl Message for RemoveQueueMessage {
+    /// Empty response type
     type Response = ();
 }
 
-impl Handler<RemovePlayer> for Matchmaking {
+impl Handler<RemoveQueueMessage> for Matchmaking {
+    /// Empty response type
     type Response = ();
 
-    fn handle(&mut self, msg: RemovePlayer, _ctx: &mut ServiceContext<Self>) {
+    fn handle(&mut self, msg: RemoveQueueMessage, _ctx: &mut ServiceContext<Self>) {
         self.queue
             .retain(|value| value.player.session_id != msg.session_id);
     }
