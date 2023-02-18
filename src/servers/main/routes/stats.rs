@@ -4,14 +4,11 @@ use crate::{
             errors::{ServerError, ServerResult},
             stats::*,
         },
-        session::Session,
+        session::SessionLink,
     },
     services::leaderboard::models::*,
     state::GlobalState,
-    utils::{
-        actor::Addr,
-        components::{Components as C, Stats as S},
-    },
+    utils::components::{Components as C, Stats as S},
 };
 use blaze_pk::{
     codec::Decodable,
@@ -23,7 +20,7 @@ use blaze_pk::{
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Addr<Session>>) {
+pub fn route(router: &mut Router<C, SessionLink>) {
     router.route(
         C::Stats(S::GetLeaderboardEntityCount),
         handle_leaderboard_entity_count,

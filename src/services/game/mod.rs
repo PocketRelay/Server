@@ -292,9 +292,13 @@ impl Game {
             let addr1 = player.addr.clone();
             let addr2 = value.addr.clone();
 
-            value.addr.do_exec(|session, _| session.push_details(addr1));
+            value
+                .addr
+                .link
+                .do_exec(|session, _| session.push_details(addr1));
             player
                 .addr
+                .link
                 .do_exec(|session, _| session.push_details(addr2));
         });
     }
@@ -339,6 +343,7 @@ impl Game {
 
         player
             .addr
+            .link
             .do_exec(move |session, _| session.set_game(Some(id)));
 
         let packet = player.create_set_session();
@@ -512,7 +517,10 @@ impl Game {
             (player, index, reason, self.players.is_empty())
         };
 
-        player.addr.do_exec(|session, _| session.set_game(None));
+        player
+            .addr
+            .link
+            .do_exec(|session, _| session.set_game(None));
         self.notify_player_removed(&player, reason);
         self.notify_fetch_data(&player);
         self.modify_admin_list(player.player.id, AdminListOperation::Remove);

@@ -71,6 +71,9 @@ jsonwebtoken = "8"
 thiserror = "1"
 validator = { version = "0.16", features = ["derive"] }
 
+
+interlink = { path = "../interlink", version = "0.1.0-alpha" }
+
 # Tokio async runtime
 [dependencies.tokio]
 version = "1"

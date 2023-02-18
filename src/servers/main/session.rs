@@ -3,7 +3,6 @@
 //! networking data.
 use super::models::errors::{ServerError, ServerResult};
 use super::router;
-use crate::utils::actor::{Actor, ActorContext, Addr, Handler, Message};
 use crate::utils::types::PlayerID;
 use crate::{
     services::game::{player::GamePlayer, RemovePlayerType},
@@ -21,6 +20,7 @@ use blaze_pk::{
     router::State,
 };
 use database::Player;
+use interlink::prelude::*;
 use log::{debug, error, log_enabled};
 use std::fmt::Debug;
 use std::net::SocketAddr;
@@ -50,30 +50,46 @@ pub struct Session {
     game: Option<GameID>,
 }
 
-impl State for Addr<Session> {}
+impl Service for Session {
+    fn stopping(&mut self) {
+        self.remove_games();
+        debug!("Session stopped (SID: {})", self.id);
+    }
+}
 
-impl Addr<Session> {
+/// Wrapper over the standard interlink link type
+/// to provide extra session functionality and to
+/// allow it to be used as State
+#[derive(Clone)]
+pub struct SessionLink {
+    pub link: Link<Session>,
+}
+
+impl State for SessionLink {}
+
+impl SessionLink {
     pub fn push(&self, packet: Packet) {
-        self.do_send(PacketMessage::Write(packet));
+        self.link.do_send(PacketMessage::Write(packet)).ok();
     }
 
     pub fn read(&self, packet: Packet) -> bool {
-        self.do_send(PacketMessage::Read(packet))
+        self.link.do_send(PacketMessage::Read(packet)).is_ok()
     }
 
     pub async fn try_into_player(&self) -> Option<GamePlayer> {
-        self.exec(|session, ctx| {
-            let player = session.player.clone()?;
-            Some(GamePlayer::new(
-                session.id,
-                player,
-                session.net.clone(),
-                ctx.addr(),
-            ))
-        })
-        .await
-        .ok()
-        .flatten()
+        self.link
+            .exec(|service, ctx| {
+                let player = service.player.clone()?;
+                Some(GamePlayer::new(
+                    service.id,
+                    player,
+                    service.net.clone(),
+                    SessionLink { link: ctx.link() },
+                ))
+            })
+            .await
+            .ok()
+            .flatten()
     }
 
     /// Attempts to set the current player will return true if successful
@@ -81,38 +97,34 @@ impl Addr<Session> {
     ///
     /// `player` The player to set for this session
     pub async fn set_player(&self, player: Player) -> bool {
-        self.exec(|session, _| {
-            session.player = Some(player);
-        })
-        .await
-        .is_ok()
+        self.link
+            .exec(|session, _| {
+                session.player = Some(player);
+            })
+            .await
+            .is_ok()
     }
 
     pub async fn get_player(&self) -> ServerResult<Option<Player>> {
-        self.exec(|session, _| session.player.clone())
+        self.link
+            .exec(|session, _| session.player.clone())
             .await
             .map_err(|_| ServerError::ServerUnavailable)
     }
 
     pub async fn get_player_id(&self) -> Option<u32> {
-        self.exec(|session, _| session.player.as_ref().map(|value| value.id))
+        self.link
+            .exec(|session, _| session.player.as_ref().map(|value| value.id))
             .await
             .ok()
             .flatten()
     }
     pub async fn id(&self) -> Option<u32> {
-        self.exec(|session, _| session.id).await.ok()
+        self.link.exec(|session, _| session.id).await.ok()
     }
 
     pub async fn socket_addr(&self) -> Option<SocketAddr> {
-        self.exec(|session, _| session.socket_addr).await.ok()
-    }
-}
-
-impl Actor for Session {
-    fn stopping(&mut self) {
-        self.remove_games();
-        debug!("Session stopped (SID: {})", self.id);
+        self.link.exec(|session, _| session.socket_addr).await.ok()
     }
 }
 
@@ -120,11 +132,11 @@ pub struct SessionReader {
     /// Underlying writable
     read: OwnedReadHalf,
     /// Address to the session for stopping
-    addr: Addr<Session>,
+    addr: SessionLink,
 }
 
 impl SessionReader {
-    pub fn new(read: OwnedReadHalf, addr: Addr<Session>) {
+    pub fn new(read: OwnedReadHalf, addr: SessionLink) {
         tokio::spawn(Self { read, addr }.process());
     }
 
@@ -135,7 +147,7 @@ impl SessionReader {
             let packet: Packet = match Packet::read_async(&mut self.read).await {
                 Ok(value) => value,
                 Err(_) => {
-                    self.addr.stop();
+                    self.addr.link.stop();
                     break;
                 }
             };
@@ -153,11 +165,11 @@ pub struct SessionWriter {
     /// Receiver for handling messages for this writer
     rx: mpsc::UnboundedReceiver<Packet>,
     /// Address to the session for stopping
-    addr: Addr<Session>,
+    addr: Link<Session>,
 }
 
 impl SessionWriter {
-    pub fn new(write: OwnedWriteHalf, addr: Addr<Session>) -> WriterAddr {
+    pub fn new(write: OwnedWriteHalf, addr: Link<Session>) -> WriterAddr {
         let (tx, rx) = mpsc::unbounded_channel();
         let writer_addr = WriterAddr { tx };
         tokio::spawn(Self { write, rx, addr }.process());
@@ -183,7 +195,11 @@ pub struct WriterAddr {
 }
 
 impl Handler<PacketMessage> for Session {
-    fn handle(&mut self, msg: PacketMessage, ctx: &mut ActorContext<Self>) {
+    fn handle(
+        &mut self,
+        msg: PacketMessage,
+        ctx: &mut ServiceContext<Self>,
+    ) -> <PacketMessage as Message>::Response {
         match msg {
             PacketMessage::Read(packet) => self.handle_packet(ctx, packet),
             PacketMessage::Write(packet) => self.push(packet),
@@ -200,7 +216,7 @@ enum PacketMessage {
 }
 
 impl Message for PacketMessage {
-    type Result = ();
+    type Response = ();
 }
 
 impl Session {
@@ -226,9 +242,9 @@ impl Session {
     /// `session`   The session to process the packet for
     /// `component` The component of the packet for routing
     /// `packet`    The packet itself
-    fn handle_packet(&mut self, ctx: &mut ActorContext<Self>, packet: Packet) {
+    fn handle_packet(&mut self, ctx: &mut ServiceContext<Self>, packet: Packet) {
         self.debug_log_packet("Read", &packet);
-        let mut addr = ctx.addr();
+        let mut addr = SessionLink { link: ctx.link() };
         tokio::spawn(async move {
             let router = router();
             match router.handle(&mut addr, packet).await {
@@ -334,7 +350,7 @@ impl Session {
         self.push(packet);
     }
 
-    pub fn push_details(&mut self, addr: Addr<Session>) {
+    pub fn push_details(&mut self, addr: SessionLink) {
         let player = match self.player.as_ref() {
             Some(value) => value,
             None => return,

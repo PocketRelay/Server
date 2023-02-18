@@ -1,8 +1,7 @@
 use super::models::PlayerState;
 use crate::{
-    servers::main::session::Session,
+    servers::main::session::SessionLink,
     utils::{
-        actor::Addr,
         components::{Components, UserSessions},
         models::NetData,
         types::{GameID, PlayerID, SessionID},
@@ -20,7 +19,7 @@ pub struct GamePlayer {
     /// Session player
     pub player: Player,
     /// Session address
-    pub addr: Addr<Session>,
+    pub addr: SessionLink,
     /// Networking information for the player
     pub net: NetData,
     /// State of the game player
@@ -45,7 +44,7 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(session_id: SessionID, player: Player, net: NetData, addr: Addr<Session>) -> Self {
+    pub fn new(session_id: SessionID, player: Player, net: NetData, addr: SessionLink) -> Self {
         Self {
             session_id,
             player,
@@ -118,7 +117,7 @@ impl GamePlayer {
 impl Drop for GamePlayer {
     fn drop(&mut self) {
         // Clear player game when game player is dropped
-        self.addr.do_exec(|session, _| session.set_game(None));
+        self.addr.link.do_exec(|session, _| session.set_game(None));
     }
 }
 

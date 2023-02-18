@@ -1,10 +1,7 @@
-use self::session::{Session, SessionReader, SessionWriter};
-use crate::utils::{
-    actor::{Actor, Addr},
-    components::Components,
-    env,
-};
+use self::session::{Session, SessionLink, SessionReader, SessionWriter};
+use crate::utils::{components::Components, env};
 use blaze_pk::router::Router;
+use interlink::prelude::*;
 use log::{error, info};
 use tokio::net::TcpListener;
 
@@ -12,9 +9,9 @@ mod models;
 mod routes;
 pub mod session;
 
-static mut ROUTER: Option<Router<Components, Addr<Session>>> = None;
+static mut ROUTER: Option<Router<Components, SessionLink>> = None;
 
-fn router() -> &'static Router<Components, Addr<Session>> {
+fn router() -> &'static Router<Components, SessionLink> {
     unsafe {
         match &ROUTER {
             Some(value) => value,
@@ -59,8 +56,8 @@ pub async fn start_server() {
         Session::create(|ctx| {
             // Attach reader and writers to the session context
             let (read, write) = stream.into_split();
-            let writer = SessionWriter::new(write, ctx.addr());
-            SessionReader::new(read, ctx.addr());
+            let writer = SessionWriter::new(write, ctx.link());
+            SessionReader::new(read, SessionLink { link: ctx.link() });
 
             Session::new(session_id, socket_addr, writer)
         });

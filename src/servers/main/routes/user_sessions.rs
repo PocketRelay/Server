@@ -5,13 +5,10 @@ use crate::{
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
-        session::Session,
+        session::SessionLink,
     },
     state::GlobalState,
-    utils::{
-        actor::Addr,
-        components::{Components as C, UserSessions as U},
-    },
+    utils::components::{Components as C, UserSessions as U},
 };
 use blaze_pk::router::Router;
 use database::Player;
@@ -21,7 +18,7 @@ use log::error;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Addr<Session>>) {
+pub fn route(router: &mut Router<C, SessionLink>) {
     router.route(C::UserSessions(U::ResumeSession), handle_resume_session);
     router.route(C::UserSessions(U::UpdateNetworkInfo), handle_update_network);
     router.route(
@@ -41,7 +38,7 @@ pub fn route(router: &mut Router<C, Addr<Session>>) {
 /// }
 /// ```
 async fn handle_resume_session(
-    session: &mut Addr<Session>,
+    session: &mut SessionLink,
     req: ResumeSessionRequest,
 ) -> ServerResult<AuthResponse> {
     let db = GlobalState::database();
@@ -112,8 +109,9 @@ async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-async fn handle_update_network(session: &mut Addr<Session>, req: UpdateNetworkRequest) {
+async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequest) {
     session
+        .link
         .exec(move |session, _| session.set_network_info(req.address, req.qos))
         .await
         .ok();
@@ -128,8 +126,9 @@ async fn handle_update_network(session: &mut Addr<Session>, req: UpdateNetworkRe
 ///     "HWFG": 0
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: &mut Addr<Session>, req: HardwareFlagRequest) {
+async fn handle_update_hardware_flag(session: &mut SessionLink, req: HardwareFlagRequest) {
     session
+        .link
         .exec(move |session, _| session.set_hardware_flag(req.hardware_flag))
         .await
         .ok();

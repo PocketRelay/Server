@@ -1,7 +1,6 @@
 use crate::{
-    servers::main::{models::messaging::*, session::Session},
+    servers::main::{models::messaging::*, session::SessionLink},
     utils::{
-        actor::Addr,
         components::{Components as C, Messaging as M},
         env,
     },
@@ -12,7 +11,7 @@ use blaze_pk::{packet::Packet, router::Router};
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Addr<Session>>) {
+pub fn route(router: &mut Router<C, SessionLink>) {
     router.route(C::Messaging(M::FetchMessages), handle_fetch_messages);
 }
 
@@ -36,7 +35,7 @@ pub fn route(router: &mut Router<C, Addr<Session>>) {
 /// }
 /// ```
 ///
-async fn handle_fetch_messages(session: &mut Addr<Session>) -> FetchMessageResponse {
+async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageResponse {
     let Ok(Some(player)) = session.get_player().await else {
         // Not authenticated return empty count
         return FetchMessageResponse { count: 0 };
@@ -61,7 +60,7 @@ async fn handle_fetch_messages(session: &mut Addr<Session>) -> FetchMessageRespo
 /// - {v} = Server Version
 /// - {n} = Player Display Name
 /// - {ip} = Session IP Address
-async fn get_menu_message(session: &Addr<Session>, player_name: &str) -> String {
+async fn get_menu_message(session: &SessionLink, player_name: &str) -> String {
     let mut message = env::env(env::MENU_MESSAGE);
     if message.contains("{v}") {
         message = message.replace("{v}", env::VERSION);

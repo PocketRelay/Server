@@ -4,11 +4,10 @@ use crate::{
             errors::{ServerError, ServerResult},
             util::*,
         },
-        session::Session,
+        session::SessionLink,
     },
     state::GlobalState,
     utils::{
-        actor::Addr,
         components::{Components as C, Util as U},
         env,
         models::Port,
@@ -33,7 +32,7 @@ use tokio::fs::read;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Addr<Session>>) {
+pub fn route(router: &mut Router<C, SessionLink>) {
     router.route(C::Util(U::PreAuth), handle_pre_auth);
     router.route(C::Util(U::PostAuth), handle_post_auth);
     router.route(C::Util(U::Ping), handle_ping);
@@ -117,13 +116,17 @@ async fn handle_pre_auth() -> PreAuthResponse {
 /// ID: 27
 /// Content: {}
 /// ```
-async fn handle_post_auth(session: &mut Addr<Session>) -> ServerResult<PostAuthResponse> {
+async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthResponse> {
     let player_id = session
         .get_player_id()
         .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    session.do_exec(move |session, ctx| session.push_details(ctx.addr()));
+    session
+        .link
+        .exec(move |session, ctx| session.push_details(SessionLink { link: ctx.link() }))
+        .await
+        .ok();
 
     Ok(PostAuthResponse {
         telemetry: TelemetryServer {
@@ -538,7 +541,7 @@ async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
 /// }
 /// ```
 async fn handle_user_settings_save(
-    session: &mut Addr<Session>,
+    session: &mut SessionLink,
     req: SettingsSaveRequest,
 ) -> ServerResult<()> {
     let player = session
@@ -563,7 +566,7 @@ async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-async fn handle_load_settings(session: &mut Addr<Session>) -> ServerResult<SettingsResponse> {
+async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<SettingsResponse> {
     let player = session
         .get_player_id()
         .await
