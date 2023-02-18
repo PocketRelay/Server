@@ -1,7 +1,7 @@
 use self::{
     game::{manager::GameManagerAddr, matchmaking::MatchmakingAddr},
     jwt::Jwt,
-    leaderboard::LeaderboardAddr,
+    leaderboard::LeaderboardLink,
     retriever::Retriever,
 };
 use tokio::join;
@@ -14,7 +14,7 @@ pub mod retriever;
 pub struct Services {
     pub game_manager: GameManagerAddr,
     pub matchmaking: MatchmakingAddr,
-    pub leaderboard: LeaderboardAddr,
+    pub leaderboard: LeaderboardLink,
     pub retriever: Option<Retriever>,
     pub jwt: Jwt,
 }
@@ -24,7 +24,7 @@ impl Services {
         let (retriever, jwt) = join!(Retriever::new(), Jwt::new());
         let game_manager = GameManagerAddr::spawn();
         let matchmaking = MatchmakingAddr::spawn();
-        let leaderboard = LeaderboardAddr::spawn();
+        let leaderboard = LeaderboardLink::start();
 
         Self {
             game_manager,
