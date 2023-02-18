@@ -1,5 +1,6 @@
 use super::{player::GamePlayer, rules::RuleSet, GameAddr, GameJoinableState};
 use crate::utils::types::SessionID;
+use futures::FutureExt;
 use interlink::{msg::ServiceFutureResponse, prelude::*};
 use log::debug;
 use std::{collections::VecDeque, sync::Arc, time::SystemTime};
@@ -79,7 +80,7 @@ impl Handler<GameCreated> for Matchmaking {
 
     fn handle(&mut self, msg: GameCreated, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         ServiceFutureResponse::new(move |service: &mut Matchmaking, _ctx| {
-            Box::pin(async move {
+            async move {
                 let addr = msg.addr;
                 let queue = &mut service.queue;
                 if queue.is_empty() {
@@ -115,7 +116,8 @@ impl Handler<GameCreated> for Matchmaking {
                         }
                     }
                 }
-            })
+            }
+            .boxed()
         })
     }
 }

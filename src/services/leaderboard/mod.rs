@@ -9,7 +9,8 @@ use crate::{
     },
 };
 use database::{DatabaseConnection, DbResult, Player};
-use interlink::{msg::ServiceFutureResponse, prelude::*};
+use futures::FutureExt;
+use interlink::prelude::*;
 use log::error;
 use std::{collections::HashMap, future::Future, sync::Arc};
 use tokio::{task::JoinSet, try_join};
@@ -38,7 +39,7 @@ impl Handler<GetRequest> for Leaderboard {
 
     fn handle(&mut self, msg: GetRequest, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         ServiceFutureResponse::new(move |service: &mut Leaderboard, _ctx| {
-            Box::pin(async move {
+            async move {
                 // If the group already exists and is not expired we can respond with it
                 if let Some(group) = service.groups.get(&msg.ty) {
                     if !group.is_expired() {
@@ -53,7 +54,8 @@ impl Handler<GetRequest> for Leaderboard {
                 // Store the group and respond to the request
                 service.groups.insert(msg.ty, group.clone());
                 group
-            })
+            }
+            .boxed()
         })
     }
 }
@@ -90,7 +92,7 @@ impl Leaderboard {
         let mut values: Vec<LeaderboardEntry> = Vec::new();
 
         // Decide the ranking function to use based on the type
-        let ranking_fn: Box<dyn Ranker> = ty.into();
+        let ranking: Box<dyn Ranker> = ty.into();
 
         let mut join_set = JoinSet::new();
 
@@ -106,7 +108,7 @@ impl Leaderboard {
 
             // Add the futures for all the players
             for player in players {
-                join_set.spawn(ranking_fn.compute_ranking(db.clone(), player));
+                join_set.spawn(ranking.compute_ranking(db.clone(), player));
             }
 
             // Await computed results

@@ -6,6 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use database::{Player, PlayerRole};
+use futures::FutureExt;
 use jsonwebtoken::errors::ErrorKind;
 use std::{fmt::Display, marker::PhantomData};
 
@@ -47,7 +48,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
         'b: 'c,
         Self: 'c,
     {
-        Box::pin(async move {
+        async move {
             let token = parts
                 .headers
                 .get(AUTHORIZATION)
@@ -79,7 +80,8 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
             let player = player.ok_or(TokenError::InvalidToken)?;
 
             Ok(Self(player, PhantomData))
-        })
+        }
+        .boxed()
     }
 }
 

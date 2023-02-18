@@ -3,6 +3,7 @@ use super::{
     GameSnapshot, RemovePlayerType,
 };
 use crate::utils::types::GameID;
+use futures::FutureExt;
 use interlink::{
     msg::{FutureResponse, MessageResponse, ServiceFutureResponse},
     prelude::*,
@@ -118,15 +119,18 @@ impl Handler<SnapshotQuery> for GameManager {
             (keys_count, more)
         };
 
-        FutureResponse::new(Box::pin(async move {
-            let mut snapshots = Vec::with_capacity(count);
-            while let Some(result) = join_set.join_next().await {
-                if let Ok(Some(snapshot)) = result {
-                    snapshots.push(snapshot);
+        FutureResponse::new(
+            async move {
+                let mut snapshots = Vec::with_capacity(count);
+                while let Some(result) = join_set.join_next().await {
+                    if let Ok(Some(snapshot)) = result {
+                        snapshots.push(snapshot);
+                    }
                 }
+                (snapshots, more)
             }
-            (snapshots, more)
-        }))
+            .boxed(),
+        )
     }
 }
 
@@ -144,13 +148,16 @@ impl Handler<Snapshot> for GameManager {
     fn handle(&mut self, msg: Snapshot, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         let addr = self.games.get(&msg.game_id).cloned();
 
-        FutureResponse::new(Box::pin(async move {
-            let addr = match addr {
-                Some(value) => value,
-                None => return None,
-            };
-            addr.snapshot().await
-        }))
+        FutureResponse::new(
+            async move {
+                let addr = match addr {
+                    Some(value) => value,
+                    None => return None,
+                };
+                addr.snapshot().await
+            }
+            .boxed(),
+        )
     }
 }
 
@@ -165,7 +172,7 @@ impl Message for Create {
 }
 
 impl Handler<Create> for GameManager {
-    type Response = MessageResponse<GameAddr>;
+    type Response = MessageResponse<Create>;
 
     fn handle(&mut self, msg: Create, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         let id = self.next_id;
@@ -210,7 +217,7 @@ impl Handler<TryAdd> for GameManager {
 
     fn handle(&mut self, msg: TryAdd, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         ServiceFutureResponse::new(move |service: &mut GameManager, _ctx| {
-            Box::pin(async move {
+            async move {
                 for (id, addr) in &service.games {
                     let join_state = addr.check_joinable(msg.rule_set.clone()).await;
                     if let GameJoinableState::Joinable = join_state {
@@ -220,7 +227,8 @@ impl Handler<TryAdd> for GameManager {
                     }
                 }
                 TryAddResult::Failure(msg.player)
-            })
+            }
+            .boxed()
         })
     }
 }
@@ -239,7 +247,7 @@ impl Handler<RemovePlayer> for GameManager {
 
     fn handle(&mut self, msg: RemovePlayer, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         ServiceFutureResponse::new(move |service: &mut GameManager, _ctx| {
-            Box::pin(async move {
+            async move {
                 if let Some(game) = service.games.get(&msg.game_id) {
                     let is_empty = game.remove_player(msg.ty).await;
                     if is_empty {
@@ -247,7 +255,8 @@ impl Handler<RemovePlayer> for GameManager {
                         service.games.remove(&msg.game_id);
                     }
                 }
-            })
+            }
+            .boxed()
         })
     }
 }
