@@ -46,7 +46,7 @@ serde = { workspace = true }
 chrono = { workspace = true }
 
 # Blaze packet system 
-blaze-pk = "^0.8"
+blaze-pk = "^0.9"
 # Blaze SSLv3 async TCPStream implementation
 blaze-ssl-async = "^0.3"
 
@@ -73,6 +73,8 @@ validator = { version = "0.16", features = ["derive"] }
 
 
 interlink = { path = "../interlink", version = "0.1.0-alpha" }
+tokio-util = { version = "0.7", features = ["codec"] }
+futures = "0.3"
 
 # Tokio async runtime
 [dependencies.tokio]

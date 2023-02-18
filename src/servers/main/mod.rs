@@ -1,9 +1,10 @@
-use self::session::{Session, SessionLink, SessionReader, SessionWriter};
+use self::session::{Session, SessionLink};
 use crate::utils::{components::Components, env};
-use blaze_pk::router::Router;
+use blaze_pk::{packet::PacketCodec, router::Router};
 use interlink::prelude::*;
 use log::{error, info};
 use tokio::net::TcpListener;
+use tokio_util::codec::{FramedRead, FramedWrite};
 
 mod models;
 mod routes;
@@ -56,8 +57,11 @@ pub async fn start_server() {
         Session::create(|ctx| {
             // Attach reader and writers to the session context
             let (read, write) = stream.into_split();
-            let writer = SessionWriter::new(write, ctx.link());
-            SessionReader::new(read, SessionLink { link: ctx.link() });
+            let read = FramedRead::new(read, PacketCodec);
+            let write = FramedWrite::new(write, PacketCodec);
+
+            ctx.attach_stream(read, true);
+            let writer = ctx.attach_sink(write);
 
             Session::new(session_id, socket_addr, writer)
         });

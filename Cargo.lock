@@ -217,13 +217,13 @@ dependencies = [
 
 [[package]]
 name = "blaze-pk"
-version = "0.8.7"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ced79fa9aedf49ac017a507923891c323a31c5ba8ff4e522980b1dbb08007a37"
+checksum = "d1793fd7a0fd957d4249db11de0878617051aab2d15edbc2e02f4793e9042651"
 dependencies = [
  "bytes",
  "serde",
- "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -1434,6 +1434,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "flate2",
+ "futures",
  "interlink",
  "jsonwebtoken",
  "local-ip-address",
@@ -1445,6 +1446,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio",
+ "tokio-util",
  "validator",
 ]
 

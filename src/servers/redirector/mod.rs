@@ -8,11 +8,13 @@ use crate::{
         models::{InstanceDetails, InstanceNet},
     },
 };
-use blaze_pk::packet::Packet;
+use blaze_pk::packet::{Packet, PacketCodec, PacketComponents};
 use blaze_ssl_async::{BlazeAccept, BlazeListener};
+use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
 use std::{io, time::Duration};
-use tokio::{io::AsyncWriteExt, select, time::sleep};
+use tokio::{select, time::sleep};
+use tokio_util::codec::Framed;
 
 /// Starts the Redirector server this server is what the Mass Effect 3 game
 /// client initially reaches out to. This server is responsible for telling
@@ -62,7 +64,7 @@ const REDIRECT_COMPONENT: Components = Components::Redirector(Redirector::GetSer
 /// `addr`     The client address
 /// `instance` The server instance information
 async fn handle_client(accept: BlazeAccept) -> io::Result<()> {
-    let (mut stream, addr) = match accept.finish_accept().await {
+    let (stream, addr) = match accept.finish_accept().await {
         Ok(value) => value,
         Err(_) => {
             error!("Unable to establish SSL connection within redirector");
@@ -70,14 +72,24 @@ async fn handle_client(accept: BlazeAccept) -> io::Result<()> {
         }
     };
 
+    let mut framed = Framed::new(stream, PacketCodec);
+
     loop {
-        let (component, packet): (Components, Packet) = select! {
+        let packet = select! {
             // Attempt to read packets from the stream
-            result = Packet::read_async_typed(&mut stream) => result,
+            result = framed.next() => result,
             // If the timeout completes before the redirect is complete the
             // request is considered over and terminates
             _ = sleep(DEFAULT_TIMEOUT) => { break; }
-        }?;
+        };
+
+        let packet = match packet {
+            Some(Ok(value)) => value,
+            Some(Err(err)) => return Err(err),
+            None => break,
+        };
+
+        let component = Components::from_header(&packet.header);
 
         if component == REDIRECT_COMPONENT {
             debug!("Redirecting client (Addr: {addr:?})");
@@ -90,13 +102,11 @@ async fn handle_client(accept: BlazeAccept) -> io::Result<()> {
             };
 
             let response = Packet::response(&packet, instance);
-            response.write_async(&mut stream).await?;
-            stream.flush().await?;
+            framed.send(response).await?;
             break;
         } else {
             let response = Packet::response_empty(&packet);
-            response.write_async(&mut stream).await?;
-            stream.flush().await?;
+            framed.send(response).await?;
         }
     }
 

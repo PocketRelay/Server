@@ -1,4 +1,5 @@
 //! Module for retrieving data from the official Mass Effect 3 Servers
+use self::origin::OriginFlowService;
 use crate::utils::{
     components::{Components, Redirector},
     env,
@@ -8,15 +9,14 @@ use crate::utils::{
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeError,
-    packet::{Packet, PacketComponents, PacketDebug, PacketType},
+    packet::{Packet, PacketCodec, PacketComponents, PacketDebug, PacketHeader, PacketType},
 };
 use blaze_ssl_async::stream::BlazeStream;
+use futures::{SinkExt, StreamExt};
 use log::{debug, error, log_enabled};
-use tokio::io::{self, AsyncWriteExt};
-
 use models::InstanceRequest;
-
-use self::origin::OriginFlowService;
+use tokio::io;
+use tokio_util::codec::Framed;
 
 mod models;
 pub mod origin;
@@ -113,7 +113,7 @@ pub struct RetSession {
     /// The ID for the next request packet
     id: u16,
     /// The underlying SSL / TCP stream connection
-    stream: BlazeStream,
+    stream: Framed<BlazeStream, PacketCodec>,
 }
 
 /// Error type for retriever errors
@@ -124,6 +124,8 @@ pub enum RetrieverError {
     IO(io::Error),
     /// Error response packet
     Packet(Packet),
+    /// Stream ended early
+    EarlyEof,
 }
 
 pub type RetrieverResult<T> = Result<T, RetrieverError>;
@@ -133,7 +135,10 @@ impl RetSession {
     /// port. This will create the underlying connection aswell.
     /// If creating the connection fails then None is returned instead.
     pub fn new(stream: BlazeStream) -> Option<Self> {
-        Some(Self { id: 0, stream })
+        Some(Self {
+            id: 0,
+            stream: Framed::new(stream, PacketCodec),
+        })
     }
 
     /// Writes a request packet and waits until the response packet is
@@ -156,11 +161,14 @@ impl RetSession {
         contents: Req,
     ) -> RetrieverResult<Packet> {
         let request = Packet::request(self.id, component, contents);
-        request.write_async(&mut self.stream).await?;
-        debug_log_packet(&request, "Sent to Official");
-        self.stream.flush().await?;
+
+        debug_log_packet(&request, "Sending to Official");
+        let header = request.header.clone();
+
+        self.stream.send(request).await?;
+
         self.id += 1;
-        self.expect_response(&request).await
+        self.expect_response(&header).await
     }
 
     /// Writes a request packet and waits until the response packet is
@@ -179,23 +187,26 @@ impl RetSession {
     /// recieved returning the raw response packet
     pub async fn request_empty_raw(&mut self, component: Components) -> RetrieverResult<Packet> {
         let request = Packet::request_empty(self.id, component);
-        request.write_async(&mut self.stream).await?;
         debug_log_packet(&request, "Sent to Official");
-        self.stream.flush().await?;
+        let header = request.header.clone();
+        self.stream.send(request).await?;
         self.id += 1;
-        self.expect_response(&request).await
+        self.expect_response(&header).await
     }
 
     /// Waits for a response packet to be recieved any notification packets
     /// that are recieved are handled in the handle_notify function.
-    async fn expect_response(&mut self, request: &Packet) -> RetrieverResult<Packet> {
+    async fn expect_response(&mut self, request: &PacketHeader) -> RetrieverResult<Packet> {
         loop {
-            let response = Packet::read_async(&mut self.stream).await?;
+            let response = match self.stream.next().await {
+                Some(value) => value?,
+                None => return Err(RetrieverError::EarlyEof),
+            };
             debug_log_packet(&response, "Received from Official");
             let header = &response.header;
 
             if let PacketType::Response = header.ty {
-                if header.path_matches(&request.header) {
+                if header.path_matches(request) {
                     return Ok(response);
                 }
             } else if let PacketType::Error = header.ty {

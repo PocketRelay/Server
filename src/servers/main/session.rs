@@ -23,9 +23,8 @@ use database::Player;
 use interlink::prelude::*;
 use log::{debug, error, log_enabled};
 use std::fmt::Debug;
+use std::io;
 use std::net::SocketAddr;
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use tokio::sync::mpsc;
 
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
@@ -34,7 +33,7 @@ pub struct Session {
     /// Unique identifier for this session.
     id: SessionID,
 
-    writer: WriterAddr,
+    writer: SinkLink<Packet>,
 
     /// The socket connection address of the client
     socket_addr: SocketAddr,
@@ -70,10 +69,6 @@ impl State for SessionLink {}
 impl SessionLink {
     pub fn push(&self, packet: Packet) {
         self.link.do_send(PacketMessage::Write(packet)).ok();
-    }
-
-    pub fn read(&self, packet: Packet) -> bool {
-        self.link.do_send(PacketMessage::Read(packet)).is_ok()
     }
 
     pub async fn try_into_player(&self) -> Option<GamePlayer> {
@@ -128,72 +123,6 @@ impl SessionLink {
     }
 }
 
-pub struct SessionReader {
-    /// Underlying writable
-    read: OwnedReadHalf,
-    /// Address to the session for stopping
-    addr: SessionLink,
-}
-
-impl SessionReader {
-    pub fn new(read: OwnedReadHalf, addr: SessionLink) {
-        tokio::spawn(Self { read, addr }.process());
-    }
-
-    /// TODO: When taking in packets write them to a buffer and then
-    /// handle polling writes from the buffer
-    pub async fn process(mut self) {
-        loop {
-            let packet: Packet = match Packet::read_async(&mut self.read).await {
-                Ok(value) => value,
-                Err(_) => {
-                    self.addr.link.stop();
-                    break;
-                }
-            };
-
-            if !self.addr.read(packet) {
-                break;
-            }
-        }
-    }
-}
-
-pub struct SessionWriter {
-    /// Underlying connection stream to client
-    write: OwnedWriteHalf,
-    /// Receiver for handling messages for this writer
-    rx: mpsc::UnboundedReceiver<Packet>,
-    /// Address to the session for stopping
-    addr: Link<Session>,
-}
-
-impl SessionWriter {
-    pub fn new(write: OwnedWriteHalf, addr: Link<Session>) -> WriterAddr {
-        let (tx, rx) = mpsc::unbounded_channel();
-        let writer_addr = WriterAddr { tx };
-        tokio::spawn(Self { write, rx, addr }.process());
-        writer_addr
-    }
-
-    /// TODO: When taking in packets write them to a buffer and then
-    /// handle polling writes from the buffer
-    pub async fn process(mut self) {
-        while let Some(packet) = self.rx.recv().await {
-            if let Err(err) = packet.write_async(&mut self.write).await {
-                error!("Error occurred while flushing session: {:?}", err);
-                self.addr.stop();
-                break;
-            }
-        }
-    }
-}
-
-pub struct WriterAddr {
-    /// Sender for writing packets
-    tx: mpsc::UnboundedSender<Packet>,
-}
-
 impl Handler<PacketMessage> for Session {
     fn handle(
         &mut self,
@@ -201,16 +130,12 @@ impl Handler<PacketMessage> for Session {
         ctx: &mut ServiceContext<Self>,
     ) -> <PacketMessage as Message>::Response {
         match msg {
-            PacketMessage::Read(packet) => self.handle_packet(ctx, packet),
             PacketMessage::Write(packet) => self.push(packet),
         }
     }
 }
 
 enum PacketMessage {
-    /// Request a read packet to be processed
-    Read(Packet),
-
     /// Queues a packet to be written to the outbound queue
     Write(Packet),
 }
@@ -219,13 +144,29 @@ impl Message for PacketMessage {
     type Response = ();
 }
 
+impl StreamHandler<io::Result<Packet>> for Session {
+    fn handle(&mut self, msg: io::Result<Packet>, ctx: &mut ServiceContext<Self>) {
+        if let Ok(msg) = msg {
+            self.handle_packet(ctx, msg);
+        } else {
+            ctx.stop();
+        }
+    }
+}
+
+impl ErrorHandler<io::Error> for Session {
+    fn handle(&mut self, err: io::Error, ctx: &mut ServiceContext<Self>) -> ErrorAction {
+        ErrorAction::Continue
+    }
+}
+
 impl Session {
     /// Creates a new session with the provided values.
     ///
     /// `id`             The unique session ID
     /// `values`         The networking TcpStream and address
     /// `message_sender` The message sender for session messages
-    pub fn new(id: SessionID, socket_addr: SocketAddr, writer: WriterAddr) -> Self {
+    pub fn new(id: SessionID, socket_addr: SocketAddr, writer: SinkLink<Packet>) -> Self {
         Self {
             id,
             socket_addr,
@@ -264,7 +205,7 @@ impl Session {
     /// `packet` The packet to push to the buffer
     pub fn push(&mut self, packet: Packet) {
         self.debug_log_packet("Queued Write", &packet);
-        if self.writer.tx.send(packet).is_err() {
+        if self.writer.sink(packet).is_err() {
             // TODO: Handle failing to send contents to writer
         }
     }
