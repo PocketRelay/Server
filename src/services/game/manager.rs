@@ -3,12 +3,13 @@ use super::{
     GameSnapshot, RemovePlayerType,
 };
 use crate::utils::types::GameID;
+use interlink::{
+    msg::{FutureResponse, MessageResponse, ServiceFutureResponse},
+    prelude::*,
+};
 use log::debug;
 use std::{collections::HashMap, sync::Arc};
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinSet,
-};
+use tokio::task::JoinSet;
 
 /// Manager which controls all the active games on the server
 /// commanding them to do different actions and removing them
@@ -18,62 +19,20 @@ struct GameManager {
     games: HashMap<GameID, GameAddr>,
     /// Stored value for the ID to give the next game
     next_id: u32,
-    /// Receiver for handling messages from GameManagerAddr instances
-    rx: mpsc::UnboundedReceiver<Message>,
 }
 
-#[derive(Clone)]
-pub struct GameManagerAddr(mpsc::UnboundedSender<Message>);
+impl Service for GameManager {}
 
-enum Message {
-    /// Message for taking a snapshot of multiple games at
-    /// a specific offset
-    SnapshotQuery {
-        offset: usize,
-        count: usize,
-        tx: oneshot::Sender<(Vec<GameSnapshot>, bool)>,
-    },
+pub struct GameManagerLink(Link<GameManager>);
 
-    /// Message for taking a snapshot of a game with a specific
-    /// game ID
-    Snapshot {
-        game_id: GameID,
-        tx: oneshot::Sender<Option<GameSnapshot>>,
-    },
-
-    /// Message for creating a new game
-    Create {
-        attributes: AttrMap,
-        setting: u16,
-        host: GamePlayer,
-        tx: oneshot::Sender<GameAddr>,
-    },
-
-    /// Attempts to add the provided player to any existing
-    /// games that match the player rule set provided
-    TryAdd(GamePlayer, Arc<RuleSet>, oneshot::Sender<TryAddResult>),
-
-    /// Message recieved telling the game manager to pass
-    /// on a modification action to the game with the
-    /// provided Game ID
-    ModifyGame(GameID, GameModifyAction),
-
-    /// Message to remove a player from the game with
-    /// the provided Game ID
-    RemovePlayer(GameID, RemovePlayerType),
-}
-
-impl GameManagerAddr {
-    pub fn spawn() -> GameManagerAddr {
-        let (tx, rx) = mpsc::unbounded_channel();
+impl GameManagerLink {
+    pub fn start() -> GameManagerLink {
         let this = GameManager {
             games: Default::default(),
             next_id: 1,
-            rx,
         };
-        let addr = GameManagerAddr(tx);
-        tokio::spawn(this.process());
-        addr
+        let link = this.start();
+        GameManagerLink(link)
     }
 
     pub async fn create(
@@ -82,22 +41,14 @@ impl GameManagerAddr {
         setting: u16,
         host: GamePlayer,
     ) -> Option<GameAddr> {
-        let (tx, rx) = oneshot::channel();
-
-        if self
-            .0
-            .send(Message::Create {
+        self.0
+            .send(Create {
                 attributes,
                 setting,
                 host,
-                tx,
             })
-            .is_err()
-        {
-            return None;
-        }
-
-        rx.await.ok()
+            .await
+            .ok()
     }
 
     pub async fn try_add(
@@ -105,23 +56,11 @@ impl GameManagerAddr {
         player: GamePlayer,
         rule_set: Arc<RuleSet>,
     ) -> Option<TryAddResult> {
-        let (tx, rx) = oneshot::channel();
-
-        if self.0.send(Message::TryAdd(player, rule_set, tx)).is_err() {
-            return None;
-        }
-
-        rx.await.ok()
+        self.0.send(TryAdd { player, rule_set }).await.ok()
     }
 
     pub async fn snapshot(&self, game_id: GameID) -> Option<GameSnapshot> {
-        let (tx, rx) = oneshot::channel();
-
-        if self.0.send(Message::Snapshot { game_id, tx }).is_err() {
-            return None;
-        }
-
-        rx.await.ok().flatten()
+        self.0.send(Snapshot { game_id }).await.ok().flatten()
     }
 
     pub async fn snapshot_query(
@@ -129,79 +68,30 @@ impl GameManagerAddr {
         offset: usize,
         count: usize,
     ) -> Option<(Vec<GameSnapshot>, bool)> {
-        let (tx, rx) = oneshot::channel();
-
-        if self
-            .0
-            .send(Message::SnapshotQuery { offset, count, tx })
-            .is_err()
-        {
-            return None;
-        }
-
-        rx.await.ok()
+        self.0.send(SnapshotQuery { offset, count }).await.ok()
     }
 
     pub fn modify(&self, game_id: GameID, action: GameModifyAction) {
-        self.0.send(Message::ModifyGame(game_id, action)).ok();
+        self.0.do_send(Modify { game_id, action }).ok();
     }
     pub fn remove_player(&self, game_id: GameID, ty: RemovePlayerType) {
-        self.0.send(Message::RemovePlayer(game_id, ty)).ok();
+        self.0.do_send(RemovePlayer { game_id, ty }).ok();
     }
 }
 
-pub enum TryAddResult {
-    Success,
-    Failure(GamePlayer),
+struct SnapshotQuery {
+    offset: usize,
+    count: usize,
 }
 
-impl GameManager {
-    /// Handling function for processing incoming messages from
-    /// the matchmaking addr instances
-    pub async fn process(mut self) {
-        while let Some(message) = self.rx.recv().await {
-            match message {
-                Message::Create {
-                    attributes,
-                    setting,
-                    host,
-                    tx,
-                } => {
-                    let addr = self.create_game(attributes, setting, host);
-                    tx.send(addr).ok();
-                }
-                Message::TryAdd(player, rule_set, tx) => {
-                    let result = self.try_add(player, rule_set).await;
-                    tx.send(result).ok();
-                }
-                Message::ModifyGame(game_id, action) => self.modify(game_id, action),
-                Message::RemovePlayer(game_id, ty) => self.remove_player(game_id, ty).await,
-                Message::SnapshotQuery { offset, count, tx } => {
-                    self.snapshot_query(offset, count, tx)
-                }
-                Message::Snapshot { game_id, tx } => self.snapshot(game_id, tx),
-            }
-        }
-    }
+impl Message for SnapshotQuery {
+    type Response = (Vec<GameSnapshot>, bool);
+}
 
-    pub fn snapshot(&self, game_id: GameID, tx: oneshot::Sender<Option<GameSnapshot>>) {
-        let addr = match self.games.get(&game_id) {
-            Some(value) => value.clone(),
-            None => return,
-        };
+impl Handler<SnapshotQuery> for GameManager {
+    type Response = FutureResponse<SnapshotQuery>;
 
-        tokio::spawn(async move {
-            let snapshot = addr.snapshot().await;
-            tx.send(snapshot).ok();
-        });
-    }
-
-    pub fn snapshot_query(
-        &self,
-        offset: usize,
-        count: usize,
-        tx: oneshot::Sender<(Vec<GameSnapshot>, bool)>,
-    ) {
+    fn handle(&mut self, msg: SnapshotQuery, ctx: &mut ServiceContext<Self>) -> Self::Response {
         let mut join_set = JoinSet::new();
         let (count, more) = {
             // Obtained an order set of the keys from the games map
@@ -209,10 +99,10 @@ impl GameManager {
             keys.sort();
 
             // Whether there is more keys that what was requested
-            let more = keys.len() > offset + count;
+            let more = keys.len() > msg.offset + msg.count;
 
             // Collect the keys we will be using
-            let keys: Vec<GameID> = keys.into_iter().skip(offset).take(count).collect();
+            let keys: Vec<GameID> = keys.into_iter().skip(msg.offset).take(msg.count).collect();
             let keys_count = keys.len();
 
             for key in keys {
@@ -228,52 +118,141 @@ impl GameManager {
             (keys_count, more)
         };
 
-        tokio::spawn(async move {
+        FutureResponse::new(Box::pin(async move {
             let mut snapshots = Vec::with_capacity(count);
             while let Some(result) = join_set.join_next().await {
                 if let Ok(Some(snapshot)) = result {
                     snapshots.push(snapshot);
                 }
             }
-
-            tx.send((snapshots, more)).ok();
-        });
+            (snapshots, more)
+        }))
     }
+}
 
-    pub fn create_game(&mut self, attributes: AttrMap, setting: u16, host: GamePlayer) -> GameAddr {
+struct Snapshot {
+    game_id: GameID,
+}
+
+impl Message for Snapshot {
+    type Response = Option<GameSnapshot>;
+}
+
+impl Handler<Snapshot> for GameManager {
+    type Response = FutureResponse<Snapshot>;
+
+    fn handle(&mut self, msg: Snapshot, ctx: &mut ServiceContext<Self>) -> Self::Response {
+        let addr = self.games.get(&msg.game_id).cloned();
+
+        FutureResponse::new(Box::pin(async move {
+            let addr = match addr {
+                Some(value) => value,
+                None => return None,
+            };
+            addr.snapshot().await
+        }))
+    }
+}
+
+struct Create {
+    attributes: AttrMap,
+    setting: u16,
+    host: GamePlayer,
+}
+
+impl Message for Create {
+    type Response = GameAddr;
+}
+
+impl Handler<Create> for GameManager {
+    type Response = MessageResponse<GameAddr>;
+
+    fn handle(&mut self, msg: Create, ctx: &mut ServiceContext<Self>) -> Self::Response {
         let id = self.next_id;
         self.next_id += 1;
-        let addr = GameAddr::spawn(id, attributes, setting);
+        let addr = GameAddr::spawn(id, msg.attributes, msg.setting);
         self.games.insert(id, addr.clone());
-        addr.add_player(host);
-        addr
+        addr.add_player(msg.host);
+        MessageResponse(addr)
     }
+}
 
-    pub async fn try_add(&self, player: GamePlayer, rule_set: Arc<RuleSet>) -> TryAddResult {
-        for (id, addr) in &self.games {
-            let join_state = addr.check_joinable(rule_set.clone()).await;
-            if let GameJoinableState::Joinable = join_state {
-                debug!("Found matching game (GID: {})", id);
-                addr.add_player(player);
-                return TryAddResult::Success;
-            }
-        }
-        TryAddResult::Failure(player)
-    }
+struct Modify {
+    game_id: GameID,
+    action: GameModifyAction,
+}
 
-    pub fn modify(&self, game_id: GameID, action: GameModifyAction) {
-        if let Some(addr) = self.games.get(&game_id) {
-            addr.send(action);
-        }
-    }
+impl Message for Modify {
+    type Response = ();
+}
 
-    pub async fn remove_player(&mut self, game_id: GameID, ty: RemovePlayerType) {
-        if let Some(game) = self.games.get(&game_id) {
-            let is_empty = game.remove_player(ty).await;
-            if is_empty {
-                // Remove the empty game
-                self.games.remove(&game_id);
-            }
+impl Handler<Modify> for GameManager {
+    type Response = ();
+
+    fn handle(&mut self, msg: Modify, ctx: &mut ServiceContext<Self>) {
+        if let Some(addr) = self.games.get(&msg.game_id) {
+            addr.send(msg.action);
         }
     }
+}
+
+struct TryAdd {
+    player: GamePlayer,
+    rule_set: Arc<RuleSet>,
+}
+
+impl Message for TryAdd {
+    type Response = TryAddResult;
+}
+
+impl Handler<TryAdd> for GameManager {
+    type Response = ServiceFutureResponse<Self, TryAdd>;
+
+    fn handle(&mut self, msg: TryAdd, ctx: &mut ServiceContext<Self>) -> Self::Response {
+        ServiceFutureResponse::new(move |service: &mut GameManager, ctx| {
+            Box::pin(async move {
+                for (id, addr) in &service.games {
+                    let join_state = addr.check_joinable(msg.rule_set.clone()).await;
+                    if let GameJoinableState::Joinable = join_state {
+                        debug!("Found matching game (GID: {})", id);
+                        addr.add_player(msg.player);
+                        return TryAddResult::Success;
+                    }
+                }
+                TryAddResult::Failure(msg.player)
+            })
+        })
+    }
+}
+
+struct RemovePlayer {
+    game_id: GameID,
+    ty: RemovePlayerType,
+}
+
+impl Message for RemovePlayer {
+    type Response = ();
+}
+
+impl Handler<RemovePlayer> for GameManager {
+    type Response = ServiceFutureResponse<Self, RemovePlayer>;
+
+    fn handle(&mut self, msg: RemovePlayer, ctx: &mut ServiceContext<Self>) -> Self::Response {
+        ServiceFutureResponse::new(move |service: &mut GameManager, ctx| {
+            Box::pin(async move {
+                if let Some(game) = service.games.get(&msg.game_id) {
+                    let is_empty = game.remove_player(msg.ty).await;
+                    if is_empty {
+                        // Remove the empty game
+                        service.games.remove(&msg.game_id);
+                    }
+                }
+            })
+        })
+    }
+}
+
+pub enum TryAddResult {
+    Success,
+    Failure(GamePlayer),
 }

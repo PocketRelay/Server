@@ -9,10 +9,10 @@ use crate::{
     },
 };
 use database::{DatabaseConnection, DbResult, Player};
-use interlink::prelude::*;
+use interlink::{msg::ServiceFutureResponse, prelude::*};
 use log::error;
 use std::{collections::HashMap, future::Future, sync::Arc};
-use tokio::{sync::oneshot, task::JoinSet, try_join};
+use tokio::{task::JoinSet, try_join};
 
 pub mod models;
 
@@ -25,39 +25,36 @@ struct Leaderboard {
 /// Request message for retrie
 struct GetRequest {
     ty: LeaderboardType,
-    tx: oneshot::Sender<Arc<LeaderboardGroup>>,
 }
 
 impl Message for GetRequest {
-    type Response = ();
+    type Response = Arc<LeaderboardGroup>;
 }
 
 impl Service for Leaderboard {}
 
 impl Handler<GetRequest> for Leaderboard {
-    fn handle(&mut self, msg: GetRequest, ctx: &mut ServiceContext<Self>) {
-        // If the group already exists and is not expired we can respond with it
-        if let Some(group) = self.groups.get(&msg.ty) {
-            if !group.is_expired() {
-                // Value is not expire respond immediately
-                msg.tx.send(group.clone()).ok();
-                return;
-            }
-        }
+    type Response = ServiceFutureResponse<Self, GetRequest>;
 
-        let link = ctx.link();
-        link.do_wait(move |service, _| {
+    fn handle(&mut self, msg: GetRequest, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        ServiceFutureResponse::new(move |service: &mut Leaderboard, _ctx| {
             Box::pin(async move {
+                // If the group already exists and is not expired we can respond with it
+                if let Some(group) = service.groups.get(&msg.ty) {
+                    if !group.is_expired() {
+                        // Value is not expire respond immediately
+                        return group.clone();
+                    }
+                }
                 // Compute the leaderboard
                 let values = service.compute(&msg.ty).await;
                 let group = Arc::new(LeaderboardGroup::new(values));
 
                 // Store the group and respond to the request
                 service.groups.insert(msg.ty, group.clone());
-                msg.tx.send(group).ok();
+                group
             })
         })
-        .ok();
     }
 }
 
@@ -65,17 +62,13 @@ pub struct LeaderboardLink(Link<Leaderboard>);
 
 impl LeaderboardLink {
     pub fn start() -> LeaderboardLink {
-        let leaderboard = Leaderboard::default();
-        let link = leaderboard.start();
+        let this = Leaderboard::default();
+        let link = this.start();
         LeaderboardLink(link)
     }
 
     pub async fn get(&self, ty: LeaderboardType) -> Option<Arc<LeaderboardGroup>> {
-        let (tx, rx) = oneshot::channel();
-        if self.0.do_send(GetRequest { ty, tx }).is_err() {
-            return None;
-        }
-        rx.await.ok()
+        self.0.send(GetRequest { ty }).await.ok()
     }
 }
 

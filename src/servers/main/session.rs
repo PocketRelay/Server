@@ -124,10 +124,12 @@ impl SessionLink {
 }
 
 impl Handler<PacketMessage> for Session {
+    type Response = ();
+
     fn handle(
         &mut self,
         msg: PacketMessage,
-        ctx: &mut ServiceContext<Self>,
+        _ctx: &mut ServiceContext<Self>,
     ) -> <PacketMessage as Message>::Response {
         match msg {
             PacketMessage::Write(packet) => self.push(packet),
