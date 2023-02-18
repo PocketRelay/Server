@@ -3,6 +3,7 @@
 //! networking data.
 use super::models::errors::{ServerError, ServerResult};
 use super::router;
+use crate::services::game::manager::RemovePlayerMessage;
 use crate::utils::types::PlayerID;
 use crate::{
     services::game::{player::GamePlayer, RemovePlayerType},
@@ -328,9 +329,10 @@ impl Session {
         let game = self.game.take();
         let services = GlobalState::services();
         if let Some(game_id) = game {
-            services
-                .game_manager
-                .remove_player(game_id, RemovePlayerType::Session(self.id))
+            let _ = services.game_manager.do_send(RemovePlayerMessage {
+                game_id,
+                ty: RemovePlayerType::Session(self.id),
+            });
         } else {
             services.matchmaking.unqueue_session(self.id);
         }

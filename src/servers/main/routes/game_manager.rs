@@ -9,7 +9,9 @@ use crate::{
         session::SessionLink,
     },
     services::game::{
-        manager::TryAddResult, player::GamePlayer, GameAddr, GameModifyAction, RemovePlayerType,
+        manager::{CreateMessage, ModifyMessage, RemovePlayerMessage, TryAddMessage, TryAddResult},
+        player::GamePlayer,
+        GameAddr, GameModifyAction, RemovePlayerType,
     },
     state::GlobalState,
     utils::components::{Components as C, GameManager as G},
@@ -105,11 +107,15 @@ async fn handle_create_game(
 
     let addr: GameAddr = match services
         .game_manager
-        .create(req.attributes, req.setting, player)
+        .send(CreateMessage {
+            attributes: req.attributes,
+            setting: req.setting,
+            host: player,
+        })
         .await
     {
-        Some(value) => value,
-        None => return Err(ServerError::ServerUnavailable),
+        Ok(value) => value,
+        Err(_) => return Err(ServerError::ServerUnavailable),
     };
 
     let game_id = addr.id;
@@ -162,7 +168,13 @@ async fn handle_create_game(
 /// ```
 async fn handle_game_modify(req: GameModifyRequest) {
     let services = GlobalState::services();
-    services.game_manager.modify(req.game_id, req.action);
+    let _ = services
+        .game_manager
+        .send(ModifyMessage {
+            game_id: req.game_id,
+            action: req.action,
+        })
+        .await;
 }
 
 /// Handles removing a player from a game
@@ -180,10 +192,13 @@ async fn handle_game_modify(req: GameModifyRequest) {
 /// ```
 async fn handle_remove_player(req: RemovePlayerRequest) {
     let services = GlobalState::services();
-    services.game_manager.remove_player(
-        req.game_id,
-        RemovePlayerType::Player(req.player_id, req.reason),
-    );
+    let _ = services
+        .game_manager
+        .send(RemovePlayerMessage {
+            game_id: req.game_id,
+            ty: RemovePlayerType::Player(req.player_id, req.reason),
+        })
+        .await;
 }
 
 /// Handles updating mesh connections
@@ -215,14 +230,17 @@ async fn handle_update_mesh_connection(session: &mut SessionLink, req: UpdateMes
 
     let services = GlobalState::services();
 
-    services.game_manager.modify(
-        req.game_id,
-        GameModifyAction::UpdateMeshConnection {
-            session: id,
-            target: target.player_id,
-            state: target.state,
-        },
-    );
+    let _ = services
+        .game_manager
+        .send(ModifyMessage {
+            game_id: req.game_id,
+            action: GameModifyAction::UpdateMeshConnection {
+                session: id,
+                target: target.player_id,
+                state: target.state,
+            },
+        })
+        .await;
 }
 
 /// Handles either directly joining a game or placing the
@@ -364,14 +382,17 @@ async fn handle_start_matchmaking(
     let rule_set = Arc::new(req.rules);
     match services
         .game_manager
-        .try_add(player, rule_set.clone())
+        .send(TryAddMessage {
+            player,
+            rule_set: rule_set.clone(),
+        })
         .await
     {
-        Some(TryAddResult::Success) => {}
-        Some(TryAddResult::Failure(player)) => {
+        Ok(TryAddResult::Success) => {}
+        Ok(TryAddResult::Failure(player)) => {
             services.matchmaking.queue(player, rule_set);
         }
-        None => return Err(ServerError::ServerUnavailable),
+        Err(_) => return Err(ServerError::ServerUnavailable),
     };
 
     Ok(MatchmakingResponse { id: session_id })

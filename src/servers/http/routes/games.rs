@@ -1,5 +1,10 @@
 use crate::{
-    servers::http::middleware::auth::AdminAuth, services::game::GameSnapshot, state::GlobalState,
+    servers::http::middleware::auth::AdminAuth,
+    services::game::{
+        manager::{SnapshotMessage, SnapshotQueryMessage},
+        GameSnapshot,
+    },
+    state::GlobalState,
     utils::types::GameID,
 };
 use axum::{
@@ -72,9 +77,12 @@ async fn get_games(
     // Retrieve the game snapshots
     let (games, more) = services
         .game_manager
-        .snapshot_query(start_index, count)
+        .send(SnapshotQueryMessage {
+            offset: start_index,
+            count,
+        })
         .await
-        .ok_or(GamesError::Server)?;
+        .map_err(|_| GamesError::Server)?;
 
     Ok(Json(GamesResponse { games, more }))
 }
@@ -89,8 +97,9 @@ async fn get_game(
     let services = GlobalState::services();
     let games = services
         .game_manager
-        .snapshot(game_id)
+        .send(SnapshotMessage { game_id })
         .await
+        .map_err(|_| GamesError::Server)?
         .ok_or(GamesError::NotFound)?;
     Ok(Json(games))
 }
