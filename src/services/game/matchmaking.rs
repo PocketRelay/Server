@@ -1,15 +1,15 @@
 use super::{player::GamePlayer, rules::RuleSet, GameAddr, GameJoinableState};
 use crate::utils::types::SessionID;
-use log::{debug, error};
+use interlink::{msg::ServiceFutureResponse, prelude::*};
+use log::debug;
 use std::{collections::VecDeque, sync::Arc, time::SystemTime};
-use tokio::sync::mpsc;
 
 struct Matchmaking {
     /// The queue of matchmaking entries
     queue: VecDeque<QueueEntry>,
-    /// Receiver for handling messages from MatchmakingAddr instances
-    rx: mpsc::UnboundedReceiver<Message>,
 }
+
+impl Service for Matchmaking {}
 
 /// Structure of a entry within the matchmaking queue
 /// containing information about the queue item
@@ -26,18 +26,15 @@ struct QueueEntry {
 }
 
 #[derive(Clone)]
-pub struct MatchmakingAddr(mpsc::UnboundedSender<Message>);
+pub struct MatchmakingLink(Link<Matchmaking>);
 
-impl MatchmakingAddr {
-    pub fn spawn() -> MatchmakingAddr {
-        let (tx, rx) = mpsc::unbounded_channel();
+impl MatchmakingLink {
+    pub fn start() -> MatchmakingLink {
         let this = Matchmaking {
             queue: Default::default(),
-            rx,
         };
-        let addr = MatchmakingAddr(tx);
-        tokio::spawn(this.process());
-        addr
+        let link = this.start();
+        MatchmakingLink(link)
     }
 
     /// Attempts to remove the player with the provided Session ID from
@@ -45,18 +42,14 @@ impl MatchmakingAddr {
     ///
     /// `id` The Session ID of the player to remove
     pub fn unqueue_session(&self, id: SessionID) {
-        if self.0.send(Message::RemovePlayer(id)).is_err() {
-            error!("Failed to remove player from matchmaking queue: {}", id);
-        }
+        self.0.do_send(RemovePlayer { session_id: id }).ok();
     }
 
     /// Handles the creation of a new game
     ///
     /// `game` The addr to the created game
     pub fn created(&self, game: GameAddr) {
-        if self.0.send(Message::GameCreated(game)).is_err() {
-            error!("Failed to handle game creation");
-        }
+        self.0.do_send(GameCreated { addr: game }).ok();
     }
 
     /// Handles the creation of a new game
@@ -64,87 +57,104 @@ impl MatchmakingAddr {
     /// `player`   The player to add to the queue
     /// `rule_set` The player rule set
     pub fn queue(&self, player: GamePlayer, rule_set: Arc<RuleSet>) {
-        if self.0.send(Message::QueuePlayer(player, rule_set)).is_err() {
-            error!("Failed to queue player");
-        }
+        self.0
+            .do_send(QueuePlayer {
+                player,
+                rules: rule_set,
+            })
+            .ok();
     }
 }
 
-enum Message {
-    /// Message recieved when a new game is created used to
-    /// check against any players waiting in the queue to
-    /// see if they are able to join
-    GameCreated(GameAddr),
-
-    /// Queues the player in the matchmaking queue to list
-    /// for future game creation events
-    QueuePlayer(GamePlayer, Arc<RuleSet>),
-
-    /// Removes any players with the provided session ID
-    /// from the matchmaking queue
-    RemovePlayer(SessionID),
+struct GameCreated {
+    addr: GameAddr,
 }
 
-impl Matchmaking {
-    /// Handling function for processing incoming messages from
-    /// the matchmaking addr instances
-    pub async fn process(mut self) {
-        while let Some(message) = self.rx.recv().await {
-            match message {
-                Message::GameCreated(addr) => self.handle_game_created(addr).await,
-                Message::QueuePlayer(player, rules) => self.handle_queue_player(player, rules),
-                Message::RemovePlayer(id) => self.handle_remove_player(id),
-            }
-        }
-    }
+impl Message for GameCreated {
+    type Response = ();
+}
 
-    async fn handle_game_created(&mut self, addr: GameAddr) {
-        let queue = &mut self.queue;
-        if queue.is_empty() {
-            return;
-        }
+impl Handler<GameCreated> for Matchmaking {
+    type Response = ServiceFutureResponse<Self, GameCreated>;
 
-        let checking_queue = queue.split_off(0);
-        for entry in checking_queue {
-            let join_state = addr.check_joinable(entry.rules.clone()).await;
-            match join_state {
-                GameJoinableState::Joinable => {
-                    debug!(
-                        "Found player from queue adding them to the game (GID: {})",
-                        addr.id
-                    );
-                    let time = SystemTime::now();
-                    let elapsed = time.duration_since(entry.time);
-                    if let Ok(elapsed) = elapsed {
-                        debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
-                    }
-                    addr.add_player(entry.player);
-                }
-                GameJoinableState::Full => {
-                    // If the game is not joinable push the entry back to the
-                    // front of the queue and early return
-                    queue.push_back(entry);
+    fn handle(&mut self, msg: GameCreated, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        ServiceFutureResponse::new(move |service: &mut Matchmaking, _ctx| {
+            Box::pin(async move {
+                let addr = msg.addr;
+                let queue = &mut service.queue;
+                if queue.is_empty() {
                     return;
                 }
-                GameJoinableState::NotMatch => {
-                    // TODO: Check started time and timeout
-                    // player if they've been waiting too long
-                    queue.push_back(entry);
-                }
-            }
-        }
-    }
 
-    fn handle_queue_player(&mut self, player: GamePlayer, rules: Arc<RuleSet>) {
+                let checking_queue = queue.split_off(0);
+                for entry in checking_queue {
+                    let join_state = addr.check_joinable(entry.rules.clone()).await;
+                    match join_state {
+                        GameJoinableState::Joinable => {
+                            debug!(
+                                "Found player from queue adding them to the game (GID: {})",
+                                addr.id
+                            );
+                            let time = SystemTime::now();
+                            let elapsed = time.duration_since(entry.time);
+                            if let Ok(elapsed) = elapsed {
+                                debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
+                            }
+                            addr.add_player(entry.player);
+                        }
+                        GameJoinableState::Full => {
+                            // If the game is not joinable push the entry back to the
+                            // front of the queue and early return
+                            queue.push_back(entry);
+                            return;
+                        }
+                        GameJoinableState::NotMatch => {
+                            // TODO: Check started time and timeout
+                            // player if they've been waiting too long
+                            queue.push_back(entry);
+                        }
+                    }
+                }
+            })
+        })
+    }
+}
+
+struct QueuePlayer {
+    player: GamePlayer,
+    rules: Arc<RuleSet>,
+}
+
+impl Message for QueuePlayer {
+    type Response = ();
+}
+
+impl Handler<QueuePlayer> for Matchmaking {
+    type Response = ();
+
+    fn handle(&mut self, msg: QueuePlayer, _ctx: &mut ServiceContext<Self>) {
         let time = SystemTime::now();
         self.queue.push_back(QueueEntry {
-            player,
-            rules,
+            player: msg.player,
+            rules: msg.rules,
             time,
         })
     }
+}
 
-    fn handle_remove_player(&mut self, id: SessionID) {
-        self.queue.retain(|value| value.player.session_id != id);
+struct RemovePlayer {
+    session_id: SessionID,
+}
+
+impl Message for RemovePlayer {
+    type Response = ();
+}
+
+impl Handler<RemovePlayer> for Matchmaking {
+    type Response = ();
+
+    fn handle(&mut self, msg: RemovePlayer, _ctx: &mut ServiceContext<Self>) {
+        self.queue
+            .retain(|value| value.player.session_id != msg.session_id);
     }
 }

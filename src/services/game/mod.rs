@@ -295,11 +295,13 @@ impl Game {
             value
                 .addr
                 .link
-                .do_exec(|session, _| session.push_details(addr1));
+                .do_exec(|session, _| session.push_details(addr1))
+                .ok();
             player
                 .addr
                 .link
-                .do_exec(|session, _| session.push_details(addr2));
+                .do_exec(|session, _| session.push_details(addr2))
+                .ok();
         });
     }
 
@@ -344,7 +346,8 @@ impl Game {
         player
             .addr
             .link
-            .do_exec(move |session, _| session.set_game(Some(id)));
+            .do_exec(move |session, _| session.set_game(Some(id)))
+            .ok();
 
         let packet = player.create_set_session();
         self.push_all(&packet);
@@ -520,7 +523,9 @@ impl Game {
         player
             .addr
             .link
-            .do_exec(|session, _| session.set_game(None));
+            .do_exec(|session, _| session.set_game(None))
+            .ok();
+
         self.notify_player_removed(&player, reason);
         self.notify_fetch_data(&player);
         self.modify_admin_list(player.player.id, AdminListOperation::Remove);

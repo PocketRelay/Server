@@ -1,5 +1,5 @@
 use self::{
-    game::{manager::GameManagerLink, matchmaking::MatchmakingAddr},
+    game::{manager::GameManagerLink, matchmaking::MatchmakingLink},
     jwt::Jwt,
     leaderboard::LeaderboardLink,
     retriever::Retriever,
@@ -13,7 +13,7 @@ pub mod retriever;
 
 pub struct Services {
     pub game_manager: GameManagerLink,
-    pub matchmaking: MatchmakingAddr,
+    pub matchmaking: MatchmakingLink,
     pub leaderboard: LeaderboardLink,
     pub retriever: Option<Retriever>,
     pub jwt: Jwt,
@@ -23,7 +23,7 @@ impl Services {
     pub async fn init() -> Self {
         let (retriever, jwt) = join!(Retriever::new(), Jwt::new());
         let game_manager = GameManagerLink::start();
-        let matchmaking = MatchmakingAddr::spawn();
+        let matchmaking = MatchmakingLink::start();
         let leaderboard = LeaderboardLink::start();
 
         Self {

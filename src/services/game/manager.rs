@@ -91,7 +91,7 @@ impl Message for SnapshotQuery {
 impl Handler<SnapshotQuery> for GameManager {
     type Response = FutureResponse<SnapshotQuery>;
 
-    fn handle(&mut self, msg: SnapshotQuery, ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(&mut self, msg: SnapshotQuery, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         let mut join_set = JoinSet::new();
         let (count, more) = {
             // Obtained an order set of the keys from the games map
@@ -141,7 +141,7 @@ impl Message for Snapshot {
 impl Handler<Snapshot> for GameManager {
     type Response = FutureResponse<Snapshot>;
 
-    fn handle(&mut self, msg: Snapshot, ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(&mut self, msg: Snapshot, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         let addr = self.games.get(&msg.game_id).cloned();
 
         FutureResponse::new(Box::pin(async move {
@@ -167,7 +167,7 @@ impl Message for Create {
 impl Handler<Create> for GameManager {
     type Response = MessageResponse<GameAddr>;
 
-    fn handle(&mut self, msg: Create, ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(&mut self, msg: Create, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         let id = self.next_id;
         self.next_id += 1;
         let addr = GameAddr::spawn(id, msg.attributes, msg.setting);
@@ -189,7 +189,7 @@ impl Message for Modify {
 impl Handler<Modify> for GameManager {
     type Response = ();
 
-    fn handle(&mut self, msg: Modify, ctx: &mut ServiceContext<Self>) {
+    fn handle(&mut self, msg: Modify, _ctx: &mut ServiceContext<Self>) {
         if let Some(addr) = self.games.get(&msg.game_id) {
             addr.send(msg.action);
         }
@@ -208,8 +208,8 @@ impl Message for TryAdd {
 impl Handler<TryAdd> for GameManager {
     type Response = ServiceFutureResponse<Self, TryAdd>;
 
-    fn handle(&mut self, msg: TryAdd, ctx: &mut ServiceContext<Self>) -> Self::Response {
-        ServiceFutureResponse::new(move |service: &mut GameManager, ctx| {
+    fn handle(&mut self, msg: TryAdd, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        ServiceFutureResponse::new(move |service: &mut GameManager, _ctx| {
             Box::pin(async move {
                 for (id, addr) in &service.games {
                     let join_state = addr.check_joinable(msg.rule_set.clone()).await;
@@ -237,8 +237,8 @@ impl Message for RemovePlayer {
 impl Handler<RemovePlayer> for GameManager {
     type Response = ServiceFutureResponse<Self, RemovePlayer>;
 
-    fn handle(&mut self, msg: RemovePlayer, ctx: &mut ServiceContext<Self>) -> Self::Response {
-        ServiceFutureResponse::new(move |service: &mut GameManager, ctx| {
+    fn handle(&mut self, msg: RemovePlayer, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        ServiceFutureResponse::new(move |service: &mut GameManager, _ctx| {
             Box::pin(async move {
                 if let Some(game) = service.games.get(&msg.game_id) {
                     let is_empty = game.remove_player(msg.ty).await;

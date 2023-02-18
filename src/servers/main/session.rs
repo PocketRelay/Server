@@ -157,7 +157,7 @@ impl StreamHandler<io::Result<Packet>> for Session {
 }
 
 impl ErrorHandler<io::Error> for Session {
-    fn handle(&mut self, err: io::Error, ctx: &mut ServiceContext<Self>) -> ErrorAction {
+    fn handle(&mut self, _err: io::Error, _ctx: &mut ServiceContext<Self>) -> ErrorAction {
         ErrorAction::Continue
     }
 }

@@ -117,7 +117,10 @@ impl GamePlayer {
 impl Drop for GamePlayer {
     fn drop(&mut self) {
         // Clear player game when game player is dropped
-        self.addr.link.do_exec(|session, _| session.set_game(None));
+        self.addr
+            .link
+            .do_exec(|session, _| session.set_game(None))
+            .ok();
     }
 }
 
