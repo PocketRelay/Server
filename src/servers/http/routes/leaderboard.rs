@@ -1,5 +1,7 @@
 use crate::{
-    servers::http::ext::ErrorStatusCode, services::leaderboard::models::*, state::GlobalState,
+    servers::http::ext::ErrorStatusCode,
+    services::leaderboard::{models::*, QueryMessage},
+    state::GlobalState,
     utils::types::PlayerID,
 };
 use axum::{
@@ -82,9 +84,9 @@ async fn get_leaderboard(
     let start: usize = query.offset * count;
 
     let group = leaderboard
-        .get(ty)
+        .send(QueryMessage(ty))
         .await
-        .ok_or(LeaderboardError::ServerError)?;
+        .map_err(|_| LeaderboardError::ServerError)?;
 
     let (entries, more) = match group.resolve(LQuery::Normal { start, count }) {
         LResult::Many(many, more) => (many, more),
@@ -116,9 +118,9 @@ async fn get_player_ranking(
     let leaderboard = &services.leaderboard;
 
     let group = leaderboard
-        .get(ty)
+        .send(QueryMessage(ty))
         .await
-        .ok_or(LeaderboardError::ServerError)?;
+        .map_err(|_| LeaderboardError::ServerError)?;
 
     let entry = match group.resolve(LQuery::Filtered { player_id }) {
         LResult::One(value) => Ok(value),

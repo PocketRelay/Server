@@ -6,7 +6,7 @@ use crate::{
         },
         session::SessionLink,
     },
-    services::leaderboard::models::*,
+    services::leaderboard::{models::*, QueryMessage},
     state::GlobalState,
     utils::components::{Components as C, Stats as S},
 };
@@ -101,9 +101,9 @@ async fn handle_leaderboard_entity_count(
     let ty = LeaderboardType::from_value(&req.name);
 
     let group = leaderboard
-        .get(ty)
+        .send(QueryMessage(ty))
         .await
-        .ok_or(ServerError::ServerUnavailableFinal)?;
+        .map_err(|_| ServerError::ServerUnavailableFinal)?;
 
     let count = group.values.len();
 
@@ -124,9 +124,9 @@ async fn handle_leaderboard_query<R: Decodable>(
     let leaderboard = &services.leaderboard;
     let ty = LeaderboardType::from_value(name);
     let group = leaderboard
-        .get(ty)
+        .send(QueryMessage(ty))
         .await
-        .ok_or(ServerError::ServerUnavailableFinal)?;
+        .map_err(|_| ServerError::ServerUnavailableFinal)?;
     let response = match group.resolve(query) {
         LResult::Many(values, _) => LeaderboardResponse::Many(values),
         LResult::One(value) => LeaderboardResponse::One(value),

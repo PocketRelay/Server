@@ -1,7 +1,7 @@
 use self::{
     game::{manager::GameManager, matchmaking::Matchmaking},
     jwt::Jwt,
-    leaderboard::LeaderboardLink,
+    leaderboard::Leaderboard,
     retriever::Retriever,
 };
 use interlink::prelude::Link;
@@ -15,7 +15,7 @@ pub mod retriever;
 pub struct Services {
     pub game_manager: Link<GameManager>,
     pub matchmaking: Link<Matchmaking>,
-    pub leaderboard: LeaderboardLink,
+    pub leaderboard: Link<Leaderboard>,
     pub retriever: Option<Retriever>,
     pub jwt: Jwt,
 }
@@ -25,7 +25,7 @@ impl Services {
         let (retriever, jwt) = join!(Retriever::new(), Jwt::new());
         let game_manager = GameManager::start();
         let matchmaking = Matchmaking::start();
-        let leaderboard = LeaderboardLink::start();
+        let leaderboard = Leaderboard::start();
 
         Self {
             game_manager,

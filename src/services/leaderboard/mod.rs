@@ -17,42 +17,43 @@ use tokio::{task::JoinSet, try_join};
 
 pub mod models;
 
-#[derive(Default)]
-struct Leaderboard {
+pub struct Leaderboard {
     /// Map between the group types and the actual leaderboard group content
     groups: HashMap<LeaderboardType, Arc<LeaderboardGroup>>,
 }
 
-/// Request message for retrie
-struct GetRequest {
-    ty: LeaderboardType,
-}
+/// Message for requesting access to a leaderborad
+/// of the specific leaderboard type
+pub struct QueryMessage(pub LeaderboardType);
 
-impl Message for GetRequest {
+impl Message for QueryMessage {
+    /// Response of an arc to the leaderborad group
     type Response = Arc<LeaderboardGroup>;
 }
 
 impl Service for Leaderboard {}
 
-impl Handler<GetRequest> for Leaderboard {
-    type Response = ServiceFutureResponse<Self, GetRequest>;
+impl Handler<QueryMessage> for Leaderboard {
+    type Response = ServiceFutureResponse<Self, QueryMessage>;
 
-    fn handle(&mut self, msg: GetRequest, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(&mut self, msg: QueryMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         ServiceFutureResponse::new(move |service: &mut Leaderboard, _ctx| {
             async move {
+                let ty = msg.0;
+
                 // If the group already exists and is not expired we can respond with it
-                if let Some(group) = service.groups.get(&msg.ty) {
+                if let Some(group) = service.groups.get(&ty) {
                     if !group.is_expired() {
                         // Value is not expire respond immediately
                         return group.clone();
                     }
                 }
                 // Compute the leaderboard
-                let values = service.compute(&msg.ty).await;
+                let values = service.compute(&ty).await;
                 let group = Arc::new(LeaderboardGroup::new(values));
 
                 // Store the group and respond to the request
-                service.groups.insert(msg.ty, group.clone());
+                service.groups.insert(ty, group.clone());
                 group
             }
             .boxed()
@@ -60,21 +61,14 @@ impl Handler<GetRequest> for Leaderboard {
     }
 }
 
-pub struct LeaderboardLink(Link<Leaderboard>);
-
-impl LeaderboardLink {
-    pub fn start() -> LeaderboardLink {
-        let this = Leaderboard::default();
-        let link = this.start();
-        LeaderboardLink(link)
-    }
-
-    pub async fn get(&self, ty: LeaderboardType) -> Option<Arc<LeaderboardGroup>> {
-        self.0.send(GetRequest { ty }).await.ok()
-    }
-}
-
 impl Leaderboard {
+    pub fn start() -> Link<Leaderboard> {
+        let this = Leaderboard {
+            groups: Default::default(),
+        };
+        this.start()
+    }
+
     /// Computes the ranking values for the provided `ty` this consists of
     /// streaming the values from the database in chunks of 20, processing the
     /// chunks converting them into entries then sorting the entries based

@@ -392,7 +392,7 @@ async fn handle_start_matchmaking(
         .await
     {
         Ok(value) => value,
-        Err(err) => return Err(ServerError::ServerUnavailable),
+        Err(_) => return Err(ServerError::ServerUnavailable),
     };
 
     // If adding failed attempt to queue instead
