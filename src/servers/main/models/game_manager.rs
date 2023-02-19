@@ -2,15 +2,15 @@ use crate::{
     services::game::{
         models::{GameState, PlayerState, RemoveReason},
         rules::RuleSet,
-        AttrMap, GameModifyAction,
+        AttrMap,
     },
     utils::types::{GameID, PlayerID, SessionID},
 };
 use blaze_pk::{
     codec::{Decodable, Encodable},
-    error::{DecodeError, DecodeResult},
+    error::DecodeResult,
     reader::TdfReader,
-    tag::{Tag, TdfType},
+    tag::TdfType,
     writer::TdfWriter,
 };
 
@@ -70,43 +70,47 @@ impl Decodable for RemovePlayerRequest {
     }
 }
 
-pub struct GameModifyRequest {
-    /// The ID of the game to modify
+pub struct SetAttributesRequest {
+    /// The new game attributes
+    pub attributes: AttrMap,
+    /// The ID of the game to set the attributes for
     pub game_id: GameID,
-    /// The modification action
-    pub action: GameModifyAction,
 }
 
-impl Decodable for GameModifyRequest {
+impl Decodable for SetAttributesRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let first: Tag = reader.read_tag()?;
-        let first_name: &str = &first.0;
-        let game_id = match first_name {
-            "ATTR" => {
-                let attributes: AttrMap = AttrMap::decode(reader)?;
-                let game_id: GameID = reader.tag("GID")?;
-                return Ok(GameModifyRequest {
-                    game_id,
-                    action: GameModifyAction::SetAttributes(attributes),
-                });
-            }
-            "GID" => GameID::decode(reader)?,
-            _ => return Err(DecodeError::Other("Unknown game modify attribute")),
-        };
-        let value_tag: Tag = reader.read_tag()?;
-        let tag: &str = &value_tag.0;
-        let action = match tag {
-            "GSTA" => {
-                let state: GameState = GameState::decode(reader)?;
-                GameModifyAction::SetState(state)
-            }
-            "GSET" => {
-                let setting: u16 = reader.read_u16()?;
-                GameModifyAction::SetSetting(setting)
-            }
-            _ => return Err(DecodeError::Other("Missing modify contents")),
-        };
-        Ok(GameModifyRequest { game_id, action })
+        let attributes = reader.tag("ATTR")?;
+        let game_id: GameID = reader.tag("GID")?;
+
+        Ok(Self {
+            attributes,
+            game_id,
+        })
+    }
+}
+
+pub struct SetStateRequest {
+    pub game_id: GameID,
+    pub state: GameState,
+}
+
+impl Decodable for SetStateRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let game_id: GameID = reader.tag("GID")?;
+        let state: GameState = reader.tag("GSTA")?;
+        Ok(Self { game_id, state })
+    }
+}
+pub struct SetSettingRequest {
+    pub game_id: GameID,
+    pub setting: u16,
+}
+
+impl Decodable for SetSettingRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let game_id: GameID = reader.tag("GID")?;
+        let setting: u16 = reader.tag("GSET")?;
+        Ok(Self { game_id, setting })
     }
 }
 

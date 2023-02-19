@@ -1,5 +1,8 @@
-use super::{player::GamePlayer, rules::RuleSet, GameAddr, GameJoinableState};
-use crate::utils::types::SessionID;
+use super::{player::GamePlayer, rules::RuleSet, CheckJoinableMessage, Game, GameJoinableState};
+use crate::{
+    services::game::AddPlayerMessage,
+    utils::types::{GameID, SessionID},
+};
 use futures::FutureExt;
 use interlink::{
     msg::{MessageResponse, ServiceFutureResponse},
@@ -42,7 +45,9 @@ struct QueueEntry {
 /// to add players from the queue into the game
 pub struct GameCreatedMessage {
     /// The link to the game
-    pub link: GameAddr,
+    pub link: Link<Game>,
+    /// The ID of the created game
+    pub game_id: GameID,
 }
 
 impl Message for GameCreatedMessage {
@@ -60,41 +65,66 @@ impl Handler<GameCreatedMessage> for Matchmaking {
     ) -> Self::Response {
         ServiceFutureResponse::new(move |service: &mut Matchmaking, _ctx| {
             async move {
-                let addr = msg.link;
+                let link = msg.link;
                 let queue = &mut service.queue;
                 if queue.is_empty() {
                     return;
                 }
 
-                let checking_queue = queue.split_off(0);
-                for entry in checking_queue {
-                    let join_state = addr.check_joinable(entry.rule_set.clone()).await;
+                let mut requeue = VecDeque::new();
+
+                while let Some(entry) = queue.pop_front() {
+                    let join_state = match link
+                        .send(CheckJoinableMessage {
+                            rule_set: entry.rule_set.clone(),
+                        })
+                        .await
+                    {
+                        Ok(value) => value,
+                        // Game is no longer available
+                        Err(_) => {
+                            requeue.push_back(entry);
+                            break;
+                        }
+                    };
+
                     match join_state {
                         GameJoinableState::Joinable => {
                             debug!(
                                 "Found player from queue adding them to the game (GID: {})",
-                                addr.id
+                                msg.game_id
                             );
                             let time = SystemTime::now();
                             let elapsed = time.duration_since(entry.time);
                             if let Ok(elapsed) = elapsed {
                                 debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
                             }
-                            addr.add_player(entry.player);
+
+                            // Add the player to the game
+                            if link
+                                .do_send(AddPlayerMessage {
+                                    player: entry.player,
+                                })
+                                .is_err()
+                            {
+                                break;
+                            }
                         }
                         GameJoinableState::Full => {
                             // If the game is not joinable push the entry back to the
                             // front of the queue and early return
-                            queue.push_back(entry);
-                            return;
+                            requeue.push_back(entry);
+                            break;
                         }
                         GameJoinableState::NotMatch => {
                             // TODO: Check started time and timeout
                             // player if they've been waiting too long
-                            queue.push_back(entry);
+                            requeue.push_back(entry);
                         }
                     }
                 }
+
+                queue.append(&mut requeue)
             }
             .boxed()
         })

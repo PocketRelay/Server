@@ -1,6 +1,6 @@
 use super::{
-    player::GamePlayer, rules::RuleSet, AttrMap, GameAddr, GameJoinableState, GameModifyAction,
-    GameSnapshot, RemovePlayerType,
+    player::GamePlayer, rules::RuleSet, AddPlayerMessage, AttrMap, CheckJoinableMessage, Game,
+    GameJoinableState, GameSnapshot, RemovePlayerType,
 };
 use crate::utils::types::GameID;
 use futures::FutureExt;
@@ -17,7 +17,7 @@ use tokio::task::JoinSet;
 /// once they are no longer used
 pub struct GameManager {
     /// The map of games to the actual game address
-    games: HashMap<GameID, GameAddr>,
+    games: HashMap<GameID, Link<Game>>,
     /// Stored value for the ID to give the next game
     next_id: u32,
 }
@@ -73,11 +73,8 @@ impl Handler<SnapshotQueryMessage> for GameManager {
 
             for key in keys {
                 let game = self.games.get(&key).cloned();
-                if let Some(game) = game {
-                    join_set.spawn(async move {
-                        let game = game;
-                        game.snapshot().await
-                    });
+                if let Some(link) = game {
+                    join_set.spawn(async move { link.send(super::SnapshotMessage).await.ok() });
                 }
             }
 
@@ -119,11 +116,12 @@ impl Handler<SnapshotMessage> for GameManager {
 
         FutureResponse::new(
             async move {
-                let addr = match link {
+                let link = match link {
                     Some(value) => value,
                     None => return None,
                 };
-                addr.snapshot().await
+
+                link.send(super::SnapshotMessage).await.ok()
             }
             .boxed(),
         )
@@ -143,7 +141,7 @@ pub struct CreateMessage {
 impl Message for CreateMessage {
     /// Create message responds with the address of the
     /// created game
-    type Response = GameAddr;
+    type Response = (Link<Game>, GameID);
 }
 
 impl Handler<CreateMessage> for GameManager {
@@ -152,37 +150,34 @@ impl Handler<CreateMessage> for GameManager {
     fn handle(&mut self, msg: CreateMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         let id = self.next_id;
         self.next_id += 1;
-        let addr = GameAddr::spawn(id, msg.attributes, msg.setting);
-        self.games.insert(id, addr.clone());
-        addr.add_player(msg.host);
-        MessageResponse(addr)
+        let link = Game::start(id, msg.attributes, msg.setting);
+        self.games.insert(id, link.clone());
+
+        // Add the host player to the game
+        let _ = link.do_send(AddPlayerMessage { player: msg.host });
+
+        MessageResponse((link, id))
     }
 }
 
-/// Message for modifying a game using a game modify action
-/// forwards the action onto the target game
-pub struct ModifyMessage {
-    /// The ID of the game to send the modify action to
+/// Message for requesting a link to a game
+/// with the provided ID
+pub struct GetGameMessage {
+    /// The ID of the game to get a link to
     pub game_id: GameID,
-    /// The modify action to send to the game
-    pub action: GameModifyAction,
 }
 
-impl Message for ModifyMessage {
-    /// Empty response type
-    type Response = ();
+impl Message for GetGameMessage {
+    /// Response is an option of a link to a game
+    type Response = Option<Link<Game>>;
 }
 
-impl Handler<ModifyMessage> for GameManager {
-    type Response = MessageResponse<ModifyMessage>;
+impl Handler<GetGameMessage> for GameManager {
+    type Response = MessageResponse<GetGameMessage>;
 
-    fn handle(&mut self, msg: ModifyMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        if let Some(addr) = self.games.get(&msg.game_id) {
-            addr.send(msg.action);
-        }
-
-        // Still respond so that we can know when its been completed
-        MessageResponse(())
+    fn handle(&mut self, msg: GetGameMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        let link = self.games.get(&msg.game_id).cloned();
+        MessageResponse(link)
     }
 }
 
@@ -214,11 +209,22 @@ impl Handler<TryAddMessage> for GameManager {
     fn handle(&mut self, msg: TryAddMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         ServiceFutureResponse::new(move |service: &mut GameManager, _ctx| {
             async move {
-                for (id, addr) in &service.games {
-                    let join_state = addr.check_joinable(msg.rule_set.clone()).await;
+                for (id, link) in &service.games {
+                    let join_state = match link
+                        .send(CheckJoinableMessage {
+                            rule_set: msg.rule_set.clone(),
+                        })
+                        .await
+                    {
+                        Ok(value) => value,
+                        // Game is no longer available
+                        Err(_) => continue,
+                    };
+
                     if let GameJoinableState::Joinable = join_state {
                         debug!("Found matching game (GID: {})", id);
-                        addr.add_player(msg.player);
+                        let _ = link.do_send(AddPlayerMessage { player: msg.player });
+
                         return TryAddResult::Success;
                     }
                 }
@@ -263,7 +269,10 @@ impl Handler<RemovePlayerMessage> for GameManager {
                     None => return,
                 };
 
-                let is_empty = link.remove_player(msg.ty).await;
+                let is_empty = match link.send(super::RemovePlayerMessage { ty: msg.ty }).await {
+                    Ok(value) => value,
+                    Err(_) => return,
+                };
 
                 if is_empty {
                     // Remove the empty game

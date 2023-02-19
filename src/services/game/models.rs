@@ -134,6 +134,7 @@ impl Decodable for GameState {
 
 value_type!(GameState, TdfType::VarInt);
 
+/// TODO: Maybe rename to mesh state?
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[allow(unused)]
 pub enum PlayerState {
