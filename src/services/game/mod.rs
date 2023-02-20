@@ -1,6 +1,6 @@
 use self::rules::RuleSet;
 use crate::{
-    servers::main::session::{self, DetailsMessage, SetGameMessage},
+    servers::main::session::{DetailsMessage, SetGameMessage},
     utils::{
         components::{Components, GameManager, UserSessions},
         types::{GameID, GameSlot, PlayerID, SessionID},
@@ -67,61 +67,46 @@ pub struct GameSnapshot {
 /// Attributes map type
 pub type AttrMap = TdfMap<String, String>;
 /// Message to add a new player to this game
+#[derive(Message)]
 pub struct AddPlayerMessage {
     /// The player to add to the game
     pub player: GamePlayer,
 }
 
-impl Message for AddPlayerMessage {
-    type Response = ();
-}
-
 impl Handler<AddPlayerMessage> for Game {
-    type Response = MessageResponse<AddPlayerMessage>;
+    type Response = ();
 
-    fn handle(&mut self, msg: AddPlayerMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(&mut self, msg: AddPlayerMessage, _ctx: &mut ServiceContext<Self>) {
         self.add_player(msg.player);
-        MessageResponse(())
     }
 }
 
 /// Message to alter the current game state
+#[derive(Message)]
 pub struct SetStateMessage {
     /// The new game state
     pub state: GameState,
 }
 
-impl Message for SetStateMessage {
-    type Response = ();
-}
-
 impl Handler<SetStateMessage> for Game {
-    type Response = MessageResponse<SetStateMessage>;
+    type Response = ();
 
-    fn handle(&mut self, msg: SetStateMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(&mut self, msg: SetStateMessage, _ctx: &mut ServiceContext<Self>) {
         self.set_state(msg.state);
-        MessageResponse(())
     }
 }
 
 /// Message for setting the current game setting value
+#[derive(Message)]
 pub struct SetSettingMessage {
     /// The new setting value
     pub setting: u16,
 }
 
-impl Message for SetSettingMessage {
-    type Response = ();
-}
-
 impl Handler<SetSettingMessage> for Game {
-    type Response = MessageResponse<SetSettingMessage>;
+    type Response = ();
 
-    fn handle(
-        &mut self,
-        msg: SetSettingMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    fn handle(&mut self, msg: SetSettingMessage, _ctx: &mut ServiceContext<Self>) {
         let setting = msg.setting;
         debug!("Updating game setting (Value: {})", &setting);
         self.setting = setting;
@@ -132,28 +117,20 @@ impl Handler<SetSettingMessage> for Game {
                 setting,
             },
         );
-        MessageResponse(())
     }
 }
 
 /// Message for setting the game attributes
+#[derive(Message)]
 pub struct SetAttributesMessage {
     /// The new attributes
     pub attributes: AttrMap,
 }
 
-impl Message for SetAttributesMessage {
-    type Response = ();
-}
-
 impl Handler<SetAttributesMessage> for Game {
-    type Response = MessageResponse<SetAttributesMessage>;
+    type Response = ();
 
-    fn handle(
-        &mut self,
-        msg: SetAttributesMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    fn handle(&mut self, msg: SetAttributesMessage, _ctx: &mut ServiceContext<Self>) {
         let attributes = msg.attributes;
         debug!("Updating game attributes");
         let packet = Packet::notify(
@@ -165,12 +142,12 @@ impl Handler<SetAttributesMessage> for Game {
         );
         self.attributes.extend(attributes);
         self.push_all(&packet);
-        MessageResponse(())
     }
 }
 
 /// Message to update the mesh connection state between
 /// clients
+#[derive(Message)]
 pub struct UpdateMeshMessage {
     /// The ID of the session updating its connection
     pub session: SessionID,
@@ -180,18 +157,10 @@ pub struct UpdateMeshMessage {
     pub state: PlayerState,
 }
 
-impl Message for UpdateMeshMessage {
-    type Response = ();
-}
-
 impl Handler<UpdateMeshMessage> for Game {
-    type Response = MessageResponse<UpdateMeshMessage>;
+    type Response = ();
 
-    fn handle(
-        &mut self,
-        msg: UpdateMeshMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    fn handle(&mut self, msg: UpdateMeshMessage, _ctx: &mut ServiceContext<Self>) {
         let state = msg.state;
         let session = msg.session;
         debug!("Updating mesh connection");
@@ -211,16 +180,13 @@ impl Handler<UpdateMeshMessage> for Game {
             PlayerState::Connected => {}
             _ => {}
         }
-        MessageResponse(())
     }
 }
 
+#[derive(Message)]
+#[msg(rtype = "bool")]
 pub struct RemovePlayerMessage {
     pub ty: RemovePlayerType,
-}
-
-impl Message for RemovePlayerMessage {
-    type Response = bool;
 }
 
 impl Handler<RemovePlayerMessage> for Game {
@@ -234,12 +200,10 @@ impl Handler<RemovePlayerMessage> for Game {
     }
 }
 
+#[derive(Message)]
+#[msg(rtype = "GameJoinableState")]
 pub struct CheckJoinableMessage {
     pub rule_set: Arc<RuleSet>,
-}
-
-impl Message for CheckJoinableMessage {
-    type Response = GameJoinableState;
 }
 
 impl Handler<CheckJoinableMessage> for Game {
@@ -263,14 +227,13 @@ impl Handler<CheckJoinableMessage> for Game {
     }
 }
 
+#[derive(Message)]
+#[msg(rtype = "GameSnapshot")]
 pub struct SnapshotMessage;
-
-impl Message for SnapshotMessage {
-    type Response = GameSnapshot;
-}
 
 impl Handler<SnapshotMessage> for Game {
     type Response = MessageResponse<SnapshotMessage>;
+
     fn handle(&mut self, _msg: SnapshotMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         let players = self.players.iter().map(|value| value.snapshot()).collect();
         MessageResponse(GameSnapshot {

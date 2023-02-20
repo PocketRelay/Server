@@ -15,6 +15,7 @@ use tokio::task::JoinSet;
 /// Manager which controls all the active games on the server
 /// commanding them to do different actions and removing them
 /// once they are no longer used
+#[derive(Service)]
 pub struct GameManager {
     /// The map of games to the actual game address
     games: HashMap<GameID, Link<Game>>,
@@ -33,19 +34,13 @@ impl GameManager {
     }
 }
 
-impl Service for GameManager {}
-
 /// Message for taking a snapshot of multiple games
 /// within the specified query range
+#[derive(Message)]
+#[msg(rtype = "(Vec<GameSnapshot>, bool)")]
 pub struct SnapshotQueryMessage {
     pub offset: usize,
     pub count: usize,
-}
-
-impl Message for SnapshotQueryMessage {
-    /// Response of the list of games and whether
-    /// there are more games at the next offset
-    type Response = (Vec<GameSnapshot>, bool);
 }
 
 impl Handler<SnapshotQueryMessage> for GameManager {
@@ -97,14 +92,13 @@ impl Handler<SnapshotQueryMessage> for GameManager {
 }
 
 /// Message for taking a snapshot of a specific game
+/// which will return a snapshot of the game if it
+/// exists
+#[derive(Message)]
+#[msg(rtype = "Option<GameSnapshot>")]
 pub struct SnapshotMessage {
     /// The ID of the game to take the snapshot of
     pub game_id: GameID,
-}
-
-impl Message for SnapshotMessage {
-    /// Response of an optional game snapshot if the game exists
-    type Response = Option<GameSnapshot>;
 }
 
 impl Handler<SnapshotMessage> for GameManager {
@@ -129,6 +123,9 @@ impl Handler<SnapshotMessage> for GameManager {
 }
 
 /// Message for creating a new game using the game manager
+/// responds with a link to the created game and its ID
+#[derive(Message)]
+#[msg(rtype = "(Link<Game>, GameID)")]
 pub struct CreateMessage {
     /// The initial game attributes
     pub attributes: AttrMap,
@@ -136,12 +133,6 @@ pub struct CreateMessage {
     pub setting: u16,
     /// The host player for the game
     pub host: GamePlayer,
-}
-
-impl Message for CreateMessage {
-    /// Create message responds with the address of the
-    /// created game
-    type Response = (Link<Game>, GameID);
 }
 
 impl Handler<CreateMessage> for GameManager {
@@ -165,16 +156,13 @@ impl Handler<CreateMessage> for GameManager {
     }
 }
 
-/// Message for requesting a link to a game
-/// with the provided ID
+/// Message for requesting a link to a game with the provided
+/// ID responds with a link to the game if it exists
+#[derive(Message)]
+#[msg(rtype = "Option<Link<Game>>")]
 pub struct GetGameMessage {
     /// The ID of the game to get a link to
     pub game_id: GameID,
-}
-
-impl Message for GetGameMessage {
-    /// Response is an option of a link to a game
-    type Response = Option<Link<Game>>;
 }
 
 impl Handler<GetGameMessage> for GameManager {
@@ -188,6 +176,8 @@ impl Handler<GetGameMessage> for GameManager {
 
 /// Message for attempting to add a player to any existing
 /// games within this game manager
+#[derive(Message)]
+#[msg(rtype = "TryAddResult")]
 pub struct TryAddMessage {
     /// The player to attempt to add
     pub player: GamePlayer,
@@ -201,11 +191,6 @@ pub struct TryAddMessage {
 pub enum TryAddResult {
     Success,
     Failure(GamePlayer),
-}
-
-impl Message for TryAddMessage {
-    /// Respond with a TryAddResult
-    type Response = TryAddResult;
 }
 
 impl Handler<TryAddMessage> for GameManager {
@@ -241,16 +226,13 @@ impl Handler<TryAddMessage> for GameManager {
 }
 
 /// Message for removing a player from a game
+
+#[derive(Message)]
 pub struct RemovePlayerMessage {
     /// The ID of the game to remove from
     pub game_id: GameID,
     /// The type of player removal
     pub ty: RemovePlayerType,
-}
-
-impl Message for RemovePlayerMessage {
-    /// Empty response type
-    type Response = ();
 }
 
 impl Handler<RemovePlayerMessage> for GameManager {
@@ -294,27 +276,19 @@ impl Handler<RemovePlayerMessage> for GameManager {
 }
 
 /// Message for removing a game from the manager
+#[derive(Message)]
 pub struct RemoveGameMessage {
     /// The ID of the game to remove
     pub game_id: GameID,
 }
 
-impl Message for RemoveGameMessage {
-    type Response = ();
-}
-
 impl Handler<RemoveGameMessage> for GameManager {
-    type Response = MessageResponse<RemoveGameMessage>;
+    type Response = ();
 
-    fn handle(
-        &mut self,
-        msg: RemoveGameMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    fn handle(&mut self, msg: RemoveGameMessage, _ctx: &mut ServiceContext<Self>) {
         // Remove the game
         if let Some(value) = self.games.remove(&msg.game_id) {
             value.stop();
         }
-        MessageResponse(())
     }
 }

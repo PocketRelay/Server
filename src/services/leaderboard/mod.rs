@@ -17,6 +17,7 @@ use tokio::{task::JoinSet, try_join};
 
 pub mod models;
 
+#[derive(Service)]
 pub struct Leaderboard {
     /// Map between the group types and the actual leaderboard group content
     groups: HashMap<LeaderboardType, Arc<LeaderboardGroup>>,
@@ -24,14 +25,9 @@ pub struct Leaderboard {
 
 /// Message for requesting access to a leaderborad
 /// of the specific leaderboard type
+#[derive(Message)]
+#[msg(rtype = "Arc<LeaderboardGroup>")]
 pub struct QueryMessage(pub LeaderboardType);
-
-impl Message for QueryMessage {
-    /// Response of an arc to the leaderborad group
-    type Response = Arc<LeaderboardGroup>;
-}
-
-impl Service for Leaderboard {}
 
 impl Handler<QueryMessage> for Leaderboard {
     type Response = ServiceFutureResponse<Self, QueryMessage>;

@@ -4,13 +4,11 @@ use crate::{
     utils::types::{GameID, SessionID},
 };
 use futures::FutureExt;
-use interlink::{
-    msg::{MessageResponse, ServiceFutureResponse},
-    prelude::*,
-};
+use interlink::prelude::*;
 use log::debug;
 use std::{collections::VecDeque, sync::Arc, time::SystemTime};
 
+#[derive(Service)]
 pub struct Matchmaking {
     /// The queue of matchmaking entries
     queue: VecDeque<QueueEntry>,
@@ -25,8 +23,6 @@ impl Matchmaking {
         this.start()
     }
 }
-
-impl Service for Matchmaking {}
 
 /// Structure of a entry within the matchmaking queue
 /// containing information about the queue item
@@ -43,16 +39,12 @@ struct QueueEntry {
 }
 /// Message for handling when a game is created and attempting
 /// to add players from the queue into the game
+#[derive(Message)]
 pub struct GameCreatedMessage {
     /// The link to the game
     pub link: Link<Game>,
     /// The ID of the created game
     pub game_id: GameID,
-}
-
-impl Message for GameCreatedMessage {
-    /// Empty response from future
-    type Response = ();
 }
 
 impl Handler<GameCreatedMessage> for Matchmaking {
@@ -132,6 +124,7 @@ impl Handler<GameCreatedMessage> for Matchmaking {
 }
 
 /// Message to add a new player to the matchmaking queue
+#[derive(Message)]
 pub struct QueuePlayerMessage {
     /// The player to add to the queue
     pub player: GamePlayer,
@@ -139,39 +132,25 @@ pub struct QueuePlayerMessage {
     pub rule_set: Arc<RuleSet>,
 }
 
-impl Message for QueuePlayerMessage {
-    /// Empty response type
-    type Response = ();
-}
-
 impl Handler<QueuePlayerMessage> for Matchmaking {
     /// Empty response type
-    type Response = MessageResponse<QueuePlayerMessage>;
+    type Response = ();
 
-    fn handle(
-        &mut self,
-        msg: QueuePlayerMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    fn handle(&mut self, msg: QueuePlayerMessage, _ctx: &mut ServiceContext<Self>) {
         let time = SystemTime::now();
         self.queue.push_back(QueueEntry {
             player: msg.player,
             rule_set: msg.rule_set,
             time,
         });
-        MessageResponse(())
     }
 }
 
 /// Message to remove a player from the matchmaking queue
+#[derive(Message)]
 pub struct RemoveQueueMessage {
     /// The session ID of the player to remove
     pub session_id: SessionID,
-}
-
-impl Message for RemoveQueueMessage {
-    /// Empty response type
-    type Response = ();
 }
 
 impl Handler<RemoveQueueMessage> for Matchmaking {

@@ -126,6 +126,12 @@ impl SessionLink {
     }
 }
 
+#[derive(Message)]
+enum PacketMessage {
+    /// Queues a packet to be written to the outbound queue
+    Write(Packet),
+}
+
 impl Handler<PacketMessage> for Session {
     type Response = ();
 
@@ -138,15 +144,6 @@ impl Handler<PacketMessage> for Session {
             PacketMessage::Write(packet) => self.push(packet),
         }
     }
-}
-
-enum PacketMessage {
-    /// Queues a packet to be written to the outbound queue
-    Write(Packet),
-}
-
-impl Message for PacketMessage {
-    type Response = ();
 }
 
 impl StreamHandler<io::Result<Packet>> for Session {
@@ -179,20 +176,13 @@ impl ErrorHandler<io::Error> for Session {
 
 /// Message telling the session to inform the clients of
 /// a change in session data
+#[derive(Message)]
 pub struct UpdateClientMessage;
 
-impl Message for UpdateClientMessage {
-    type Response = ();
-}
-
 impl Handler<UpdateClientMessage> for Session {
-    type Response = MessageResponse<UpdateClientMessage>;
+    type Response = ();
 
-    fn handle(
-        &mut self,
-        _msg: UpdateClientMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    fn handle(&mut self, _msg: UpdateClientMessage, _ctx: &mut ServiceContext<Self>) {
         if let Some(player) = &self.player {
             let packet = Packet::notify(
                 Components::UserSessions(UserSessions::SetSession),
@@ -203,55 +193,38 @@ impl Handler<UpdateClientMessage> for Session {
             );
             self.push(packet);
         }
-        MessageResponse(())
     }
 }
 
 /// Message to update the hardware flag of a session
+#[derive(Message)]
 pub struct HardwareFlagMessage {
     /// The new value for the hardware flag
     pub value: u16,
 }
 
-impl Message for HardwareFlagMessage {
-    type Response = ();
-}
-
 impl Handler<HardwareFlagMessage> for Session {
-    type Response = MessageResponse<HardwareFlagMessage>;
+    type Response = ();
 
-    fn handle(
-        &mut self,
-        msg: HardwareFlagMessage,
-        ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    fn handle(&mut self, msg: HardwareFlagMessage, ctx: &mut ServiceContext<Self>) {
         self.net.hardware_flags = msg.value;
 
         // Notify the client of the change via a message rather than
         // directly so its sent after the response
         let _ = ctx.shared_link().do_send(UpdateClientMessage);
-
-        MessageResponse(())
     }
 }
 
+#[derive(Message)]
 pub struct NetworkInfoMessage {
     pub groups: NetGroups,
     pub qos: QosNetworkData,
 }
 
-impl Message for NetworkInfoMessage {
-    type Response = ();
-}
-
 impl Handler<NetworkInfoMessage> for Session {
-    type Response = MessageResponse<NetworkInfoMessage>;
+    type Response = ();
 
-    fn handle(
-        &mut self,
-        msg: NetworkInfoMessage,
-        ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    fn handle(&mut self, msg: NetworkInfoMessage, ctx: &mut ServiceContext<Self>) {
         let net = &mut &mut self.net;
         net.qos = msg.qos;
         net.groups = Some(msg.groups);
@@ -259,50 +232,40 @@ impl Handler<NetworkInfoMessage> for Session {
         // Notify the client of the change via a message rather than
         // directly so its sent after the response
         let _ = ctx.shared_link().do_send(UpdateClientMessage);
-
-        MessageResponse(())
     }
 }
 
+#[derive(Message)]
 pub struct SetGameMessage {
     pub game: Option<GameID>,
 }
 
-impl Message for SetGameMessage {
-    type Response = ();
-}
-
 impl Handler<SetGameMessage> for Session {
-    type Response = MessageResponse<SetGameMessage>;
+    type Response = ();
 
-    fn handle(&mut self, msg: SetGameMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(&mut self, msg: SetGameMessage, ctx: &mut ServiceContext<Self>) {
         self.game = msg.game;
 
         // Notify the client of the change via a message rather than
         // directly so its sent after the response
         let _ = ctx.shared_link().do_send(UpdateClientMessage);
-
-        MessageResponse(())
     }
 }
 
 /// Message to send the details of this session to
 /// the provided session link
+#[derive(Message)]
 pub struct DetailsMessage {
     pub link: SessionLink,
 }
 
-impl Message for DetailsMessage {
-    type Response = ();
-}
-
 impl Handler<DetailsMessage> for Session {
-    type Response = MessageResponse<DetailsMessage>;
+    type Response = ();
 
-    fn handle(&mut self, msg: DetailsMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(&mut self, msg: DetailsMessage, _ctx: &mut ServiceContext<Self>) {
         let player = match self.player.as_ref() {
             Some(value) => value,
-            None => return MessageResponse(()),
+            None => return,
         };
 
         // Create the details packets
@@ -326,8 +289,6 @@ impl Handler<DetailsMessage> for Session {
         // Push the message to the session link
         msg.link.push(a);
         msg.link.push(b);
-
-        MessageResponse(())
     }
 }
 
