@@ -30,10 +30,10 @@ pub struct Leaderboard {
 pub struct QueryMessage(pub LeaderboardType);
 
 impl Handler<QueryMessage> for Leaderboard {
-    type Response = ServiceFutureResponse<Self, QueryMessage>;
+    type Response = Sfr<Self, QueryMessage>;
 
     fn handle(&mut self, msg: QueryMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        ServiceFutureResponse::new(move |service: &mut Leaderboard, _ctx| {
+        Sfr::new(move |service: &mut Leaderboard, _ctx| {
             async move {
                 let ty = msg.0;
 

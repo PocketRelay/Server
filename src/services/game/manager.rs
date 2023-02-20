@@ -4,10 +4,7 @@ use super::{
 };
 use crate::utils::types::GameID;
 use futures::FutureExt;
-use interlink::{
-    msg::{FutureResponse, MessageResponse, ServiceFutureResponse},
-    prelude::*,
-};
+use interlink::prelude::*;
 use log::debug;
 use std::{collections::HashMap, sync::Arc};
 use tokio::task::JoinSet;
@@ -44,7 +41,7 @@ pub struct SnapshotQueryMessage {
 }
 
 impl Handler<SnapshotQueryMessage> for GameManager {
-    type Response = FutureResponse<SnapshotQueryMessage>;
+    type Response = Fr<SnapshotQueryMessage>;
 
     fn handle(
         &mut self,
@@ -76,7 +73,7 @@ impl Handler<SnapshotQueryMessage> for GameManager {
             (keys_count, more)
         };
 
-        FutureResponse::new(
+        Fr::new(
             async move {
                 let mut snapshots = Vec::with_capacity(count);
                 while let Some(result) = join_set.join_next().await {
@@ -102,13 +99,13 @@ pub struct SnapshotMessage {
 }
 
 impl Handler<SnapshotMessage> for GameManager {
-    type Response = FutureResponse<SnapshotMessage>;
+    type Response = Fr<SnapshotMessage>;
 
     fn handle(&mut self, msg: SnapshotMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         // Link to the game
         let link = self.games.get(&msg.game_id).cloned();
 
-        FutureResponse::new(
+        Fr::new(
             async move {
                 let link = match link {
                     Some(value) => value,
@@ -136,7 +133,7 @@ pub struct CreateMessage {
 }
 
 impl Handler<CreateMessage> for GameManager {
-    type Response = MessageResponse<CreateMessage>;
+    type Response = Mr<CreateMessage>;
 
     fn handle(
         &mut self,
@@ -152,7 +149,7 @@ impl Handler<CreateMessage> for GameManager {
 
         let _ = link.do_send(AddPlayerMessage { player: msg.host });
 
-        MessageResponse((link, id))
+        Mr((link, id))
     }
 }
 
@@ -166,11 +163,11 @@ pub struct GetGameMessage {
 }
 
 impl Handler<GetGameMessage> for GameManager {
-    type Response = MessageResponse<GetGameMessage>;
+    type Response = Mr<GetGameMessage>;
 
     fn handle(&mut self, msg: GetGameMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         let link = self.games.get(&msg.game_id).cloned();
-        MessageResponse(link)
+        Mr(link)
     }
 }
 
@@ -194,10 +191,10 @@ pub enum TryAddResult {
 }
 
 impl Handler<TryAddMessage> for GameManager {
-    type Response = ServiceFutureResponse<Self, TryAddMessage>;
+    type Response = Sfr<Self, TryAddMessage>;
 
     fn handle(&mut self, msg: TryAddMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        ServiceFutureResponse::new(move |service: &mut GameManager, _ctx| {
+        Sfr::new(move |service: &mut GameManager, _ctx| {
             async move {
                 for (id, link) in &service.games {
                     let join_state = match link
@@ -236,7 +233,7 @@ pub struct RemovePlayerMessage {
 }
 
 impl Handler<RemovePlayerMessage> for GameManager {
-    type Response = FutureResponse<RemovePlayerMessage>;
+    type Response = Fr<RemovePlayerMessage>;
 
     fn handle(
         &mut self,
@@ -249,7 +246,7 @@ impl Handler<RemovePlayerMessage> for GameManager {
         // Link to the target game
         let link = self.games.get(&msg.game_id).cloned();
 
-        FutureResponse::new(
+        Fr::new(
             async move {
                 let link = match link {
                     Some(value) => value,

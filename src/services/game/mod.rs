@@ -7,7 +7,7 @@ use crate::{
     },
 };
 use blaze_pk::{codec::Encodable, packet::Packet, types::TdfMap};
-use interlink::{msg::MessageResponse, prelude::*};
+use interlink::prelude::*;
 use log::debug;
 use models::*;
 use player::{GamePlayer, GamePlayerSnapshot};
@@ -190,13 +190,13 @@ pub struct RemovePlayerMessage {
 }
 
 impl Handler<RemovePlayerMessage> for Game {
-    type Response = MessageResponse<RemovePlayerMessage>;
+    type Response = Mr<RemovePlayerMessage>;
     fn handle(
         &mut self,
         msg: RemovePlayerMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        MessageResponse(self.remove_player(msg.ty))
+        Mr(self.remove_player(msg.ty))
     }
 }
 
@@ -207,7 +207,7 @@ pub struct CheckJoinableMessage {
 }
 
 impl Handler<CheckJoinableMessage> for Game {
-    type Response = MessageResponse<CheckJoinableMessage>;
+    type Response = Mr<CheckJoinableMessage>;
 
     fn handle(
         &mut self,
@@ -216,10 +216,10 @@ impl Handler<CheckJoinableMessage> for Game {
     ) -> Self::Response {
         let is_joinable = self.next_slot < Self::MAX_PLAYERS;
         if !msg.rule_set.matches(&self.attributes) {
-            return MessageResponse(GameJoinableState::NotMatch);
+            return Mr(GameJoinableState::NotMatch);
         }
 
-        MessageResponse(if is_joinable {
+        Mr(if is_joinable {
             GameJoinableState::Joinable
         } else {
             GameJoinableState::Full
@@ -232,11 +232,11 @@ impl Handler<CheckJoinableMessage> for Game {
 pub struct SnapshotMessage;
 
 impl Handler<SnapshotMessage> for Game {
-    type Response = MessageResponse<SnapshotMessage>;
+    type Response = Mr<SnapshotMessage>;
 
     fn handle(&mut self, _msg: SnapshotMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         let players = self.players.iter().map(|value| value.snapshot()).collect();
-        MessageResponse(GameSnapshot {
+        Mr(GameSnapshot {
             id: self.id,
             state: self.state,
             setting: self.setting,

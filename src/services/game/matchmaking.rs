@@ -48,14 +48,14 @@ pub struct GameCreatedMessage {
 }
 
 impl Handler<GameCreatedMessage> for Matchmaking {
-    type Response = ServiceFutureResponse<Self, GameCreatedMessage>;
+    type Response = Sfr<Self, GameCreatedMessage>;
 
     fn handle(
         &mut self,
         msg: GameCreatedMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        ServiceFutureResponse::new(move |service: &mut Matchmaking, _ctx| {
+        Sfr::new(move |service: &mut Matchmaking, _ctx| {
             async move {
                 let link = msg.link;
                 let queue = &mut service.queue;
