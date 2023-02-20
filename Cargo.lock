@@ -946,9 +946,11 @@ dependencies = [
 
 [[package]]
 name = "interlink"
-version = "0.1.0-alpha"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e471e7631f5eda56798649c2255fb36e579bdc2005e3e7eaa85b5e0f744e7e75"
 dependencies = [
- "futures",
+ "futures-util",
  "interlink-derive",
  "tokio",
 ]
@@ -956,6 +958,8 @@ dependencies = [
 [[package]]
 name = "interlink-derive"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21fe40b60b29c6ec830315a783f9b5df9d4913704a0f1f906308c69bc23e80eb"
 dependencies = [
  "darling",
  "quote",
