@@ -1,7 +1,10 @@
 use self::rules::RuleSet;
-use crate::utils::{
-    components::{Components, GameManager, UserSessions},
-    types::{GameID, GameSlot, PlayerID, SessionID},
+use crate::{
+    servers::main::session::{self, DetailsMessage, SetGameMessage},
+    utils::{
+        components::{Components, GameManager, UserSessions},
+        types::{GameID, GameSlot, PlayerID, SessionID},
+    },
 };
 use blaze_pk::{codec::Encodable, packet::Packet, types::TdfMap};
 use interlink::{msg::MessageResponse, prelude::*};
@@ -32,7 +35,11 @@ pub struct Game {
     pub next_slot: GameSlot,
 }
 
-impl Service for Game {}
+impl Service for Game {
+    fn stopping(&mut self) {
+        debug!("Game is stopping (GID: {})", self.id)
+    }
+}
 
 impl Game {
     pub fn start(id: GameID, attributes: AttrMap, setting: u16) -> Link<Game> {
@@ -70,31 +77,11 @@ impl Message for AddPlayerMessage {
 }
 
 impl Handler<AddPlayerMessage> for Game {
-    type Response = ();
+    type Response = MessageResponse<AddPlayerMessage>;
 
     fn handle(&mut self, msg: AddPlayerMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        let mut player = msg.player;
-        let slot = self.aquire_slot();
-        player.game_id = self.id;
-
-        self.notify_player_joining(&player, slot);
-        self.update_clients(&player);
-        self.notify_game_setup(&player, slot);
-
-        let id = self.id;
-
-        player
-            .addr
-            .link
-            .do_exec(move |session, _| session.set_game(Some(id)))
-            .ok();
-
-        let packet = player.create_set_session();
-        self.push_all(&packet);
-
-        self.players.push(player);
-
-        debug!("Adding player complete");
+        self.add_player(msg.player);
+        MessageResponse(())
     }
 }
 
@@ -109,10 +96,11 @@ impl Message for SetStateMessage {
 }
 
 impl Handler<SetStateMessage> for Game {
-    type Response = ();
+    type Response = MessageResponse<SetStateMessage>;
 
     fn handle(&mut self, msg: SetStateMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        self.set_state(msg.state)
+        self.set_state(msg.state);
+        MessageResponse(())
     }
 }
 
@@ -127,7 +115,7 @@ impl Message for SetSettingMessage {
 }
 
 impl Handler<SetSettingMessage> for Game {
-    type Response = ();
+    type Response = MessageResponse<SetSettingMessage>;
 
     fn handle(
         &mut self,
@@ -144,6 +132,7 @@ impl Handler<SetSettingMessage> for Game {
                 setting,
             },
         );
+        MessageResponse(())
     }
 }
 
@@ -158,7 +147,7 @@ impl Message for SetAttributesMessage {
 }
 
 impl Handler<SetAttributesMessage> for Game {
-    type Response = ();
+    type Response = MessageResponse<SetAttributesMessage>;
 
     fn handle(
         &mut self,
@@ -176,6 +165,7 @@ impl Handler<SetAttributesMessage> for Game {
         );
         self.attributes.extend(attributes);
         self.push_all(&packet);
+        MessageResponse(())
     }
 }
 
@@ -195,7 +185,7 @@ impl Message for UpdateMeshMessage {
 }
 
 impl Handler<UpdateMeshMessage> for Game {
-    type Response = ();
+    type Response = MessageResponse<UpdateMeshMessage>;
 
     fn handle(
         &mut self,
@@ -221,6 +211,7 @@ impl Handler<UpdateMeshMessage> for Game {
             PlayerState::Connected => {}
             _ => {}
         }
+        MessageResponse(())
     }
 }
 
@@ -352,17 +343,31 @@ impl Game {
             let addr1 = player.addr.clone();
             let addr2 = value.addr.clone();
 
-            value
-                .addr
-                .link
-                .do_exec(|session, _| session.push_details(addr1))
-                .ok();
-            player
-                .addr
-                .link
-                .do_exec(|session, _| session.push_details(addr2))
-                .ok();
+            // Queue the session details to be sent to this client
+            let _ = player.addr.link.do_send(DetailsMessage { link: addr2 });
+            let _ = value.addr.link.do_send(DetailsMessage { link: addr1 });
         });
+    }
+
+    fn add_player(&mut self, mut player: GamePlayer) {
+        let slot = self.aquire_slot();
+        player.game_id = self.id;
+
+        self.notify_player_joining(&player, slot);
+        self.update_clients(&player);
+        self.notify_game_setup(&player, slot);
+
+        // Set current game of this player
+        let _ = player.addr.link.do_send(SetGameMessage {
+            game: Some(self.id),
+        });
+
+        let packet = player.create_set_session();
+        self.push_all(&packet);
+
+        self.players.push(player);
+
+        debug!("Adding player complete");
     }
 
     /// Checks whether the provided session is a player in this game
@@ -377,7 +382,7 @@ impl Game {
     ///
     /// `pid` The player ID
     fn is_player_pid(&self, pid: PlayerID) -> bool {
-        self.players.iter().any(|value| value.session_id == pid)
+        self.players.iter().any(|value| value.player.id == pid)
     }
 
     fn aquire_slot(&mut self) -> usize {
@@ -527,11 +532,8 @@ impl Game {
             (player, index, reason, self.players.is_empty())
         };
 
-        player
-            .addr
-            .link
-            .do_exec(|session, _| session.set_game(None))
-            .ok();
+        // Set current game of this player
+        let _ = player.addr.link.do_send(SetGameMessage { game: None });
 
         self.notify_player_removed(&player, reason);
         self.notify_fetch_data(&player);
@@ -635,12 +637,6 @@ impl Game {
             HostMigrateFinished { game_id: self.id },
         );
         self.push_all(&packet);
-    }
-}
-
-impl Drop for Game {
-    fn drop(&mut self) {
-        debug!("Game has been dropped (GID: {})", self.id)
     }
 }
 

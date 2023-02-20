@@ -4,7 +4,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             util::*,
         },
-        session::SessionLink,
+        session::{DetailsMessage, SessionLink},
     },
     state::GlobalState,
     utils::{
@@ -122,11 +122,10 @@ async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthRes
         .await
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    session
-        .link
-        .exec(move |session, ctx| session.push_details(SessionLink { link: ctx.link() }))
-        .await
-        .ok();
+    // Queue the session details to be sent to this client
+    let _ = session.link.do_send(DetailsMessage {
+        link: session.clone(),
+    });
 
     Ok(PostAuthResponse {
         telemetry: TelemetryServer {

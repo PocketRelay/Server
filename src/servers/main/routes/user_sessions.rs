@@ -5,7 +5,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
-        session::SessionLink,
+        session::{HardwareFlagMessage, NetworkInfoMessage, SessionLink},
     },
     state::GlobalState,
     utils::components::{Components as C, UserSessions as U},
@@ -110,11 +110,13 @@ async fn handle_resume_session(
 /// }
 /// ```
 async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequest) {
-    session
+    let _ = session
         .link
-        .exec(move |session, _| session.set_network_info(req.address, req.qos))
-        .await
-        .ok();
+        .send(NetworkInfoMessage {
+            groups: req.address,
+            qos: req.qos,
+        })
+        .await;
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
@@ -127,9 +129,10 @@ async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequ
 /// }
 /// ```
 async fn handle_update_hardware_flag(session: &mut SessionLink, req: HardwareFlagRequest) {
-    session
+    let _ = session
         .link
-        .exec(move |session, _| session.set_hardware_flag(req.hardware_flag))
-        .await
-        .ok();
+        .send(HardwareFlagMessage {
+            value: req.hardware_flag,
+        })
+        .await;
 }

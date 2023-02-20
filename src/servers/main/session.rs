@@ -5,12 +5,13 @@ use super::models::errors::{ServerError, ServerResult};
 use super::router;
 use crate::services::game::manager::RemovePlayerMessage;
 use crate::services::game::matchmaking::RemoveQueueMessage;
+use crate::utils::components;
 use crate::utils::types::PlayerID;
 use crate::{
     services::game::{player::GamePlayer, RemovePlayerType},
     state::GlobalState,
     utils::{
-        components::{self, Components, UserSessions},
+        components::{Components, UserSessions},
         models::{NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
         types::{GameID, SessionID},
     },
@@ -150,8 +151,20 @@ impl Message for PacketMessage {
 
 impl StreamHandler<io::Result<Packet>> for Session {
     fn handle(&mut self, msg: io::Result<Packet>, ctx: &mut ServiceContext<Self>) {
-        if let Ok(msg) = msg {
-            self.handle_packet(ctx, msg);
+        if let Ok(packet) = msg {
+            self.debug_log_packet("Read", &packet);
+            let mut addr = SessionLink { link: ctx.link() };
+            tokio::spawn(async move {
+                let router = router();
+                match router.handle(&mut addr, packet).await {
+                    Ok(packet) => {
+                        addr.push(packet);
+                    }
+                    Err(err) => {
+                        error!("Error occurred while decoding packet: {:?}", err);
+                    }
+                }
+            });
         } else {
             ctx.stop();
         }
@@ -161,6 +174,160 @@ impl StreamHandler<io::Result<Packet>> for Session {
 impl ErrorHandler<io::Error> for Session {
     fn handle(&mut self, _err: io::Error, _ctx: &mut ServiceContext<Self>) -> ErrorAction {
         ErrorAction::Continue
+    }
+}
+
+/// Message telling the session to inform the clients of
+/// a change in session data
+pub struct UpdateClientMessage;
+
+impl Message for UpdateClientMessage {
+    type Response = ();
+}
+
+impl Handler<UpdateClientMessage> for Session {
+    type Response = MessageResponse<UpdateClientMessage>;
+
+    fn handle(
+        &mut self,
+        _msg: UpdateClientMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        if let Some(player) = &self.player {
+            let packet = Packet::notify(
+                Components::UserSessions(UserSessions::SetSession),
+                SetSession {
+                    player_id: player.id,
+                    session: self,
+                },
+            );
+            self.push(packet);
+        }
+        MessageResponse(())
+    }
+}
+
+/// Message to update the hardware flag of a session
+pub struct HardwareFlagMessage {
+    /// The new value for the hardware flag
+    pub value: u16,
+}
+
+impl Message for HardwareFlagMessage {
+    type Response = ();
+}
+
+impl Handler<HardwareFlagMessage> for Session {
+    type Response = MessageResponse<HardwareFlagMessage>;
+
+    fn handle(
+        &mut self,
+        msg: HardwareFlagMessage,
+        ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        self.net.hardware_flags = msg.value;
+
+        // Notify the client of the change via a message rather than
+        // directly so its sent after the response
+        let _ = ctx.shared_link().do_send(UpdateClientMessage);
+
+        MessageResponse(())
+    }
+}
+
+pub struct NetworkInfoMessage {
+    pub groups: NetGroups,
+    pub qos: QosNetworkData,
+}
+
+impl Message for NetworkInfoMessage {
+    type Response = ();
+}
+
+impl Handler<NetworkInfoMessage> for Session {
+    type Response = MessageResponse<NetworkInfoMessage>;
+
+    fn handle(
+        &mut self,
+        msg: NetworkInfoMessage,
+        ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let net = &mut &mut self.net;
+        net.qos = msg.qos;
+        net.groups = Some(msg.groups);
+
+        // Notify the client of the change via a message rather than
+        // directly so its sent after the response
+        let _ = ctx.shared_link().do_send(UpdateClientMessage);
+
+        MessageResponse(())
+    }
+}
+
+pub struct SetGameMessage {
+    pub game: Option<GameID>,
+}
+
+impl Message for SetGameMessage {
+    type Response = ();
+}
+
+impl Handler<SetGameMessage> for Session {
+    type Response = MessageResponse<SetGameMessage>;
+
+    fn handle(&mut self, msg: SetGameMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
+        self.game = msg.game;
+
+        // Notify the client of the change via a message rather than
+        // directly so its sent after the response
+        let _ = ctx.shared_link().do_send(UpdateClientMessage);
+
+        MessageResponse(())
+    }
+}
+
+/// Message to send the details of this session to
+/// the provided session link
+pub struct DetailsMessage {
+    pub link: SessionLink,
+}
+
+impl Message for DetailsMessage {
+    type Response = ();
+}
+
+impl Handler<DetailsMessage> for Session {
+    type Response = MessageResponse<DetailsMessage>;
+
+    fn handle(&mut self, msg: DetailsMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        let player = match self.player.as_ref() {
+            Some(value) => value,
+            None => return MessageResponse(()),
+        };
+
+        // Create the details packets
+        let a = Packet::notify(
+            Components::UserSessions(UserSessions::SessionDetails),
+            SessionUpdate {
+                session: self,
+                player_id: player.id,
+                display_name: &player.display_name,
+            },
+        );
+
+        let b = Packet::notify(
+            Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
+            UpdateExtDataAttr {
+                flags: 0x3,
+                player_id: player.id,
+            },
+        );
+
+        // Push the message to the session link
+        msg.link.push(a);
+        msg.link.push(b);
+
+        MessageResponse(())
     }
 }
 
@@ -179,28 +346,6 @@ impl Session {
             net: NetData::default(),
             game: None,
         }
-    }
-
-    /// Handles processing a recieved packet from the `process` function.
-    /// The buffer is flushed after routing is complete.
-    ///
-    /// `session`   The session to process the packet for
-    /// `component` The component of the packet for routing
-    /// `packet`    The packet itself
-    fn handle_packet(&mut self, ctx: &mut ServiceContext<Self>, packet: Packet) {
-        self.debug_log_packet("Read", &packet);
-        let mut addr = SessionLink { link: ctx.link() };
-        tokio::spawn(async move {
-            let router = router();
-            match router.handle(&mut addr, packet).await {
-                Ok(packet) => {
-                    addr.push(packet);
-                }
-                Err(err) => {
-                    error!("Error occurred while decoding packet: {:?}", err);
-                }
-            }
-        });
     }
 
     /// Pushes a new packet to the back of the packet buffer
@@ -247,81 +392,6 @@ impl Session {
         };
 
         debug!("\n{:?}", debug);
-    }
-
-    /// Sets the game details for the current session and updates
-    /// the client with the new sesion details
-    ///
-    /// `game` The game the player has joined.
-    /// `slot` The slot in the game the player is in.
-    pub fn set_game(&mut self, game: Option<GameID>) {
-        self.game = game;
-        self.update_client();
-    }
-
-    /// Updates the networking information for this session making
-    /// it a set and setting the ext and groups. Updating the client
-    /// with the new session details
-    ///
-    /// `groups` The networking groups
-    /// `ext`    The networking ext
-    pub fn set_network_info(&mut self, groups: NetGroups, ext: QosNetworkData) {
-        let net = &mut &mut self.net;
-        net.qos = ext;
-        net.groups = Some(groups);
-        self.update_client();
-    }
-
-    /// Updates the hardware flag for this session and
-    /// updates the client with the changes
-    ///
-    /// `value` The new hardware flag value
-    pub fn set_hardware_flag(&mut self, value: u16) {
-        self.net.hardware_flags = value;
-        self.update_client();
-    }
-
-    /// Updates the data stored on the client so that it matches
-    /// the data stored in this session
-    fn update_client(&mut self) {
-        let player_id = self.player.as_ref().map(|player| player.id).unwrap_or(1);
-        let packet = Packet::notify(
-            Components::UserSessions(UserSessions::SetSession),
-            SetSession {
-                player_id,
-                session: self,
-            },
-        );
-        self.push(packet);
-    }
-
-    pub fn push_details(&mut self, addr: SessionLink) {
-        let player = match self.player.as_ref() {
-            Some(value) => value,
-            None => return,
-        };
-
-        // Create the details packets
-        let a = Packet::notify(
-            Components::UserSessions(UserSessions::SessionDetails),
-            SessionUpdate {
-                session: self,
-                player_id: player.id,
-                display_name: &player.display_name,
-            },
-        );
-
-        let b = Packet::notify(
-            Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
-            UpdateExtDataAttr {
-                flags: 0x3,
-                player_id: player.id,
-            },
-        );
-
-        // Push the packets
-        addr.push(a);
-        addr.push(b);
     }
 
     /// Removes the session from any connected games and the

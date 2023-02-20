@@ -1,6 +1,6 @@
 use super::{
-    player::GamePlayer, rules::RuleSet, AddPlayerMessage, AttrMap, CheckJoinableMessage, Game,
-    GameJoinableState, GameSnapshot, RemovePlayerType,
+    models::PlayerState, player::GamePlayer, rules::RuleSet, AddPlayerMessage, AttrMap,
+    CheckJoinableMessage, Game, GameJoinableState, GameSnapshot, RemovePlayerType,
 };
 use crate::utils::types::GameID;
 use futures::FutureExt;
@@ -147,13 +147,18 @@ impl Message for CreateMessage {
 impl Handler<CreateMessage> for GameManager {
     type Response = MessageResponse<CreateMessage>;
 
-    fn handle(&mut self, msg: CreateMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(
+        &mut self,
+        mut msg: CreateMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
         let id = self.next_id;
         self.next_id += 1;
         let link = Game::start(id, msg.attributes, msg.setting);
         self.games.insert(id, link.clone());
 
-        // Add the host player to the game
+        msg.host.state = PlayerState::Connected;
+
         let _ = link.do_send(AddPlayerMessage { player: msg.host });
 
         MessageResponse((link, id))
@@ -307,7 +312,9 @@ impl Handler<RemoveGameMessage> for GameManager {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         // Remove the game
-        self.games.remove(&msg.game_id);
+        if let Some(value) = self.games.remove(&msg.game_id) {
+            value.stop();
+        }
         MessageResponse(())
     }
 }

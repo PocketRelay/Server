@@ -1,6 +1,6 @@
 use super::models::PlayerState;
 use crate::{
-    servers::main::session::SessionLink,
+    servers::main::session::{SessionLink, SetGameMessage},
     utils::{
         components::{Components, UserSessions},
         models::NetData,
@@ -85,7 +85,7 @@ impl GamePlayer {
         writer.tag_u8(b"SLOT", 0);
         writer.tag_value(b"STAT", &self.state);
         writer.tag_u16(b"TIDX", 0xffff);
-        writer.tag_u8(b"TIME", 0);
+        writer.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
         writer.tag_triple(b"UGID", (0, 0, 0));
         writer.tag_u32(b"UID", self.session_id);
         writer.tag_group_end();
@@ -117,10 +117,7 @@ impl GamePlayer {
 impl Drop for GamePlayer {
     fn drop(&mut self) {
         // Clear player game when game player is dropped
-        self.addr
-            .link
-            .do_exec(|session, _| session.set_game(None))
-            .ok();
+        let _ = self.addr.link.do_send(SetGameMessage { game: None });
     }
 }
 

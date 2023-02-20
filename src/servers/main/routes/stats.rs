@@ -137,7 +137,7 @@ async fn handle_leaderboard_query<R: Decodable>(
 }
 
 fn get_locale_name(code: &str) -> &str {
-    match code {
+    match &code as &str {
         "global" => "Global",
         "de" => "Germany",
         "en" => "English",
@@ -147,6 +147,7 @@ fn get_locale_name(code: &str) -> &str {
         "ja" => "Japan",
         "pl" => "Poland",
         "ru" => "Russia",
+        "nz" => "New Zealand",
         value => value,
     }
 }
@@ -170,7 +171,8 @@ async fn handle_leaderboard_group(
         return None;
     }
     let split = if is_n7 { 8 } else { 15 };
-    let locale = get_locale_name(name.split_at(split).1);
+    let local_code = name.split_at(split).1.to_lowercase();
+    let locale = get_locale_name(&local_code);
     let group = if is_n7 {
         let desc = format!("N7 Rating - {locale}");
         LeaderboardGroupResponse {

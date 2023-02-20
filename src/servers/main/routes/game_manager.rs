@@ -165,7 +165,7 @@ async fn handle_set_attributes(req: SetAttributesRequest) -> ServerResult<()> {
             attributes: req.attributes,
         })
         .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+        .map_err(|_| ServerError::InvalidInformation)?;
     }
 
     Ok(())
@@ -194,7 +194,7 @@ async fn handle_set_state(req: SetStateRequest) -> ServerResult<()> {
     if let Some(link) = link {
         link.send(SetStateMessage { state: req.state })
             .await
-            .map_err(|_| ServerError::ServerUnavailableFinal)?;
+            .map_err(|_| ServerError::InvalidInformation)?;
     }
 
     Ok(())
@@ -225,7 +225,7 @@ async fn handle_set_setting(req: SetSettingRequest) -> ServerResult<()> {
             setting: req.setting,
         })
         .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+        .map_err(|_| ServerError::InvalidInformation)?;
     }
 
     Ok(())
