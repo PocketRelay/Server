@@ -55,6 +55,8 @@ struct LeaderboardQuery {
 /// from a leaderboard request
 #[derive(Serialize)]
 struct LeaderboardResponse<'a> {
+    /// The total number of players in the entire leaderboard
+    total: usize,
     /// The entries retrieved at the provided offset
     entries: &'a [LeaderboardEntry],
     /// Whether there is more entries past the provided offset
@@ -92,6 +94,7 @@ async fn get_leaderboard(
         LResult::Many(many, more) => (many, more),
         LResult::Empty => {
             let empty = Json(LeaderboardResponse {
+                total: group.values.len(),
                 entries: &[],
                 more: false,
             });
@@ -100,7 +103,11 @@ async fn get_leaderboard(
         _ => return Err(LeaderboardError::ServerError),
     };
 
-    let response = Json(LeaderboardResponse { entries, more });
+    let response = Json(LeaderboardResponse {
+        total: group.values.len(),
+        entries,
+        more,
+    });
     Ok(response.into_response())
 }
 
