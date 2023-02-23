@@ -1,5 +1,8 @@
 use crate::{
-    servers::http::{ext::ErrorStatusCode, middleware::auth::AdminAuth},
+    servers::http::{
+        ext::ErrorStatusCode,
+        middleware::auth::{AdminAuth, Auth},
+    },
     state::GlobalState,
     utils::{hashing::hash_password, types::PlayerID},
 };
@@ -22,6 +25,7 @@ use validator::validate_email;
 pub fn router() -> Router {
     Router::new()
         .route("/", get(get_players))
+        .route("/self", get(get_self))
         .route(
             "/:id",
             get(get_player).put(modify_player).delete(delete_player),
@@ -49,6 +53,8 @@ enum PlayersError {
     ServerError,
     /// Requested class could not be found
     DataNotFound,
+    /// The account doesn't have permission to complete the action
+    InvalidPermission,
 }
 
 /// Type alias for players result responses which wraps the provided type in
@@ -107,6 +113,12 @@ async fn get_players(
     let (players, more) = Player::all(&db, offset, count as u64).await?;
 
     Ok(Json(PlayersResponse { players, more }))
+}
+
+/// Route for obtaining the player details for the current
+/// authentication token
+async fn get_self(auth: Auth) -> Json<Player> {
+    Json(auth.into_inner())
 }
 
 /// Route for retrieving a player from the database with an ID that
@@ -194,11 +206,19 @@ async fn modify_player(
 ///
 /// `path` The route path with the ID for the player to find
 async fn delete_player(
-    _: AdminAuth,
+    auth: AdminAuth,
     Path(player_id): Path<PlayerID>,
 ) -> Result<Response, PlayersError> {
+    // Obtain the authenticated player
+    let auth = auth.into_inner();
+
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
+
+    if auth.id != player.id && auth.role <= player.role {
+        return Err(PlayersError::InvalidPermission);
+    }
+
     player.delete(&db).await?;
     Ok(StatusCode::OK.into_response())
 }
@@ -233,10 +253,16 @@ async fn all_data(Path(player_id): Path<PlayerID>, _: AdminAuth) -> PlayersResul
 
 async fn get_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
-    _: AdminAuth,
+    auth: Auth,
 ) -> PlayersResult<PlayerData> {
+    let auth = auth.into_inner();
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
+
+    if auth.id != player.id && auth.role <= player.role {
+        return Err(PlayersError::InvalidPermission);
+    }
+
     let value = player
         .get_data(&db, &key)
         .await?
@@ -258,11 +284,20 @@ struct SetDataRequest {
 /// `req`  The update class request
 async fn set_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
-    _: AdminAuth,
+    auth: AdminAuth,
     Json(req): Json<SetDataRequest>,
 ) -> PlayersResult<PlayerData> {
+    // Obtain the authenticated player
+    let auth = auth.into_inner();
+
     let db = GlobalState::database();
-    let data = Player::set_data(player_id, &db, key, req.value).await?;
+    let player: Player = find_player(&db, player_id).await?;
+
+    if auth.id != player.id && auth.role <= player.role {
+        return Err(PlayersError::InvalidPermission);
+    }
+
+    let data = Player::set_data(player.id, &db, key, req.value).await?;
     Ok(Json(data))
 }
 /// Route for updating the class for a player with the provided {id}
@@ -272,10 +307,18 @@ async fn set_data(
 /// `req`  The update class request
 async fn delete_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
-    _: AdminAuth,
+    auth: AdminAuth,
 ) -> PlayersResult<()> {
+    // Obtain the authenticated player
+    let auth = auth.into_inner();
+
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
+
+    if auth.id != player.id && auth.role <= player.role {
+        return Err(PlayersError::InvalidPermission);
+    }
+
     player.delete_data(&db, &key).await?;
     Ok(Json(()))
 }

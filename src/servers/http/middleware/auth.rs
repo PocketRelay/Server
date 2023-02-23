@@ -14,6 +14,12 @@ use std::{fmt::Display, marker::PhantomData};
 /// authorization header Bearer token
 pub struct Auth<V: AuthVerifier = ()>(pub Player, PhantomData<V>);
 
+impl<V: AuthVerifier> Auth<V> {
+    pub fn into_inner(self) -> Player {
+        self.0
+    }
+}
+
 pub type AdminAuth = Auth<AdminVerify>;
 
 pub trait AuthVerifier {
@@ -32,7 +38,7 @@ pub struct AdminVerify;
 
 impl AuthVerifier for AdminVerify {
     fn verify(player: &Player) -> bool {
-        matches!(player.role, PlayerRole::Admin | PlayerRole::SuperAdmin)
+        player.role >= PlayerRole::Admin
     }
 }
 
