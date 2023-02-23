@@ -217,18 +217,16 @@ async fn attempt_set_details(
     let email = if player.email == req.email {
         None
     } else {
-        let is_taken = match Player::is_email_taken(&db, &req.email).await {
-            Ok(value) => value,
+        let is_taken = match Player::by_email(&db, &req.email).await {
+            Ok(None) => {}
+            // Error if email is taken
+            Ok(Some(_)) => return Err(PlayersError::EmailTaken),
+
             Err(err) => {
                 error!("Failed to check if email is taken: {:?}", err);
                 return Err(PlayersError::ServerError);
             }
         };
-
-        // Error if email is taken
-        if is_taken {
-            return Err(PlayersError::EmailTaken);
-        }
 
         Some(req.email)
     };
@@ -305,8 +303,13 @@ async fn update_password(
     // Obtain the player from auth
     let player = auth.into_inner();
 
+    let player_password = match &player.password {
+        Some(value) => value,
+        None => return Err(PlayersError::InvalidPassword),
+    };
+
     // Compare the existing passwords
-    if !verify_password(&req.current_password, &player.password) {
+    if !verify_password(&req.current_password, player_password) {
         return Err(PlayersError::InvalidPassword);
     }
 

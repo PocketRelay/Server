@@ -1,12 +1,12 @@
 use crate::{
     entities::{player_data, players, PlayerData},
-    DbResult, Player,
+    DbResult, Player, PlayerRole,
 };
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, CursorTrait, DatabaseConnection, DeleteResult, EntityTrait, IntoActiveModel,
-    ModelTrait, QueryFilter,
+    ColumnTrait, CursorTrait, DatabaseConnection, DeleteResult, EntityTrait, InsertResult,
+    IntoActiveModel, ModelTrait, QueryFilter,
 };
 use std::{future::Future, iter::Iterator, pin::Pin};
 
@@ -45,38 +45,38 @@ impl Player {
     /// `display_name` The player display name
     /// `password`     The hashed player password
     /// `origin`       Whether the account is an origin account
-    pub async fn create(
+    pub fn create(
         db: &DatabaseConnection,
         email: String,
         display_name: String,
-        password: String,
-        origin: bool,
-    ) -> DbResult<Self> {
+        password: Option<String>,
+    ) -> DbFuture<Self> {
         let active_model = players::ActiveModel {
             email: Set(email),
             display_name: Set(display_name),
-            origin: Set(origin),
             password: Set(password),
             ..Default::default()
         };
-        active_model.insert(db).await
+        active_model.insert(db)
     }
 
     /// Deletes the provided player
     ///
     /// `db` The database connection
-    pub async fn delete(self, db: &DatabaseConnection) -> DbResult<DeleteResult> {
+    pub fn delete(self, db: &DatabaseConnection) -> DbFuture<DeleteResult> {
         // Delete player itself
         let model = self.into_active_model();
-        model.delete(db).await
+        model.delete(db)
     }
 
     /// Retrieves all the player data for this player
-    pub async fn all_data(id: u32, db: &DatabaseConnection) -> DbResult<Vec<PlayerData>> {
+    pub fn all_data<'a>(
+        id: u32,
+        db: &'a DatabaseConnection,
+    ) -> impl Future<Output = DbResult<Vec<PlayerData>>> + Send + 'a {
         player_data::Entity::find()
             .filter(player_data::Column::PlayerId.eq(id))
             .all(db)
-            .await
     }
 
     /// Sets the key value data for the provided player. If the data exists then
@@ -126,11 +126,11 @@ impl Player {
     ///
     /// `db`   The database connection
     /// `data` Iterator of the data keys and values
-    pub async fn bulk_insert_data(
+    pub fn bulk_insert_data<'a>(
         &self,
-        db: &DatabaseConnection,
+        db: &'a DatabaseConnection,
         data: impl Iterator<Item = (String, String)>,
-    ) -> DbResult<()> {
+    ) -> impl Future<Output = DbResult<InsertResult<player_data::ActiveModel>>> + Send + 'a {
         // Transform the provided key values into active models
         let models_iter = data.map(|(key, value)| player_data::ActiveModel {
             id: NotSet,
@@ -139,83 +139,46 @@ impl Player {
             value: Set(value),
         });
         // Insert all the models
-        player_data::Entity::insert_many(models_iter)
-            .exec(db)
-            .await?;
-        Ok(())
+        player_data::Entity::insert_many(models_iter).exec(db)
     }
 
-    pub async fn delete_data(&self, db: &DatabaseConnection, key: &str) -> DbResult<()> {
-        let data = self
-            .find_related(player_data::Entity)
-            .filter(player_data::Column::Key.eq(key))
-            .one(db)
-            .await?;
-        if let Some(data) = data {
-            data.delete(db).await?;
-        }
-        Ok(())
-    }
-
-    pub async fn get_data(
+    pub fn delete_data<'a>(
         &self,
-        db: &DatabaseConnection,
+        db: &'a DatabaseConnection,
         key: &str,
-    ) -> DbResult<Option<PlayerData>> {
+    ) -> impl Future<Output = DbResult<DeleteResult>> + Send + 'a {
+        player_data::Entity::delete_many()
+            .belongs_to(self)
+            .filter(player_data::Column::Key.eq(key))
+            .exec(db)
+    }
+
+    pub fn get_data<'a>(
+        &self,
+        db: &'a DatabaseConnection,
+        key: &str,
+    ) -> impl Future<Output = DbResult<Option<PlayerData>>> + Send + 'a {
         self.find_related(player_data::Entity)
             .filter(player_data::Column::Key.eq(key))
             .one(db)
-            .await
     }
 
-    pub async fn get_classes(&self, db: &DatabaseConnection) -> DbResult<Vec<PlayerData>> {
+    pub fn get_classes<'a>(
+        &self,
+        db: &'a DatabaseConnection,
+    ) -> impl Future<Output = DbResult<Vec<PlayerData>>> + Send + 'a {
         self.find_related(player_data::Entity)
             .filter(player_data::Column::Key.starts_with("class"))
             .all(db)
-            .await
     }
 
-    pub async fn get_characters(&self, db: &DatabaseConnection) -> DbResult<Vec<PlayerData>> {
+    pub fn get_characters<'a>(
+        &self,
+        db: &'a DatabaseConnection,
+    ) -> impl Future<Output = DbResult<Vec<PlayerData>>> + Send + 'a {
         self.find_related(player_data::Entity)
             .filter(player_data::Column::Key.starts_with("char"))
             .all(db)
-            .await
-    }
-
-    /// Updates the player using the optional values provided from the HTTP
-    /// API
-    ///
-    /// `db`           The database connection
-    /// `email`        The optional email to use
-    /// `display_name` The optional display name to use
-    /// `origin`       The optional origin value to use
-    /// `password`     The optional password to use
-    pub async fn update_http(
-        self,
-        db: &DatabaseConnection,
-        email: Option<String>,
-        display_name: Option<String>,
-        origin: Option<bool>,
-        password: Option<String>,
-    ) -> DbResult<Self> {
-        let mut active = self.into_active_model();
-        if let Some(email) = email {
-            active.email = Set(email);
-        }
-
-        if let Some(display_name) = display_name {
-            active.display_name = Set(display_name);
-        }
-
-        if let Some(origin) = origin {
-            active.origin = Set(origin);
-        }
-
-        if let Some(password) = password {
-            active.password = Set(password);
-        }
-
-        active.update(db).await
     }
 
     /// Parses the challenge points value which is the second
@@ -232,9 +195,11 @@ impl Player {
     ///
     /// `db` The database instance
     /// `id` The ID of the player to find
-    #[inline]
-    pub async fn by_id(db: &DatabaseConnection, id: u32) -> DbResult<Option<Self>> {
-        players::Entity::find_by_id(id).one(db).await
+    pub fn by_id<'a>(
+        db: &'a DatabaseConnection,
+        id: u32,
+    ) -> impl Future<Output = DbResult<Option<Player>>> + Send + 'a {
+        players::Entity::find_by_id(id).one(db)
     }
 
     /// Attempts to find a player with the provided email. Conditional
@@ -242,32 +207,13 @@ impl Player {
     ///
     /// `email`  The email address to search for
     /// `origin` Whether to check for origin accounts or normal accounts
-    pub async fn by_email(
-        db: &DatabaseConnection,
+    pub fn by_email<'a>(
+        db: &'a DatabaseConnection,
         email: &str,
-        origin: bool,
-    ) -> DbResult<Option<Self>> {
-        players::Entity::find()
-            .filter(
-                players::Column::Email
-                    .eq(email)
-                    .and(players::Column::Origin.eq(origin)),
-            )
-            .one(db)
-            .await
-    }
-
-    /// Checks whether the provided email address is taken by any
-    /// accounts in the database including origin accounts.
-    ///
-    /// `db`    The datbase connection
-    /// `email` The email to check for
-    pub async fn is_email_taken(db: &DatabaseConnection, email: &str) -> DbResult<bool> {
+    ) -> impl Future<Output = DbResult<Option<Player>>> + Send + 'a {
         players::Entity::find()
             .filter(players::Column::Email.eq(email))
             .one(db)
-            .await
-            .map(|value| value.is_some())
     }
 
     /// Determines whether the current player has permission to
@@ -292,17 +238,21 @@ impl Player {
         password: String,
     ) -> DbFuture<'a, Player> {
         let mut model = self.into_active_model();
-        model.password = Set(password);
+        model.password = Set(Some(password));
         model.update(db)
     }
 
-    /// Updates whether the account is an Origin account or not
+    /// Sets the role of the provided player
     ///
-    /// `db`     The database connection
-    /// `origin` Whether the account is an origin account
-    pub fn set_origin<'a>(self, db: &'a DatabaseConnection, origin: bool) -> DbFuture<'a, Player> {
+    /// `db`   The database connection
+    /// `role` The new role for the player
+    pub fn set_role<'a>(
+        self,
+        db: &'a DatabaseConnection,
+        role: PlayerRole,
+    ) -> DbFuture<'a, Player> {
         let mut model = self.into_active_model();
-        model.origin = Set(origin);
+        model.role = Set(role);
         model.update(db)
     }
 

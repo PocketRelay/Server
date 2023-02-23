@@ -185,13 +185,18 @@ async fn handle_login_email(
     }
 
     // Find a non origin player with that email
-    let player: Player = Player::by_email(db, email, false)
+    let player: Player = Player::by_email(db, email)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::EmailNotFound)?;
 
+    let player_password = match &player.password {
+        Some(value) => value,
+        None => return Err(ServerError::InvalidAccount),
+    };
+
     // Ensure passwords match
-    if !verify_password(password, &player.password) {
+    if !verify_password(password, player_password) {
         return Err(ServerError::WrongPassword);
     }
 
@@ -231,7 +236,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
     };
 
     // Lookup the player details to see if the player exists
-    let player: Option<Player> = Player::by_email(db, &details.email, true)
+    let player: Option<Player> = Player::by_email(db, &details.email)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?;
 
@@ -239,10 +244,9 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
         return Ok(player);
     }
 
-    let player: Player =
-        Player::create(db, details.email, details.display_name, String::new(), true)
-            .await
-            .map_err(|_| ServerError::ServerUnavailable)?;
+    let player: Player = Player::create(db, details.email, details.display_name, None)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?;
 
     // Early return created player if origin fetching is disabled
     if !flow.data {
@@ -440,11 +444,11 @@ async fn handle_create_account(
 
     let db = GlobalState::database();
 
-    match Player::is_email_taken(&db, &email).await {
+    match Player::by_email(&db, &email).await {
         // Continue normally for non taken emails
-        Ok(false) => {}
+        Ok(None) => {}
         // Handle email address is already in use
-        Ok(true) => return Err(ServerError::EmailAlreadyInUse),
+        Ok(Some(_)) => return Err(ServerError::EmailAlreadyInUse),
         // Handle database error while checking taken
         Err(err) => {
             error!("Unable to check if email '{email}' is already taken: {err:?}");
@@ -465,14 +469,14 @@ async fn handle_create_account(
     let display_name: String = email.chars().take(99).collect::<String>();
 
     // Create a new player
-    let player: Player =
-        match Player::create(&db, email, display_name, hashed_password, false).await {
-            Ok(value) => value,
-            Err(err) => {
-                error!("Failed to create player: {err:?}");
-                return Err(ServerError::ServerUnavailable);
-            }
-        };
+    let player: Player = match Player::create(&db, email, display_name, Some(hashed_password)).await
+    {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to create player: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down

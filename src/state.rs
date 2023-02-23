@@ -1,5 +1,6 @@
 use crate::{env, services::Services};
-use database::{self, DatabaseConnection, DatabaseType};
+use database::{self, DatabaseConnection, DatabaseType, Player, PlayerRole};
+use log::{error, info};
 use tokio::join;
 
 /// Global state that is shared throughout the application this
@@ -37,7 +38,43 @@ impl GlobalState {
             );
             DatabaseType::MySQL(url)
         };
-        database::connect(ty).await
+        let db = database::connect(ty).await;
+        Self::init_database_admin(&db).await;
+        db
+    }
+
+    /// Initializes the database super admin account using the
+    /// admin email stored within the environment variables if
+    /// one is present
+    ///
+    /// `db` The database connection
+    async fn init_database_admin(db: &DatabaseConnection) {
+        let admin_email = match std::env::var(env::SUPER_ADMIN_EMAIL) {
+            Ok(value) => value,
+            Err(_) => {
+                info!(
+                    "{} not set will not assign super admin to any accounts.",
+                    env::SUPER_ADMIN_EMAIL
+                );
+                return;
+            }
+        };
+
+        let player = match Player::by_email(db, &admin_email).await {
+            // Player exists
+            Ok(Some(value)) => value,
+            // Player doesn't exist yet
+            Ok(None) => return,
+            // Encountered an error
+            Err(err) => {
+                error!("Failed to find player to provide super admin: {:?}", err);
+                return;
+            }
+        };
+
+        if let Err(err) = player.set_role(db, PlayerRole::SuperAdmin).await {
+            error!("Failed to assign super admin role: {:?}", err);
+        }
     }
 
     /// Obtains a database connection by cloning the global

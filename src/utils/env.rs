@@ -36,6 +36,8 @@ pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
 
 pub const API: (&str, bool) = ("PR_API", false);
 
+pub const SUPER_ADMIN_EMAIL: &str = "PR_SUPER_ADMIN_EMAIL";
+
 #[inline]
 pub fn env(pair: (&str, &str)) -> String {
     std::env::var(pair.0).unwrap_or_else(|_| pair.1.to_string())

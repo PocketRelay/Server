@@ -27,6 +27,10 @@ pub enum AuthError {
     ServerError,
     #[error("The provided credentials are invalid")]
     InvalidCredentails,
+    #[error(
+        "The provided email is for an origin account without a password ask an Admin to set one"
+    )]
+    OriginAccess,
 }
 
 #[derive(Deserialize, Validate)]
@@ -46,12 +50,17 @@ pub struct TokenResponse {
 /// Route for logging into a non origin account
 async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, AuthError> {
     let db = GlobalState::database();
-    let player = Player::by_email(&db, &req.email, false)
+    let player = Player::by_email(&db, &req.email)
         .await
         .map_err(|_| AuthError::ServerError)?
         .ok_or(AuthError::InvalidCredentails)?;
 
-    if !verify_password(&req.password, &player.password) {
+    let password = match &player.password {
+        Some(value) => value,
+        None => return Err(AuthError::OriginAccess),
+    };
+
+    if !verify_password(&req.password, password) {
         return Err(AuthError::InvalidCredentails);
     }
 
@@ -69,7 +78,7 @@ impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             AuthError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
-            AuthError::InvalidCredentails => StatusCode::UNAUTHORIZED,
+            AuthError::InvalidCredentails | AuthError::OriginAccess => StatusCode::UNAUTHORIZED,
         };
 
         (status_code, self.to_string()).into_response()

@@ -15,11 +15,9 @@ pub struct Model {
     pub email: String,
     /// Display name / Username of the player
     pub display_name: String,
-    /// Flag for whether the account is created from origin
-    pub origin: bool,
     /// Hashed password which is omitted from serialization
     #[serde(skip)]
-    pub password: String,
+    pub password: Option<String>,
     /// The role of the player
     pub role: PlayerRole,
 }
