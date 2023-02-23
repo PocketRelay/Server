@@ -4,20 +4,23 @@ use crate::{
         middleware::auth::{AdminAuth, Auth},
     },
     state::GlobalState,
-    utils::{hashing::hash_password, types::PlayerID},
+    utils::{
+        hashing::{hash_password, verify_password},
+        types::PlayerID,
+    },
 };
 use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, put},
     Json, Router,
 };
 use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData};
+use log::error;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use std::fmt::Display;
 use validator::validate_email;
-
 /// Router function creates a new router with all the underlying
 /// routes for this file.
 ///
@@ -25,7 +28,12 @@ use validator::validate_email;
 pub fn router() -> Router {
     Router::new()
         .route("/", get(get_players))
-        .route("/self", get(get_self))
+        .nest(
+            "/self",
+            Router::new()
+                .route("", get(get_self))
+                .route("password", put(update_password)),
+        )
         .route(
             "/:id",
             get(get_player).put(modify_player).delete(delete_player),
@@ -55,12 +63,16 @@ enum PlayersError {
     DataNotFound,
     /// The account doesn't have permission to complete the action
     InvalidPermission,
+    /// Invalid current password was provided when attempting
+    /// to update the account password
+    InvalidPassword,
 }
 
 /// Type alias for players result responses which wraps the provided type in
 /// a result where the success is wrapped in Json and the error type is
 /// PlayersError
-type PlayersResult<T> = Result<Json<T>, PlayersError>;
+type PlayersJsonResult<T> = PlayersResult<Json<T>>;
+type PlayersResult<T> = Result<T, PlayersError>;
 
 /// Attempts to find a player with the provided player ID returning
 /// the PlayerNotFound error if the player didn't exist.
@@ -103,7 +115,7 @@ struct PlayersResponse {
 async fn get_players(
     Query(query): Query<PlayersQuery>,
     _: AdminAuth,
-) -> PlayersResult<PlayersResponse> {
+) -> PlayersJsonResult<PlayersResponse> {
     const DEFAULT_COUNT: u8 = 20;
     const DEFAULT_OFFSET: u16 = 0;
 
@@ -125,10 +137,56 @@ async fn get_self(auth: Auth) -> Json<Player> {
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find
-async fn get_player(Path(player_id): Path<PlayerID>, _: AdminAuth) -> PlayersResult<Player> {
+async fn get_player(Path(player_id): Path<PlayerID>, _: AdminAuth) -> PlayersJsonResult<Player> {
     let db = GlobalState::database();
     let player = find_player(&db, player_id).await?;
     Ok(Json(player))
+}
+
+/// Request to update the password of the current user account
+#[derive(Deserialize)]
+struct UpdatePasswordRequest {
+    /// The current password for the account
+    current_password: String,
+    /// The new account password
+    new_password: String,
+}
+
+/// PUT /api/players/self/password
+///
+/// Route for updating the password of the authenticated account
+/// takes the current account password and the new account password
+/// as the request data
+async fn update_password(
+    auth: Auth,
+    Json(req): Json<UpdatePasswordRequest>,
+) -> PlayersResult<StatusCode> {
+    // Obtain the player from auth
+    let player = auth.into_inner();
+
+    // Compare the existing passwords
+    if !verify_password(&req.current_password, &player.password) {
+        return Err(PlayersError::InvalidPassword);
+    }
+
+    let password = match hash_password(&req.new_password) {
+        Ok(value) => value,
+        Err(_) => {
+            // This block shouldn't ever be encounted with the current alg
+            // but is handled anyway
+            return Err(PlayersError::ServerError);
+        }
+    };
+
+    // Update the password
+    let db = GlobalState::database();
+    if let Err(err) = player.set_password(&db, password).await {
+        error!("Failed to update player password: {:?}", err);
+        return Err(PlayersError::ServerError);
+    }
+
+    // Ok status code indicating updated
+    Ok(StatusCode::OK)
 }
 
 /// Request structure for a request to modify a player entity
@@ -155,7 +213,7 @@ async fn modify_player(
     Path(player_id): Path<PlayerID>,
     _: AdminAuth,
     Json(req): Json<ModifyPlayerRequest>,
-) -> PlayersResult<Player> {
+) -> PlayersJsonResult<Player> {
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
 
@@ -244,7 +302,10 @@ impl Serialize for PlayerDataMap {
 /// matches the provided {id}
 ///
 /// `path` The route path with the ID for the player to find the classes for
-async fn all_data(Path(player_id): Path<PlayerID>, _: AdminAuth) -> PlayersResult<PlayerDataMap> {
+async fn all_data(
+    Path(player_id): Path<PlayerID>,
+    _: AdminAuth,
+) -> PlayersJsonResult<PlayerDataMap> {
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
     let data = Player::all_data(player.id, &db).await?;
@@ -254,7 +315,7 @@ async fn all_data(Path(player_id): Path<PlayerID>, _: AdminAuth) -> PlayersResul
 async fn get_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: Auth,
-) -> PlayersResult<PlayerData> {
+) -> PlayersJsonResult<PlayerData> {
     let auth = auth.into_inner();
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
@@ -286,7 +347,7 @@ async fn set_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: AdminAuth,
     Json(req): Json<SetDataRequest>,
-) -> PlayersResult<PlayerData> {
+) -> PlayersJsonResult<PlayerData> {
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
@@ -308,7 +369,7 @@ async fn set_data(
 async fn delete_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: AdminAuth,
-) -> PlayersResult<()> {
+) -> PlayersJsonResult<()> {
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
@@ -330,7 +391,7 @@ async fn delete_data(
 async fn get_player_gaw(
     Path(player_id): Path<PlayerID>,
     _: AdminAuth,
-) -> PlayersResult<GalaxyAtWar> {
+) -> PlayersJsonResult<GalaxyAtWar> {
     let db = GlobalState::database();
     let player = find_player(&db, player_id).await?;
     let galax_at_war = GalaxyAtWar::find_or_create(&db, &player, 0.0).await?;

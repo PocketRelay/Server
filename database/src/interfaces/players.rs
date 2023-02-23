@@ -8,7 +8,7 @@ use sea_orm::{
     ColumnTrait, CursorTrait, DatabaseConnection, DeleteResult, EntityTrait, IntoActiveModel,
     ModelTrait, QueryFilter,
 };
-use std::iter::Iterator;
+use std::{future::Future, iter::Iterator};
 
 impl Player {
     /// Takes all the player models using a cursor starting at the offset row
@@ -268,5 +268,21 @@ impl Player {
             .one(db)
             .await
             .map(|value| value.is_some())
+    }
+
+    /// Updates the password for the provided player returning
+    /// a future resolving to the new player with its updated
+    /// password value
+    ///
+    /// `db`       The database connection to use
+    /// `password` The new hashed password
+    pub fn set_password<'a>(
+        self,
+        db: &'a DatabaseConnection,
+        password: String,
+    ) -> impl Future<Output = DbResult<Player>> + 'a {
+        let mut model = self.into_active_model();
+        model.password = Set(password);
+        model.update(db)
     }
 }
