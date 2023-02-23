@@ -65,6 +65,12 @@ pub fn setup() {
                 .additive(false)
                 .build("pocket_relay", logging_level),
         )
+        .logger(
+            Logger::builder()
+                .appenders(APPENDERS)
+                .additive(false)
+                .build("pocket_relay_database", logging_level),
+        )
         .build(
             Root::builder()
                 .appenders(APPENDERS)
