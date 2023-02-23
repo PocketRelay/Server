@@ -8,7 +8,7 @@ use sea_orm::{
     ColumnTrait, CursorTrait, DatabaseConnection, DeleteResult, EntityTrait, IntoActiveModel,
     ModelTrait, QueryFilter,
 };
-use std::{future::Future, iter::Iterator};
+use std::{future::Future, iter::Iterator, pin::Pin};
 
 impl Player {
     /// Takes all the player models using a cursor starting at the offset row
@@ -260,7 +260,7 @@ impl Player {
     /// Checks whether the provided email address is taken by any
     /// accounts in the database including origin accounts.
     ///
-    /// `db`    The datbase instance
+    /// `db`    The datbase connection
     /// `email` The email to check for
     pub async fn is_email_taken(db: &DatabaseConnection, email: &str) -> DbResult<bool> {
         players::Entity::find()
@@ -274,15 +274,42 @@ impl Player {
     /// a future resolving to the new player with its updated
     /// password value
     ///
-    /// `db`       The database connection to use
+    /// `db`       The database connection
     /// `password` The new hashed password
     pub fn set_password<'a>(
         self,
         db: &'a DatabaseConnection,
         password: String,
-    ) -> impl Future<Output = DbResult<Player>> + 'a {
+    ) -> DbFuture<'a, Player> {
         let mut model = self.into_active_model();
         model.password = Set(password);
         model.update(db)
     }
+
+    /// Updates the basic details of the provided player if
+    /// they are provided
+    ///
+    /// `db`       The database connection
+    /// `username` Optional new username for the player
+    /// `email`    Optional new email for the player
+    pub fn set_details<'a>(
+        self,
+        db: &'a DatabaseConnection,
+        username: Option<String>,
+        email: Option<String>,
+    ) -> DbFuture<'a, Player> {
+        let mut model = self.into_active_model();
+
+        if let Some(username) = username {
+            model.display_name = Set(username);
+        }
+
+        if let Some(email) = email {
+            model.email = Set(email)
+        }
+
+        model.update(db)
+    }
 }
+
+type DbFuture<'a, T> = Pin<Box<dyn Future<Output = DbResult<T>> + Send + 'a>>;

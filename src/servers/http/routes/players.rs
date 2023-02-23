@@ -32,7 +32,8 @@ pub fn router() -> Router {
             "/self",
             Router::new()
                 .route("", get(get_self))
-                .route("password", put(update_password)),
+                .route("password", put(update_password))
+                .route("details", put(update_details)),
         )
         .route(
             "/:id",
@@ -141,6 +142,76 @@ async fn get_player(Path(player_id): Path<PlayerID>, _: AdminAuth) -> PlayersJso
     let db = GlobalState::database();
     let player = find_player(&db, player_id).await?;
     Ok(Json(player))
+}
+
+/// Request to update the basic details of the currently
+/// authenticated account
+///
+/// Will ignore the fields that already match the current
+/// account details
+#[derive(Deserialize)]
+struct UpdateDetailsRequest {
+    /// The new or current username
+    username: String,
+    /// The new or current email
+    email: String,
+}
+
+/// PUT /api/players/self/details
+///
+/// Route for updating the basic account details for the
+/// currenlty authenticated account. WIll ignore any fields
+/// that are already up to date
+async fn update_details(
+    auth: Auth,
+    Json(req): Json<UpdateDetailsRequest>,
+) -> PlayersResult<StatusCode> {
+    // Obtain the player from auth
+    let player = auth.into_inner();
+
+    if !validate_email(&req.email) {
+        return Err(PlayersError::InvalidEmail);
+    }
+
+    let db = GlobalState::database();
+
+    // Decide whether to update the account email based on whether
+    // it has been changed
+    let email = if player.email == req.email {
+        None
+    } else {
+        // Check if the email is already taken
+        let is_taken = match Player::is_email_taken(&db, &req.email).await {
+            Ok(value) => value,
+            Err(err) => {
+                error!("Failed to check if email address is taken: {:?}", err);
+                return Err(PlayersError::ServerError);
+            }
+        };
+
+        if is_taken {
+            return Err(PlayersError::EmailTaken);
+        }
+
+        Some(req.email)
+    };
+    // Decide whether to update the account username based on
+    // whether it has been changed
+    let username = if player.display_name == req.username {
+        None
+    } else {
+        Some(req.username)
+    };
+
+    // Update the details
+    let db = GlobalState::database();
+    if let Err(err) = player.set_details(&db, username, email).await {
+        error!("Failed to update player password: {:?}", err);
+        return Err(PlayersError::ServerError);
+    }
+
+    // Ok status code indicating updated
+    Ok(StatusCode::OK)
 }
 
 /// Request to update the password of the current user account
