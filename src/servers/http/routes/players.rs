@@ -217,7 +217,7 @@ async fn attempt_set_details(
     let email = if player.email == req.email {
         None
     } else {
-        let is_taken = match Player::by_email(&db, &req.email).await {
+        match Player::by_email(&db, &req.email).await {
             Ok(None) => {}
             // Error if email is taken
             Ok(Some(_)) => return Err(PlayersError::EmailTaken),
