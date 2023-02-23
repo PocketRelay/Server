@@ -21,6 +21,7 @@ use log::error;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use std::fmt::Display;
 use validator::validate_email;
+
 /// Router function creates a new router with all the underlying
 /// routes for this file.
 ///

@@ -5,7 +5,7 @@ use crate::{state::GlobalState, utils::hashing::verify_password};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::post,
     Json, Router,
 };
 use database::Player;
@@ -18,7 +18,7 @@ use validator::Validate;
 ///
 /// Prefix: /api/auth
 pub fn router() -> Router {
-    Router::new().route("/login", get(login))
+    Router::new().route("/login", post(login))
 }
 
 #[derive(Debug, Error)]
