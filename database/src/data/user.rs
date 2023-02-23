@@ -4,7 +4,7 @@ use serde::Serialize;
 /// Enum for the different roles that a player could have used to
 /// determine their permissions to access different server
 /// functionality
-#[derive(Serialize, Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
+#[derive(Serialize, Debug, Clone, PartialEq, PartialOrd, Ord, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "u8", db_type = "TinyUnsigned")]
 #[repr(u8)]
 pub enum PlayerRole {
