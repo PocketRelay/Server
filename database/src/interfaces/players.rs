@@ -29,7 +29,7 @@ impl Player {
             .first(count + 1)
             .all(db)
             .await?;
-        let is_more = values.len() == (count + 1) as usize;
+        let is_more = values.len() as u64 == count + 1;
         if is_more {
             // Pop the value being used to determine the leftover size
             values.pop();
@@ -92,31 +92,29 @@ impl Player {
         key: String,
         value: String,
     ) -> DbResult<PlayerData> {
-        match player_data::Entity::find()
+        let existing = player_data::Entity::find()
             .filter(
                 player_data::Column::PlayerId
                     .eq(id)
                     .and(player_data::Column::Key.eq(&key as &str)),
             )
             .one(db)
-            .await?
-        {
-            Some(player_data) => {
-                let mut model = player_data.into_active_model();
-                model.key = Set(key);
-                model.value = Set(value);
-                model.update(db).await
+            .await?;
+
+        if let Some(player_data) = existing {
+            let mut model = player_data.into_active_model();
+            model.key = Set(key);
+            model.value = Set(value);
+            model.update(db).await
+        } else {
+            player_data::ActiveModel {
+                player_id: Set(id),
+                key: Set(key),
+                value: Set(value),
+                ..Default::default()
             }
-            None => {
-                player_data::ActiveModel {
-                    player_id: Set(id),
-                    key: Set(key),
-                    value: Set(value),
-                    ..Default::default()
-                }
-                .insert(db)
-                .await
-            }
+            .insert(db)
+            .await
         }
     }
 
