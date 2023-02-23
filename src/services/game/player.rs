@@ -1,6 +1,6 @@
 use super::models::PlayerState;
 use crate::{
-    servers::main::session::{SessionLink, SetGameMessage},
+    servers::main::session::{Session, SetGameMessage},
     utils::{
         components::{Components, UserSessions},
         models::NetData,
@@ -9,6 +9,7 @@ use crate::{
 };
 use blaze_pk::{codec::Encodable, packet::Packet, tag::TdfType, writer::TdfWriter};
 use database::Player;
+use interlink::prelude::Link;
 use serde::Serialize;
 
 pub struct GamePlayer {
@@ -19,7 +20,7 @@ pub struct GamePlayer {
     /// Session player
     pub player: Player,
     /// Session address
-    pub addr: SessionLink,
+    pub link: Link<Session>,
     /// Networking information for the player
     pub net: NetData,
     /// State of the game player
@@ -44,11 +45,11 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(session_id: SessionID, player: Player, net: NetData, addr: SessionLink) -> Self {
+    pub fn new(session_id: SessionID, player: Player, net: NetData, link: Link<Session>) -> Self {
         Self {
             session_id,
             player,
-            addr,
+            link,
             net,
             game_id: 1,
             state: PlayerState::Connecting,
@@ -117,7 +118,7 @@ impl GamePlayer {
 impl Drop for GamePlayer {
     fn drop(&mut self) {
         // Clear player game when game player is dropped
-        let _ = self.addr.link.do_send(SetGameMessage { game: None });
+        let _ = self.link.do_send(SetGameMessage { game: None });
     }
 }
 

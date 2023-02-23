@@ -46,7 +46,7 @@ serde = { workspace = true }
 chrono = { workspace = true }
 
 # Blaze packet system 
-blaze-pk = "^0.9"
+blaze-pk = { version = "^0.9", path = "../BlazePK" }
 # Blaze SSLv3 async TCPStream implementation
 blaze-ssl-async = "^0.3"
 
@@ -72,7 +72,7 @@ thiserror = "1"
 validator = { version = "0.16", features = ["derive"] }
 
 
-interlink = { version = "0.1.1" }
+interlink = { version = "0.1.1", path = "../interlink/interlink" }
 tokio-util = { version = "0.7", features = ["codec"] }
 futures = "0.3"
 

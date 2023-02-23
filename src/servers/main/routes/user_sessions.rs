@@ -5,7 +5,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
-        session::{HardwareFlagMessage, NetworkInfoMessage, SessionLink},
+        session::{HardwareFlagMessage, NetworkInfoMessage, SessionLink, SetPlayerMessage},
     },
     state::GlobalState,
     utils::components::{Components as C, UserSessions as U},
@@ -69,7 +69,11 @@ async fn handle_resume_session(
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down
-    if !session.set_player(player.clone()).await {
+    if session
+        .send(SetPlayerMessage(Some(player.clone())))
+        .await
+        .is_err()
+    {
         return Err(ServerError::ServerUnavailable);
     }
 
@@ -111,7 +115,6 @@ async fn handle_resume_session(
 /// ```
 async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequest) {
     let _ = session
-        .link
         .send(NetworkInfoMessage {
             groups: req.address,
             qos: req.qos,
@@ -130,7 +133,6 @@ async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequ
 /// ```
 async fn handle_update_hardware_flag(session: &mut SessionLink, req: HardwareFlagRequest) {
     let _ = session
-        .link
         .send(HardwareFlagMessage {
             value: req.hardware_flag,
         })

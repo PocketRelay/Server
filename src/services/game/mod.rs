@@ -1,6 +1,6 @@
 use self::rules::RuleSet;
 use crate::{
-    servers::main::session::{DetailsMessage, SetGameMessage},
+    servers::main::session::{DetailsMessage, PushExt, SetGameMessage},
     utils::{
         components::{Components, GameManager, UserSessions},
         types::{GameID, GameSlot, PlayerID, SessionID},
@@ -268,7 +268,7 @@ impl Game {
     fn push_all(&self, packet: &Packet) {
         self.players
             .iter()
-            .for_each(|value| value.addr.push(packet.clone()));
+            .for_each(|value| value.link.push(packet.clone()));
     }
 
     /// Sends a notification packet to all the connected session
@@ -303,12 +303,12 @@ impl Game {
     fn update_clients(&self, player: &GamePlayer) {
         debug!("Updating clients with new session details");
         self.players.iter().for_each(|value| {
-            let addr1 = player.addr.clone();
-            let addr2 = value.addr.clone();
+            let addr1 = player.link.clone();
+            let addr2 = value.link.clone();
 
             // Queue the session details to be sent to this client
-            let _ = player.addr.link.do_send(DetailsMessage { link: addr2 });
-            let _ = value.addr.link.do_send(DetailsMessage { link: addr1 });
+            let _ = player.link.do_send(DetailsMessage { link: addr2 });
+            let _ = value.link.do_send(DetailsMessage { link: addr1 });
         });
     }
 
@@ -321,7 +321,7 @@ impl Game {
         self.notify_game_setup(&player, slot);
 
         // Set current game of this player
-        let _ = player.addr.link.do_send(SetGameMessage {
+        let _ = player.link.do_send(SetGameMessage {
             game: Some(self.id),
         });
 
@@ -369,7 +369,7 @@ impl Game {
             PlayerJoining { slot, player },
         );
         self.push_all(&packet);
-        player.addr.push(packet);
+        player.link.push(packet);
     }
 
     /// Notifies the provided player that the game has been setup and
@@ -392,7 +392,7 @@ impl Game {
             },
         );
 
-        player.addr.push(packet);
+        player.link.push(packet);
     }
 
     /// Sets the state for the provided session notifying all
@@ -496,7 +496,7 @@ impl Game {
         };
 
         // Set current game of this player
-        let _ = player.addr.link.do_send(SetGameMessage { game: None });
+        let _ = player.link.do_send(SetGameMessage { game: None });
 
         self.notify_player_removed(&player, reason);
         self.notify_fetch_data(&player);
@@ -533,7 +533,7 @@ impl Game {
             },
         );
         self.push_all(&packet);
-        player.addr.push(packet);
+        player.link.push(packet);
     }
 
     /// Notifies all the sessions in the game to fetch the player data
@@ -559,7 +559,7 @@ impl Game {
                     player_id: other_player.player.id,
                 },
             );
-            player.addr.push(packet)
+            player.link.push(packet)
         }
     }
 

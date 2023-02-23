@@ -4,7 +4,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             util::*,
         },
-        session::{DetailsMessage, SessionLink},
+        session::{DetailsMessage, GetPlayerIdMessage, SessionLink},
     },
     state::GlobalState,
     utils::{
@@ -18,6 +18,7 @@ use base64ct::{Base64, Encoding};
 use blaze_pk::{router::Router, types::TdfMap};
 use database::{Player, PlayerData};
 use flate2::{write::ZlibEncoder, Compression};
+use interlink::prelude::Link;
 use log::{error, warn};
 use rust_embed::RustEmbed;
 use std::{
@@ -118,13 +119,14 @@ async fn handle_pre_auth() -> PreAuthResponse {
 /// ```
 async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthResponse> {
     let player_id = session
-        .get_player_id()
+        .send(GetPlayerIdMessage)
         .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     // Queue the session details to be sent to this client
-    let _ = session.link.do_send(DetailsMessage {
-        link: session.clone(),
+    let _ = session.do_send(DetailsMessage {
+        link: Link::clone(&*session),
     });
 
     Ok(PostAuthResponse {
@@ -544,8 +546,9 @@ async fn handle_user_settings_save(
     req: SettingsSaveRequest,
 ) -> ServerResult<()> {
     let player = session
-        .get_player_id()
+        .send(GetPlayerIdMessage)
         .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let db = GlobalState::database();
@@ -567,8 +570,9 @@ async fn handle_user_settings_save(
 /// ```
 async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<SettingsResponse> {
     let player = session
-        .get_player_id()
+        .send(GetPlayerIdMessage)
         .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let db = GlobalState::database();

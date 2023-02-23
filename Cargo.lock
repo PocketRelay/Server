@@ -219,12 +219,20 @@ dependencies = [
 [[package]]
 name = "blaze-pk"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1793fd7a0fd957d4249db11de0878617051aab2d15edbc2e02f4793e9042651"
 dependencies = [
+ "blaze-pk-derive",
  "bytes",
  "serde",
  "tokio-util",
+]
+
+[[package]]
+name = "blaze-pk-derive"
+version = "0.1.0"
+dependencies = [
+ "darling",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -948,10 +956,9 @@ dependencies = [
 [[package]]
 name = "interlink"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e471e7631f5eda56798649c2255fb36e579bdc2005e3e7eaa85b5e0f744e7e75"
 dependencies = [
- "futures-util",
+ "futures-core",
+ "futures-sink",
  "interlink-derive",
  "tokio",
 ]
@@ -959,8 +966,6 @@ dependencies = [
 [[package]]
 name = "interlink-derive"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21fe40b60b29c6ec830315a783f9b5df9d4913704a0f1f906308c69bc23e80eb"
 dependencies = [
  "darling",
  "quote",

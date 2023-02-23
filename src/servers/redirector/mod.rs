@@ -55,8 +55,6 @@ pub async fn start_server() {
 /// The timeout before idle redirector connections are terminated
 /// (1 minutes before disconnect timeout)
 static DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
-/// The component to look for when waiting for redirects
-const REDIRECT_COMPONENT: Components = Components::Redirector(Redirector::GetServerInstance);
 
 /// Handles dealing with a redirector client
 ///
@@ -89,9 +87,16 @@ async fn handle_client(accept: BlazeAccept) -> io::Result<()> {
             None => break,
         };
 
-        let component = Components::from_header(&packet.header);
+        let component = match Components::from_header(&packet.header) {
+            Some(value) => value,
+            // Don't know the component type send an empty response
+            None => {
+                framed.send(packet.respond_empty()).await?;
+                continue;
+            }
+        };
 
-        if component == REDIRECT_COMPONENT {
+        if let Components::Redirector(Redirector::GetServerInstance) = component {
             debug!("Redirecting client (Addr: {addr:?})");
 
             let host = env::EXTERNAL_HOST;

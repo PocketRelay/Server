@@ -115,7 +115,7 @@ async fn handle_leaderboard_entity_count(
 ///
 /// `name`  The name of the leaderboard
 /// `query` The query to resolve
-async fn handle_leaderboard_query<R: Decodable>(
+async fn handle_leaderboard_query<R: Decodable + Send + 'static>(
     name: &str,
     query: LQuery,
     req: &Request<R>,

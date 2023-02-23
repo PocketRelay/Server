@@ -6,7 +6,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             game_manager::*,
         },
-        session::SessionLink,
+        session::{GetGamePlayerMessage, GetIdMessage, SessionLink},
     },
     services::game::{
         manager::{
@@ -104,8 +104,9 @@ async fn handle_create_game(
     req: CreateGameRequest,
 ) -> ServerResult<CreateGameResponse> {
     let player: GamePlayer = session
-        .try_into_player()
+        .send(GetGamePlayerMessage)
         .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
     let services = GlobalState::services();
 
@@ -275,9 +276,9 @@ async fn handle_update_mesh_connection(
     session: &mut SessionLink,
     req: UpdateMeshRequest,
 ) -> ServerResult<()> {
-    let id = match session.id().await {
-        Some(value) => value,
-        None => return Err(ServerError::ServerUnavailable),
+    let id = match session.send(GetIdMessage).await {
+        Ok(value) => value,
+        Err(_) => return Err(ServerError::ServerUnavailable),
     };
 
     let target = match req.target {
@@ -437,8 +438,9 @@ async fn handle_start_matchmaking(
     req: MatchmakingRequest,
 ) -> ServerResult<MatchmakingResponse> {
     let player: GamePlayer = session
-        .try_into_player()
+        .send(GetGamePlayerMessage)
         .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let session_id = player.session_id;
@@ -488,7 +490,6 @@ async fn handle_start_matchmaking(
 /// ```
 async fn handle_cancel_matchmaking(session: &mut SessionLink) {
     session
-        .link
         .exec(|session, _| {
             session.remove_games();
         })

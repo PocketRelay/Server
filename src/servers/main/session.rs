@@ -1,7 +1,7 @@
 //! Sessions are client connections to the main server with associated
 //! data such as player data for when they become authenticated and
 //! networking data.
-use super::models::errors::{ServerError, ServerResult};
+
 use super::router;
 use crate::services::game::manager::RemovePlayerMessage;
 use crate::services::game::matchmaking::RemoveQueueMessage;
@@ -17,11 +17,9 @@ use crate::{
     },
 };
 use blaze_pk::packet::PacketDebug;
+use blaze_pk::packet::{Packet, PacketComponents};
+use blaze_pk::router::HandleError;
 use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
-use blaze_pk::{
-    packet::{Packet, PacketComponents},
-    router::State,
-};
 use database::Player;
 use interlink::prelude::*;
 use log::{debug, error, log_enabled};
@@ -43,7 +41,7 @@ pub struct Session {
 
     /// If the session is authenticated it will have a linked
     /// player model from the database
-    pub player: Option<Player>,
+    player: Option<Player>,
 
     /// Networking information
     net: NetData,
@@ -59,90 +57,120 @@ impl Service for Session {
     }
 }
 
-/// Wrapper over the standard interlink link type
-/// to provide extra session functionality and to
-/// allow it to be used as State
-#[derive(Clone)]
-pub struct SessionLink {
-    pub link: Link<Session>,
-}
+pub type SessionLink = Link<Session>;
 
-impl State for SessionLink {}
+#[derive(Message)]
+#[msg(rtype = "Option<Player>")]
+pub struct GetPlayerMessage;
 
-impl SessionLink {
-    pub fn push(&self, packet: Packet) {
-        self.link.do_send(PacketMessage::Write(packet)).ok();
-    }
+impl Handler<GetPlayerMessage> for Session {
+    type Response = Mr<GetPlayerMessage>;
 
-    pub async fn try_into_player(&self) -> Option<GamePlayer> {
-        self.link
-            .exec(|service, ctx| {
-                let player = service.player.clone()?;
-                Some(GamePlayer::new(
-                    service.id,
-                    player,
-                    service.net.clone(),
-                    SessionLink { link: ctx.link() },
-                ))
-            })
-            .await
-            .ok()
-            .flatten()
-    }
-
-    /// Attempts to set the current player will return true if successful
-    /// or false if the sesson is terminated or another error occurs
-    ///
-    /// `player` The player to set for this session
-    pub async fn set_player(&self, player: Player) -> bool {
-        self.link
-            .exec(|session, _| {
-                session.player = Some(player);
-            })
-            .await
-            .is_ok()
-    }
-
-    pub async fn get_player(&self) -> ServerResult<Option<Player>> {
-        self.link
-            .exec(|session, _| session.player.clone())
-            .await
-            .map_err(|_| ServerError::ServerUnavailable)
-    }
-
-    pub async fn get_player_id(&self) -> Option<u32> {
-        self.link
-            .exec(|session, _| session.player.as_ref().map(|value| value.id))
-            .await
-            .ok()
-            .flatten()
-    }
-    pub async fn id(&self) -> Option<u32> {
-        self.link.exec(|session, _| session.id).await.ok()
-    }
-
-    pub async fn socket_addr(&self) -> Option<SocketAddr> {
-        self.link.exec(|session, _| session.socket_addr).await.ok()
+    fn handle(
+        &mut self,
+        _msg: GetPlayerMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        Mr(self.player.clone())
     }
 }
 
 #[derive(Message)]
-enum PacketMessage {
-    /// Queues a packet to be written to the outbound queue
-    Write(Packet),
-}
+#[msg(rtype = "Option<u32>")]
+pub struct GetPlayerIdMessage;
 
-impl Handler<PacketMessage> for Session {
-    type Response = ();
+impl Handler<GetPlayerIdMessage> for Session {
+    type Response = Mr<GetPlayerIdMessage>;
 
     fn handle(
         &mut self,
-        msg: PacketMessage,
+        _msg: GetPlayerIdMessage,
         _ctx: &mut ServiceContext<Self>,
-    ) -> <PacketMessage as Message>::Response {
-        match msg {
-            PacketMessage::Write(packet) => self.push(packet),
-        }
+    ) -> Self::Response {
+        Mr(self.player.as_ref().map(|value| value.id))
+    }
+}
+
+#[derive(Message)]
+#[msg(rtype = "Option<GamePlayer>")]
+pub struct GetGamePlayerMessage;
+
+impl Handler<GetGamePlayerMessage> for Session {
+    type Response = Mr<GetGamePlayerMessage>;
+    fn handle(
+        &mut self,
+        _msg: GetGamePlayerMessage,
+        ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let player = match self.player.clone() {
+            Some(value) => value,
+            None => return Mr(None),
+        };
+        Mr(Some(GamePlayer::new(
+            self.id,
+            player,
+            self.net.clone(),
+            ctx.link(),
+        )))
+    }
+}
+
+#[derive(Message)]
+pub struct SetPlayerMessage(pub Option<Player>);
+
+impl Handler<SetPlayerMessage> for Session {
+    type Response = ();
+    fn handle(&mut self, msg: SetPlayerMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        self.player = msg.0;
+    }
+}
+
+#[derive(Message)]
+#[msg(rtype = "SocketAddr")]
+pub struct GetSocketMessage;
+
+impl Handler<GetSocketMessage> for Session {
+    type Response = Mr<GetSocketMessage>;
+
+    fn handle(
+        &mut self,
+        _msg: GetSocketMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        Mr(self.socket_addr)
+    }
+}
+
+/// Extension for links to push packets for session links
+pub trait PushExt {
+    fn push(&self, packet: Packet);
+}
+
+impl PushExt for Link<Session> {
+    fn push(&self, packet: Packet) {
+        let _ = self.do_send(WriteMessage(packet));
+    }
+}
+#[derive(Message)]
+#[msg(rtype = "SessionID")]
+pub struct GetIdMessage;
+
+impl Handler<GetIdMessage> for Session {
+    type Response = Mr<GetIdMessage>;
+
+    fn handle(&mut self, _msg: GetIdMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        Mr(self.id)
+    }
+}
+
+#[derive(Message)]
+pub struct WriteMessage(pub Packet);
+
+impl Handler<WriteMessage> for Session {
+    type Response = ();
+
+    fn handle(&mut self, msg: WriteMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        self.push(msg.0);
     }
 }
 
@@ -150,17 +178,27 @@ impl StreamHandler<io::Result<Packet>> for Session {
     fn handle(&mut self, msg: io::Result<Packet>, ctx: &mut ServiceContext<Self>) {
         if let Ok(packet) = msg {
             self.debug_log_packet("Read", &packet);
-            let mut addr = SessionLink { link: ctx.link() };
+            let mut addr = ctx.link();
             tokio::spawn(async move {
                 let router = router();
-                match router.handle(&mut addr, packet).await {
-                    Ok(packet) => {
-                        addr.push(packet);
-                    }
+                let response = match router.handle(&mut addr, packet) {
+                    // Await the handler response future
+                    Ok(fut) => fut.await,
+
+                    // Handle any errors that occur
                     Err(err) => {
-                        error!("Error occurred while decoding packet: {:?}", err);
+                        match err {
+                            // No handler set-up just respond with a default empty response
+                            HandleError::MissingHandler(packet) => packet.respond_empty(),
+                            HandleError::Decoding(err) => {
+                                error!("Error while decoding packet: {:?}", err);
+                                return;
+                            }
+                        }
                     }
-                }
+                };
+                // Push the response to the client
+                addr.push(response);
             });
         } else {
             ctx.stop();
@@ -256,7 +294,7 @@ impl Handler<SetGameMessage> for Session {
 /// the provided session link
 #[derive(Message)]
 pub struct DetailsMessage {
-    pub link: SessionLink,
+    pub link: Link<Session>,
 }
 
 impl Handler<DetailsMessage> for Session {
@@ -335,11 +373,15 @@ impl Session {
         let component = Components::from_header(&packet.header);
 
         // Ping messages are ignored from debug logging as they are very frequent
-        let ignored = matches!(
-            component,
-            Components::Util(components::Util::Ping)
-                | Components::Util(components::Util::SuspendUserPing)
-        );
+        let ignored = if let Some(component) = &component {
+            matches!(
+                component,
+                Components::Util(components::Util::Ping)
+                    | Components::Util(components::Util::SuspendUserPing)
+            )
+        } else {false};
+
+
 
         if ignored {
             return;
@@ -378,7 +420,7 @@ impl Session {
 struct SessionPacketDebug<'a> {
     action: &'static str,
     packet: &'a Packet,
-    component: Components,
+    component: Option<Components>,
     session: &'a Session,
 }
 
@@ -398,16 +440,18 @@ impl Debug for SessionPacketDebug<'_> {
             writeln!(f, "Info: ( SID: {})", &self.session.id)?;
         }
 
-        let minified = matches!(
-            component,
-            Components::Authentication(components::Authentication::ListUserEntitlements2)
-                | Components::Util(components::Util::FetchClientConfig)
-                | Components::Util(components::Util::UserSettingsLoadAll)
-        );
+        let minified = if let Some(component) = &self.component {
+            matches!(
+                component,
+                Components::Authentication(components::Authentication::ListUserEntitlements2)
+                    | Components::Util(components::Util::FetchClientConfig)
+                    | Components::Util(components::Util::UserSettingsLoadAll)
+            )
+        } else { false };
 
         PacketDebug {
             packet: self.packet,
-            component,
+            component: component.as_ref(),
             minified,
         }
         .fmt(f)

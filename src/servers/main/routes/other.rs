@@ -1,5 +1,8 @@
 use crate::{
-    servers::main::{models::other::*, session::SessionLink},
+    servers::main::{
+        models::other::*,
+        session::{PushExt, SessionLink},
+    },
     utils::components::{AssociationLists as A, Components as C, GameReporting as G},
 };
 use blaze_pk::{packet::Packet, router::Router};

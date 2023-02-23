@@ -1,8 +1,7 @@
-use blaze_pk::router::Router;
-
 use crate::utils::components::Components;
 
 use super::session::SessionLink;
+use blaze_pk::router::Router;
 
 mod auth;
 mod game_manager;

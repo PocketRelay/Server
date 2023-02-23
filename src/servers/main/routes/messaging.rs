@@ -1,5 +1,8 @@
 use crate::{
-    servers::main::{models::messaging::*, session::SessionLink},
+    servers::main::{
+        models::messaging::*,
+        session::{GetPlayerMessage, GetSocketMessage, PushExt, SessionLink},
+    },
     utils::{
         components::{Components as C, Messaging as M},
         env,
@@ -36,7 +39,7 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// ```
 ///
 async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageResponse {
-    let Ok(Some(player)) = session.get_player().await else {
+    let Ok(Some(player)) = session.send(GetPlayerMessage).await else {
         // Not authenticated return empty count
         return FetchMessageResponse { count: 0 };
     };
@@ -69,7 +72,7 @@ async fn get_menu_message(session: &SessionLink, player_name: &str) -> String {
         message = message.replace("{n}", player_name);
     }
     if message.contains("{ip}") {
-        if let Some(addr) = session.socket_addr().await {
+        if let Ok(addr) = session.send(GetSocketMessage).await {
             message = message.replace("{ip}", &addr.to_string());
         }
     }

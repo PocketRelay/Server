@@ -240,7 +240,7 @@ fn debug_log_packet(packet: &Packet, action: &str) {
     let component = Components::from_header(&packet.header);
     let debug = PacketDebug {
         packet,
-        component: &component,
+        component: component.as_ref(),
         minified: false,
     };
     debug!("\n{}\n{:?}", action, debug);

@@ -4,7 +4,7 @@ use crate::{
             auth::*,
             errors::{ServerError, ServerResult},
         },
-        session::SessionLink,
+        session::{GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage},
     },
     state::GlobalState,
     utils::{
@@ -112,7 +112,11 @@ async fn handle_auth_request(
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down
-    if !session.set_player(player.clone()).await {
+    if session
+        .send(SetPlayerMessage(Some(player.clone())))
+        .await
+        .is_err()
+    {
         return Err(ServerError::ServerUnavailable);
     }
 
@@ -271,13 +275,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
 /// Content: {}
 /// ```
 async fn handle_logout(session: &mut SessionLink) {
-    session
-        .link
-        .exec(|session, _| {
-            session.player = None;
-        })
-        .await
-        .ok();
+    let _ = session.send(SetPlayerMessage(None)).await;
 }
 
 /// Handles list user entitlements 2 responses requests which contains information
@@ -372,8 +370,9 @@ async fn handle_list_entitlements(
 /// ```
 async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<PersonaResponse> {
     let player: Player = session
-        .get_player()
-        .await?
+        .send(GetPlayerMessage)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
     Ok(PersonaResponse { player })
 }
@@ -477,7 +476,11 @@ async fn handle_create_account(
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down
-    if !session.set_player(player.clone()).await {
+    if session
+        .send(SetPlayerMessage(Some(player.clone())))
+        .await
+        .is_err()
+    {
         return Err(ServerError::ServerUnavailable);
     }
 
@@ -591,8 +594,9 @@ async fn handle_legal_content(ty: LegalType) -> LegalContent {
 /// ```
 async fn handle_get_auth_token(session: &mut SessionLink) -> ServerResult<GetTokenResponse> {
     let player_id = session
-        .get_player_id()
+        .send(GetPlayerIdMessage)
         .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
     // Create a new token claim for the player to use with the API
     let services = GlobalState::services();
