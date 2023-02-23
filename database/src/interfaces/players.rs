@@ -270,6 +270,16 @@ impl Player {
             .map(|value| value.is_some())
     }
 
+    /// Determines whether the current player has permission to
+    /// make actions on behalf of the other player. This can
+    /// occur when they are both the same player or the role of
+    /// self is greater than the other role
+    ///
+    /// `other` The player to check for permission over
+    pub fn has_permission_over(&self, other: &Self) -> bool {
+        self.id == other.id || self.role > other.role
+    }
+
     /// Updates the password for the provided player returning
     /// a future resolving to the new player with its updated
     /// password value
@@ -283,6 +293,16 @@ impl Player {
     ) -> DbFuture<'a, Player> {
         let mut model = self.into_active_model();
         model.password = Set(password);
+        model.update(db)
+    }
+
+    /// Updates whether the account is an Origin account or not
+    ///
+    /// `db`     The database connection
+    /// `origin` Whether the account is an origin account
+    pub fn set_origin<'a>(self, db: &'a DatabaseConnection, origin: bool) -> DbFuture<'a, Player> {
+        let mut model = self.into_active_model();
+        model.origin = Set(origin);
         model.update(db)
     }
 

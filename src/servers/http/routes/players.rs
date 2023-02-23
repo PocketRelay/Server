@@ -28,23 +28,18 @@ use validator::validate_email;
 pub fn router() -> Router {
     Router::new()
         .route("/", get(get_players))
-        .nest(
-            "/self",
-            Router::new()
-                .route("", get(get_self))
-                .route("password", put(update_password))
-                .route("details", put(update_details)),
-        )
-        .route(
-            "/:id",
-            get(get_player).put(modify_player).delete(delete_player),
-        )
+        .route("/self", get(get_self))
+        .route("/self/password", put(update_password))
+        .route("/self/details", put(update_details))
+        .route("/:id", get(get_player).delete(delete_player))
         .route("/:id/data", get(all_data))
         .route(
             "/:id/data/:key",
             get(get_data).put(set_data).delete(delete_data),
         )
         .route("/:id/galaxy_at_war", get(get_player_gaw))
+        .route("/:id/password", put(set_password))
+        .route("/:id/details", put(set_details))
 }
 
 /// Enum for errors that could occur when accessing any of
@@ -157,6 +152,32 @@ struct UpdateDetailsRequest {
     email: String,
 }
 
+/// PUT /api/players/:id/details
+///
+/// Admin route for updating the basic details of another
+/// account.
+async fn set_details(
+    Path(player_id): Path<PlayerID>,
+    auth: AdminAuth,
+    Json(req): Json<UpdateDetailsRequest>,
+) -> PlayersResult<StatusCode> {
+    let auth = auth.into_inner();
+
+    // Get the target player
+    let db = GlobalState::database();
+    let player = find_player(&db, player_id).await?;
+
+    // Check modification permission
+    if !auth.has_permission_over(&player) {
+        return Err(PlayersError::InvalidPermission);
+    }
+
+    attempt_set_details(db, player, req).await?;
+
+    // Ok status code indicating updated
+    Ok(StatusCode::OK)
+}
+
 /// PUT /api/players/self/details
 ///
 /// Route for updating the basic account details for the
@@ -174,27 +195,44 @@ async fn update_details(
     }
 
     let db = GlobalState::database();
+    attempt_set_details(db, player, req).await?;
 
+    // Ok status code indicating updated
+    Ok(StatusCode::OK)
+}
+
+/// Attempts to set the details for the provided account using the
+/// provided details request
+///
+/// `db`     The database connection
+/// `player` The player to set the details for
+/// `req`    The update request
+async fn attempt_set_details(
+    db: DatabaseConnection,
+    player: Player,
+    req: UpdateDetailsRequest,
+) -> PlayersResult<()> {
     // Decide whether to update the account email based on whether
     // it has been changed
     let email = if player.email == req.email {
         None
     } else {
-        // Check if the email is already taken
         let is_taken = match Player::is_email_taken(&db, &req.email).await {
             Ok(value) => value,
             Err(err) => {
-                error!("Failed to check if email address is taken: {:?}", err);
+                error!("Failed to check if email is taken: {:?}", err);
                 return Err(PlayersError::ServerError);
             }
         };
 
+        // Error if email is taken
         if is_taken {
             return Err(PlayersError::EmailTaken);
         }
 
         Some(req.email)
     };
+
     // Decide whether to update the account username based on
     // whether it has been changed
     let username = if player.display_name == req.username {
@@ -204,11 +242,43 @@ async fn update_details(
     };
 
     // Update the details
-    let db = GlobalState::database();
     if let Err(err) = player.set_details(&db, username, email).await {
         error!("Failed to update player password: {:?}", err);
         return Err(PlayersError::ServerError);
     }
+
+    Ok(())
+}
+
+/// Request to set the password of another account
+#[derive(Deserialize)]
+struct SetPasswordRequest {
+    /// The new password for the account
+    password: String,
+}
+
+/// PUT /api/players/:id/password
+///
+/// Admin route for setting the password of another account
+/// to the desired password. Requires that the authenticated
+/// account has a higher role than the target account
+async fn set_password(
+    Path(player_id): Path<PlayerID>,
+    auth: AdminAuth,
+    Json(req): Json<SetPasswordRequest>,
+) -> PlayersResult<StatusCode> {
+    let auth = auth.into_inner();
+
+    // Get the target player
+    let db = GlobalState::database();
+    let player = find_player(&db, player_id).await?;
+
+    // Check modification permission
+    if !auth.has_permission_over(&player) {
+        return Err(PlayersError::InvalidPermission);
+    }
+
+    attempt_set_password(db, player, req.password).await?;
 
     // Ok status code indicating updated
     Ok(StatusCode::OK)
@@ -240,7 +310,26 @@ async fn update_password(
         return Err(PlayersError::InvalidPassword);
     }
 
-    let password = match hash_password(&req.new_password) {
+    let db = GlobalState::database();
+    attempt_set_password(db, player, req.new_password).await?;
+
+    // Ok status code indicating updated
+    Ok(StatusCode::OK)
+}
+
+/// Attempts to set hash and the password for
+/// the provided account
+///
+/// `db`       The database connection
+/// `player`   The player to set the password for
+/// `password` The password to set
+async fn attempt_set_password(
+    db: DatabaseConnection,
+    player: Player,
+    password: String,
+) -> PlayersResult<()> {
+    // Hash the new password
+    let password = match hash_password(&password) {
         Ok(value) => value,
         Err(_) => {
             // This block shouldn't ever be encounted with the current alg
@@ -250,85 +339,12 @@ async fn update_password(
     };
 
     // Update the password
-    let db = GlobalState::database();
     if let Err(err) = player.set_password(&db, password).await {
         error!("Failed to update player password: {:?}", err);
         return Err(PlayersError::ServerError);
     }
 
-    // Ok status code indicating updated
-    Ok(StatusCode::OK)
-}
-
-/// Request structure for a request to modify a player entity
-/// edits can range from simple name changes to converting the
-/// profile to a local profile
-#[derive(Deserialize)]
-struct ModifyPlayerRequest {
-    /// Email value
-    email: Option<String>,
-    /// Display name value
-    display_name: Option<String>,
-    /// Origin value
-    origin: Option<bool>,
-    /// Plain text password to be hashed and used
-    password: Option<String>,
-}
-
-/// Route for modifying a player with the provided ID can take multiple
-/// fields to update.
-///
-/// `path` The route path with the ID for the player to find
-/// `req`  The request body
-async fn modify_player(
-    Path(player_id): Path<PlayerID>,
-    _: AdminAuth,
-    Json(req): Json<ModifyPlayerRequest>,
-) -> PlayersJsonResult<Player> {
-    let db = GlobalState::database();
-    let player: Player = find_player(&db, player_id).await?;
-
-    let email = if let Some(email) = req.email {
-        // Ensure the email is valid email format
-        if !validate_email(&email) {
-            return Err(PlayersError::InvalidEmail);
-        }
-
-        // Ignore unchanged email field
-        if email == player.email {
-            None
-        } else {
-            // Ensure the email is not already taken
-            if Player::by_email(&db, &email, player.origin)
-                .await?
-                .is_some()
-            {
-                return Err(PlayersError::EmailTaken);
-            }
-            Some(email)
-        }
-    } else {
-        None
-    };
-
-    // Ignore the display name field if it has not changed
-    let display_name = req
-        .display_name
-        .filter(|value| value.ne(&player.display_name));
-
-    // Hash the password value if it is present
-    let password = if let Some(password) = req.password.as_ref() {
-        let password = hash_password(password).map_err(|_| PlayersError::ServerError)?;
-        Some(password)
-    } else {
-        None
-    };
-
-    let player = player
-        .update_http(&db, email, display_name, req.origin, password)
-        .await?;
-
-    Ok(Json(player))
+    Ok(())
 }
 
 /// Route for deleting a player using its Player ID
