@@ -29,6 +29,7 @@ readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
 # Glob to ensure resources is included 
 include = ["src/**/*"]
+build = "build.rs"
 
 version.workspace = true
 edition.workspace = true
@@ -112,6 +113,10 @@ features = [
     "fixed_window_roller",
     "size_trigger",
 ]
+
+[build-dependencies]
+vergen = "6"
+
 
 [profile.release]
 strip = true
