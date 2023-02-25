@@ -75,6 +75,17 @@ impl LeaderboardGroup {
         Self { expires, values }
     }
 
+    /// Creates a dummy leaderboard group which has no values and
+    /// is already considered to be expired. Used to hand out
+    /// a value while computed to prevent mulitple computes happening
+    pub fn dummy() -> Self {
+        let values = Vec::with_capacity(0);
+        Self {
+            expires: SystemTime::UNIX_EPOCH,
+            values,
+        }
+    }
+
     /// Checks whether this group is expired
     pub fn is_expired(&self) -> bool {
         let now = SystemTime::now();
@@ -132,7 +143,7 @@ impl LeaderboardGroup {
 }
 
 /// Type of leaderboard entity
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq)]
 pub enum LeaderboardType {
     N7Rating,
     ChallengePoints,

@@ -20,7 +20,12 @@ pub mod models;
 #[derive(Service)]
 pub struct Leaderboard {
     /// Map between the group types and the actual leaderboard group content
-    groups: HashMap<LeaderboardType, Arc<LeaderboardGroup>>,
+    groups: HashMap<LeaderboardType, GroupState>,
+}
+
+struct GroupState {
+    computing: bool,
+    group: Arc<LeaderboardGroup>,
 }
 
 /// Message for requesting access to a leaderborad
@@ -29,31 +34,74 @@ pub struct Leaderboard {
 #[msg(rtype = "Arc<LeaderboardGroup>")]
 pub struct QueryMessage(pub LeaderboardType);
 
+/// Message used internally to update group state with
+/// a new group value once a leaderboard has been
+/// computed
+#[derive(Message)]
+struct SetGroupMessage {
+    ty: LeaderboardType,
+    group: Arc<LeaderboardGroup>,
+}
+
+impl Handler<SetGroupMessage> for Leaderboard {
+    type Response = ();
+
+    fn handle(&mut self, msg: SetGroupMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        self.groups.insert(
+            msg.ty,
+            GroupState {
+                computing: false,
+                group: msg.group,
+            },
+        );
+    }
+}
+
 impl Handler<QueryMessage> for Leaderboard {
-    type Response = Sfr<Self, QueryMessage>;
+    type Response = Fr<QueryMessage>;
 
-    fn handle(&mut self, msg: QueryMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        Sfr::new(move |service: &mut Leaderboard, _ctx| {
+    fn handle(&mut self, msg: QueryMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
+        let ty = msg.0;
+
+        // If the group already exists and is not expired we can respond with it
+        if let Some(group) = self.groups.get_mut(&ty) {
+            let inner = &group.group;
+
+            // Response with current values if the group isn't expired or is computing
+            if group.computing || !inner.is_expired() {
+                // Value is not expired respond immediately
+                return Fr::ready(inner.clone());
+            }
+
+            // Mark the group as currently being computed
+            group.computing = true;
+        } else {
+            // Create dummy empty group to hand out while computing
+            let dummy = GroupState {
+                computing: true,
+                group: Arc::new(LeaderboardGroup::dummy()),
+            };
+            self.groups.insert(ty, dummy);
+        }
+
+        let link = ctx.link();
+
+        Fr::new(
             async move {
-                let ty = msg.0;
-
-                // If the group already exists and is not expired we can respond with it
-                if let Some(group) = service.groups.get(&ty) {
-                    if !group.is_expired() {
-                        // Value is not expire respond immediately
-                        return group.clone();
-                    }
-                }
-                // Compute the leaderboard
-                let values = service.compute(&ty).await;
+                // Compute new leaderboard values
+                let values = Self::compute(&ty).await;
                 let group = Arc::new(LeaderboardGroup::new(values));
 
                 // Store the group and respond to the request
-                service.groups.insert(ty, group.clone());
+                let _ = link.do_send(SetGroupMessage {
+                    group: group.clone(),
+                    ty,
+                });
+
                 group
             }
-            .boxed()
-        })
+            .boxed(),
+        )
     }
 }
 
@@ -71,7 +119,7 @@ impl Leaderboard {
     /// on their value.
     ///
     /// `ty` The leaderboard type
-    async fn compute(&self, ty: &LeaderboardType) -> Vec<LeaderboardEntry> {
+    async fn compute(ty: &LeaderboardType) -> Vec<LeaderboardEntry> {
         // The amount of players to process in each database request
         const BATCH_COUNT: u64 = 20;
 
