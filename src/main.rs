@@ -23,7 +23,12 @@ fn main() {
     // Initialize logging
     logging::setup();
 
-    info!("Starting Pocket Relay v{}", env::VERSION);
+    info!(
+        "Starting Pocket Relay v{} ({}/{})",
+        env::VERSION,
+        env::GIT_BRANCH,
+        env::GIT_SHA_SHORT
+    );
 
     // Initialize global state
     runtime.block_on(GlobalState::init());
