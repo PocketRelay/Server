@@ -11,8 +11,8 @@ use crate::{
 use database::{DatabaseConnection, DbResult, Player};
 use futures::FutureExt;
 use interlink::prelude::*;
-use log::error;
-use std::{collections::HashMap, future::Future, sync::Arc};
+use log::{debug, error};
+use std::{collections::HashMap, future::Future, sync::Arc, time::SystemTime};
 use tokio::{task::JoinSet, try_join};
 
 pub mod models;
@@ -120,6 +120,8 @@ impl Leaderboard {
     ///
     /// `ty` The leaderboard type
     async fn compute(ty: &LeaderboardType) -> Vec<LeaderboardEntry> {
+        let start_time = SystemTime::now();
+
         // The amount of players to process in each database request
         const BATCH_COUNT: u64 = 20;
 
@@ -171,6 +173,11 @@ impl Leaderboard {
         for value in &mut values {
             value.rank = rank;
             rank += 1;
+        }
+
+        let end_time = SystemTime::now();
+        if let Ok(duration) = end_time.duration_since(start_time) {
+            debug!("Computed leaderboard took: {}μs", duration.as_micros())
         }
 
         values
