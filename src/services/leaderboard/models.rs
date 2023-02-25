@@ -91,7 +91,7 @@ impl LeaderboardGroup {
         match query {
             LQuery::Normal { start, count } => {
                 // The index to stop at
-                let end_index = count.min(values_len);
+                let end_index = (start + count).min(values_len);
 
                 values
                     .get(start..end_index)
