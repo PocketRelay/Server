@@ -1,5 +1,5 @@
 use crate::{
-    servers::http::middleware::auth::AdminAuth,
+    servers::http::middleware::auth::Auth,
     services::game::{
         manager::{SnapshotMessage, SnapshotQueryMessage},
         GameSnapshot,
@@ -14,6 +14,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use database::PlayerRole;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -63,8 +64,9 @@ struct GamesResponse {
 /// `query` The query containing the offset and count
 async fn get_games(
     Query(query): Query<GamesQuery>,
-    _: AdminAuth,
+    auth: Auth,
 ) -> Result<Json<GamesResponse>, GamesError> {
+    let auth = auth.into_inner();
     /// The default number of games to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 20;
 
@@ -80,6 +82,7 @@ async fn get_games(
         .send(SnapshotQueryMessage {
             offset: start_index,
             count,
+            include_net: auth.role >= PlayerRole::Admin,
         })
         .await
         .map_err(|_| GamesError::Server)?;
@@ -92,12 +95,16 @@ async fn get_games(
 /// `game_id` The ID of the game
 async fn get_game(
     Path(game_id): Path<GameID>,
-    _: AdminAuth,
+    auth: Auth,
 ) -> Result<Json<GameSnapshot>, GamesError> {
+    let auth = auth.into_inner();
     let services = GlobalState::services();
     let games = services
         .game_manager
-        .send(SnapshotMessage { game_id })
+        .send(SnapshotMessage {
+            game_id,
+            include_net: auth.role >= PlayerRole::Admin,
+        })
         .await
         .map_err(|_| GamesError::Server)?
         .ok_or(GamesError::NotFound)?;

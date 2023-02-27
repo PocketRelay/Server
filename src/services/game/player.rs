@@ -35,7 +35,7 @@ pub struct GamePlayerSnapshot {
     pub session_id: SessionID,
     pub player_id: PlayerID,
     pub display_name: String,
-    pub net: NetData,
+    pub net: Option<NetData>,
 }
 
 impl GamePlayer {
@@ -58,12 +58,16 @@ impl GamePlayer {
 
     /// Takes a snapshot of the current player state
     /// for serialization
-    pub fn snapshot(&self) -> GamePlayerSnapshot {
+    pub fn snapshot(&self, include_net: bool) -> GamePlayerSnapshot {
         GamePlayerSnapshot {
             session_id: self.session_id,
             player_id: self.player.id,
             display_name: self.player.display_name.clone(),
-            net: self.net.clone(),
+            net: if include_net {
+                Some(self.net.clone())
+            } else {
+                None
+            },
         }
     }
 

@@ -38,6 +38,8 @@ impl GameManager {
 pub struct SnapshotQueryMessage {
     pub offset: usize,
     pub count: usize,
+    /// Whether to include sensitively player net info
+    pub include_net: bool,
 }
 
 impl Handler<SnapshotQueryMessage> for GameManager {
@@ -66,7 +68,13 @@ impl Handler<SnapshotQueryMessage> for GameManager {
             for key in keys {
                 let game = self.games.get(&key).cloned();
                 if let Some(link) = game {
-                    join_set.spawn(async move { link.send(super::SnapshotMessage).await.ok() });
+                    join_set.spawn(async move {
+                        link.send(super::SnapshotMessage {
+                            include_net: msg.include_net,
+                        })
+                        .await
+                        .ok()
+                    });
                 }
             }
 
@@ -96,6 +104,8 @@ impl Handler<SnapshotQueryMessage> for GameManager {
 pub struct SnapshotMessage {
     /// The ID of the game to take the snapshot of
     pub game_id: GameID,
+    /// Whether to include sensitively player net info
+    pub include_net: bool,
 }
 
 impl Handler<SnapshotMessage> for GameManager {
@@ -112,7 +122,11 @@ impl Handler<SnapshotMessage> for GameManager {
                     None => return None,
                 };
 
-                link.send(super::SnapshotMessage).await.ok()
+                link.send(super::SnapshotMessage {
+                    include_net: msg.include_net,
+                })
+                .await
+                .ok()
             }
             .boxed(),
         )

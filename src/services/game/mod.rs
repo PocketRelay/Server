@@ -229,13 +229,19 @@ impl Handler<CheckJoinableMessage> for Game {
 
 #[derive(Message)]
 #[msg(rtype = "GameSnapshot")]
-pub struct SnapshotMessage;
+pub struct SnapshotMessage {
+    pub include_net: bool,
+}
 
 impl Handler<SnapshotMessage> for Game {
     type Response = Mr<SnapshotMessage>;
 
-    fn handle(&mut self, _msg: SnapshotMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        let players = self.players.iter().map(|value| value.snapshot()).collect();
+    fn handle(&mut self, msg: SnapshotMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        let players = self
+            .players
+            .iter()
+            .map(|value| value.snapshot(msg.include_net))
+            .collect();
         Mr(GameSnapshot {
             id: self.id,
             state: self.state,
