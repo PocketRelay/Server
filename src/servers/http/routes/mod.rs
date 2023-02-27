@@ -4,6 +4,7 @@ use axum::{middleware, Router};
 
 mod auth;
 mod content;
+mod dashboard;
 mod games;
 mod gaw;
 mod leaderboard;
@@ -22,6 +23,7 @@ pub fn router() -> Router {
         .nest("/gaw", gaw::router())
         .nest("/qos", qos::router())
         .nest("/api", api_router())
+        .nest("/", dashboard::router())
 }
 
 /// Creates a router for the routes that reside under /api
