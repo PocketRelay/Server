@@ -3,10 +3,9 @@
 
 use crate::{
     servers::http::{ext::ErrorStatusCode, middleware::auth::AdminAuth},
-    utils::env,
+    utils::{env, logging::get_log_path},
 };
 use axum::{
-    extract::Path,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
@@ -15,10 +14,7 @@ use axum::{
 use database::PlayerRole;
 use serde::Serialize;
 use thiserror::Error;
-use tokio::{
-    fs::{read_dir, read_to_string},
-    io,
-};
+use tokio::{fs::read_to_string, io};
 
 /// Router function creates a new router with all the underlying
 /// routes for this file.
@@ -27,8 +23,7 @@ use tokio::{
 pub fn router() -> Router {
     Router::new()
         .route("/", get(server_details))
-        .route("/logs", get(list_logs))
-        .route("/logs/:name", get(get_log))
+        .route("/log", get(get_log))
 }
 
 /// Response detailing the information about this Pocket Relay server
@@ -63,51 +58,18 @@ struct LogsList {
 
 #[derive(Debug, Error)]
 enum LogsError {
-    #[error("{0}")]
+    #[error("Failed to read log file")]
     IO(#[from] io::Error),
-    #[error("Invalid log path")]
-    InvalidPath,
     #[error("Invalid permission")]
     InvalidPermission,
 }
 
-async fn list_logs(auth: AdminAuth) -> Result<Json<LogsList>, LogsError> {
+async fn get_log(auth: AdminAuth) -> Result<String, LogsError> {
     let auth = auth.into_inner();
     if auth.role < PlayerRole::SuperAdmin {
         return Err(LogsError::InvalidPermission);
     }
-
-    let path = env::env(env::LOGGING_DIR);
-    let mut read_dir = read_dir(&path).await?;
-
-    let mut files = Vec::new();
-
-    while let Some(file) = read_dir.next_entry().await? {
-        let name = file.file_name().to_string_lossy().to_string();
-        let file_type = file.file_type().await?;
-        if !file_type.is_file() || !name.ends_with(".log") {
-            continue;
-        }
-        files.push(name);
-    }
-
-    Ok(Json(LogsList { files }))
-}
-
-async fn get_log(Path(name): Path<String>, auth: AdminAuth) -> Result<String, LogsError> {
-    let auth = auth.into_inner();
-    if auth.role < PlayerRole::SuperAdmin {
-        return Err(LogsError::InvalidPermission);
-    }
-
-    let logging_root = env::env(env::LOGGING_DIR);
-
-    let path = std::path::Path::new(&logging_root).join(name);
-
-    if !path.starts_with(logging_root) {
-        return Err(LogsError::InvalidPath);
-    }
-
+    let path = get_log_path();
     let file = read_to_string(path).await?;
     Ok(file)
 }
@@ -118,7 +80,6 @@ impl ErrorStatusCode for LogsError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::InvalidPermission => StatusCode::UNAUTHORIZED,
-            Self::InvalidPath => StatusCode::BAD_REQUEST,
             Self::IO(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
