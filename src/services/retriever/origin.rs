@@ -8,6 +8,10 @@ use log::debug;
 
 /// Service for providing origin flows from a retriever
 /// instance if available
+///
+/// Fallback for if official servers get shutdown. Try using data from
+/// https://service-aggregation-layer.juno.ea.com/graphql?operationName=GetUserPlayer&variables=%7B%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22387cef4a793043a4c76c92ff4f2bceb7b25c3438f9c3c4fd5eb67eea18272657%22%7D%7D
+/// to create origin authentication
 pub struct OriginFlowService {
     /// Whether data fetching is enabled within the
     /// created origin flows
