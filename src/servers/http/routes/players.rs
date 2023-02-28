@@ -505,6 +505,7 @@ impl ErrorStatusCode for PlayersError {
             Self::DataNotFound => StatusCode::NOT_FOUND,
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
             Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
+            Self::InvalidPassword => StatusCode::UNAUTHORIZED,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
