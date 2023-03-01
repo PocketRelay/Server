@@ -2,7 +2,7 @@ use crate::{servers::http::ext::ErrorStatusCode, state::GlobalState, utils::type
 use axum::{
     body::boxed,
     extract::FromRequestParts,
-    http::{header::AUTHORIZATION, StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Response},
 };
 use database::{Player, PlayerRole};
@@ -42,6 +42,8 @@ impl AuthVerifier for AdminVerify {
     }
 }
 
+const TOKEN_HEADER: &str = "X-Token";
+
 impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
     type Rejection = TokenError;
 
@@ -57,15 +59,9 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
         async move {
             let token = parts
                 .headers
-                .get(AUTHORIZATION)
+                .get(TOKEN_HEADER)
                 .and_then(|value| value.to_str().ok())
                 .ok_or(TokenError::MissingToken)?;
-
-            let (schema, token) = token.split_once(' ').ok_or(TokenError::InvalidToken)?;
-
-            if schema != "Bearer" {
-                return Err(TokenError::InvalidToken);
-            }
 
             let services = GlobalState::services();
 
