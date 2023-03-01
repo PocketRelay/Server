@@ -19,7 +19,7 @@ use axum::{
 use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData};
 use log::error;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use std::fmt::Display;
+use thiserror::Error;
 use validator::validate_email;
 
 /// Router function creates a new router with all the underlying
@@ -45,23 +45,30 @@ pub fn router() -> Router {
 
 /// Enum for errors that could occur when accessing any of
 /// the players routes
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum PlayersError {
     /// The player with the requested ID was not found
+    #[error("Unable to find requested player")]
     PlayerNotFound,
     /// The provided email address was already in use
+    #[error("Email address already in use")]
     EmailTaken,
     /// The provided email was not a valid email
+    #[error("Invalid email address")]
     InvalidEmail,
     /// Server error occurred such as failing to hash a password
     /// or a database error
+    #[error("Internal server error")]
     ServerError,
     /// Requested class could not be found
+    #[error("Unable to find data")]
     DataNotFound,
     /// The account doesn't have permission to complete the action
+    #[error("Invalid permission")]
     InvalidPermission,
     /// Invalid current password was provided when attempting
     /// to update the account password
+    #[error("Invalid password")]
     InvalidPassword,
 }
 
@@ -516,14 +523,6 @@ async fn get_player_gaw(
     let player = find_player(&db, player_id).await?;
     let galax_at_war = GalaxyAtWar::find_or_create(&db, &player, 0.0).await?;
     Ok(Json(galax_at_war))
-}
-
-/// Display implementation for the PlayersError type. Only the PlayerNotFound
-/// error has a custom message. All other errors use "Internal Server Error"
-impl Display for PlayersError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 /// Error status code implementation for the different error
