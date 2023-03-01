@@ -29,7 +29,7 @@ use validator::validate_email;
 pub fn router() -> Router {
     Router::new()
         .route("/", get(get_players))
-        .route("/self", get(get_self))
+        .route("/self", get(get_self).delete(delete_self))
         .route("/self/password", put(update_password))
         .route("/self/details", put(update_details))
         .route("/:id", get(get_player).delete(delete_player))
@@ -369,6 +369,35 @@ async fn delete_player(
     }
 
     player.delete(&db).await?;
+    Ok(StatusCode::OK.into_response())
+}
+/// Request to update the password of the current user account
+#[derive(Deserialize)]
+struct DeleteSelfRequest {
+    /// Account password for deletion
+    password: String,
+}
+
+/// Route for deleting the authenticated player
+async fn delete_self(
+    auth: Auth,
+    Json(req): Json<DeleteSelfRequest>,
+) -> Result<Response, PlayersError> {
+    // Obtain the authenticated player
+    let auth = auth.into_inner();
+
+    let player_password = match &auth.password {
+        Some(value) => value,
+        None => return Err(PlayersError::InvalidPassword),
+    };
+
+    // Compare the existing passwords
+    if !verify_password(&req.password, player_password) {
+        return Err(PlayersError::InvalidPassword);
+    }
+
+    let db = GlobalState::database();
+    auth.delete(&db).await?;
     Ok(StatusCode::OK.into_response())
 }
 
