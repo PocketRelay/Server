@@ -16,7 +16,7 @@ use axum::{
     routing::{get, put},
     Json, Router,
 };
-use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData};
+use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData, PlayerRole};
 use log::error;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;
@@ -41,6 +41,7 @@ pub fn router() -> Router {
         .route("/:id/galaxy_at_war", get(get_player_gaw))
         .route("/:id/password", put(set_password))
         .route("/:id/details", put(set_details))
+        .route("/:id/role", put(set_role))
 }
 
 /// Enum for errors that could occur when accessing any of
@@ -287,6 +288,40 @@ async fn set_password(
     attempt_set_password(db, player, req.password).await?;
 
     // Ok status code indicating updated
+    Ok(StatusCode::OK)
+}
+
+#[derive(Deserialize)]
+struct SetPlayerRoleRequest {
+    /// The role to give the player
+    role: PlayerRole,
+}
+
+async fn set_role(
+    Path(player_id): Path<PlayerID>,
+    auth: AdminAuth,
+    Json(req): Json<SetPlayerRoleRequest>,
+) -> PlayersResult<StatusCode> {
+    let auth = auth.into_inner();
+
+    let role = req.role;
+
+    // Super admin role cannot be granted by anyone but the server
+    if let PlayerRole::SuperAdmin = role {
+        return Err(PlayersError::InvalidPermission);
+    }
+
+    // Changing an account role requires Super Admin permission
+    if auth.role != PlayerRole::SuperAdmin {
+        return Err(PlayersError::InvalidPermission);
+    }
+
+    // Get the target player
+    let db = GlobalState::database();
+    let player = find_player(&db, player_id).await?;
+
+    player.set_role(&db, role).await;
+
     Ok(StatusCode::OK)
 }
 
