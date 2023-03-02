@@ -129,8 +129,7 @@ async fn get_players(
 
     let db = GlobalState::database();
     let count = query.count.unwrap_or(DEFAULT_COUNT);
-    let offset = query.offset as u64 * count as u64;
-    let (players, more) = Player::all(&db, offset, count as u64).await?;
+    let (players, more) = Player::all(&db, query.offset as u64, count as u64).await?;
 
     Ok(Json(PlayersResponse { players, more }))
 }

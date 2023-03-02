@@ -162,7 +162,7 @@ impl Leaderboard {
                 break;
             }
 
-            offset += BATCH_COUNT;
+            offset += 1;
         }
 
         // Sort the values based on their value

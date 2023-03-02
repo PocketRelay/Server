@@ -5,8 +5,8 @@ use crate::{
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, CursorTrait, DatabaseConnection, DeleteResult, EntityTrait, InsertResult,
-    IntoActiveModel, ModelTrait, QueryFilter,
+    ColumnTrait, DatabaseConnection, DeleteResult, EntityTrait, InsertResult, IntoActiveModel,
+    ModelTrait, PaginatorTrait, QueryFilter,
 };
 use std::{future::Future, iter::Iterator, pin::Pin};
 
@@ -20,22 +20,14 @@ impl Player {
     /// `count`  The number of rows to collect
     pub async fn all(
         db: &DatabaseConnection,
-        offset: u64,
+        page: u64,
         count: u64,
     ) -> DbResult<(Vec<Self>, bool)> {
-        // TODO: Fix internal ordering? Try caching mass query for all users
+        let paginate = players::Entity::find().paginate(db, count);
+        let total_pages = paginate.num_pages().await?;
+        let is_more = page < total_pages;
+        let values = paginate.fetch_page(page).await?;
 
-        let mut values = players::Entity::find()
-            .cursor_by(players::Column::Id)
-            .after(offset)
-            .first(count + 1)
-            .all(db)
-            .await?;
-        let is_more = values.len() as u64 == count + 1;
-        if is_more {
-            // Pop the value being used to determine the leftover size
-            values.pop();
-        }
         Ok((values, is_more))
     }
 
