@@ -6,7 +6,7 @@ use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
     ColumnTrait, DatabaseConnection, DeleteResult, EntityTrait, InsertResult, IntoActiveModel,
-    ModelTrait, PaginatorTrait, QueryFilter,
+    ModelTrait, PaginatorTrait, QueryFilter, QueryOrder,
 };
 use std::{future::Future, iter::Iterator, pin::Pin};
 
@@ -23,7 +23,10 @@ impl Player {
         page: u64,
         count: u64,
     ) -> DbResult<(Vec<Self>, bool)> {
-        let paginate = players::Entity::find().paginate(db, count);
+        let paginate = players::Entity::find()
+            .order_by_asc(players::Column::Id)
+            .paginate(db, count);
+
         let total_pages = paginate.num_pages().await?;
         let is_more = page < total_pages;
         let values = paginate.fetch_page(page).await?;
