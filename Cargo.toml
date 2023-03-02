@@ -47,7 +47,7 @@ serde = { workspace = true }
 chrono = { workspace = true }
 
 # Blaze packet system 
-blaze-pk = { version = "^0.9", path = "../BlazePK" }
+blaze-pk = "1"
 # Blaze SSLv3 async TCPStream implementation
 blaze-ssl-async = "^0.3"
 
