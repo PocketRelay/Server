@@ -5,21 +5,24 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use database::{Player, PlayerRole};
+use database::{DbErr, Player, PlayerRole};
 use futures::FutureExt;
 use jsonwebtoken::errors::ErrorKind;
-use std::{fmt::Display, marker::PhantomData};
+use std::marker::PhantomData;
+use thiserror::Error;
 
 /// Extractor for extracting authentication from a request
 /// authorization header Bearer token
 pub struct Auth<V: AuthVerifier = ()>(pub Player, PhantomData<V>);
 
 impl<V: AuthVerifier> Auth<V> {
+    /// Converts the auth guard into its inner player
     pub fn into_inner(self) -> Player {
         self.0
     }
 }
 
+/// Alias for an auth gaurd using admin verification
 pub type AdminAuth = Auth<AdminVerify>;
 
 pub trait AuthVerifier {
@@ -28,12 +31,15 @@ pub trait AuthVerifier {
     fn verify(player: &Player) -> bool;
 }
 
+/// Unit auth verifier type for accepting any player
 impl AuthVerifier for () {
     fn verify(_player: &Player) -> bool {
         true
     }
 }
 
+/// Auth verifier implementation requiring a role of
+/// Admin or higher
 pub struct AdminVerify;
 
 impl AuthVerifier for AdminVerify {
@@ -42,6 +48,7 @@ impl AuthVerifier for AdminVerify {
     }
 }
 
+/// The HTTP header that contains the authentication token
 const TOKEN_HEADER: &str = "X-Token";
 
 impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
@@ -57,29 +64,22 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
         Self: 'c,
     {
         async move {
+            // Extract the token from the headers
             let token = parts
                 .headers
                 .get(TOKEN_HEADER)
                 .and_then(|value| value.to_str().ok())
                 .ok_or(TokenError::MissingToken)?;
 
+            // Verify the token claim
             let services = GlobalState::services();
+            let claim = services.jwt.verify(token)?;
 
-            let claim = match services.jwt.verify(token) {
-                Ok(value) => value,
-                Err(err) => {
-                    return Err(match err.kind() {
-                        ErrorKind::ExpiredSignature => TokenError::ExpiredToken,
-                        _ => TokenError::InvalidToken,
-                    })
-                }
-            };
-
+            // Load the claimed player
             let db = GlobalState::database();
             let player = Player::by_id(&db, claim.id)
-                .await
-                .map_err(|_| TokenError::Server)?;
-            let player = player.ok_or(TokenError::InvalidToken)?;
+                .await?
+                .ok_or(TokenError::InvalidToken)?;
 
             Ok(Self(player, PhantomData))
         }
@@ -89,27 +89,28 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
 
 /// Error type used by the token checking middleware to handle
 /// different errors and create error respones based on them
+#[derive(Debug, Error)]
 pub enum TokenError {
     /// The token was expired
+    #[error("Expired token")]
     ExpiredToken,
     /// The token header was not provided on the request
+    #[error("Missing token")]
     MissingToken,
     /// The provided token was not a valid token
+    #[error("Invalid token")]
     InvalidToken,
-    /// Server error occurred
-    Server,
+    /// Database error
+    #[error("Internal server error")]
+    Database(#[from] DbErr),
 }
 
-/// Display implementation for the TokenError this will be displayed
-/// as the error response message.
-impl Display for TokenError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::MissingToken => "Missing token",
-            Self::InvalidToken => "Invalid token",
-            Self::ExpiredToken => "Expired token",
-            Self::Server => "Internal server error",
-        })
+impl From<jsonwebtoken::errors::Error> for TokenError {
+    fn from(value: jsonwebtoken::errors::Error) -> Self {
+        match value.into_kind() {
+            ErrorKind::ExpiredSignature => Self::ExpiredToken,
+            _ => Self::InvalidToken,
+        }
     }
 }
 
@@ -120,7 +121,7 @@ impl ErrorStatusCode for TokenError {
         match self {
             Self::MissingToken => StatusCode::BAD_REQUEST,
             Self::InvalidToken | Self::ExpiredToken => StatusCode::UNAUTHORIZED,
-            Self::Server => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
