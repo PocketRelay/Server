@@ -112,14 +112,17 @@ struct PlayersResponse {
     more: bool,
 }
 
+/// GET /api/players
+///
 /// Route for retrieving a list of players from the database. The
 /// offset value if used to know how many rows to skip and count
 /// is the number of rows to collect. Offset = offset * count
 ///
 /// `query` The query containing the offset and count values
+/// `_auth` The currently authenticated (Admin) player
 async fn get_players(
     Query(query): Query<PlayersQuery>,
-    _: AdminAuth,
+    _auth: AdminAuth,
 ) -> PlayersJsonResult<PlayersResponse> {
     const DEFAULT_COUNT: u8 = 20;
     const DEFAULT_OFFSET: u16 = 0;
@@ -132,17 +135,27 @@ async fn get_players(
     Ok(Json(PlayersResponse { players, more }))
 }
 
+/// GET /api/players/self
+///
 /// Route for obtaining the player details for the current
 /// authentication token
+///
+/// `auth` The currently authenticated player
 async fn get_self(auth: Auth) -> Json<Player> {
     Json(auth.into_inner())
 }
 
+/// GET /api/players/:id
+///
 /// Route for retrieving a player from the database with an ID that
 /// matches the provided {id}
 ///
-/// `path` The route path with the ID for the player to find
-async fn get_player(Path(player_id): Path<PlayerID>, _: AdminAuth) -> PlayersJsonResult<Player> {
+/// `player_id` The ID of the player to get
+/// `_auth`     The currently authenticated (Admin) player
+async fn get_player(
+    Path(player_id): Path<PlayerID>,
+    _auth: AdminAuth,
+) -> PlayersJsonResult<Player> {
     let db = GlobalState::database();
     let player = find_player(&db, player_id).await?;
     Ok(Json(player))
@@ -165,6 +178,10 @@ struct UpdateDetailsRequest {
 ///
 /// Admin route for updating the basic details of another
 /// account.
+///
+/// `player_id` The ID of the player to set the details for
+/// `auth`      The currently authenticated player
+/// `req`       The update details request
 async fn set_details(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
@@ -192,6 +209,9 @@ async fn set_details(
 /// Route for updating the basic account details for the
 /// currenlty authenticated account. WIll ignore any fields
 /// that are already up to date
+///
+/// `auth` The currently authenticated player
+/// `req`  The details update request
 async fn update_details(
     auth: Auth,
     Json(req): Json<UpdateDetailsRequest>,
@@ -269,6 +289,10 @@ struct SetPasswordRequest {
 /// Admin route for setting the password of another account
 /// to the desired password. Requires that the authenticated
 /// account has a higher role than the target account
+///
+/// `player_id` The ID of the player to set the password for
+/// `auth`      The currently authenticated (Admin) player
+/// `req`       The password set request
 async fn set_password(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
@@ -291,6 +315,9 @@ async fn set_password(
     Ok(StatusCode::OK)
 }
 
+/// Request to set the role of a player only allowed
+/// to be used by SuperAdmin's and can only set
+/// between Default and Admin roles
 #[derive(Deserialize)]
 struct SetPlayerRoleRequest {
     /// The role to give the player
@@ -320,7 +347,10 @@ async fn set_role(
     let db = GlobalState::database();
     let player = find_player(&db, player_id).await?;
 
-    player.set_role(&db, role).await;
+    if let Err(err) = player.set_role(&db, role).await {
+        error!("Failed to set player role: {:?}", err);
+        return Err(PlayersError::ServerError);
+    }
 
     Ok(StatusCode::OK)
 }
@@ -393,9 +423,12 @@ async fn attempt_set_password(
     Ok(())
 }
 
+/// DELETE /api/players/:id
+///
 /// Route for deleting a player using its Player ID
 ///
-/// `path` The route path with the ID for the player to find
+/// `player_id` The ID of the player to delete
+/// `auth`      The currently authenticated (Admin) player
 async fn delete_player(
     auth: AdminAuth,
     Path(player_id): Path<PlayerID>,
@@ -420,6 +453,8 @@ struct DeleteSelfRequest {
     password: String,
 }
 
+/// DELETE /api/players/self
+///
 /// Route for deleting the authenticated player
 async fn delete_self(
     auth: Auth,
@@ -460,13 +495,16 @@ impl Serialize for PlayerDataMap {
     }
 }
 
+/// GET /api/players/:id/data
+///
 /// Route for retrieving the list of classes for a provided player
 /// matches the provided {id}
 ///
-/// `path` The route path with the ID for the player to find the classes for
+/// `player_id` The ID of the player
+/// `_admin`    The currently authenticated (Admin) player
 async fn all_data(
     Path(player_id): Path<PlayerID>,
-    _: AdminAuth,
+    _admin: AdminAuth,
 ) -> PlayersJsonResult<PlayerDataMap> {
     let db = GlobalState::database();
     let player: Player = find_player(&db, player_id).await?;
@@ -474,6 +512,15 @@ async fn all_data(
     Ok(Json(PlayerDataMap(data)))
 }
 
+/// GET /api/players/:id/data/:key
+///
+/// Route for getting a specific piece of player data for
+/// a specific player using the ID of the player and the
+/// key of the data
+///  
+/// `player_id` The ID of the player
+/// `key`       The player data key
+/// `auth`      The currently authenticated player
 async fn get_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: Auth,
@@ -500,11 +547,15 @@ struct SetDataRequest {
     value: String,
 }
 
-/// Route for updating the class for a player with the provided {id}
-/// at the class {index}
+/// PUT /api/players/:id/data/:key
 ///
-/// `path` The route path with the ID for the player to find the classes for and class index
-/// `req`  The update class request
+/// Route for setting a piece of player data for a specific
+/// player using the key of the data
+///
+/// `player_id` The ID of the player
+/// `key`       The player data key
+/// `auth`      The currently authenticated (Admin) player
+/// `req`       The request containing the data value
 async fn set_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: AdminAuth,
@@ -523,11 +574,15 @@ async fn set_data(
     let data = Player::set_data(player.id, &db, key, req.value).await?;
     Ok(Json(data))
 }
-/// Route for updating the class for a player with the provided {id}
-/// at the class {index}
+
+/// DELETE /api/players/:id/data/:key
 ///
-/// `path` The route path with the ID for the player to find the classes for and class index
-/// `req`  The update class request
+/// Route for deleting the player data for a specific player
+/// using the key of the data
+///
+/// `player_id` The ID of the player
+/// `key`       The player data key
+/// `auth`      The currently authenticated (Admin) player
 async fn delete_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: AdminAuth,
@@ -546,13 +601,16 @@ async fn delete_data(
     Ok(Json(()))
 }
 
-/// Route for retrieving the galaxy at war data for a provided player
-/// matches the provided {id}
+/// GET /api/players/:id/galaxy_at_war
 ///
-/// `path` The route path with the ID for the player to find the characters for
+/// Route for retrieving the galaxy at war data for a provided player
+/// matches the provided `id`
+///
+/// `player_id` The ID of the player to get the GAW data for
+/// `_admin`    The currently authenticated (Admin) player
 async fn get_player_gaw(
     Path(player_id): Path<PlayerID>,
-    _: AdminAuth,
+    _admin: AdminAuth,
 ) -> PlayersJsonResult<GalaxyAtWar> {
     let db = GlobalState::database();
     let player = find_player(&db, player_id).await?;
@@ -568,8 +626,8 @@ impl ErrorStatusCode for PlayersError {
             Self::DataNotFound => StatusCode::NOT_FOUND,
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
             Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
-            Self::InvalidPassword => StatusCode::UNAUTHORIZED,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InvalidPassword | Self::InvalidPermission => StatusCode::UNAUTHORIZED,
+            Self::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
