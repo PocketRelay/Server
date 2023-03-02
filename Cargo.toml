@@ -73,7 +73,7 @@ thiserror = "1"
 validator = { version = "0.16", features = ["derive"] }
 
 
-interlink = { version = "0.1.1", path = "../interlink/interlink" }
+interlink = "0.1.2"
 tokio-util = { version = "0.7", features = ["codec"] }
 futures = "0.3"
 

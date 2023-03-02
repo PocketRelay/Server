@@ -1003,7 +1003,9 @@ dependencies = [
 
 [[package]]
 name = "interlink"
-version = "0.1.1"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66dc4111cc70e6e2a1f4a8cd3afd56b08120bb156de3e411101a0d34a36f75e0"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -1014,6 +1016,8 @@ dependencies = [
 [[package]]
 name = "interlink-derive"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21fe40b60b29c6ec830315a783f9b5df9d4913704a0f1f906308c69bc23e80eb"
 dependencies = [
  "darling",
  "quote",
