@@ -1,6 +1,3 @@
-//! This module contains routes that handle the authentication tokens
-//! for dealing with the server API
-
 use crate::{state::GlobalState, utils::hashing::verify_password};
 use axum::{
     http::StatusCode,

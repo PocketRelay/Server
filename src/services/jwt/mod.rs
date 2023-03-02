@@ -10,10 +10,16 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::fs::{read_to_string, write};
 
+/// Json Web Token service for providing JWT tokens
+/// and token claiming
 pub struct Jwt {
+    /// The encoding key
     encoding: EncodingKey,
+    /// The decoding key
     decoding: DecodingKey,
+    /// The JWT header
     header: Header,
+    /// Validation for the JWT headers
     validation: Validation,
 }
 

@@ -1,5 +1,4 @@
 use super::middleware::cors::cors_layer;
-use crate::env;
 use axum::{middleware, Router};
 
 mod auth;
@@ -28,23 +27,17 @@ pub fn router() -> Router {
 
 /// Creates a router for the routes that reside under /api
 fn api_router() -> Router {
-    if env::from_env(env::API) {
-        Router::new()
-            // Games routing
-            .nest("/games", games::router())
-            // Players routing
-            .nest("/players", players::router())
-            // Routes that require token store access but arent protected
-            .nest("/auth", auth::router())
-            // Non protected API routes
-            .nest("/leaderboard", leaderboard::router())
-    } else {
-        // If the API is disable a default empty router is added
-        Router::new()
-    }
-    // Even when the API is disabled the server route must still
-    // be applied otherwise clients won't be able to check the server
-    .nest("/server", server::router())
-    // CORS middleware is applied to all API routes to allow browser access
-    .layer(middleware::from_fn(cors_layer))
+    Router::new()
+        // Games routing
+        .nest("/games", games::router())
+        // Players routing
+        .nest("/players", players::router())
+        // Authentication routes
+        .nest("/auth", auth::router())
+        // Leaderboard routing
+        .nest("/leaderboard", leaderboard::router())
+        // Server details routes
+        .nest("/server", server::router())
+        // CORS middleware is applied to all API routes to allow browser access
+        .layer(middleware::from_fn(cors_layer))
 }

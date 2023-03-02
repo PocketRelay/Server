@@ -85,6 +85,22 @@ DEFAULT : 17499
 
 This is the port of the *Quality Of Service* server this is used to obtain your public IP address so that other players outside of your network can make a connection to you
 
+# Dashboard
+
+Configuration for the dashboard
+
+## Super Admin
+
+```
+ENV  : PR_SUPER_ADMIN_EMAIL
+TYPE : TEXT
+```
+
+In order to grant other users admin access and to have any admin access on the dashboard you must set the email address of a user to become the super user
+
+Super user access will be granted whenever the server starts up and checks if the access is missing and updates accordingly
+
+
 # Menu 
 
 This section contains configuration for the Main menu
@@ -162,19 +178,6 @@ in order from lowest to highest.
 - error *Only shows error logs*
 - off *Doesn't show any logs at all*
 
-## Log Compression
-```
-ENV     : PR_LOG_COMPRESSION
-TYPE    : BOOLEAN
-DEFAULT : true
-```
-
-This environment variable determines whether old logs should be compressed using Gzip 
-to save space on the drive 
-
-> Log files are not allowed to exceed 5mb before rolling over to the next file so this 
-> won't make a very large difference
-
 ## Logging Directory
 ```
 ENV     : PR_LOGGING_DIR
@@ -249,16 +252,3 @@ DEFAULT : mysql://username:password@host/database
 If you are using the MySQL version of Pocket Relay then this variable
 determines the connection url for the database.
 
-# API
-
-This section contains the configuration for the API system
-
-## Enabled
-```
-ENV     : PR_API
-TYPE    : BOOLEAN
-DEFAULT : false
-```
-
-This variable determines whether the API for accessing players on the server and currently
-running games. This API is disabled by default
