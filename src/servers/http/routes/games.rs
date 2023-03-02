@@ -93,6 +93,7 @@ async fn get_games(
 /// Route for retrieving the details of a game with a specific game ID
 ///
 /// `game_id` The ID of the game
+/// `auth`    The currently authenticated player
 async fn get_game(
     Path(game_id): Path<GameID>,
     auth: Auth,
