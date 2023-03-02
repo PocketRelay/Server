@@ -80,20 +80,17 @@ impl GlobalState {
     /// Obtains a database connection by cloning the global
     /// database pool
     pub fn database() -> DatabaseConnection {
-        unsafe {
-            match &GLOBAL_STATE {
-                Some(value) => value.db.clone(),
-                None => panic!("Global state not initialized"),
-            }
+        match unsafe { &GLOBAL_STATE } {
+            Some(value) => value.db.clone(),
+            None => panic!("Global state not initialized"),
         }
     }
 
+    /// Obtains a static reference to the services
     pub fn services() -> &'static Services {
-        unsafe {
-            match &GLOBAL_STATE {
-                Some(value) => &value.services,
-                None => panic!("Global state not initialized"),
-            }
+        match unsafe { &GLOBAL_STATE } {
+            Some(value) => &value.services,
+            None => panic!("Global state not initialized"),
         }
     }
 }
