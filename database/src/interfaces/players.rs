@@ -23,6 +23,8 @@ impl Player {
         offset: u64,
         count: u64,
     ) -> DbResult<(Vec<Self>, bool)> {
+        // TODO: Fix internal ordering? Try caching mass query for all users
+
         let mut values = players::Entity::find()
             .cursor_by(players::Column::Id)
             .after(offset)
