@@ -1,5 +1,5 @@
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
@@ -52,7 +52,7 @@ blaze-pk = { version = "^0.9", path = "../BlazePK" }
 blaze-ssl-async = "^0.3"
 
 # Isolated database crate
-database = { path = "database", package = "pocket-relay-database", version = "^0.2" }
+database = { path = "database", package = "pocket-relay-database", version = "^0.3" }
 
 # Resource embedding using debug-embed to always resolve relative to the Cargo.toml file
 rust-embed = { version = "6.4.2", features = ["debug-embed"] }
