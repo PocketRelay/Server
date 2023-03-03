@@ -11,5 +11,3 @@ build-release.nu
 
 tools/target
 
-
-/src/resources/dashboard/**
