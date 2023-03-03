@@ -2,25 +2,16 @@ use std::path::Path;
 
 use crate::utils::random::random_string;
 use chrono::{Days, Utc};
-use jsonwebtoken::{
-    self as jwt, decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation,
-};
+
+use hs256_token::{JsonError, Tokens};
 use log::error;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::fs::{read_to_string, write};
-
 /// Json Web Token service for providing JWT tokens
 /// and token claiming
 pub struct Jwt {
-    /// The encoding key
-    encoding: EncodingKey,
-    /// The decoding key
-    decoding: DecodingKey,
-    /// The JWT header
-    header: Header,
-    /// Validation for the JWT headers
-    validation: Validation,
+    tokens: Tokens,
 }
 
 impl Jwt {
@@ -52,18 +43,8 @@ impl Jwt {
         };
 
         let secret_bytes = secret.as_bytes();
-        let encoding = EncodingKey::from_secret(secret_bytes);
-        let decoding = DecodingKey::from_secret(secret_bytes);
-        let alg = Algorithm::HS256;
-        let header = Header::new(alg);
-        let validation = Validation::new(alg);
-
-        Self {
-            encoding,
-            decoding,
-            header,
-            validation,
-        }
+        let tokens = Tokens::new(secret_bytes);
+        Self { tokens }
     }
 
     /// Creates a new claim using the provided claim value
@@ -76,31 +57,46 @@ impl Jwt {
             .ok_or(ClaimError::Timestamp)?
             .timestamp();
         let claim = PlayerClaim { id, exp };
-        let token = encode(&self.header, &claim, &self.encoding)?;
+        let token = self.tokens.encode(&claim)?;
         Ok(token)
     }
 
     /// Verifies a token claims returning the decoded claim structure
     ///
     /// `token` The token to verify
-    pub fn verify(&self, token: &str) -> jwt::errors::Result<PlayerClaim> {
-        decode(token, &self.decoding, &self.validation).map(|value| value.claims)
+    pub fn verify(&self, token: &str) -> Result<PlayerClaim, VerifyError> {
+        let claim: PlayerClaim = self
+            .tokens
+            .decode(token)
+            .map_err(|_| VerifyError::Invalid)?;
+        let now = Utc::now().timestamp();
+        if claim.exp < now {
+            return Err(VerifyError::Expired);
+        }
+        Ok(claim)
     }
 }
 
 #[derive(Debug, Error)]
 pub enum ClaimError {
     #[error("{0}")]
-    Jwt(#[from] jwt::errors::Error),
+    Json(#[from] JsonError),
     #[error("Failed to create timestamp for message")]
     Timestamp,
+}
+
+#[derive(Debug, Error)]
+pub enum VerifyError {
+    #[error("Expired token")]
+    Expired,
+    #[error("Invalid token")]
+    Invalid,
 }
 
 /// Claim for player authentication
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PlayerClaim {
     /// The ID of the user this claim represents
-    #[serde(rename = "sub")]
     pub id: u32,
     /// Expiry date timestamp
     pub exp: i64,

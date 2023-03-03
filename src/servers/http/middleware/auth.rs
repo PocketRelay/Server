@@ -1,4 +1,7 @@
-use crate::{servers::http::ext::ErrorStatusCode, state::GlobalState, utils::types::BoxFuture};
+use crate::{
+    servers::http::ext::ErrorStatusCode, services::jwt::VerifyError, state::GlobalState,
+    utils::types::BoxFuture,
+};
 use axum::{
     body::boxed,
     extract::FromRequestParts,
@@ -7,7 +10,6 @@ use axum::{
 };
 use database::{DbErr, Player, PlayerRole};
 use futures::FutureExt;
-use jsonwebtoken::errors::ErrorKind;
 use std::marker::PhantomData;
 use thiserror::Error;
 
@@ -105,10 +107,10 @@ pub enum TokenError {
     Database(#[from] DbErr),
 }
 
-impl From<jsonwebtoken::errors::Error> for TokenError {
-    fn from(value: jsonwebtoken::errors::Error) -> Self {
-        match value.into_kind() {
-            ErrorKind::ExpiredSignature => Self::ExpiredToken,
+impl From<VerifyError> for TokenError {
+    fn from(value: VerifyError) -> Self {
+        match value {
+            VerifyError::Expired => Self::ExpiredToken,
             _ => Self::InvalidToken,
         }
     }
