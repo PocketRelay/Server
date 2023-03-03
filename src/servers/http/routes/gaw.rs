@@ -105,11 +105,11 @@ async fn get_player_gaw_data(
     token: &str,
 ) -> Result<(GalaxyAtWar, u32), GAWError> {
     let services = GlobalState::services();
-    let claim = services
-        .jwt
+    let player_id = services
+        .tokens
         .verify(token)
         .map_err(|_| GAWError::InvalidToken)?;
-    let player = Player::by_id(db, claim.id)
+    let player = Player::by_id(db, player_id)
         .await?
         .ok_or(GAWError::InvalidToken)?;
     let (gaw_data, promotions) = try_join!(

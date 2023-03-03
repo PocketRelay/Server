@@ -1,5 +1,5 @@
 use crate::{
-    servers::http::ext::ErrorStatusCode, services::jwt::VerifyError, state::GlobalState,
+    servers::http::ext::ErrorStatusCode, services::tokens::VerifyError, state::GlobalState,
     utils::types::BoxFuture,
 };
 use axum::{
@@ -75,11 +75,11 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
 
             // Verify the token claim
             let services = GlobalState::services();
-            let claim = services.jwt.verify(token)?;
+            let player_id = services.tokens.verify(token)?;
 
             // Load the claimed player
             let db = GlobalState::database();
-            let player = Player::by_id(&db, claim.id)
+            let player = Player::by_id(&db, player_id)
                 .await?
                 .ok_or(TokenError::InvalidToken)?;
 

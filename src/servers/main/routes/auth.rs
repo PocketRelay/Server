@@ -125,16 +125,7 @@ async fn handle_auth_request(
         AuthRequest::Silent { token, .. } => token,
         _ => {
             let services = GlobalState::services();
-            match services.jwt.claim(player.id) {
-                Ok(value) => value,
-                Err(err) => {
-                    error!(
-                        "Unable to create session token for player (AUTH): {:?}",
-                        err
-                    );
-                    return Err(ServerError::ServerUnavailable);
-                }
-            }
+            services.tokens.claim(player.id)
         }
     };
 
@@ -154,7 +145,7 @@ async fn handle_auth_request(
 async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
     let services = GlobalState::services();
 
-    let player = match services.jwt.verify(token) {
+    let player_id = match services.tokens.verify(token) {
         Ok(value) => value,
         Err(err) => {
             error!("Error while attempt to resume invalid session: {err:?}");
@@ -162,7 +153,7 @@ async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResul
         }
     };
 
-    Player::by_id(db, player.id)
+    Player::by_id(db, player_id)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::InvalidSession)
@@ -489,16 +480,7 @@ async fn handle_create_account(
     }
 
     let services = GlobalState::services();
-    let session_token = match services.jwt.claim(player.id) {
-        Ok(value) => value,
-        Err(err) => {
-            error!(
-                "Unable to create session token for player (AUTH): {:?}",
-                err
-            );
-            return Err(ServerError::ServerUnavailable);
-        }
-    };
+    let session_token = services.tokens.claim(player.id);
 
     Ok(AuthResponse {
         player,
@@ -604,9 +586,6 @@ async fn handle_get_auth_token(session: &mut SessionLink) -> ServerResult<GetTok
         .ok_or(ServerError::FailedNoLoginAction)?;
     // Create a new token claim for the player to use with the API
     let services = GlobalState::services();
-    let token = services
-        .jwt
-        .claim(player_id)
-        .map_err(|_| ServerError::ServerUnavailable)?;
+    let token = services.tokens.claim(player_id);
     Ok(GetTokenResponse { token })
 }

@@ -62,11 +62,7 @@ async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, Aut
     }
 
     let services = GlobalState::services();
-
-    let token = services
-        .jwt
-        .claim(player.id)
-        .map_err(|_| AuthError::ServerError)?;
+    let token = services.tokens.claim(player.id);
 
     Ok(Json(TokenResponse { token }))
 }

@@ -847,18 +847,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "hs256-token"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd2d6a4ae64a12dad5848c6bac5b8ec546629018dc0f8494a6f601984ec8cc74"
-dependencies = [
- "base64ct",
- "ring",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "http"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1562,17 +1550,16 @@ dependencies = [
  "base64ct",
  "blaze-pk",
  "blaze-ssl-async",
- "chrono",
  "dotenvy",
  "flate2",
  "futures",
- "hs256-token",
  "interlink",
  "local-ip-address",
  "log",
  "log4rs",
  "pocket-relay-database",
  "reqwest",
+ "ring",
  "rust-embed",
  "serde",
  "thiserror",
