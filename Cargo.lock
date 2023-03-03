@@ -1573,7 +1573,6 @@ name = "pocket-relay-database"
 version = "0.3.0"
 dependencies = [
  "chrono",
- "log",
  "sea-orm",
  "sea-orm-migration",
  "serde",

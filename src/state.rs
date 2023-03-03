@@ -39,6 +39,7 @@ impl GlobalState {
             DatabaseType::MySQL(url)
         };
         let db = database::connect(ty).await;
+        info!("Connected to database..");
         Self::init_database_admin(&db).await;
         db
     }
@@ -53,7 +54,7 @@ impl GlobalState {
             Ok(value) => value,
             Err(_) => {
                 info!(
-                    "{} not set will not assign super admin to any accounts.",
+                    "{} not set. Will not assign super admin to any accounts.",
                     env::SUPER_ADMIN_EMAIL
                 );
                 return;

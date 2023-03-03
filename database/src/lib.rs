@@ -1,4 +1,3 @@
-use log::{debug, info};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::Database as SeaDatabase;
 use std::{
@@ -44,13 +43,9 @@ pub async fn connect(ty: DatabaseType) -> DatabaseConnection {
         .await
         .expect("Unable to create database connection");
 
-    info!("Connected to database: {url}");
-    debug!("Running migrations...");
-
     Migrator::up(&connection, None)
         .await
         .expect("Unable to run database migrations");
-    debug!("Migrations complete");
 
     connection
 }
