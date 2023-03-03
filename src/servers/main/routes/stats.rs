@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     servers::main::{
         models::{
@@ -11,7 +13,6 @@ use crate::{
     utils::components::{Components as C, Stats as S},
 };
 use blaze_pk::{
-    codec::Decodable,
     packet::{Request, Response},
     router::Router,
 };
@@ -39,43 +40,35 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 
 async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> ServerResult<Response> {
     let query = &*req;
-    handle_leaderboard_query(
-        &query.name,
-        LQuery::Normal {
-            start: query.start,
-            count: query.count,
-        },
-        &req,
-    )
-    .await
+    let group = get_group(&query.name).await?;
+    let response = match group.get_normal(query.start, query.count) {
+        Some((values, _)) => LeaderboardResponse::Many(values),
+        None => LeaderboardResponse::Empty,
+    };
+    Ok(req.response(response))
 }
 
 async fn handle_centered_leaderboard(
     req: Request<CenteredLeaderboardRequest>,
 ) -> ServerResult<Response> {
     let query = &*req;
-    handle_leaderboard_query(
-        &query.name,
-        LQuery::Centered {
-            player_id: query.center,
-            count: query.count,
-        },
-        &req,
-    )
-    .await
+    let group = get_group(&query.name).await?;
+    let response = match group.get_centered(query.center, query.count) {
+        Some(values) => LeaderboardResponse::Many(values),
+        None => LeaderboardResponse::Empty,
+    };
+    Ok(req.response(response))
 }
 async fn handle_filtered_leaderboard(
     req: Request<FilteredLeaderboardRequest>,
 ) -> ServerResult<Response> {
     let query = &*req;
-    handle_leaderboard_query(
-        &query.name,
-        LQuery::Filtered {
-            player_id: query.id,
-        },
-        &req,
-    )
-    .await
+    let group = get_group(&query.name).await?;
+    let response = match group.get_entry(query.id) {
+        Some(value) => LeaderboardResponse::One(value),
+        None => LeaderboardResponse::Empty,
+    };
+    Ok(req.response(response))
 }
 
 /// Handles returning the number of leaderboard objects present.
@@ -96,44 +89,19 @@ async fn handle_filtered_leaderboard(
 async fn handle_leaderboard_entity_count(
     req: EntityCountRequest,
 ) -> ServerResult<EntityCountResponse> {
-    let services = GlobalState::services();
-    let leaderboard = &services.leaderboard;
-    let ty = LeaderboardType::from_value(&req.name);
-
-    let group = leaderboard
-        .send(QueryMessage(ty))
-        .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?;
-
+    let group = get_group(&req.name).await?;
     let count = group.values.len();
-
     Ok(EntityCountResponse { count })
 }
 
-/// Handler function for handling leaderboard querys and returning the resulting
-/// leaderboard
-///
-/// `name`  The name of the leaderboard
-/// `query` The query to resolve
-async fn handle_leaderboard_query<R: Decodable + Send + 'static>(
-    name: &str,
-    query: LQuery,
-    req: &Request<R>,
-) -> ServerResult<Response> {
+async fn get_group(name: &str) -> ServerResult<Arc<LeaderboardGroup>> {
     let services = GlobalState::services();
     let leaderboard = &services.leaderboard;
     let ty = LeaderboardType::from_value(name);
-    let group = leaderboard
+    leaderboard
         .send(QueryMessage(ty))
         .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?;
-    let response = match group.resolve(query) {
-        LResult::Many(values, _) => LeaderboardResponse::Many(values),
-        LResult::One(value) => LeaderboardResponse::One(value),
-        LResult::Empty => LeaderboardResponse::Empty,
-    };
-
-    Ok(req.response(response))
+        .map_err(|_| ServerError::ServerUnavailableFinal)
 }
 
 fn get_locale_name(code: &str) -> &str {

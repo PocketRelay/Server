@@ -28,42 +28,6 @@ pub struct LeaderboardGroup {
     pub expires: SystemTime,
 }
 
-/// Different query types for querying the leaderboards
-/// in different ways
-pub enum LQuery {
-    /// Normal query
-    Normal {
-        /// Offset amount to start at
-        start: usize,
-        /// Number of items to retrieve
-        count: usize,
-    },
-    /// Query where the center is a specific player
-    Centered {
-        /// The ID of the player to center
-        player_id: PlayerID,
-        /// The number of players to query
-        count: usize,
-    },
-    /// Returning a leaderboard filtered for
-    /// a specific player
-    Filtered {
-        /// The ID of the player to get
-        player_id: PlayerID,
-    },
-}
-
-/// Result of a query from the leaderboard contains borrowed values
-/// from the leaderboard group
-pub enum LResult<'a> {
-    // Query resulted in nothing being found
-    Empty,
-    // Query resulted in a single item response
-    One(&'a LeaderboardEntry),
-    // Query resulted in a many item response
-    Many(&'a [LeaderboardEntry], bool),
-}
-
 impl LeaderboardGroup {
     /// Leaderboard contents are cached for 1 hour
     const LIFETIME: Duration = Duration::from_secs(60 * 60);
@@ -92,53 +56,46 @@ impl LeaderboardGroup {
         now.ge(&self.expires)
     }
 
-    /// Resolves the provided query on this entity group returning the LResult if it
-    /// was able be resolved or None if it was unable to resolve
-    ///
-    /// `query` The query to resolve
-    pub fn resolve(&self, query: LQuery) -> LResult {
+    pub fn get_normal(&self, start: usize, count: usize) -> Option<(&[LeaderboardEntry], bool)> {
         let values = &self.values;
         let values_len = values.len();
-        match query {
-            LQuery::Normal { start, count } => {
-                // The index to stop at
-                let end_index = (start + count).min(values_len);
 
-                values
-                    .get(start..end_index)
-                    .map(|value| LResult::Many(value, values_len > end_index))
-            }
-            LQuery::Centered { player_id, count } => {
-                // The number of items before the center index
-                let before = if count % 2 == 0 {
-                    count / 2 + 1
-                } else {
-                    count / 2
-                };
-                // The number of items after the center index
-                let after = count / 2;
+        // The index to stop at
+        let end_index = (start + count).min(values_len);
 
-                // The index of the centered player
-                let player_index =
-                    match values.iter().position(|value| value.player_id == player_id) {
-                        Some(value) => value,
-                        None => return LResult::Empty,
-                    };
+        values
+            .get(start..end_index)
+            .map(|value| (value, values_len > end_index))
+    }
 
-                // The index of the first item
-                let start_index = player_index - before.min(player_index);
-                // The index of the last item
-                let end_index = (player_index + after).min(values_len);
-                values
-                    .get(start_index..end_index)
-                    .map(|value| LResult::Many(value, values_len > end_index))
-            }
-            LQuery::Filtered { player_id } => values
-                .iter()
-                .find(|value| value.player_id == player_id)
-                .map(LResult::One),
-        }
-        .unwrap_or(LResult::Empty)
+    pub fn get_entry(&self, player_id: PlayerID) -> Option<&LeaderboardEntry> {
+        let values = &self.values;
+        values.iter().find(|value| value.player_id == player_id)
+    }
+
+    pub fn get_centered(&self, player_id: PlayerID, count: usize) -> Option<&[LeaderboardEntry]> {
+        let values = &self.values;
+        let values_len = values.len();
+        // The number of items before the center index
+        let before = if count % 2 == 0 {
+            count / 2 + 1
+        } else {
+            count / 2
+        };
+        // The number of items after the center index
+        let after = count / 2;
+
+        // The index of the centered player
+        let player_index = values
+            .iter()
+            .position(|value| value.player_id == player_id)?;
+
+        // The index of the first item
+        let start_index = player_index - before.min(player_index);
+        // The index of the last item
+        let end_index = (player_index + after).min(values_len);
+
+        values.get(start_index..end_index)
     }
 }
 

@@ -86,20 +86,22 @@ pub enum LeaderboardResponse<'a> {
     Many(&'a [LeaderboardEntry]),
 }
 
-fn write_leaderboard_entry(writer: &mut TdfWriter, value: &LeaderboardEntry) {
-    writer.tag_str(b"ENAM", &value.player_name);
-    writer.tag_u32(b"ENID", value.player_id);
-    writer.tag_usize(b"RANK", value.rank);
-    let value_str = value.value.to_string();
-    writer.tag_str(b"RSTA", &value_str);
-    writer.tag_zero(b"RWFG");
-    writer.tag_union_unset(b"RWST");
-    {
-        writer.tag_list_start(b"STAT", TdfType::String, 1);
-        writer.write_str(&value_str);
+impl Encodable for LeaderboardEntry {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_str(b"ENAM", &self.player_name);
+        writer.tag_u32(b"ENID", self.player_id);
+        writer.tag_usize(b"RANK", self.rank);
+        let value_str = self.value.to_string();
+        writer.tag_str(b"RSTA", &value_str);
+        writer.tag_zero(b"RWFG");
+        writer.tag_union_unset(b"RWST");
+        {
+            writer.tag_list_start(b"STAT", TdfType::String, 1);
+            writer.write_str(&value_str);
+        }
+        writer.tag_zero(b"UATT");
+        writer.tag_group_end();
     }
-    writer.tag_zero(b"UATT");
-    writer.tag_group_end();
 }
 
 impl Encodable for LeaderboardResponse<'_> {
@@ -110,12 +112,12 @@ impl Encodable for LeaderboardResponse<'_> {
             }
             Self::One(value) => {
                 writer.tag_list_start(b"LDLS", TdfType::Group, 1);
-                write_leaderboard_entry(writer, value);
+                value.encode(writer);
             }
             Self::Many(values) => {
                 writer.tag_list_start(b"LDLS", TdfType::Group, values.len());
                 for value in *values {
-                    write_leaderboard_entry(writer, value);
+                    value.encode(writer);
                 }
             }
         }

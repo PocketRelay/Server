@@ -1,5 +1,3 @@
-//! Module for leaderboard related logic
-
 use self::models::*;
 use crate::{
     state::GlobalState,
@@ -33,29 +31,6 @@ struct GroupState {
 #[derive(Message)]
 #[msg(rtype = "Arc<LeaderboardGroup>")]
 pub struct QueryMessage(pub LeaderboardType);
-
-/// Message used internally to update group state with
-/// a new group value once a leaderboard has been
-/// computed
-#[derive(Message)]
-struct SetGroupMessage {
-    ty: LeaderboardType,
-    group: Arc<LeaderboardGroup>,
-}
-
-impl Handler<SetGroupMessage> for Leaderboard {
-    type Response = ();
-
-    fn handle(&mut self, msg: SetGroupMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        self.groups.insert(
-            msg.ty,
-            GroupState {
-                computing: false,
-                group: msg.group,
-            },
-        );
-    }
-}
 
 impl Handler<QueryMessage> for Leaderboard {
     type Response = Fr<QueryMessage>;
@@ -105,6 +80,29 @@ impl Handler<QueryMessage> for Leaderboard {
     }
 }
 
+/// Message used internally to update group state with
+/// a new group value once a leaderboard has been
+/// computed
+#[derive(Message)]
+struct SetGroupMessage {
+    ty: LeaderboardType,
+    group: Arc<LeaderboardGroup>,
+}
+
+impl Handler<SetGroupMessage> for Leaderboard {
+    type Response = ();
+
+    fn handle(&mut self, msg: SetGroupMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        self.groups.insert(
+            msg.ty,
+            GroupState {
+                computing: false,
+                group: msg.group,
+            },
+        );
+    }
+}
+
 impl Leaderboard {
     pub fn start() -> Link<Leaderboard> {
         let this = Leaderboard {
@@ -127,8 +125,8 @@ impl Leaderboard {
 
         let db = GlobalState::database();
 
-        // The current database batch offset position
-        let mut offset = 0;
+        // The current players pagination page
+        let mut page = 0;
         let mut values: Vec<LeaderboardEntry> = Vec::new();
 
         // Decide the ranking function to use based on the type
@@ -137,7 +135,7 @@ impl Leaderboard {
         let mut join_set = JoinSet::new();
 
         loop {
-            let (players, more) = match Player::all(&db, offset, BATCH_COUNT).await {
+            let (players, more) = match Player::all(&db, page, BATCH_COUNT).await {
                 Ok((ref players, _)) if players.is_empty() => break,
                 Ok(value) => value,
                 Err(err) => {
@@ -162,7 +160,7 @@ impl Leaderboard {
                 break;
             }
 
-            offset += 1;
+            page += 1;
         }
 
         // Sort the values based on their value

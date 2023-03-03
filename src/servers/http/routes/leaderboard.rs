@@ -12,7 +12,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
+use thiserror::Error;
 
 /// Router function creates a new router with all the underlying
 /// routes for this file.
@@ -26,14 +26,17 @@ pub fn router() -> Router {
 /// Error type used in leaderboard routes to handle errors
 /// such as database errors and player not founds when
 /// searching for a specific player.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum LeaderboardError {
     /// Some server error occurred like a database failure when computing
     /// the leaderboards
+    #[error("Internal server error")]
     ServerError,
     /// The requested player was not found in the leaderboard
+    #[error("Player not found")]
     PlayerNotFound,
     /// Error for when a unknown leaderboard is requested
+    #[error("Unknown leaderboard")]
     UnknownLeaderboard,
 }
 
@@ -90,17 +93,9 @@ async fn get_leaderboard(
         .await
         .map_err(|_| LeaderboardError::ServerError)?;
 
-    let (entries, more) = match group.resolve(LQuery::Normal { start, count }) {
-        LResult::Many(many, more) => (many, more),
-        LResult::Empty => {
-            let empty = Json(LeaderboardResponse {
-                total: group.values.len(),
-                entries: &[],
-                more: false,
-            });
-            return Ok(empty.into_response());
-        }
-        _ => return Err(LeaderboardError::ServerError),
+    let (entries, more) = match group.get_normal(start, count) {
+        Some(value) => value,
+        None => return Err(LeaderboardError::ServerError),
     };
 
     let response = Json(LeaderboardResponse {
@@ -108,6 +103,7 @@ async fn get_leaderboard(
         entries,
         more,
     });
+
     Ok(response.into_response())
 }
 
@@ -129,22 +125,13 @@ async fn get_player_ranking(
         .await
         .map_err(|_| LeaderboardError::ServerError)?;
 
-    let entry = match group.resolve(LQuery::Filtered { player_id }) {
-        LResult::One(value) => Ok(value),
-        LResult::Empty => Err(LeaderboardError::PlayerNotFound),
-        _ => Err(LeaderboardError::ServerError),
-    }?;
+    let entry = match group.get_entry(player_id) {
+        Some(value) => value,
+        None => return Err(LeaderboardError::PlayerNotFound),
+    };
 
     let response = Json(entry);
     Ok(response.into_response())
-}
-
-/// Display implementation for the LeaderboardError this will be displayed
-/// as the error response message.
-impl Display for LeaderboardError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 /// Error status code implementation for the different error

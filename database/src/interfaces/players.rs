@@ -10,6 +10,8 @@ use sea_orm::{
 };
 use std::{future::Future, iter::Iterator, pin::Pin};
 
+type DbFuture<'a, T> = Pin<Box<dyn Future<Output = DbResult<T>> + Send + 'a>>;
+
 impl Player {
     /// Takes all the player models using a cursor starting at the offset row
     /// and finding the count number of values will check the count + 1 rows
@@ -66,7 +68,10 @@ impl Player {
         model.delete(db)
     }
 
-    /// Retrieves all the player data for this player
+    /// Retrieves all the player data for the desired player
+    ///
+    /// `id`    The ID of the player
+    /// `db`    The database connection
     pub fn all_data<'a>(
         id: u32,
         db: &'a DatabaseConnection,
@@ -80,6 +85,7 @@ impl Player {
     /// the value is updated otherwise the data will be created. The new data is
     /// returned.
     ///
+    /// `id`    The ID of the player
     /// `db`    The database connection
     /// `key`   The data key
     /// `value` The data value
@@ -137,6 +143,11 @@ impl Player {
         player_data::Entity::insert_many(models_iter).exec(db)
     }
 
+    /// Deletes the player data with the provided key for the
+    /// current player
+    ///
+    /// `db`    The database connection
+    /// `key`   The data key
     pub fn delete_data<'a>(
         &self,
         db: &'a DatabaseConnection,
@@ -148,6 +159,11 @@ impl Player {
             .exec(db)
     }
 
+    /// Gets the player data with the provided key for the
+    /// current player
+    ///
+    /// `db`  The database connection
+    /// `key` The data key
     pub fn get_data<'a>(
         &self,
         db: &'a DatabaseConnection,
@@ -158,6 +174,9 @@ impl Player {
             .one(db)
     }
 
+    /// Gets all the player class data for the current player
+    ///
+    /// `db` The database connection
     pub fn get_classes<'a>(
         &self,
         db: &'a DatabaseConnection,
@@ -167,6 +186,9 @@ impl Player {
             .all(db)
     }
 
+    /// Gets all the player character data for the current player
+    ///
+    /// `db` The database connection
     pub fn get_characters<'a>(
         &self,
         db: &'a DatabaseConnection,
@@ -178,6 +200,8 @@ impl Player {
 
     /// Parses the challenge points value which is the second
     /// item in the completion list.
+    ///
+    /// `db` The database connection
     pub async fn get_challenge_points(&self, db: &DatabaseConnection) -> Option<u32> {
         let list = self.get_data(db, "Completion").await.ok()??.value;
         let part = list.split(',').nth(1)?;
@@ -197,11 +221,10 @@ impl Player {
         players::Entity::find_by_id(id).one(db)
     }
 
-    /// Attempts to find a player with the provided email. Conditional
-    /// check for whether to allow origin accounts in the search.
+    /// Attempts to find a player with the provided email.
     ///
-    /// `email`  The email address to search for
-    /// `origin` Whether to check for origin accounts or normal accounts
+    /// `db`    The database connection
+    /// `email` The email address to search for
     pub fn by_email<'a>(
         db: &'a DatabaseConnection,
         email: &str,
@@ -276,5 +299,3 @@ impl Player {
         model.update(db)
     }
 }
-
-type DbFuture<'a, T> = Pin<Box<dyn Future<Output = DbResult<T>> + Send + 'a>>;
