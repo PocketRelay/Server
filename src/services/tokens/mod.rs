@@ -19,20 +19,6 @@ pub struct Tokens {
     key: hmac::Key,
 }
 
-#[derive(Debug, Error)]
-pub enum VerifyError {
-    #[error("Expired token")]
-    Expired,
-    #[error("Invalid token")]
-    Invalid,
-}
-
-impl From<base64ct::Error> for VerifyError {
-    fn from(_: base64ct::Error) -> Self {
-        Self::Invalid
-    }
-}
-
 impl Tokens {
     /// Expiry time for tokens
     const EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24 * 30 /* 30 Days */);
@@ -148,5 +134,19 @@ impl Tokens {
         }
 
         Ok(id)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum VerifyError {
+    #[error("Expired token")]
+    Expired,
+    #[error("Invalid token")]
+    Invalid,
+}
+
+impl From<base64ct::Error> for VerifyError {
+    fn from(_: base64ct::Error) -> Self {
+        Self::Invalid
     }
 }
