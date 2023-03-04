@@ -14,6 +14,12 @@
 
 **Pocket Relay** Is a custom implementation of the Mass Effect 3 multiplayer servers all bundled into a easy to use server with a Dashboard for managing accounts and inventories.
 
+With **Pocket Relay** you can play Mass Effect 3 multiplayer offline by yourself, over LAN, or even over WAN as a public server 
+
+## 📌 EA / BioWare Notice
+
+The **Pocket Relay** software in all its forms are in no way or form supported, endorsed, or provided by BioWare or Electronic Arts. 
+
 ## 📖 Starting your own server
 
 If you would like to host your own **Pocket Relay** serveryou can follow this guide [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_SERVER.md) 
@@ -50,49 +56,41 @@ In order to configure the server such as changing the ports you can see the
 configuration documentation [Here (docs/CONFIG.md)](docs/CONFIG.md)
 
 
-# ❔ What
+## ⚙️ Features
 
-This is an implementation of a Mass Effect 3 multiplayer server. This server emulates the functionality of the official servers except it can run locally on your machine and be shared over LAN allowing you to play Mass Effect 3 multiplayer 
-without an internet connection or just locally for a LAN party.
+- **Origin Support** This server supports **Origin** / **EA Launcher** copies of the game through its fetching system. As long as the official servers are still available and you have internet access the server will connect to the official servers to authorize **Origin** accounts. *This behavior can be disabled using the `PR_ORIGIN_FETCH` environment variable*
+- **Origin Fetching** Along with supporting **Origin** authentication your player data from the official servers can also be loaded for those logging into **Origin** accounts. *This behavior can be disabled using the `PR_ORIGIN_FETCH_DATA` environment variable*
+- **Portable & Platform Independent** This server can be run on most hardware and software due to its low requirements and custom
+implementations of lots of required portions allowing you to run it
+on Windows, Linux, etc. *Note the server will store the player data and logging in a folder named `data` in the same folder as the exe*
+- **Cracked Support** This server supports cracked Mass Effect 3 copies so you can play on the server using them.
+- **Docker Support** This server includes a `Dockerfile` so that it can be run in a containerized environment. The server uses a small alpine linux container to run inside
+- **Dashboard** The server includes a management dashboard 
+    - This includes leaderboards displays
+    - Allowing players to edit their username, email, and password
+    - Deleting and managing accounts
+    - Viewing running games
+    - Inventory editing for admins (Weapons, Classes, Characters, etc)
+    - View server logs as super admin
 
-# 🔌 Client Usage
-In order to connect to a Pocket Relay server you will first need to use the Client tool to patch your
-game and update your hosts file with the address of the server.
-
-You can find the client [Here (https://github.com/PocketRelay/Client)](https://github.com/PocketRelay/Client)
-
-The client tool makes it easy to do the setup process. But its possible to do everything the client
-does manually if you'd prefer. Documentation for how to do so will be posted at a later point.
-
-
-# 🚀 Building
+## 🚀 Manual Building
 
 Instructions for building the server can be found [Here](https://github.com/PocketRelay/.github/blob/main/manual/BUILDING.md)
 
-# ⚙️ Features
+> Note: Building the server can be quite a heavy load on your computer
 
-**Origin Authentication** This server supports origin authentication through the official servers. This is enabled by default but can be changed using the PR_ORIGIN_FETCH environment variable.
+## Dashboard
 
-> NOTE: Origin Authentication requires that the PR_RETRIEVER must not be false. If the 
-> retriever system is disabled then it won't be allowed to connect to the official servers
+Below are some screenshots of the included dashboard. You can access the dashboard by visting the server connection URL this 
+URL will be present in the server logs / output upon launching.
 
-**Origin Fetching** This server supports copying over Origin credits, classes, characters, weapons, levels, etc from the official servers. This is enabled by default and can
-be changed using the PR_ORIGIN_FETCH_DATA environment variable.
+> If you are running the server on the same computer you can access the dashboard using http://localhost
 
-**Man-In-The-Middle Server** This server has a built in Man-In-The-Middle server for proxying your connection to the Official servers while logging all the packets that travel
-between the client and the server. 
+![Dashboard Login](images/3.png)
+![Dashboard Home](images/1.png)
+![Dashboard Inventory](images/2.png)
 
-**Dockerized** This server is able to be built and run in an Alpine linux docker container 
-removing the need for building and managing files and executables.
-
-**Fully portable & Platform Independent** Other Mass Effect 3 servers were limited by the operating systems that they were able to run on due to limitations with SSLv3 which is required by a portion of the server to function. However this server has its own 
-custom SSLv3 implementation and can be compiled for Windows, Linux and even Alpine linux.
-The entire server fits inside a single executable and the only files it writes to the drive
-are log files and the database if using the SQLite database version. 
-
-**Cracked & Origin Support** This server supports both cracked and Origin clients.
-
-# ⛔️ Known Issues
+## ⛔️ Known Issues
 
 **Host Migration** Host migration is partially working however it only currently works
 for a single player. If there is more than one player in the game when host migration
@@ -115,12 +113,7 @@ taken to a login screen where you can create a new account with Pocket Relay.
 will crash. The cause for this is not yet known but restarting the game and attempting to create
 an account again usually works.
 
-# 📌 EA / BioWare Notice
-
-All code in this repository is authored by Jacobtread and none is taken from BioWare. This code has been 
-produced from studying the protocol of the official servers and emulating its functionality. This program is in no way or form supported, endorsed, or provided by BioWare or Electronic Arts.
-
-# 🧾 License
+## 🧾 License
 
 MIT License
 
