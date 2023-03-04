@@ -1,5 +1,4 @@
 [workspace.package]
-version = "0.3.0-beta1"
 edition = "2021"
 license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
@@ -39,15 +38,15 @@ targets = [
 
 [package]
 name = "pocket-relay"
+version = "0.3.0-beta1"
 description = "Pocket Relay Server"
-repository = "https://github.com/PocketRelay/ServerRust"
+repository = "https://github.com/PocketRelay/Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
 # Glob to ensure resources is included 
 include = ["src/**/*"]
 build = "build.rs"
 
-version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
@@ -67,7 +66,7 @@ blaze-pk = "1"
 blaze-ssl-async = "^0.3"
 
 # Isolated database crate
-database = { path = "database", package = "pocket-relay-database", version = "^0.3" }
+database = { path = "database", package = "pocket-relay-database", version = "0.3.0-beta1" }
 
 # Resource embedding using debug-embed to always resolve relative to the Cargo.toml file
 rust-embed = { version = "6.4.2", features = ["debug-embed"] }

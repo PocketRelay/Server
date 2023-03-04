@@ -1,7 +1,7 @@
 [package]
 name = "pocket-relay-database"
 description = "Module for isolating the database logic from the Pocket Relay servers"
-version = "0.3.0"
+version = "0.3.0-beta1"
 
 repository.workspace = true
 edition.workspace = true
