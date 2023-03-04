@@ -50,7 +50,7 @@ blaze-pk = "1"
 blaze-ssl-async = "^0.3"
 
 # Isolated database crate
-database = { path = "database", package = "pocket-relay-database", version = "0.3.0-beta1" }
+database = { path = "database", package = "pocket-relay-database", version = "^0.3" }
 
 # Resource embedding using debug-embed to always resolve relative to the Cargo.toml file
 rust-embed = { version = "6.4.2", features = ["debug-embed"] }
