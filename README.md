@@ -9,6 +9,8 @@
 ![Cargo Downloads](https://img.shields.io/crates/d/pocket-relay?style=for-the-badge)
 ![Build](https://img.shields.io/github/actions/workflow/status/PocketRelay/ServerRust/rust.yml?style=for-the-badge)
 
+[Discord Server (https://discord.gg/yvycWW8RgR)](https://discord.gg/yvycWW8RgR)
+
 Development on this implementation has made great strides and has surpassed the original Kotlin server in terms of performance
 reliabality, functionality and actual parody to the official server.
 
@@ -108,6 +110,9 @@ taken to a login screen where you can create a new account with Pocket Relay.
 > The only way to solve this issue would be to delete or move the Local_Profile.sav file
 > whenever switching servers in order to clear the token.
 
+**Account creation crash** Sometimes when attempting to create a new account the Mass Effect client
+will crash. The cause for this is not yet known but restarting the game and attempting to create
+an account again usually works.
 
 # 📌 EA / BioWare Notice
 

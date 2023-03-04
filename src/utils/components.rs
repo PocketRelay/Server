@@ -1,268 +1,507 @@
 //! Modules contains the component definitions for the servers used throughout
 //! this application.
 
-use blaze_pk::define_components;
-use std::hash::Hash;
+use blaze_pk::{PacketComponent, PacketComponents};
 
-define_components! {
-    Authentication (0x1) {
-        UpdateAccount (0x14)
-        UpdateParentalEmail (0x1C)
-        ListUserEntitlements2 (0x1D)
-        GetAccount (0x1E)
-        GrantEntitlement (0x1F)
-        ListEntitlements (0x20)
-        HasEntitlement (0x21)
-        GetUseCount (0x22)
-        DecrementUseCount (0x23)
-        GetAuthToken(0x24)
-        GetHandoffToken (0x25)
-        GetPasswordRules (0x26)
-        GrantEntitlement2 (0x27)
-        Login (0x28)
-        AcceptTOS (0x29)
-        GetTOSInfo (0x2A)
-        ModifyEntitlement2 (0x2B)
-        ConsumeCode (0x2C)
-        PasswordForgot (0x2D)
-        GetTOSContent (0x2E)
-        GetPrivacyPolicyContent (0x2F)
-        ListPersonalEntitlements2 (0x30)
-        SilentLogin (0x32)
-        CheckAgeRequirement (0x33)
-        GetOptIn (0x34)
-        EnableOptIn (0x35)
-        DisableOptIn (0x36)
-        ExpressLogin (0x3C)
-        Logout (0x46)
-        CreatePersona (0x50)
-        GetPersona (0x5A)
-        ListPersonas (0x64)
-        LoginPersona (0x6E)
-        LogoutPersona (0x78)
-        DeletePersona (0x8C)
-        DisablePersona (0x8D)
-        ListDeviceAccounts (0x8F)
-        XboxCreateAccount (0x96)
-        OriginLogin (0x98)
-        XboxAssociateAccount (0xA0)
-        XboxLogin (0xAA)
-        PS3CreateAccount (0xB4)
-        PS3AssociateAccount (0xBE)
-        PS3Login (0xC8)
-        ValidateSessionKey (0xD2)
-        CreateWalUserSession (0xE6)
-        AcceptLegalDocs (0xF1)
-        GetLegalDocsInfo (0xF2)
-        GetTermsOfServiceConent (0xF6)
-        DeviceLoginGuest (0x12C)
-        CreateAccount (0xA)
-    }
+#[derive(Debug, Hash, PartialEq, Eq, PacketComponents)]
+pub enum Components {
+    #[component(target = 0x1)]
+    Authentication(Authentication),
+    #[component(target = 0x4)]
+    GameManager(GameManager),
+    #[component(target = 0x5)]
+    Redirector(Redirector),
+    #[component(target = 0x7)]
+    Stats(Stats),
+    #[component(target = 0x9)]
+    Util(Util),
+    #[component(target = 0xF)]
+    Messaging(Messaging),
+    #[component(target = 0x19)]
+    AssociationLists(AssociationLists),
+    #[component(target = 0x1C)]
+    GameReporting(GameReporting),
+    #[component(target = 0x7802)]
+    UserSessions(UserSessions),
+}
 
-    GameManager (0x4) {
-        CreateGame (0x1)
-        DestroyGame (0x2)
-        AdvanceGameState (0x3)
-        SetGameSettings (0x4)
-        SetPlayerCapacity (0x5)
-        SetPresenceMode (0x6)
-        SetGameAttributes (0x7)
-        SetPlayerAttributes (0x8)
-        JoinGame (0x9)
-        RemovePlayer (0xB)
-        StartMatchmaking (0xD)
-        CancelMatchmaking (0xE)
-        FinalizeGameCreation (0xF)
-        ListGames (0x11)
-        SetPlayerCustomData (0x12)
-        ReplayGame (0x13)
-        ReturnDedicatedServerToPool (0x14)
-        JoinGameByGroup (0x15)
-        LeaveGameByGroup (0x16)
-        MigrateGame (0x17)
-        UpdateGameHostMigrationStatus (0x18)
-        ResetDedicatedServer (0x19)
-        UpdateGameSession (0x1A)
-        BanPlayer (0x1B)
-        UpdateMeshConnection (0x1D)
-        RemovePlayerFromBannedList (0x1F)
-        ClearBannedList(0x20)
-        GetBannedList(0x21)
-        AddQueuedPlayerToGame(0x26)
-        UpdateGameName(0x27)
-        EjectHost(0x28)
-        GetGameListSnapshot(0x64)
-        GetGameListSubscription(0x65)
-        DestroyGameList(0x66)
-        GetFullGameData(0x67)
-        GetMatchmakingConfig(0x68)
-        GetGameDataFromID(0x69)
-        AddAdminPlayer(0x6A)
-        RemoveAdminPlayer(0x6B)
-        SetPlayerTeam(0x6C)
-        ChangeGameTeamID (0x6D)
-        MigrateAdminPlayer(0x6E)
-        GetUserSetGameListSubscription(0x6F)
-        SwapPlayersTeam(0x70)
-        RegisterDynamicDedicatedServerCreator(0x96)
-        UnregisterDynamicDedicatedServerCreator(0x97);
+#[derive(Debug, Hash, PartialEq, Eq, PacketComponent)]
+pub enum Authentication {
+    #[command(target = 0x14)]
+    UpdateAccount,
+    #[command(target = 0x1C)]
+    UpdateParentalEmail,
+    #[command(target = 0x1D)]
+    ListUserEntitlements2,
+    #[command(target = 0x1E)]
+    GetAccount,
+    #[command(target = 0x1F)]
+    GrantEntitlement,
+    #[command(target = 0x20)]
+    ListEntitlements,
+    #[command(target = 0x21)]
+    HasEntitlement,
+    #[command(target = 0x22)]
+    GetUseCount,
+    #[command(target = 0x23)]
+    DecrementUseCount,
+    #[command(target = 0x24)]
+    GetAuthToken,
+    #[command(target = 0x25)]
+    GetHandoffToken,
+    #[command(target = 0x26)]
+    GetPasswordRules,
+    #[command(target = 0x27)]
+    GrantEntitlement2,
+    #[command(target = 0x28)]
+    Login,
+    #[command(target = 0x29)]
+    AcceptTOS,
+    #[command(target = 0x2A)]
+    GetTOSInfo,
+    #[command(target = 0x2B)]
+    ModifyEntitlement2,
+    #[command(target = 0x2C)]
+    ConsumeCode,
+    #[command(target = 0x2D)]
+    PasswordForgot,
+    #[command(target = 0x2E)]
+    GetTOSContent,
+    #[command(target = 0x2F)]
+    GetPrivacyPolicyContent,
+    #[command(target = 0x30)]
+    ListPersonalEntitlements2,
+    #[command(target = 0x32)]
+    SilentLogin,
+    #[command(target = 0x33)]
+    CheckAgeRequirement,
+    #[command(target = 0x34)]
+    GetOptIn,
+    #[command(target = 0x35)]
+    EnableOptIn,
+    #[command(target = 0x36)]
+    DisableOptIn,
+    #[command(target = 0x3C)]
+    ExpressLogin,
+    #[command(target = 0x46)]
+    Logout,
+    #[command(target = 0x50)]
+    CreatePersona,
+    #[command(target = 0x5A)]
+    GetPersona,
+    #[command(target = 0x64)]
+    ListPersonas,
+    #[command(target = 0x6E)]
+    LoginPersona,
+    #[command(target = 0x78)]
+    LogoutPersona,
+    #[command(target = 0x8C)]
+    DeletePersona,
+    #[command(target = 0x8D)]
+    DisablePersona,
+    #[command(target = 0x8F)]
+    ListDeviceAccounts,
+    #[command(target = 0x96)]
+    XboxCreateAccount,
+    #[command(target = 0x98)]
+    OriginLogin,
+    #[command(target = 0xA0)]
+    XboxAssociateAccount,
+    #[command(target = 0xAA)]
+    XboxLogin,
+    #[command(target = 0xB4)]
+    PS3CreateAccount,
+    #[command(target = 0xBE)]
+    PS3AssociateAccount,
+    #[command(target = 0xC8)]
+    PS3Login,
+    #[command(target = 0xD2)]
+    ValidateSessionKey,
+    #[command(target = 0xE6)]
+    CreateWalUserSession,
+    #[command(target = 0xF1)]
+    AcceptLegalDocs,
+    #[command(target = 0xF2)]
+    GetLegalDocsInfo,
+    #[command(target = 0xF6)]
+    GetTermsOfServiceConent,
+    #[command(target = 0x12C)]
+    DeviceLoginGuest,
+    #[command(target = 0xA)]
+    CreateAccount,
+}
 
-        notify {
-            MatchmakingFailed (0xA)
-            MatchmakingAsyncStatus (0xC)
-            GameCreated (0xF)
-            GameRemoved (0x10)
-            GameSetup (0x14)
-            PlayerJoining (0x15)
-            JoiningPlayerInitiateConnections (0x16)
-            PlayerJoiningQueue (0x17)
-            PlayerPromotedFromQueue (0x18)
-            PlayerClaimingReservation (0x19)
-            PlayerJoinCompleted (0x1E)
-            PlayerRemoved (0x28)
-            HostMigrationFinished (0x3C)
-            HostMigrationStart (0x46)
-            PlatformHostInitialized (0x47)
-            GameAttribChange (0x50)
-            PlayerAttribChange(0x5A)
-            PlayerCustomDataChange (0x5F)
-            GameStateChange (0x64)
-            GameSettingsChange (0x6E)
-            GameCapacityChange(0x6F)
-            GameReset (0x70)
-            GameReportingIDChange (0x71)
-            GameSessionUpdated (0x73)
-            GamePlayerStateChange (0x74)
-            GamePlayerTeamChange (0x75)
-            GameTeamIDChange (0x76)
-            ProcesssQueue (0x77)
-            PrecenseModeChanged (0x78)
-            GamePlayerQueuePositionChange (0x79)
-            GameListUpdate (0xC9)
-            AdminListChange (0xCA)
-            CreateDynamicDedicatedServerGame (0xDC)
-            GameNameChange (0xE6)
-        }
-    }
+#[derive(Debug, Hash, PartialEq, Eq, PacketComponent)]
+pub enum GameManager {
+    #[command(target = 0x1)]
+    CreateGame,
+    #[command(target = 0x2)]
+    DestroyGame,
+    #[command(target = 0x3)]
+    AdvanceGameState,
+    #[command(target = 0x4)]
+    SetGameSettings,
+    #[command(target = 0x5)]
+    SetPlayerCapacity,
+    #[command(target = 0x6)]
+    SetPresenceMode,
+    #[command(target = 0x7)]
+    SetGameAttributes,
+    #[command(target = 0x8)]
+    SetPlayerAttributes,
+    #[command(target = 0x9)]
+    JoinGame,
+    #[command(target = 0xB)]
+    RemovePlayer,
+    #[command(target = 0xD)]
+    StartMatchmaking,
+    #[command(target = 0xE)]
+    CancelMatchmaking,
+    #[command(target = 0xF)]
+    FinalizeGameCreation,
+    #[command(target = 0x11)]
+    ListGames,
+    #[command(target = 0x12)]
+    SetPlayerCustomData,
+    #[command(target = 0x13)]
+    ReplayGame,
+    #[command(target = 0x14)]
+    ReturnDedicatedServerToPool,
+    #[command(target = 0x15)]
+    JoinGameByGroup,
+    #[command(target = 0x16)]
+    LeaveGameByGroup,
+    #[command(target = 0x17)]
+    MigrateGame,
+    #[command(target = 0x18)]
+    UpdateGameHostMigrationStatus,
+    #[command(target = 0x19)]
+    ResetDedicatedServe,
+    #[command(target = 0x1A)]
+    UpdateGameSession,
+    #[command(target = 0x1B)]
+    BanPlayer,
+    #[command(target = 0x1D)]
+    UpdateMeshConnection,
+    #[command(target = 0x1F)]
+    RemovePlayerFromBannedList,
+    #[command(target = 0x20)]
+    ClearBannedList,
+    #[command(target = 0x21)]
+    GetBannedList,
+    #[command(target = 0x26)]
+    AddQueuedPlayerToGame,
+    #[command(target = 0x27)]
+    UpdateGameName,
+    #[command(target = 0x28)]
+    EjectHost,
+    #[command(target = 0x64)]
+    GetGameListSnapshot,
+    #[command(target = 0x65)]
+    GetGameListSubscription,
+    #[command(target = 0x66)]
+    DestroyGameList,
+    #[command(target = 0x67)]
+    GetFullGameData,
+    #[command(target = 0x68)]
+    GetMatchmakingConfig,
+    #[command(target = 0x69)]
+    GetGameDataFromID,
+    #[command(target = 0x6A)]
+    AddAdminPlayer,
+    #[command(target = 0x6B)]
+    RemoveAdminPlayer,
+    #[command(target = 0x6C)]
+    SetPlayerTeam,
+    #[command(target = 0x6D)]
+    ChangeGameTeamID,
+    #[command(target = 0x6E)]
+    MigrateAdminPlayer,
+    #[command(target = 0x6F)]
+    GetUserSetGameListSubscription,
+    #[command(target = 0x70)]
+    SwapPlayersTeam,
+    #[command(target = 0x96)]
+    RegisterDynamicDedicatedServerCreator,
+    #[command(target = 0x97)]
+    UnregisterDynamicDedicatedServerCreator,
 
-    Redirector(0x5) {
-        GetServerInstance (0x1)
-    }
+    #[command(target = 0xA, notify)]
+    MatchmakingFailed,
+    #[command(target = 0xC, notify)]
+    MatchmakingAsyncStatus,
+    #[command(target = 0xF, notify)]
+    GameCreated,
+    #[command(target = 0x10, notify)]
+    GameRemoved,
+    #[command(target = 0x14, notify)]
+    GameSetup,
+    #[command(target = 0x15, notify)]
+    PlayerJoining,
+    #[command(target = 0x16, notify)]
+    JoiningPlayerInitiateConnections,
+    #[command(target = 0x17, notify)]
+    PlayerJoiningQueue,
+    #[command(target = 0x18, notify)]
+    PlayerPromotedFromQueue,
+    #[command(target = 0x19, notify)]
+    PlayerClaimingReservation,
+    #[command(target = 0x1E, notify)]
+    PlayerJoinCompleted,
+    #[command(target = 0x28, notify)]
+    PlayerRemoved,
+    #[command(target = 0x3C, notify)]
+    HostMigrationFinished,
+    #[command(target = 0x46, notify)]
+    HostMigrationStart,
+    #[command(target = 0x47, notify)]
+    PlatformHostInitialized,
+    #[command(target = 0x50, notify)]
+    GameAttribChange,
+    #[command(target = 0x5A, notify)]
+    PlayerAttribChange,
+    #[command(target = 0x5F, notify)]
+    PlayerCustomDataChange,
+    #[command(target = 0x64, notify)]
+    GameStateChange,
+    #[command(target = 0x6E, notify)]
+    GameSettingsChange,
+    #[command(target = 0x6F, notify)]
+    GameCapacityChange,
+    #[command(target = 0x70, notify)]
+    GameReset,
+    #[command(target = 0x71, notify)]
+    GameReportingIDChange,
+    #[command(target = 0x73, notify)]
+    GameSessionUpdated,
+    #[command(target = 0x74, notify)]
+    GamePlayerStateChange,
+    #[command(target = 0x75, notify)]
+    GamePlayerTeamChange,
+    #[command(target = 0x76, notify)]
+    GameTeamIDChange,
+    #[command(target = 0x77, notify)]
+    ProcesssQueue,
+    #[command(target = 0x78, notify)]
+    PrecenseModeChanged,
+    #[command(target = 0x79, notify)]
+    GamePlayerQueuePositionChange,
+    #[command(target = 0xC9, notify)]
+    GameListUpdate,
+    #[command(target = 0xCA, notify)]
+    AdminListChange,
+    #[command(target = 0xDC, notify)]
+    CreateDynamicDedicatedServerGame,
+    #[command(target = 0xE6, notify)]
+    GameNameChange,
+}
 
-    Stats (0x7) {
-        GetStatDecs(0x1)
-        GetStats(0x2)
-        GetStatGroupList(0x3)
-        GetStatGroup(0x4)
-        GetStatsByGroup(0x5)
-        GetDateRange(0x6)
-        GetEntityCount(0x7)
-        GetLeaderboardGroup(0xA)
-        GetLeaderboardFolderGroup(0xB)
-        GetLeaderboard(0xc)
-        GetCenteredLeaderboard(0xD)
-        GetFilteredLeaderboard(0xE)
-        GetKeyScopesMap(0xF)
-        GetStatsByGroupASync(0x10)
-        GetLeaderboardTreeAsync(0x11)
-        GetLeaderboardEntityCount(0x12)
-        GetStatCategoryList(0x13)
-        GetPeriodIDs(0x14)
-        GetLeaderboardRaw(0x15)
-        GetCenteredLeaderboardRaw(0x16)
-        GetFilteredLeaderboardRaw(0x17)
-        ChangeKeyScopeValue(0x18)
-    }
+#[derive(Debug, Hash, PartialEq, Eq, PacketComponent)]
+pub enum Redirector {
+    #[command(target = 0x1)]
+    GetServerInstance,
+}
 
-    Util (0x9) {
-        FetchClientConfig (0x1)
-        Ping (0x2)
-        SetClientData (0x3)
-        LocalizeStrings (0x4)
-        GetTelemetryServer (0x5)
-        GetTickerServer (0x6)
-        PreAuth (0x7)
-        PostAuth (0x8)
-        UserSettingsLoad (0xA)
-        UserSettingsSave (0xB)
-        UserSettingsLoadAll (0xC)
-        DeleteUserSettings (0xE)
-        FilterForProfanity (0x14)
-        FetchQOSConfig (0x15)
-        SetClientMetrics (0x16)
-        SetConnectionState (0x17)
-        GetPSSConfig (0x18)
-        GetUserOptions (0x19)
-        SetUserOptions (0x1A)
-        SuspendUserPing (0x1B)
-    }
+#[derive(Debug, Hash, PartialEq, Eq, PacketComponent)]
+pub enum Stats {
+    #[command(target = 0x1)]
+    GetStatDecs,
+    #[command(target = 0x2)]
+    GetStats,
+    #[command(target = 0x3)]
+    GetStatGroupList,
+    #[command(target = 0x4)]
+    GetStatGroup,
+    #[command(target = 0x5)]
+    GetStatsByGroup,
+    #[command(target = 0x6)]
+    GetDateRange,
+    #[command(target = 0x7)]
+    GetEntityCount,
+    #[command(target = 0xA)]
+    GetLeaderboardGroup,
+    #[command(target = 0xB)]
+    GetLeaderboardFolderGroup,
+    #[command(target = 0xC)]
+    GetLeaderboard,
+    #[command(target = 0xD)]
+    GetCenteredLeaderboard,
+    #[command(target = 0xE)]
+    GetFilteredLeaderboard,
+    #[command(target = 0xF)]
+    GetKeyScopesMap,
+    #[command(target = 0x10)]
+    GetStatsByGroupASync,
+    #[command(target = 0x11)]
+    GetLeaderboardTreeAsync,
+    #[command(target = 0x12)]
+    GetLeaderboardEntityCount,
+    #[command(target = 0x13)]
+    GetStatCategoryList,
+    #[command(target = 0x14)]
+    GetPeriodIDs,
+    #[command(target = 0x15)]
+    GetLeaderboardRaw,
+    #[command(target = 0x16)]
+    GetCenteredLeaderboardRaw,
+    #[command(target = 0x17)]
+    GetFilteredLeaderboardRaw,
+    #[command(target = 0x18)]
+    ChangeKeyScopeValue,
+}
 
-    Messaging (0xF) {
-        FetchMessages (0x2)
-        PurgeMessages (0x3)
-        TouchMessages (0x4)
-        GetMessages (0x5);
+#[derive(Debug, Hash, PartialEq, Eq, PacketComponent)]
+pub enum Util {
+    #[command(target = 0x1)]
+    FetchClientConfig,
+    #[command(target = 0x2)]
+    Ping,
+    #[command(target = 0x3)]
+    SetClientData,
+    #[command(target = 0x4)]
+    LocalizeStrings,
+    #[command(target = 0x5)]
+    GetTelemetryServer,
+    #[command(target = 0x6)]
+    GetTickerServer,
+    #[command(target = 0x7)]
+    PreAuth,
+    #[command(target = 0x8)]
+    PostAuth,
+    #[command(target = 0xA)]
+    UserSettingsLoad,
+    #[command(target = 0xB)]
+    UserSettingsSave,
+    #[command(target = 0xC)]
+    UserSettingsLoadAll,
+    #[command(target = 0xE)]
+    DeleteUserSettings,
+    #[command(target = 0x14)]
+    FilterForProfanity,
+    #[command(target = 0x15)]
+    FetchQOSConfig,
+    #[command(target = 0x16)]
+    SetClientMetrics,
+    #[command(target = 0x17)]
+    SetConnectionState,
+    #[command(target = 0x18)]
+    GetPSSConfig,
+    #[command(target = 0x19)]
+    GetUserOptions,
+    #[command(target = 0x1A)]
+    SetUserOptions,
+    #[command(target = 0x1B)]
+    SuspendUserPing,
+}
 
-        notify {
-            SendMessage (0x1)
-        }
-    }
+#[derive(Debug, Hash, PartialEq, Eq, PacketComponent)]
+pub enum Messaging {
+    #[command(target = 0x2)]
+    FetchMessages,
+    #[command(target = 0x3)]
+    PurgeMessages,
+    #[command(target = 0x4)]
+    TouchMessages,
+    #[command(target = 0x5)]
+    GetMessages,
+    #[command(target = 0x1, notify)]
+    SendMessage,
+}
 
-    AssociationLists (0x19) {
-        AddUsersToList (0x1)
-        RemoveUsersFromList (0x2)
-        ClearList (0x3)
-        SetUsersToList (0x4)
-        GetListForUser (0x5)
-        GetLists (0x6)
-        SubscribeToLists (0x7)
-        UnsubscribeToLists (0x8)
-        GetConfigListsInfo (0x9)
-    }
+#[derive(Debug, Hash, PartialEq, Eq, PacketComponent)]
+pub enum AssociationLists {
+    #[command(target = 0x1)]
+    AddUsersToList,
+    #[command(target = 0x2)]
+    RemoveUsersFromList,
+    #[command(target = 0x3)]
+    ClearList,
+    #[command(target = 0x4)]
+    SetUsersToList,
+    #[command(target = 0x5)]
+    GetListForUser,
+    #[command(target = 0x6)]
+    GetLists,
+    #[command(target = 0x7)]
+    SubscribeToLists,
+    #[command(target = 0x8)]
+    UnsubscribeToLists,
+    #[command(target = 0x9)]
+    GetConfigListsInfo,
+}
 
-    GameReporting (0x1C) {
-        SubmitGameReport (0x1)
-        SubmitOfflineGameReport (0x2)
-        SubmitGameEvents (0x3)
-        GetGameReportQuery (0x4)
-        GetGameReportQueriesList (0x5)
-        GetGameReports (0x6)
-        GetGameReportView (0x7)
-        GetGameReportViewInfo (0x8)
-        GetGameReportViewInfoList (0x9)
-        GetGameReportTypes (0xA)
-        UpdateMetrics (0xB)
-        GetGameReportColumnInfo(0xC)
-        GetGameReortColummnValues(0xD)
-        SubmitTrustedMidGameReport (0x64)
-        SubmitTrustedEndGameReport (0x65);
+#[derive(Debug, Hash, PartialEq, Eq, PacketComponent)]
+pub enum GameReporting {
+    #[command(target = 0x1)]
+    SubmitGameReport,
+    #[command(target = 0x2)]
+    SubmitOfflineGameReport,
+    #[command(target = 0x3)]
+    SubmitGameEvents,
+    #[command(target = 0x4)]
+    GetGameReportQuery,
+    #[command(target = 0x5)]
+    GetGameReportQueriesList,
+    #[command(target = 0x6)]
+    GetGameReports,
+    #[command(target = 0x7)]
+    GetGameReportView,
+    #[command(target = 0x8)]
+    GetGameReportViewInfo,
+    #[command(target = 0x9)]
+    GetGameReportViewInfoList,
+    #[command(target = 0xA)]
+    GetGameReportTypes,
+    #[command(target = 0xB)]
+    UpdateMetrics,
+    #[command(target = 0xC)]
+    GetGameReportColumnInfo,
+    #[command(target = 0xD)]
+    GetGameReortColummnValues,
+    #[command(target = 0x64)]
+    SubmitTrustedMidGameReport,
+    #[command(target = 0x65)]
+    SubmitTrustedEndGameReport,
+    #[command(target = 0x72, notify)]
+    GameReportSubmitted,
+}
 
-        notify {
-            GameReportSubmitted(0x72)
-        }
-    }
-
-    UserSessions (0x7802) {
-        UpdateHardwareFlags (0x8)
-        LookupUser (0xC)
-        LookupUsers (0xD)
-        LookupUsersByPrefix (0xE)
-        UpdateNetworkInfo (0x14)
-        LookupUserGeoIPData (0x17)
-        OverrideUserGeoIPData(0x18)
-        UpdateUserSessionClientData (0x19)
-        SetUserInfoAttribute (0x1A)
-        ResetUserGeoIPData (0x1B)
-        LookupUserSessionID (0x20)
-        FetchLastLocaleUsedAndAuthError (0x21)
-        FetchUserFirstLastAuthTime (0x22)
-        ResumeSession (0x23);
-
-        notify {
-            SetSession (0x1)
-            SessionDetails (0x2)
-            UpdateExtendedDataAttribute (0x5)
-            FetchExtendedData (0x3)
-        }
-    }
+#[derive(Debug, Hash, PartialEq, Eq, PacketComponent)]
+pub enum UserSessions {
+    #[command(target = 0x8)]
+    UpdateHardwareFlags,
+    #[command(target = 0xC)]
+    LookupUser,
+    #[command(target = 0xD)]
+    LookupUsers,
+    #[command(target = 0xE)]
+    LookupUsersByPrefix,
+    #[command(target = 0x14)]
+    UpdateNetworkInfo,
+    #[command(target = 0x17)]
+    LookupUserGeoIPData,
+    #[command(target = 0x18)]
+    OverrideUserGeoIPData,
+    #[command(target = 0x19)]
+    UpdateUserSessionClientData,
+    #[command(target = 0x1A)]
+    SetUserInfoAttribute,
+    #[command(target = 0x1B)]
+    ResetUserGeoIPData,
+    #[command(target = 0x20)]
+    LookupUserSessionID,
+    #[command(target = 0x21)]
+    FetchLastLocaleUsedAndAuthError,
+    #[command(target = 0x22)]
+    FetchUserFirstLastAuthTime,
+    #[command(target = 0x23)]
+    ResumeSession,
+    #[command(target = 0x1, notify)]
+    SetSession,
+    #[command(target = 0x2, notify)]
+    SessionDetails,
+    #[command(target = 0x5, notify)]
+    UpdateExtendedDataAttribute,
+    #[command(target = 0x3, notify)]
+    FetchExtendedData,
 }

@@ -1,17 +1,24 @@
+use std::sync::Arc;
+
 use crate::{
-    game::{player::GamePlayer, GameModifyAction, RemovePlayerType},
     servers::main::{
         models::{
             errors::{ServerError, ServerResult},
             game_manager::*,
         },
-        session::Session,
+        session::{GetGamePlayerMessage, GetIdMessage, SessionLink},
+    },
+    services::game::{
+        manager::{
+            CreateMessage, GetGameMessage, RemovePlayerMessage, TryAddMessage, TryAddResult,
+        },
+        matchmaking::{GameCreatedMessage, QueuePlayerMessage},
+        player::GamePlayer,
+        RemovePlayerType, SetAttributesMessage, SetSettingMessage, SetStateMessage,
+        UpdateMeshMessage,
     },
     state::GlobalState,
-    utils::{
-        components::{Components as C, GameManager as G},
-        types::GameID,
-    },
+    utils::components::{Components as C, GameManager as G},
 };
 use blaze_pk::router::Router;
 use log::info;
@@ -20,11 +27,11 @@ use log::info;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Session>) {
+pub fn route(router: &mut Router<C, SessionLink>) {
     router.route(C::GameManager(G::CreateGame), handle_create_game);
-    router.route(C::GameManager(G::AdvanceGameState), handle_game_modify);
-    router.route(C::GameManager(G::SetGameSettings), handle_game_modify);
-    router.route(C::GameManager(G::SetGameAttributes), handle_game_modify);
+    router.route(C::GameManager(G::AdvanceGameState), handle_set_state);
+    router.route(C::GameManager(G::SetGameSettings), handle_set_setting);
+    router.route(C::GameManager(G::SetGameAttributes), handle_set_attributes);
     router.route(C::GameManager(G::RemovePlayer), handle_remove_player);
     router.route(C::GameManager(G::RemovePlayer), handle_remove_player);
     router.route(
@@ -93,39 +100,37 @@ pub fn route(router: &mut Router<C, Session>) {
 /// }
 /// ```
 async fn handle_create_game(
-    session: &mut Session,
+    session: &mut SessionLink,
     req: CreateGameRequest,
 ) -> ServerResult<CreateGameResponse> {
     let player: GamePlayer = session
-        .try_into_player()
+        .send(GetGamePlayerMessage)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
+    let services = GlobalState::services();
 
-    let games = GlobalState::games();
-    let game_id: GameID = games.create_game(req.attributes, req.setting, player).await;
+    let (link, game_id) = match services
+        .game_manager
+        .send(CreateMessage {
+            attributes: req.attributes,
+            setting: req.setting,
+            host: player,
+        })
+        .await
+    {
+        Ok(value) => value,
+        Err(_) => return Err(ServerError::ServerUnavailable),
+    };
+
+    // Notify matchmaking of the new game
+    let _ = services
+        .matchmaking
+        .do_send(GameCreatedMessage { link, game_id });
+
     Ok(CreateGameResponse { game_id })
 }
 
-/// Handles changing the state of the game with the provided ID
-///
-/// ```
-/// Route: GameManager(AdvanceGameState)
-/// ID: 57
-/// Content: {
-///     "GID": 1
-///     "GSTA": 130
-/// }
-/// ```
-///
-/// Handles changing the setting of the game with the provided ID
-///
-/// ```
-/// Route: GameManager(SetGameSettings)
-/// ID: 161
-/// Content: {
-///     "GID": 1,
-///     "GSET": 285
-/// }
-/// ```
 /// Handles changing the attributes of the game with the provided ID
 ///
 /// ```
@@ -146,9 +151,85 @@ async fn handle_create_game(
 ///     "GID": 1
 /// }
 /// ```
-async fn handle_game_modify(req: GameModifyRequest) {
-    let games = GlobalState::games();
-    games.modify_game(req.game_id, req.action);
+async fn handle_set_attributes(req: SetAttributesRequest) -> ServerResult<()> {
+    let services = GlobalState::services();
+    let link = services
+        .game_manager
+        .send(GetGameMessage {
+            game_id: req.game_id,
+        })
+        .await
+        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+
+    if let Some(link) = link {
+        link.send(SetAttributesMessage {
+            attributes: req.attributes,
+        })
+        .await
+        .map_err(|_| ServerError::InvalidInformation)?;
+    }
+
+    Ok(())
+}
+
+/// Handles changing the state of the game with the provided ID
+///
+/// ```
+/// Route: GameManager(AdvanceGameState)
+/// ID: 57
+/// Content: {
+///     "GID": 1
+///     "GSTA": 130
+/// }
+/// ```
+async fn handle_set_state(req: SetStateRequest) -> ServerResult<()> {
+    let services = GlobalState::services();
+    let link = services
+        .game_manager
+        .send(GetGameMessage {
+            game_id: req.game_id,
+        })
+        .await
+        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+
+    if let Some(link) = link {
+        link.send(SetStateMessage { state: req.state })
+            .await
+            .map_err(|_| ServerError::InvalidInformation)?;
+    }
+
+    Ok(())
+}
+
+/// Handles changing the setting of the game with the provided ID
+///
+/// ```
+/// Route: GameManager(SetGameSettings)
+/// ID: 161
+/// Content: {
+///     "GID": 1,
+///     "GSET": 285
+/// }
+/// ```
+async fn handle_set_setting(req: SetSettingRequest) -> ServerResult<()> {
+    let services = GlobalState::services();
+    let link = services
+        .game_manager
+        .send(GetGameMessage {
+            game_id: req.game_id,
+        })
+        .await
+        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+
+    if let Some(link) = link {
+        link.send(SetSettingMessage {
+            setting: req.setting,
+        })
+        .await
+        .map_err(|_| ServerError::InvalidInformation)?;
+    }
+
+    Ok(())
 }
 
 /// Handles removing a player from a game
@@ -165,11 +246,14 @@ async fn handle_game_modify(req: GameModifyRequest) {
 /// }
 /// ```
 async fn handle_remove_player(req: RemovePlayerRequest) {
-    let games = GlobalState::games();
-    games.remove_player(
-        req.game_id,
-        RemovePlayerType::Player(req.player_id, req.reason),
-    );
+    let services = GlobalState::services();
+    let _ = services
+        .game_manager
+        .send(RemovePlayerMessage {
+            game_id: req.game_id,
+            ty: RemovePlayerType::Player(req.player_id, req.reason),
+        })
+        .await;
 }
 
 /// Handles updating mesh connections
@@ -188,21 +272,44 @@ async fn handle_remove_player(req: RemovePlayerRequest) {
 ///     ]
 /// }
 /// ```
-async fn handle_update_mesh_connection(session: &mut Session, req: UpdateMeshRequest) {
-    let target = match req.target {
-        Some(value) => value,
-        None => return,
+async fn handle_update_mesh_connection(
+    session: &mut SessionLink,
+    req: UpdateMeshRequest,
+) -> ServerResult<()> {
+    let id = match session.send(GetIdMessage).await {
+        Ok(value) => value,
+        Err(_) => return Err(ServerError::ServerUnavailable),
     };
 
-    let games = GlobalState::games();
-    games.modify_game(
-        req.game_id,
-        GameModifyAction::UpdateMeshConnection {
-            session: session.id,
+    let target = match req.target {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+
+    let services = GlobalState::services();
+
+    let link = services
+        .game_manager
+        .send(GetGameMessage {
+            game_id: req.game_id,
+        })
+        .await
+        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+
+    let link = match link {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+
+    let _ = link
+        .send(UpdateMeshMessage {
+            session: id,
             target: target.player_id,
             state: target.state,
-        },
-    );
+        })
+        .await;
+
+    Ok(())
 }
 
 /// Handles either directly joining a game or placing the
@@ -327,19 +434,48 @@ async fn handle_update_mesh_connection(session: &mut Session, req: UpdateMeshReq
 /// }
 /// ```
 async fn handle_start_matchmaking(
-    session: &mut Session,
+    session: &mut SessionLink,
     req: MatchmakingRequest,
 ) -> ServerResult<MatchmakingResponse> {
     let player: GamePlayer = session
-        .try_into_player()
+        .send(GetGamePlayerMessage)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
+
+    let session_id = player.session_id;
 
     info!("Player {} started matchmaking", player.player.display_name);
 
-    let games = GlobalState::games();
-    games.add_or_queue(player, req.rules);
+    let services = GlobalState::services();
 
-    Ok(MatchmakingResponse { id: session.id })
+    let rule_set = Arc::new(req.rules);
+
+    let result = match services
+        .game_manager
+        .send(TryAddMessage {
+            player,
+            rule_set: rule_set.clone(),
+        })
+        .await
+    {
+        Ok(value) => value,
+        Err(_) => return Err(ServerError::ServerUnavailable),
+    };
+
+    // If adding failed attempt to queue instead
+    if let TryAddResult::Failure(player) = result {
+        if services
+            .matchmaking
+            .send(QueuePlayerMessage { player, rule_set })
+            .await
+            .is_err()
+        {
+            return Err(ServerError::ServerUnavailable);
+        }
+    }
+
+    Ok(MatchmakingResponse { id: session_id })
 }
 
 /// Handles cancelling matchmaking for the current session removing
@@ -352,6 +488,11 @@ async fn handle_start_matchmaking(
 ///     "MSID": 1
 /// }
 /// ```
-async fn handle_cancel_matchmaking(session: &mut Session) {
-    session.remove_games();
+async fn handle_cancel_matchmaking(session: &mut SessionLink) {
+    session
+        .exec(|session, _| {
+            session.remove_games();
+        })
+        .await
+        .ok();
 }

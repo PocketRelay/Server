@@ -1,4 +1,6 @@
-//! Migration logic for generating the players table
+//! Migration logic for generating the players table which stores
+//! the basic player details
+
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]

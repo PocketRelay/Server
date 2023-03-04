@@ -4,13 +4,11 @@ use crate::{
             errors::{ServerError, ServerResult},
             util::*,
         },
-        session::Session,
+        session::{DetailsMessage, GetPlayerIdMessage, SessionLink},
     },
     state::GlobalState,
     utils::{
         components::{Components as C, Util as U},
-        constants,
-        dmap::load_dmap,
         env,
         models::Port,
     },
@@ -18,8 +16,9 @@ use crate::{
 
 use base64ct::{Base64, Encoding};
 use blaze_pk::{router::Router, types::TdfMap};
-use database::PlayerData;
+use database::{Player, PlayerData};
 use flate2::{write::ZlibEncoder, Compression};
+use interlink::prelude::Link;
 use log::{error, warn};
 use rust_embed::RustEmbed;
 use std::{
@@ -34,7 +33,7 @@ use tokio::fs::read;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Session>) {
+pub fn route(router: &mut Router<C, SessionLink>) {
     router.route(C::Util(U::PreAuth), handle_pre_auth);
     router.route(C::Util(U::PostAuth), handle_post_auth);
     router.route(C::Util(U::Ping), handle_ping);
@@ -118,14 +117,17 @@ async fn handle_pre_auth() -> PreAuthResponse {
 /// ID: 27
 /// Content: {}
 /// ```
-async fn handle_post_auth(session: &mut Session) -> ServerResult<PostAuthResponse> {
+async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthResponse> {
     let player_id = session
-        .player
-        .as_ref()
-        .map(|value| value.id)
+        .send(GetPlayerIdMessage)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    session.push_details();
+    // Queue the session details to be sent to this client
+    let _ = session.do_send(DetailsMessage {
+        link: Link::clone(&*session),
+    });
 
     Ok(PostAuthResponse {
         telemetry: TelemetryServer {
@@ -180,7 +182,7 @@ async fn handle_fetch_client_config(req: FetchConfigRequest) -> ServerResult<Fet
     let config = match req.id.as_ref() {
         "ME3_DATA" => data_config(),
         "ME3_MSG" => messages(),
-        "ME3_ENT" => load_dmap(ME3_ENT),
+        "ME3_ENT" => load_entitlements(),
         "ME3_DIME" => {
             let mut map = TdfMap::with_capacity(1);
             map.insert("Config", ME3_DIME);
@@ -203,6 +205,16 @@ async fn handle_fetch_client_config(req: FetchConfigRequest) -> ServerResult<Fet
     };
 
     Ok(FetchConfigResponse { config })
+}
+
+/// Loads the entitlements from the entitlements file and parses
+/// it as a
+fn load_entitlements() -> TdfMap<String, String> {
+    let mut map = TdfMap::<String, String>::new();
+    for (key, value) in ME3_ENT.lines().filter_map(|line| line.split_once('=')) {
+        map.insert(key, value)
+    }
+    map
 }
 
 /// Loads the local coalesced if one is present falling back
@@ -360,10 +372,10 @@ fn messages() -> TdfMap<String, String> {
         title: Some("Pocket Relay".to_owned()),
         message: format!(
             "You are connected to Pocket Relay <font color='#FFFF66'>(v{})</font>",
-            constants::VERSION,
+            env::VERSION,
         ),
         priority: 1,
-        tracking_id: None,
+        tracking_id: Some(1),
         ty: MessageType::MenuTerminal,
     };
 
@@ -478,7 +490,7 @@ impl Message {
 fn data_config() -> TdfMap<String, String> {
     let http_port = env::from_env(env::HTTP_PORT);
     let tele_port = env::from_env(env::TELEMETRY_PORT);
-    let prefix = format!("http://{}:{}", constants::EXTERNAL_HOST, http_port);
+    let prefix = format!("http://{}:{}", env::EXTERNAL_HOST, http_port);
 
     let mut config = TdfMap::with_capacity(15);
     config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/gaw"));
@@ -496,7 +508,7 @@ fn data_config() -> TdfMap<String, String> {
     config.insert("TEL_PORT", tele_port.to_string());
     config.insert("TEL_SEND_DELAY", "15000");
     config.insert("TEL_SEND_PCT", "75");
-    config.insert("TEL_SERVER", constants::EXTERNAL_HOST);
+    config.insert("TEL_SERVER", env::EXTERNAL_HOST);
     config
 }
 
@@ -530,16 +542,17 @@ async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
 /// }
 /// ```
 async fn handle_user_settings_save(
-    session: &mut Session,
+    session: &mut SessionLink,
     req: SettingsSaveRequest,
 ) -> ServerResult<()> {
     let player = session
-        .player
-        .as_ref()
+        .send(GetPlayerIdMessage)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let db = GlobalState::database();
-    if let Err(err) = player.set_data(db, req.key, req.value).await {
+    if let Err(err) = Player::set_data(player, &db, req.key, req.value).await {
         warn!("Failed to update player data: {err:?}");
         Err(ServerError::ServerUnavailable)
     } else {
@@ -555,16 +568,17 @@ async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-async fn handle_load_settings(session: &mut Session) -> ServerResult<SettingsResponse> {
+async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<SettingsResponse> {
     let player = session
-        .player
-        .as_ref()
+        .send(GetPlayerIdMessage)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let db = GlobalState::database();
 
     // Load the player data from the database
-    let data: Vec<PlayerData> = match player.all_data(db).await {
+    let data: Vec<PlayerData> = match Player::all_data(player, &db).await {
         Ok(value) => value,
         Err(err) => {
             error!("Failed to load player data: {err:?}");

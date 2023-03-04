@@ -1,7 +1,7 @@
 [package]
 name = "pocket-relay-database"
 description = "Module for isolating the database logic from the Pocket Relay servers"
-version = "0.2.1"
+version = "0.3.0"
 
 repository.workspace = true
 edition.workspace = true
@@ -13,7 +13,6 @@ sqlite = ["sea-orm/sqlx-sqlite", "sea-orm-migration/sqlx-sqlite"]
 mysql = ["sea-orm/sqlx-mysql", "sea-orm-migration/sqlx-mysql"]
 
 [dependencies]
-log = { workspace = true }
 serde = { workspace = true }
 chrono = { workspace = true }
 

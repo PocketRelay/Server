@@ -1,3 +1,6 @@
+//! This migration removes the old session_token column from versions of the
+//! database that used the old session token system
+
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]

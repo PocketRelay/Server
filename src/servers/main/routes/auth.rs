@@ -4,31 +4,27 @@ use crate::{
             auth::*,
             errors::{ServerError, ServerResult},
         },
-        session::Session,
+        session::{GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage},
     },
     state::GlobalState,
     utils::{
         components::{Authentication as A, Components as C},
-        env,
         hashing::{hash_password, verify_password},
-        validate::is_email,
     },
 };
-use blaze_pk::{
-    packet::{Request, Response},
-    router::Router,
-};
+use blaze_pk::router::Router;
 use database::{DatabaseConnection, Player};
 use log::{debug, error, warn};
 use std::borrow::Cow;
 use std::path::Path;
 use tokio::fs::read_to_string;
+use validator::validate_email;
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Session>) {
+pub fn route(router: &mut Router<C, SessionLink>) {
     router.route(C::Authentication(A::Logout), handle_logout);
     router.route(C::Authentication(A::SilentLogin), handle_auth_request);
     router.route(C::Authentication(A::OriginLogin), handle_auth_request);
@@ -103,26 +99,41 @@ pub fn route(router: &mut Router<C, Session>) {
 /// }
 /// ```
 async fn handle_auth_request(
-    session: &mut Session,
-    req: Request<AuthRequest>,
-) -> ServerResult<Response> {
+    session: &mut SessionLink,
+    req: AuthRequest,
+) -> ServerResult<AuthResponse> {
     let silent = req.is_silent();
     let db = GlobalState::database();
-    let player: Player = match &req.req {
-        AuthRequest::Silent { token, .. } => handle_login_token(db, token).await,
-        AuthRequest::Login { email, password } => handle_login_email(db, email, password).await,
-        AuthRequest::Origin { token } => handle_login_origin(db, token).await,
+    let player: Player = match &req {
+        AuthRequest::Silent { token, .. } => handle_login_token(&db, token).await,
+        AuthRequest::Login { email, password } => handle_login_email(&db, email, password).await,
+        AuthRequest::Origin { token } => handle_login_origin(&db, token).await,
     }?;
 
-    let (player, session_token) = session.set_player(player)?;
+    // Failing to set the player likely the player disconnected or
+    // the server is shutting down
+    if session
+        .send(SetPlayerMessage(Some(player.clone())))
+        .await
+        .is_err()
+    {
+        return Err(ServerError::ServerUnavailable);
+    }
 
-    let res = AuthResponse {
+    // Handle reusing existing tokens from silent login
+    let session_token = match req {
+        AuthRequest::Silent { token, .. } => token,
+        _ => {
+            let services = GlobalState::services();
+            services.tokens.claim(player.id)
+        }
+    };
+
+    Ok(AuthResponse {
         player,
         session_token,
         silent,
-    };
-
-    Ok(req.response(res))
+    })
 }
 
 /// Handles finding a player through an authentication token and a player ID
@@ -132,9 +143,9 @@ async fn handle_auth_request(
 /// `token`     The authentication token
 /// `player_id` The player ID
 async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
-    let jwt = GlobalState::jwt();
+    let services = GlobalState::services();
 
-    let player = match jwt.verify(token) {
+    let player_id = match services.tokens.verify(token) {
         Ok(value) => value,
         Err(err) => {
             error!("Error while attempt to resume invalid session: {err:?}");
@@ -142,7 +153,7 @@ async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResul
         }
     };
 
-    Player::by_id(db, player.id)
+    Player::by_id(db, player_id)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::InvalidSession)
@@ -160,18 +171,23 @@ async fn handle_login_email(
     password: &str,
 ) -> ServerResult<Player> {
     // Ensure the email is actually valid
-    if !is_email(email) {
+    if !validate_email(email) {
         return Err(ServerError::InvalidEmail);
     }
 
     // Find a non origin player with that email
-    let player: Player = Player::by_email(db, email, false)
+    let player: Player = Player::by_email(db, email)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::EmailNotFound)?;
 
+    let player_password = match &player.password {
+        Some(value) => value,
+        None => return Err(ServerError::InvalidAccount),
+    };
+
     // Ensure passwords match
-    if !verify_password(password, &player.password) {
+    if !verify_password(password, player_password) {
         return Err(ServerError::WrongPassword);
     }
 
@@ -184,20 +200,22 @@ async fn handle_login_email(
 ///
 /// `db`    The database connection
 /// `token` The origin authentication token
-async fn handle_login_origin(db: &'static DatabaseConnection, token: &str) -> ServerResult<Player> {
-    // Only continue if Origin Fetch is actually enabled
-    if !env::from_env(env::ORIGIN_FETCH) {
-        return Err(ServerError::ServerUnavailable);
-    }
+async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
+    let services = GlobalState::services();
 
     // Ensure the retriever is enabled
-    let Some(retriever) = GlobalState::retriever() else {
+    let Some(retriever) = &services.retriever else {
         error!("Unable to authenticate Origin: Retriever is disabled or unavailable");
         return Err(ServerError::ServerUnavailable);
     };
 
+    let Some(service) = &retriever.origin_flow else {
+        error!("Origin authentication is disabled cannot authenticate origin client");
+        return Err(ServerError::ServerUnavailable);
+    };
+
     // Create an origin authentication flow
-    let Some(mut flow) = retriever.create_origin_flow().await else {
+    let Some(mut flow) = service.create(retriever).await else {
         error!("Unable to authenticate Origin: Unable to connect to official servers");
         return Err(ServerError::ServerUnavailable);
     };
@@ -209,7 +227,7 @@ async fn handle_login_origin(db: &'static DatabaseConnection, token: &str) -> Se
     };
 
     // Lookup the player details to see if the player exists
-    let player: Option<Player> = Player::by_email(db, &details.email, true)
+    let player: Option<Player> = Player::by_email(db, &details.email)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?;
 
@@ -217,13 +235,12 @@ async fn handle_login_origin(db: &'static DatabaseConnection, token: &str) -> Se
         return Ok(player);
     }
 
-    let player: Player =
-        Player::create(db, details.email, details.display_name, String::new(), true)
-            .await
-            .map_err(|_| ServerError::ServerUnavailable)?;
+    let player: Player = Player::create(db, details.email, details.display_name, None)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?;
 
     // Early return created player if origin fetching is disabled
-    if !env::from_env(env::ORIGIN_FETCH_DATA) {
+    if !flow.data {
         return Ok(player);
     }
 
@@ -252,8 +269,8 @@ async fn handle_login_origin(db: &'static DatabaseConnection, token: &str) -> Se
 /// ID: 8
 /// Content: {}
 /// ```
-async fn handle_logout(session: &mut Session) {
-    session.player = None;
+async fn handle_logout(session: &mut SessionLink) {
+    let _ = session.send(SetPlayerMessage(None)).await;
 }
 
 /// Handles list user entitlements 2 responses requests which contains information
@@ -346,13 +363,13 @@ async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-async fn handle_login_persona(session: &mut Session, req: Request<()>) -> ServerResult<Response> {
-    let player: &Player = session
-        .player
-        .as_ref()
+async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<PersonaResponse> {
+    let player: Player = session
+        .send(GetPlayerMessage)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
-    let res = PersonaResponse { player };
-    Ok(req.response(res))
+    Ok(PersonaResponse { player })
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -367,7 +384,7 @@ async fn handle_login_persona(session: &mut Session, req: Request<()>) -> Server
 /// }
 /// ```
 async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> {
-    if !is_email(&req.email) {
+    if !validate_email(&req.email) {
         return Err(ServerError::InvalidEmail);
     }
     debug!("Got request for password rest for email: {}", &req.email);
@@ -408,21 +425,21 @@ async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> 
 /// ```
 ///
 async fn handle_create_account(
-    session: &mut Session,
-    req: Request<CreateAccountRequest>,
-) -> ServerResult<Response> {
-    let email = &req.email;
-    if !is_email(email) {
+    session: &mut SessionLink,
+    req: CreateAccountRequest,
+) -> ServerResult<AuthResponse> {
+    let email = req.email;
+    if !validate_email(&email) {
         return Err(ServerError::InvalidEmail);
     }
 
     let db = GlobalState::database();
 
-    match Player::is_email_taken(db, email).await {
+    match Player::by_email(&db, &email).await {
         // Continue normally for non taken emails
-        Ok(false) => {}
+        Ok(None) => {}
         // Handle email address is already in use
-        Ok(true) => return Err(ServerError::EmailAlreadyInUse),
+        Ok(Some(_)) => return Err(ServerError::EmailAlreadyInUse),
         // Handle database error while checking taken
         Err(err) => {
             error!("Unable to check if email '{email}' is already taken: {err:?}");
@@ -443,24 +460,33 @@ async fn handle_create_account(
     let display_name: String = email.chars().take(99).collect::<String>();
 
     // Create a new player
-    let player: Player =
-        match Player::create(db, email.to_string(), display_name, hashed_password, false).await {
-            Ok(value) => value,
-            Err(err) => {
-                error!("Failed to create player: {err:?}");
-                return Err(ServerError::ServerUnavailable);
-            }
-        };
+    let player: Player = match Player::create(&db, email, display_name, Some(hashed_password)).await
+    {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to create player: {err:?}");
+            return Err(ServerError::ServerUnavailable);
+        }
+    };
 
-    let (player, session_token) = session.set_player(player)?;
+    // Failing to set the player likely the player disconnected or
+    // the server is shutting down
+    if session
+        .send(SetPlayerMessage(Some(player.clone())))
+        .await
+        .is_err()
+    {
+        return Err(ServerError::ServerUnavailable);
+    }
 
-    let res = AuthResponse {
+    let services = GlobalState::services();
+    let session_token = services.tokens.claim(player.id);
+
+    Ok(AuthResponse {
         player,
         session_token,
         silent: false,
-    };
-
-    Ok(req.response(res))
+    })
 }
 
 /// Expected to be getting information about the legal docs however the exact meaning
@@ -552,11 +578,14 @@ async fn handle_legal_content(ty: LegalType) -> LegalContent {
 /// ID: 35
 /// Content: {}
 /// ```
-async fn handle_get_auth_token(session: &mut Session) -> ServerResult<GetTokenResponse> {
-    let token: String = session
-        .player
-        .as_ref()
-        .map(|player| format!("{:X}", player.id))
+async fn handle_get_auth_token(session: &mut SessionLink) -> ServerResult<GetTokenResponse> {
+    let player_id = session
+        .send(GetPlayerIdMessage)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
+    // Create a new token claim for the player to use with the API
+    let services = GlobalState::services();
+    let token = services.tokens.claim(player_id);
     Ok(GetTokenResponse { token })
 }

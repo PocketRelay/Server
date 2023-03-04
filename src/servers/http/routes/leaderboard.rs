@@ -1,6 +1,6 @@
 use crate::{
-    leaderboard::{models::*, Leaderboard},
     servers::http::ext::ErrorStatusCode,
+    services::leaderboard::{models::*, QueryMessage},
     state::GlobalState,
     utils::types::PlayerID,
 };
@@ -12,7 +12,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
+use thiserror::Error;
 
 /// Router function creates a new router with all the underlying
 /// routes for this file.
@@ -26,14 +26,17 @@ pub fn router() -> Router {
 /// Error type used in leaderboard routes to handle errors
 /// such as database errors and player not founds when
 /// searching for a specific player.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum LeaderboardError {
     /// Some server error occurred like a database failure when computing
     /// the leaderboards
+    #[error("Internal server error")]
     ServerError,
     /// The requested player was not found in the leaderboard
+    #[error("Player not found")]
     PlayerNotFound,
     /// Error for when a unknown leaderboard is requested
+    #[error("Unknown leaderboard")]
     UnknownLeaderboard,
 }
 
@@ -55,6 +58,8 @@ struct LeaderboardQuery {
 /// from a leaderboard request
 #[derive(Serialize)]
 struct LeaderboardResponse<'a> {
+    /// The total number of players in the entire leaderboard
+    total: usize,
     /// The entries retrieved at the provided offset
     entries: &'a [LeaderboardEntry],
     /// Whether there is more entries past the provided offset
@@ -72,8 +77,8 @@ async fn get_leaderboard(
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-
-    let leaderboard: &Leaderboard = GlobalState::leaderboard();
+    let services = GlobalState::services();
+    let leaderboard = &services.leaderboard;
 
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
@@ -83,23 +88,22 @@ async fn get_leaderboard(
     // Calculate the start and ending indexes
     let start: usize = query.offset * count;
 
-    let lock = leaderboard.get(ty).await;
+    let group = leaderboard
+        .send(QueryMessage(ty))
+        .await
+        .map_err(|_| LeaderboardError::ServerError)?;
 
-    let group = lock.read().await;
-
-    let (entries, more) = match group.resolve(LQuery::Normal { start, count }) {
-        LResult::Many(many, more) => (many, more),
-        LResult::Empty => {
-            let empty = Json(LeaderboardResponse {
-                entries: &[],
-                more: false,
-            });
-            return Ok(empty.into_response());
-        }
-        _ => return Err(LeaderboardError::ServerError),
+    let (entries, more) = match group.get_normal(start, count) {
+        Some(value) => value,
+        None => return Err(LeaderboardError::ServerError),
     };
 
-    let response = Json(LeaderboardResponse { entries, more });
+    let response = Json(LeaderboardResponse {
+        total: group.values.len(),
+        entries,
+        more,
+    });
+
     Ok(response.into_response())
 }
 
@@ -113,28 +117,21 @@ async fn get_player_ranking(
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-    let leaderboard: &Leaderboard = GlobalState::leaderboard();
+    let services = GlobalState::services();
+    let leaderboard = &services.leaderboard;
 
-    let lock = leaderboard.get(ty).await;
+    let group = leaderboard
+        .send(QueryMessage(ty))
+        .await
+        .map_err(|_| LeaderboardError::ServerError)?;
 
-    let group = lock.read().await;
-
-    let entry = match group.resolve(LQuery::Filtered { player_id }) {
-        LResult::One(value) => Ok(value),
-        LResult::Empty => Err(LeaderboardError::PlayerNotFound),
-        _ => Err(LeaderboardError::ServerError),
-    }?;
+    let entry = match group.get_entry(player_id) {
+        Some(value) => value,
+        None => return Err(LeaderboardError::PlayerNotFound),
+    };
 
     let response = Json(entry);
     Ok(response.into_response())
-}
-
-/// Display implementation for the LeaderboardError this will be displayed
-/// as the error response message.
-impl Display for LeaderboardError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 /// Error status code implementation for the different error

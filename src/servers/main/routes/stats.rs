@@ -1,11 +1,18 @@
+use std::sync::Arc;
+
 use crate::{
-    leaderboard::models::*,
-    servers::main::{models::stats::*, session::Session},
+    servers::main::{
+        models::{
+            errors::{ServerError, ServerResult},
+            stats::*,
+        },
+        session::SessionLink,
+    },
+    services::leaderboard::{models::*, QueryMessage},
     state::GlobalState,
     utils::components::{Components as C, Stats as S},
 };
 use blaze_pk::{
-    codec::Decodable,
     packet::{Request, Response},
     router::Router,
 };
@@ -14,7 +21,7 @@ use blaze_pk::{
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Session>) {
+pub fn route(router: &mut Router<C, SessionLink>) {
     router.route(
         C::Stats(S::GetLeaderboardEntityCount),
         handle_leaderboard_entity_count,
@@ -31,41 +38,37 @@ pub fn route(router: &mut Router<C, Session>) {
     router.route(C::Stats(S::GetLeaderboardGroup), handle_leaderboard_group);
 }
 
-async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> Response {
+async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> ServerResult<Response> {
     let query = &*req;
-    handle_leaderboard_query(
-        &query.name,
-        LQuery::Normal {
-            start: query.start,
-            count: query.count,
-        },
-        &req,
-    )
-    .await
+    let group = get_group(&query.name).await?;
+    let response = match group.get_normal(query.start, query.count) {
+        Some((values, _)) => LeaderboardResponse::Many(values),
+        None => LeaderboardResponse::Empty,
+    };
+    Ok(req.response(response))
 }
 
-async fn handle_centered_leaderboard(req: Request<CenteredLeaderboardRequest>) -> Response {
+async fn handle_centered_leaderboard(
+    req: Request<CenteredLeaderboardRequest>,
+) -> ServerResult<Response> {
     let query = &*req;
-    handle_leaderboard_query(
-        &query.name,
-        LQuery::Centered {
-            player_id: query.center,
-            count: query.count,
-        },
-        &req,
-    )
-    .await
+    let group = get_group(&query.name).await?;
+    let response = match group.get_centered(query.center, query.count) {
+        Some(values) => LeaderboardResponse::Many(values),
+        None => LeaderboardResponse::Empty,
+    };
+    Ok(req.response(response))
 }
-async fn handle_filtered_leaderboard(req: Request<FilteredLeaderboardRequest>) -> Response {
+async fn handle_filtered_leaderboard(
+    req: Request<FilteredLeaderboardRequest>,
+) -> ServerResult<Response> {
     let query = &*req;
-    handle_leaderboard_query(
-        &query.name,
-        LQuery::Filtered {
-            player_id: query.id,
-        },
-        &req,
-    )
-    .await
+    let group = get_group(&query.name).await?;
+    let response = match group.get_entry(query.id) {
+        Some(value) => LeaderboardResponse::One(value),
+        None => LeaderboardResponse::Empty,
+    };
+    Ok(req.response(response))
 }
 
 /// Handles returning the number of leaderboard objects present.
@@ -83,42 +86,26 @@ async fn handle_filtered_leaderboard(req: Request<FilteredLeaderboardRequest>) -
 ///     "POFF": 0
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(req: EntityCountRequest) -> EntityCountResponse {
-    let leaderboard = GlobalState::leaderboard();
-    let ty = LeaderboardType::from_value(&req.name);
-
-    let lock = leaderboard.get(ty).await;
-    let group = lock.read().await;
+async fn handle_leaderboard_entity_count(
+    req: EntityCountRequest,
+) -> ServerResult<EntityCountResponse> {
+    let group = get_group(&req.name).await?;
     let count = group.values.len();
-
-    EntityCountResponse { count }
+    Ok(EntityCountResponse { count })
 }
 
-/// Handler function for handling leaderboard querys and returning the resulting
-/// leaderboard
-///
-/// `name`  The name of the leaderboard
-/// `query` The query to resolve
-async fn handle_leaderboard_query<R: Decodable>(
-    name: &str,
-    query: LQuery,
-    req: &Request<R>,
-) -> Response {
-    let leaderboard = GlobalState::leaderboard();
+async fn get_group(name: &str) -> ServerResult<Arc<LeaderboardGroup>> {
+    let services = GlobalState::services();
+    let leaderboard = &services.leaderboard;
     let ty = LeaderboardType::from_value(name);
-    let lock = leaderboard.get(ty).await;
-    let group = lock.read().await;
-    let response = match group.resolve(query) {
-        LResult::Many(values, _) => LeaderboardResponse::Many(values),
-        LResult::One(value) => LeaderboardResponse::One(value),
-        LResult::Empty => LeaderboardResponse::Empty,
-    };
-
-    req.response(response)
+    leaderboard
+        .send(QueryMessage(ty))
+        .await
+        .map_err(|_| ServerError::ServerUnavailableFinal)
 }
 
 fn get_locale_name(code: &str) -> &str {
-    match code {
+    match &code as &str {
         "global" => "Global",
         "de" => "Germany",
         "en" => "English",
@@ -128,6 +115,7 @@ fn get_locale_name(code: &str) -> &str {
         "ja" => "Japan",
         "pl" => "Poland",
         "ru" => "Russia",
+        "nz" => "New Zealand",
         value => value,
     }
 }
@@ -151,7 +139,8 @@ async fn handle_leaderboard_group(
         return None;
     }
     let split = if is_n7 { 8 } else { 15 };
-    let locale = get_locale_name(name.split_at(split).1);
+    let local_code = name.split_at(split).1.to_lowercase();
+    let locale = get_locale_name(&local_code);
     let group = if is_n7 {
         let desc = format!("N7 Rating - {locale}");
         LeaderboardGroupResponse {

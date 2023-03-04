@@ -5,15 +5,12 @@ use crate::{
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
-        session::Session,
+        session::{HardwareFlagMessage, NetworkInfoMessage, SessionLink, SetPlayerMessage},
     },
     state::GlobalState,
     utils::components::{Components as C, UserSessions as U},
 };
-use blaze_pk::{
-    packet::{Request, Response},
-    router::Router,
-};
+use blaze_pk::router::Router;
 use database::Player;
 use log::error;
 
@@ -21,7 +18,7 @@ use log::error;
 /// provided router
 ///
 /// `router` The router to add to
-pub fn route(router: &mut Router<C, Session>) {
+pub fn route(router: &mut Router<C, SessionLink>) {
     router.route(C::UserSessions(U::ResumeSession), handle_resume_session);
     router.route(C::UserSessions(U::UpdateNetworkInfo), handle_update_network);
     router.route(
@@ -41,13 +38,15 @@ pub fn route(router: &mut Router<C, Session>) {
 /// }
 /// ```
 async fn handle_resume_session(
-    session: &mut Session,
-    req: Request<ResumeSessionRequest>,
-) -> ServerResult<Response> {
+    session: &mut SessionLink,
+    req: ResumeSessionRequest,
+) -> ServerResult<AuthResponse> {
     let db = GlobalState::database();
-    let jwt = GlobalState::jwt();
+    let services = GlobalState::services();
 
-    let player = match jwt.verify(&req.session_token) {
+    let session_token = req.session_token;
+
+    let player_id = match services.tokens.verify(&session_token) {
         Ok(value) => value,
         Err(err) => {
             error!("Error while attempt to resume invalid session: {err:?}");
@@ -56,7 +55,7 @@ async fn handle_resume_session(
     };
 
     // Find the player that the token is for
-    let player: Player = match Player::by_id(db, player.id).await {
+    let player: Player = match Player::by_id(&db, player_id).await {
         // Valid session token
         Ok(Some(player)) => player,
         // Session that was attempted to resume is expired
@@ -68,15 +67,21 @@ async fn handle_resume_session(
         }
     };
 
-    let (player, session_token) = session.set_player(player)?;
+    // Failing to set the player likely the player disconnected or
+    // the server is shutting down
+    if session
+        .send(SetPlayerMessage(Some(player.clone())))
+        .await
+        .is_err()
+    {
+        return Err(ServerError::ServerUnavailable);
+    }
 
-    let res = AuthResponse {
+    Ok(AuthResponse {
         player,
         session_token,
         silent: true,
-    };
-
-    Ok(req.response(res))
+    })
 }
 
 /// Handles updating the stored networking information for the current session
@@ -108,8 +113,13 @@ async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-async fn handle_update_network(session: &mut Session, req: UpdateNetworkRequest) {
-    session.set_network_info(req.address, req.qos);
+async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequest) {
+    let _ = session
+        .send(NetworkInfoMessage {
+            groups: req.address,
+            qos: req.qos,
+        })
+        .await;
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
@@ -121,6 +131,10 @@ async fn handle_update_network(session: &mut Session, req: UpdateNetworkRequest)
 ///     "HWFG": 0
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: &mut Session, req: HardwareFlagRequest) {
-    session.set_hardware_flag(req.hardware_flag);
+async fn handle_update_hardware_flag(session: &mut SessionLink, req: HardwareFlagRequest) {
+    let _ = session
+        .send(HardwareFlagMessage {
+            value: req.hardware_flag,
+        })
+        .await;
 }

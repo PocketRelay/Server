@@ -7,7 +7,6 @@ use log::{error, info};
 mod ext;
 mod middleware;
 mod routes;
-mod stores;
 
 /// Starts the HTTP server
 pub async fn start_server() {

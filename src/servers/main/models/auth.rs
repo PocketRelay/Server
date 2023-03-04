@@ -92,16 +92,16 @@ fn encode_persona(writer: &mut TdfWriter, id: PlayerID, display_name: &str) {
 }
 
 /// Structure for the response to an authentication request.
-pub struct AuthResponse<'a> {
+pub struct AuthResponse {
     /// The authenticated player
-    pub player: &'a Player,
+    pub player: Player,
     /// The session token for the completed authentication
     pub session_token: String,
     /// Whether the authentication proccess was silent
     pub silent: bool,
 }
 
-impl Encodable for AuthResponse<'_> {
+impl Encodable for AuthResponse {
     fn encode(&self, writer: &mut TdfWriter) {
         if self.silent {
             writer.tag_zero(b"AGUP");
@@ -162,12 +162,12 @@ impl Decodable for CreateAccountRequest {
 /// Structure for the persona response which contains details
 /// about the current persona. Which in this case is just the
 /// player details
-pub struct PersonaResponse<'a> {
+pub struct PersonaResponse {
     /// The player
-    pub player: &'a Player,
+    pub player: Player,
 }
 
-impl Encodable for PersonaResponse<'_> {
+impl Encodable for PersonaResponse {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_u32(b"BUID", self.player.id);
         writer.tag_zero(b"FRST");

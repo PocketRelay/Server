@@ -1,5 +1,4 @@
 [workspace.package]
-version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
@@ -23,14 +22,14 @@ features = ["std", "serde"]
 
 [package]
 name = "pocket-relay"
+version = "0.3.0"
 description = "Pocket Relay Server"
-repository = "https://github.com/PocketRelay/ServerRust"
+repository = "https://github.com/PocketRelay/Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
 # Glob to ensure resources is included 
 include = ["src/**/*"]
 
-version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
@@ -43,15 +42,14 @@ database-mysql = ["database/mysql"]
 [dependencies]
 log = { workspace = true }
 serde = { workspace = true }
-chrono = { workspace = true }
 
 # Blaze packet system 
-blaze-pk = "^0.8"
+blaze-pk = "1"
 # Blaze SSLv3 async TCPStream implementation
 blaze-ssl-async = "^0.3"
 
 # Isolated database crate
-database = { path = "database", package = "pocket-relay-database", version = "^0.2" }
+database = { path = "database", package = "pocket-relay-database", version = "^0.3" }
 
 # Resource embedding using debug-embed to always resolve relative to the Cargo.toml file
 rust-embed = { version = "6.4.2", features = ["debug-embed"] }
@@ -61,13 +59,20 @@ argon2 = "0.4"
 
 base64ct = { version = "1.5", features = ["alloc"] }
 flate2 = { version = "1", features = ["zlib"], default-features = false }
+ring = "0.16"
 
 # .env file loader
 dotenvy = "0.15"
 
 # Library for obtaining the local IP address of the device
 local-ip-address = "0.5.0"
-jsonwebtoken = "8"
+
+thiserror = "1"
+validator = { version = "0.16", features = ["derive"] }
+
+interlink = "0.1.2"
+tokio-util = { version = "0.7", features = ["codec"] }
+futures = "0.3"
 
 # Tokio async runtime
 [dependencies.tokio]
@@ -94,24 +99,17 @@ version = "0.11.12"
 default-features = false
 features = ["json", "rustls-tls"]
 
-[dependencies.regex]
-version = "1"
-default-features = false
-features = ["std"]
-
 # Logging provider 
 [dependencies.log4rs]
 version = "1.2.0"
 default-features = false
-features = [
-    "gzip",
-    "console_appender",
-    "rolling_file_appender",
-    "compound_policy",
-    "fixed_window_roller",
-    "size_trigger",
-]
+features = ["console_appender", "file_appender"]
 
 [profile.release]
 strip = true
 lto = true
+
+# The profile that 'cargo dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

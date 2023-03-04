@@ -32,16 +32,16 @@ const ADDR_CACHE_TIME: Duration = Duration::from_secs(60 * 60 * 2);
 pub async fn public_address() -> Option<Ipv4Addr> {
     {
         let cached = &*PUBLIC_ADDR_CACHE.read().await;
-        match cached {
-            PublicAddrCache::Unset => {}
-            PublicAddrCache::Set { value, expires } => {
-                let time = SystemTime::now();
-                if time.lt(expires) {
-                    return Some(*value);
-                }
+        if let PublicAddrCache::Set { value, expires } = cached {
+            let time = SystemTime::now();
+            if time.lt(expires) {
+                return Some(*value);
             }
-        };
+        }
     }
+
+    // Hold the write lock to prevent others from attempting to update aswell
+    let cached = &mut *PUBLIC_ADDR_CACHE.write().await;
 
     // API addresses for IP lookup
     let addresses = ["https://api.ipify.org/", "https://ipv4.icanhazip.com/"];
@@ -76,13 +76,11 @@ pub async fn public_address() -> Option<Ipv4Addr> {
     let value = value?;
 
     // Update cached value with the new address
-    {
-        let cached = &mut *PUBLIC_ADDR_CACHE.write().await;
-        *cached = PublicAddrCache::Set {
-            value,
-            expires: SystemTime::now() + ADDR_CACHE_TIME,
-        };
-    }
+
+    *cached = PublicAddrCache::Set {
+        value,
+        expires: SystemTime::now() + ADDR_CACHE_TIME,
+    };
 
     Some(value)
 }

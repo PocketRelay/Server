@@ -1,4 +1,12 @@
-use crate::{game::GameSnapshot, state::GlobalState, utils::types::GameID};
+use crate::{
+    servers::http::middleware::auth::Auth,
+    services::game::{
+        manager::{SnapshotMessage, SnapshotQueryMessage},
+        GameSnapshot,
+    },
+    state::GlobalState,
+    utils::types::GameID,
+};
 use axum::{
     extract::{Path, Query},
     http::StatusCode,
@@ -6,7 +14,9 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use database::PlayerRole;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// Router function creates a new router with all the underlying
 /// routes for this file.
@@ -30,6 +40,14 @@ struct GamesQuery {
     count: Option<u8>,
 }
 
+#[derive(Debug, Error)]
+pub enum GamesError {
+    #[error("GameNotFound")]
+    NotFound,
+    #[error("InternalServerError")]
+    Server,
+}
+
 /// Response from the players endpoint which contains a list of
 /// players and whether there is more players after
 #[derive(Serialize)]
@@ -44,7 +62,11 @@ struct GamesResponse {
 /// Will take a snapshot of all the games.
 ///
 /// `query` The query containing the offset and count
-async fn get_games(Query(query): Query<GamesQuery>) -> Json<GamesResponse> {
+async fn get_games(
+    Query(query): Query<GamesQuery>,
+    auth: Auth,
+) -> Result<Json<GamesResponse>, GamesError> {
+    let auth = auth.into_inner();
     /// The default number of games to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 20;
 
@@ -53,32 +75,50 @@ async fn get_games(Query(query): Query<GamesQuery>) -> Json<GamesResponse> {
     // Calculate the start and ending indexes
     let start_index: usize = query.offset * count;
 
+    let services = GlobalState::services();
     // Retrieve the game snapshots
-    let (games, more) = GlobalState::games().snapshot(start_index, count).await;
+    let (games, more) = services
+        .game_manager
+        .send(SnapshotQueryMessage {
+            offset: start_index,
+            count,
+            include_net: auth.role >= PlayerRole::Admin,
+        })
+        .await
+        .map_err(|_| GamesError::Server)?;
 
-    Json(GamesResponse { games, more })
+    Ok(Json(GamesResponse { games, more }))
 }
-
-/// Error type used when a game with a specific ID was requested
-/// but was not found when attempting to take a snapshot
-struct GameNotFound;
 
 /// Route for retrieving the details of a game with a specific game ID
 ///
 /// `game_id` The ID of the game
-async fn get_game(Path(game_id): Path<GameID>) -> Result<Json<GameSnapshot>, GameNotFound> {
-    let games = GlobalState::games()
-        .snapshot_id(game_id)
+/// `auth`    The currently authenticated player
+async fn get_game(
+    Path(game_id): Path<GameID>,
+    auth: Auth,
+) -> Result<Json<GameSnapshot>, GamesError> {
+    let auth = auth.into_inner();
+    let services = GlobalState::services();
+    let games = services
+        .game_manager
+        .send(SnapshotMessage {
+            game_id,
+            include_net: auth.role >= PlayerRole::Admin,
+        })
         .await
-        .ok_or(GameNotFound)?;
+        .map_err(|_| GamesError::Server)?
+        .ok_or(GamesError::NotFound)?;
     Ok(Json(games))
 }
 
-/// IntoResponse implementation for GameNotFound to allow it to be
-/// used within the result type as a error response
-impl IntoResponse for GameNotFound {
-    #[inline]
+impl IntoResponse for GamesError {
     fn into_response(self) -> Response {
-        (StatusCode::NOT_FOUND, "GameNotFound").into_response()
+        let status_code = match &self {
+            GamesError::NotFound => StatusCode::NOT_FOUND,
+            GamesError::Server => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (status_code, self.to_string()).into_response()
     }
 }

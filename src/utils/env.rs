@@ -3,6 +3,13 @@ use std::str::FromStr;
 
 use super::models::Port;
 
+/// The server version extracted from the Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The external address of the server. This address is whats used in
+/// the system hosts file as a redirect so theres no need to use any
+/// other address.
+pub const EXTERNAL_HOST: &str = "gosredirector.ea.com";
+
 pub const REDIRECTOR_PORT: (&str, Port) = ("PR_REDIRECTOR_PORT", 42127);
 pub const MAIN_PORT: (&str, Port) = ("PR_MAIN_PORT", 14219);
 pub const HTTP_PORT: (&str, Port) = ("PR_HTTP_PORT", 80);
@@ -21,19 +28,13 @@ pub const GAW_DAILY_DECAY: (&str, f32) = ("PR_GAW_DAILY_DECAY", 0.0);
 pub const GAW_PROMOTIONS: (&str, bool) = ("PR_GAW_PROMOTIONS", true);
 
 pub const RETRIEVER: (&str, bool) = ("PR_RETRIEVER", true);
-
 pub const ORIGIN_FETCH: (&str, bool) = ("PR_ORIGIN_FETCH", true);
 pub const ORIGIN_FETCH_DATA: (&str, bool) = ("PR_ORIGIN_FETCH_DATA", true);
 
-pub const MITM_ENABLED: (&str, bool) = ("PR_MITM_ENABLED", false);
-
 pub const LOGGING_LEVEL: (&str, LevelFilter) = ("PR_LOG_LEVEL", LevelFilter::Info);
 pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
-pub const LOG_COMPRESSION: (&str, bool) = ("PR_LOG_COMPRESSION", true);
 
-pub const API: (&str, bool) = ("PR_API", false);
-pub const API_USERNAME: (&str, &str) = ("PR_API_USERNAME", "admin");
-pub const API_PASSWORD: (&str, &str) = ("PR_API_PASSWORD", "admin");
+pub const SUPER_ADMIN_EMAIL: &str = "PR_SUPER_ADMIN_EMAIL";
 
 #[inline]
 pub fn env(pair: (&str, &str)) -> String {

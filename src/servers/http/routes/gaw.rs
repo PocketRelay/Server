@@ -37,10 +37,8 @@ pub fn router() -> Router {
 /// as being unable to parse player IDs, find players
 /// or Database errors
 enum GAWError {
-    /// The provided player ID was not a valid hex value
-    InvalidID,
     /// The player could not be found
-    PlayerNotFound,
+    InvalidToken,
     /// There was a server error
     ServerError,
 }
@@ -104,12 +102,16 @@ async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
 /// `id` The hex ID of the player
 async fn get_player_gaw_data(
     db: &DatabaseConnection,
-    id: &str,
+    token: &str,
 ) -> Result<(GalaxyAtWar, u32), GAWError> {
-    let id = u32::from_str_radix(id, 16).map_err(|_| GAWError::InvalidID)?;
-    let player = Player::by_id(db, id)
+    let services = GlobalState::services();
+    let player_id = services
+        .tokens
+        .verify(token)
+        .map_err(|_| GAWError::InvalidToken)?;
+    let player = Player::by_id(db, player_id)
         .await?
-        .ok_or(GAWError::PlayerNotFound)?;
+        .ok_or(GAWError::InvalidToken)?;
     let (gaw_data, promotions) = try_join!(
         GalaxyAtWar::find_or_create(db, &player, env::from_env(env::GAW_DAILY_DECAY)),
         get_promotions(db, &player)
@@ -124,8 +126,8 @@ async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u3
     Ok(player
         .get_classes(db)
         .await?
-        .into_iter()
-        .filter_map(|value| parse_player_class(value.value))
+        .iter()
+        .filter_map(|value| parse_player_class(&value.value))
         .map(|value| value.promotions)
         .sum())
 }
@@ -136,7 +138,7 @@ async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u3
 /// `id` The hex encoded ID of the player
 async fn get_ratings(Path(id): Path<String>) -> Result<Xml, GAWError> {
     let db = GlobalState::database();
-    let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
+    let (gaw_data, promotions) = get_player_gaw_data(&db, &id).await?;
     Ok(ratings_response(gaw_data, promotions))
 }
 
@@ -172,9 +174,9 @@ async fn increase_ratings(
     Query(query): Query<IncreaseQuery>,
 ) -> Result<Xml, GAWError> {
     let db = GlobalState::database();
-    let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
+    let (gaw_data, promotions) = get_player_gaw_data(&db, &id).await?;
     let gaw_data = gaw_data
-        .increase(db, (query.a, query.b, query.c, query.d, query.e))
+        .increase(&db, (query.a, query.b, query.c, query.d, query.e))
         .await?;
     Ok(ratings_response(gaw_data, promotions))
 }
@@ -229,14 +231,7 @@ fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> Xml {
 impl Display for GAWError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidID => f.write_str(
-                r#"<?xml version="1.0" encoding="UTF-8"?>
-                <error>
-                    <errorcode>401</errorcode>
-                    <errormessage>Session key format invalid</errormessage>
-                </error>"#,
-            ),
-            Self::PlayerNotFound => f.write_str(
+            Self::InvalidToken => f.write_str(
                 r#"<?xml version="1.0" encoding="UTF-8"?>
                 <error>
                     <component>2049</component>
@@ -270,8 +265,7 @@ impl From<DbErr> for GAWError {
 impl ErrorStatusCode for GAWError {
     fn status_code(&self) -> StatusCode {
         match self {
-            GAWError::InvalidID => StatusCode::UNAUTHORIZED,
-            GAWError::PlayerNotFound => StatusCode::OK,
+            GAWError::InvalidToken => StatusCode::OK,
             GAWError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
