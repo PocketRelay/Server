@@ -68,9 +68,6 @@ Instructions for building the server can be found [Here](https://github.com/Pock
 **Origin Fetching** This server supports copying over Origin credits, classes, characters, weapons, levels, etc from the official servers. This is enabled by default and can
 be changed using the PR_ORIGIN_FETCH_DATA environment variable.
 
-**API** The server includes an optional API that you can enable which allows querying and modifying 
-player data on the server along with querying the active games on the server.
-
 **Man-In-The-Middle Server** This server has a built in Man-In-The-Middle server for proxying your connection to the Official servers while logging all the packets that travel
 between the client and the server. 
 
@@ -83,13 +80,6 @@ The entire server fits inside a single executable and the only files it writes t
 are log files and the database if using the SQLite database version. 
 
 **Cracked & Origin Support** This server supports both cracked and Origin clients.
-
-# 📡 API
-
-Pocket Relay servers contain an API which allows you to query the list of players and view currently active games.
-This is not enabled by default but see the configuration documentation for the variable to enable it. 
-
-You can view its documentation [Here (docs/API.md)](docs/API.md)
 
 # ⛔️ Known Issues
 
