@@ -44,7 +44,7 @@ repository = "https://github.com/PocketRelay/Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
 # Glob to ensure resources is included 
-include = ["src/**/*"]
+include = ["src/**/*", "build.rs"]
 build = "build.rs"
 
 edition.workspace = true
