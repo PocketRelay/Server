@@ -10,11 +10,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// other address.
 pub const EXTERNAL_HOST: &str = "gosredirector.ea.com";
 
-/// The current git commit hash (e.g dbc43b4)
-pub const GIT_SHA_SHORT: &str = env!("VERGEN_GIT_SHA_SHORT");
-/// The active git branch while building
-pub const GIT_BRANCH: &str = env!("VERGEN_GIT_BRANCH");
-
 pub const REDIRECTOR_PORT: (&str, Port) = ("PR_REDIRECTOR_PORT", 42127);
 pub const MAIN_PORT: (&str, Port) = ("PR_MAIN_PORT", 14219);
 pub const HTTP_PORT: (&str, Port) = ("PR_HTTP_PORT", 80);

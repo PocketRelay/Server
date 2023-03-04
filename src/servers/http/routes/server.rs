@@ -34,10 +34,6 @@ struct ServerDetails {
     ident: &'static str,
     /// The server version
     version: &'static str,
-    /// Git branch
-    branch: &'static str,
-    /// Git SHA
-    hash: &'static str,
 }
 
 /// Route for retrieving the server details responds with
@@ -46,8 +42,6 @@ async fn server_details() -> Json<ServerDetails> {
     Json(ServerDetails {
         ident: "POCKET_RELAY_SERVER",
         version: env::VERSION,
-        branch: env::GIT_BRANCH,
-        hash: env::GIT_SHA_SHORT,
     })
 }
 

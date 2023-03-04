@@ -28,8 +28,7 @@ repository = "https://github.com/PocketRelay/Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
 # Glob to ensure resources is included 
-include = ["src/**/*", "build.rs"]
-build = "build.rs"
+include = ["src/**/*"]
 
 edition.workspace = true
 license.workspace = true
@@ -105,10 +104,6 @@ features = ["json", "rustls-tls"]
 version = "1.2.0"
 default-features = false
 features = ["console_appender", "file_appender"]
-
-[build-dependencies]
-vergen = "7"
-
 
 [profile.release]
 strip = true
