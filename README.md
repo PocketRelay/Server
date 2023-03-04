@@ -1,8 +1,9 @@
-<img src="https://raw.githubusercontent.com/PocketRelay/.github/main/assets/logo-new-text.svg" width="100%" height="160px">
+<img src="https://raw.githubusercontent.com/PocketRelay/.github/main/assets/logo-new-text.svg" width="100%" height="120px">
 
 # Pocket Relay 
 
-> Mass Effect 3 Server Emulator Rust server implementation
+*Mass Effect 3 Server Emulator / Private Server*
+
 
 ![License](https://img.shields.io/github/license/PocketRelay/ServerRust?style=for-the-badge)
 ![Cargo Version](https://img.shields.io/crates/v/pocket-relay?style=for-the-badge)
@@ -11,13 +12,43 @@
 
 [Discord Server (https://discord.gg/yvycWW8RgR)](https://discord.gg/yvycWW8RgR)
 
-Development on this implementation has made great strides and has surpassed the original Kotlin server in terms of performance
-reliabality, functionality and actual parody to the official server.
+**Pocket Relay** Is a custom implementation of the Mass Effect 3 multiplayer servers all bundled into a easy to use server with a Dashboard for managing accounts and inventories.
 
-# 📖 Setting up a server
+## 📖 Starting your own server
 
-For a guide on how to setup a Pocket Relay server see [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_SERVER.md)
-and for connecting to a server see [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_CLIENT.md)
+If you would like to host your own **Pocket Relay** serveryou can follow this guide [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_SERVER.md) 
+
+If you would like to join an existing **Pocket Relay** server you can follow this guide [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_CLIENT.md)
+
+## 📦 Downloads
+
+Below is a table of the download links for the different platforms and server types
+
+### Normal
+
+The **SQLite** version of **Pocket Relay** this version requires no additional database setup and is the ideal choice for most 
+
+| Platform | Download                                                                                                |
+| -------- | ------------------------------------------------------------------------------------------------------- |
+| Windows  | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-windows.exe) |
+| Linux    | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-linux)       |
+
+### MySQL
+
+The **MySQL** version which requires that you have a **MySQL** database to use. This version expects you to have some understanding of **MySQL** and a server prepared to use it with
+
+| Platform | Download                                                                                                      |
+| -------- | ------------------------------------------------------------------------------------------------------------- |
+| Windows  | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-windows-mysql.exe) |
+| Linux    | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-linux-mysql)       |
+
+
+
+## 🔧 Configuration
+
+In order to configure the server such as changing the ports you can see the
+configuration documentation [Here (docs/CONFIG.md)](docs/CONFIG.md)
+
 
 # ❔ What
 
@@ -33,26 +64,6 @@ You can find the client [Here (https://github.com/PocketRelay/Client)](https://g
 The client tool makes it easy to do the setup process. But its possible to do everything the client
 does manually if you'd prefer. Documentation for how to do so will be posted at a later point.
 
-# 🔧 Configuration
-
-In order to configure the server such as changing the ports you can see the
-configuration documentation [Here (docs/CONFIG.md)](docs/CONFIG.md)
-
-# 📦 Releases
-
-**SQLite**:
-
-| Platform | Download                                                                                                |
-| -------- | ------------------------------------------------------------------------------------------------------- |
-| Windows  | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-windows.exe) |
-| Linux    | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-linux)       |
-
-**MySQL**:
-
-| Platform | Download                                                                                                      |
-| -------- | ------------------------------------------------------------------------------------------------------------- |
-| Windows  | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-windows-mysql.exe) |
-| Linux    | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-linux-mysql)       |
 
 # 🚀 Building
 
