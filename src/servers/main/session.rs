@@ -151,6 +151,7 @@ impl PushExt for Link<Session> {
         let _ = self.do_send(WriteMessage(packet));
     }
 }
+
 #[derive(Message)]
 #[msg(rtype = "SessionID")]
 pub struct GetIdMessage;
@@ -379,9 +380,9 @@ impl Session {
                 Components::Util(components::Util::Ping)
                     | Components::Util(components::Util::SuspendUserPing)
             )
-        } else {false};
-
-
+        } else {
+            false
+        };
 
         if ignored {
             return;
@@ -447,7 +448,9 @@ impl Debug for SessionPacketDebug<'_> {
                     | Components::Util(components::Util::FetchClientConfig)
                     | Components::Util(components::Util::UserSettingsLoadAll)
             )
-        } else { false };
+        } else {
+            false
+        };
 
         PacketDebug {
             packet: self.packet,

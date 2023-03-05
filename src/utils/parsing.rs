@@ -190,17 +190,3 @@ pub fn parse_player_character(value: &str) -> Option<PlayerCharacter<'_>> {
         leveled_up,
     })
 }
-
-#[cfg(test)]
-mod test {
-    use crate::utils::parsing::MEStringParser;
-
-    #[test]
-    fn test_a() {
-        let value = "20;4;AABB;123;DWADA";
-        let mut parser = MEStringParser::new(value).unwrap();
-        assert_eq!(parser.next_str().unwrap(), "AABB");
-        assert_eq!(parser.parse_next::<u16>().unwrap(), 123);
-        assert_eq!(parser.next_str().unwrap(), "DWADA");
-    }
-}

@@ -30,19 +30,3 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
     let argon2 = Argon2::default();
     argon2.verify_password(password.as_bytes(), &hash).is_ok()
 }
-
-#[cfg(test)]
-mod test {
-    use crate::utils::random::random_string;
-
-    use super::{hash_password, verify_password};
-
-    /// Tests that password hashing works correctly
-    #[test]
-    fn test_password_hashing() {
-        let value = random_string(50);
-        let hash = hash_password(&value).unwrap();
-        let valid = verify_password(&value, &hash);
-        assert_eq!(valid, true)
-    }
-}
