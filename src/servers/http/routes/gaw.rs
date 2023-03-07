@@ -8,7 +8,7 @@ use crate::{
     env,
     servers::http::ext::{ErrorStatusCode, Xml},
     state::GlobalState,
-    utils::parsing::parse_player_class,
+    utils::parsing::PlayerClass,
 };
 use axum::{
     extract::{Path, Query},
@@ -127,7 +127,7 @@ async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u3
         .get_classes(db)
         .await?
         .iter()
-        .filter_map(|value| parse_player_class(&value.value))
+        .filter_map(|value| PlayerClass::parse(&value.value))
         .map(|value| value.promotions)
         .sum())
 }
