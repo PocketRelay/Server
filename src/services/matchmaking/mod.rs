@@ -1,12 +1,16 @@
-use super::{player::GamePlayer, rules::RuleSet, CheckJoinableMessage, Game, GameJoinableState};
 use crate::{
-    services::game::AddPlayerMessage,
+    services::game::{
+        player::GamePlayer, AddPlayerMessage, CheckJoinableMessage, Game, GameJoinableState,
+    },
     utils::types::{GameID, SessionID},
 };
 use futures::FutureExt;
 use interlink::prelude::*;
 use log::debug;
+use rules::RuleSet;
 use std::{collections::VecDeque, sync::Arc, time::SystemTime};
+
+pub mod rules;
 
 #[derive(Service)]
 pub struct Matchmaking {

@@ -4,7 +4,7 @@
 
 use super::router;
 use crate::services::game::manager::RemovePlayerMessage;
-use crate::services::game::matchmaking::RemoveQueueMessage;
+use crate::services::matchmaking::RemoveQueueMessage;
 use crate::utils::components;
 use crate::utils::types::PlayerID;
 use crate::{

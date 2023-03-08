@@ -1,8 +1,10 @@
 use crate::{
-    services::game::{
-        models::{GameState, PlayerState, RemoveReason},
-        rules::RuleSet,
-        AttrMap,
+    services::{
+        game::{
+            models::{GameState, PlayerState, RemoveReason},
+            AttrMap,
+        },
+        matchmaking::rules::RuleSet,
     },
     utils::types::{GameID, PlayerID, SessionID},
 };

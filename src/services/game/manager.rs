@@ -1,8 +1,8 @@
 use super::{
-    models::PlayerState, player::GamePlayer, rules::RuleSet, AddPlayerMessage, AttrMap,
-    CheckJoinableMessage, Game, GameJoinableState, GameSnapshot, RemovePlayerType,
+    models::PlayerState, player::GamePlayer, AddPlayerMessage, AttrMap, CheckJoinableMessage, Game,
+    GameJoinableState, GameSnapshot, RemovePlayerType,
 };
-use crate::utils::types::GameID;
+use crate::{services::matchmaking::rules::RuleSet, utils::types::GameID};
 use futures::FutureExt;
 use interlink::prelude::*;
 use log::debug;

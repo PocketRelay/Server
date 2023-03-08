@@ -1,14 +1,13 @@
 use self::{
-    game::{manager::GameManager, matchmaking::Matchmaking},
-    leaderboard::Leaderboard,
-    retriever::Retriever,
-    tokens::Tokens,
+    game::manager::GameManager, leaderboard::Leaderboard, matchmaking::Matchmaking,
+    retriever::Retriever, tokens::Tokens,
 };
 use interlink::prelude::Link;
 use tokio::join;
 
 pub mod game;
 pub mod leaderboard;
+pub mod matchmaking;
 pub mod retriever;
 pub mod tokens;
 

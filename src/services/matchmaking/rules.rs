@@ -1,4 +1,4 @@
-use super::AttrMap;
+use crate::services::game::AttrMap;
 
 /// Rulesets are fairly cheap to clone. Rule values are not usually
 /// very long.

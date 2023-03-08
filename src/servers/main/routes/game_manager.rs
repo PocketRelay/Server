@@ -8,14 +8,16 @@ use crate::{
         },
         session::{GetGamePlayerMessage, GetIdMessage, SessionLink},
     },
-    services::game::{
-        manager::{
-            CreateMessage, GetGameMessage, RemovePlayerMessage, TryAddMessage, TryAddResult,
+    services::{
+        game::{
+            manager::{
+                CreateMessage, GetGameMessage, RemovePlayerMessage, TryAddMessage, TryAddResult,
+            },
+            player::GamePlayer,
+            RemovePlayerType, SetAttributesMessage, SetSettingMessage, SetStateMessage,
+            UpdateMeshMessage,
         },
         matchmaking::{GameCreatedMessage, QueuePlayerMessage},
-        player::GamePlayer,
-        RemovePlayerType, SetAttributesMessage, SetSettingMessage, SetStateMessage,
-        UpdateMeshMessage,
     },
     state::GlobalState,
     utils::components::{Components as C, GameManager as G},
