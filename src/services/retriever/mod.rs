@@ -163,7 +163,7 @@ impl RetSession {
         let request = Packet::request(self.id, component, contents);
 
         debug_log_packet(&request, "Sending to Official");
-        let header = request.header.clone();
+        let header = request.header;
 
         self.stream.send(request).await?;
 
@@ -188,7 +188,7 @@ impl RetSession {
     pub async fn request_empty_raw(&mut self, component: Components) -> RetrieverResult<Packet> {
         let request = Packet::request_empty(self.id, component);
         debug_log_packet(&request, "Sent to Official");
-        let header = request.header.clone();
+        let header = request.header;
         self.stream.send(request).await?;
         self.id += 1;
         self.expect_response(&header).await

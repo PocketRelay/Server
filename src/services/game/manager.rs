@@ -237,7 +237,6 @@ impl Handler<TryAddMessage> for GameManager {
 }
 
 /// Message for removing a player from a game
-
 #[derive(Message)]
 pub struct RemovePlayerMessage {
     /// The ID of the game to remove from

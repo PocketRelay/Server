@@ -105,7 +105,7 @@ async fn get_group(name: &str) -> ServerResult<Arc<LeaderboardGroup>> {
 }
 
 fn get_locale_name(code: &str) -> &str {
-    match &code as &str {
+    match code as &str {
         "global" => "Global",
         "de" => "Germany",
         "en" => "English",
