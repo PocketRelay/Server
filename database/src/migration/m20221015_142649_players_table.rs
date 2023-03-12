@@ -21,23 +21,55 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Players::Email).string_len(254).not_null())
+                    .col(
+                        ColumnDef::new(Players::Email)
+                            .string_len(254)
+                            .unique_key()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(Players::DisplayName)
                             .string_len(99)
                             .not_null(),
                     )
-                    .col(ColumnDef::new(Players::SessionToken).string_len(254).null())
-                    .col(ColumnDef::new(Players::Origin).boolean().not_null())
-                    .col(ColumnDef::new(Players::Password).string().not_null())
+                    .col(ColumnDef::new(Players::Password).string().null())
+                    .col(
+                        ColumnDef::new(Players::Role)
+                            .tiny_integer()
+                            .default(0)
+                            .not_null(),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        // Create index for email
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-pr-email")
+                    .table(Players::Table)
+                    .col(Players::Email)
+                    .unique()
                     .to_owned(),
             )
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // Drop the table
         manager
             .drop_table(Table::drop().table(Players::Table).to_owned())
+            .await?;
+
+        // Drop the index
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-pr-email")
+                    .table(Players::Table)
+                    .to_owned(),
+            )
             .await
     }
 }
@@ -48,7 +80,6 @@ pub enum Players {
     Id,
     Email,
     DisplayName,
-    SessionToken,
-    Origin,
     Password,
+    Role,
 }

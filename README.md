@@ -12,6 +12,13 @@
 
 [Discord Server (https://discord.gg/yvycWW8RgR)](https://discord.gg/yvycWW8RgR)
 
+
+> **📌 Update Notice**
+> If you are updating from a version lower than 0.3 you will need to 
+> delete the app.db file before launching or else the server will not
+> work
+
+
 **Pocket Relay** Is a custom implementation of the Mass Effect 3 multiplayer servers all bundled into a easy to use server with a Dashboard for managing accounts and inventories.
 
 With **Pocket Relay** you can play Mass Effect 3 multiplayer offline by yourself, over LAN, or even over WAN as a public server 
