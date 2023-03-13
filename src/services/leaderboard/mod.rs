@@ -2,7 +2,7 @@ use self::models::*;
 use crate::{
     state::GlobalState,
     utils::{
-        parsing::{parse_player_character, parse_player_class},
+        parsing::{KitNameDeployed, PlayerClass},
         types::BoxFuture,
     },
 };
@@ -230,12 +230,12 @@ async fn compute_n7_player(db: DatabaseConnection, player: Player) -> DbResult<L
 
     let classes: Vec<_> = classes
         .iter()
-        .filter_map(|value| parse_player_class(&value.value))
+        .filter_map(|value| PlayerClass::parse(&value.value))
         .collect();
 
     let characters: Vec<_> = characters
         .iter()
-        .filter_map(|value| parse_player_character(&value.value))
+        .filter_map(|value| KitNameDeployed::parse(&value.value))
         .collect();
 
     for class in classes {

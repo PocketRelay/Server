@@ -72,10 +72,10 @@ impl Player {
     ///
     /// `id`    The ID of the player
     /// `db`    The database connection
-    pub fn all_data<'a>(
+    pub fn all_data(
         id: u32,
-        db: &'a DatabaseConnection,
-    ) -> impl Future<Output = DbResult<Vec<PlayerData>>> + Send + 'a {
+        db: &DatabaseConnection,
+    ) -> impl Future<Output = DbResult<Vec<PlayerData>>> + Send + '_ {
         player_data::Entity::find()
             .filter(player_data::Column::PlayerId.eq(id))
             .all(db)
@@ -214,10 +214,10 @@ impl Player {
     ///
     /// `db` The database instance
     /// `id` The ID of the player to find
-    pub fn by_id<'a>(
-        db: &'a DatabaseConnection,
+    pub fn by_id(
+        db: &DatabaseConnection,
         id: u32,
-    ) -> impl Future<Output = DbResult<Option<Player>>> + Send + 'a {
+    ) -> impl Future<Output = DbResult<Option<Player>>> + Send + '_ {
         players::Entity::find_by_id(id).one(db)
     }
 
@@ -250,11 +250,7 @@ impl Player {
     ///
     /// `db`       The database connection
     /// `password` The new hashed password
-    pub fn set_password<'a>(
-        self,
-        db: &'a DatabaseConnection,
-        password: String,
-    ) -> DbFuture<'a, Player> {
+    pub fn set_password(self, db: &DatabaseConnection, password: String) -> DbFuture<'_, Player> {
         let mut model = self.into_active_model();
         model.password = Set(Some(password));
         model.update(db)
@@ -264,11 +260,7 @@ impl Player {
     ///
     /// `db`   The database connection
     /// `role` The new role for the player
-    pub fn set_role<'a>(
-        self,
-        db: &'a DatabaseConnection,
-        role: PlayerRole,
-    ) -> DbFuture<'a, Player> {
+    pub fn set_role(self, db: &DatabaseConnection, role: PlayerRole) -> DbFuture<'_, Player> {
         let mut model = self.into_active_model();
         model.role = Set(role);
         model.update(db)
@@ -280,12 +272,12 @@ impl Player {
     /// `db`       The database connection
     /// `username` Optional new username for the player
     /// `email`    Optional new email for the player
-    pub fn set_details<'a>(
+    pub fn set_details(
         self,
-        db: &'a DatabaseConnection,
+        db: &DatabaseConnection,
         username: Option<String>,
         email: Option<String>,
-    ) -> DbFuture<'a, Player> {
+    ) -> DbFuture<'_, Player> {
         let mut model = self.into_active_model();
 
         if let Some(username) = username {

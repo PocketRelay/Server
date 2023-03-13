@@ -22,7 +22,7 @@ features = ["std", "serde"]
 
 [package]
 name = "pocket-relay"
-version = "0.3.0"
+version = "0.3.1"
 description = "Pocket Relay Server"
 repository = "https://github.com/PocketRelay/Server"
 readme = "README.md"
@@ -55,7 +55,7 @@ database = { path = "database", package = "pocket-relay-database", version = "^0
 rust-embed = { version = "6.4.2", features = ["debug-embed"] }
 
 # Password hashing
-argon2 = "0.4"
+argon2 = "0.5"
 
 base64ct = { version = "1.5", features = ["alloc"] }
 flate2 = { version = "1", features = ["zlib"], default-features = false }
@@ -65,12 +65,12 @@ ring = "0.16"
 dotenvy = "0.15"
 
 # Library for obtaining the local IP address of the device
-local-ip-address = "0.5.0"
+local-ip-address = "0.5"
 
 thiserror = "1"
 validator = { version = "0.16", features = ["derive"] }
 
-interlink = "0.1.2"
+interlink = "0.1"
 tokio-util = { version = "0.7", features = ["codec"] }
 futures = "0.3"
 
@@ -104,6 +104,9 @@ features = ["json", "rustls-tls"]
 version = "1.2.0"
 default-features = false
 features = ["console_appender", "file_appender"]
+
+[patch.crates-io]
+local-ip-address = { git = "https://github.com/jacobtread/local-ip-address.git" }
 
 [profile.release]
 strip = true

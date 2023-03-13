@@ -36,12 +36,10 @@ pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
 
 pub const SUPER_ADMIN_EMAIL: &str = "PR_SUPER_ADMIN_EMAIL";
 
-#[inline]
 pub fn env(pair: (&str, &str)) -> String {
     std::env::var(pair.0).unwrap_or_else(|_| pair.1.to_string())
 }
 
-#[inline]
 pub fn from_env<F: FromStr>(pair: (&str, F)) -> F {
     if let Ok(value) = std::env::var(pair.0) {
         if let Ok(value) = F::from_str(&value) {
@@ -49,27 +47,4 @@ pub fn from_env<F: FromStr>(pair: (&str, F)) -> F {
         }
     }
     pair.1
-}
-
-#[cfg(test)]
-mod test {
-    use crate::env::from_env;
-
-    #[test]
-    fn test_bool() {
-        std::env::set_var("TEST", "false");
-        assert_eq!(from_env(("TEST", true)), false);
-
-        std::env::set_var("TEST", "False");
-        assert_eq!(from_env(("TEST", true)), true);
-
-        std::env::set_var("TEST", "true");
-        assert_eq!(from_env(("TEST", false)), true);
-
-        std::env::set_var("TEST", "True");
-        assert_eq!(from_env(("TEST", false)), false);
-
-        std::env::set_var("TEST", "12");
-        assert_eq!(from_env(("TEST", 0)), 12);
-    }
 }

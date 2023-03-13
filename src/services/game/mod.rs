@@ -1,4 +1,3 @@
-use self::rules::RuleSet;
 use crate::{
     servers::main::session::{DetailsMessage, PushExt, SetGameMessage},
     utils::{
@@ -14,11 +13,11 @@ use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
 use std::sync::Arc;
 
+use super::matchmaking::rules::RuleSet;
+
 pub mod manager;
-pub mod matchmaking;
 pub mod models;
 pub mod player;
-pub mod rules;
 
 pub struct Game {
     /// Unique ID for this game

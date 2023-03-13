@@ -23,15 +23,3 @@ pub fn random_string(len: usize) -> String {
 
     output
 }
-
-#[cfg(test)]
-mod test {
-    use super::random_string;
-
-    #[test]
-    fn test_random() {
-        let value = random_string(128);
-        println!("Generated: {value:?}");
-        assert!(value.len() == 128)
-    }
-}

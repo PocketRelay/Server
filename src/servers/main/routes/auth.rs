@@ -253,6 +253,8 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
         return Ok(player);
     };
 
+    debug!("Loaded origin data from official server");
+
     if let Err(err) = player.bulk_insert_data(db, settings.into_iter()).await {
         error!("Failed to set origin data: {err:?}");
         return Err(ServerError::ServerUnavailable);
