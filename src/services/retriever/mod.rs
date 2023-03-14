@@ -81,7 +81,7 @@ impl Retriever {
     /// host and returns the instance response.
     async fn get_main_host(host: String) -> Option<(String, Port)> {
         debug!("Connecting to official redirector");
-        let stream = Self::stream_to(&host, Self::REDIRECT_PORT).await?;
+        let stream = Self::stream(&host, Self::REDIRECT_PORT).await?;
         let mut session = RetSession::new(stream)?;
         debug!("Connected to official redirector");
         debug!("Requesting details from official server");
@@ -94,7 +94,7 @@ impl Retriever {
     /// session returning that session. Will return None if the
     /// stream failed.
     pub async fn session(&self) -> Option<RetSession> {
-        let stream = self.stream().await?;
+        let stream = Self::stream(&self.host, self.port).await?;
         RetSession::new(stream)
     }
 
@@ -103,7 +103,7 @@ impl Retriever {
     ///
     /// `host` The host of the server
     /// `port` The port of the server
-    pub async fn stream_to(host: &str, port: Port) -> Option<BlazeStream> {
+    pub async fn stream(host: &str, port: Port) -> Option<BlazeStream> {
         match BlazeStream::connect((host, port)).await {
             Ok(value) => Some(value),
             Err(err) => {
@@ -114,11 +114,6 @@ impl Retriever {
                 None
             }
         }
-    }
-
-    /// Returns a new stream to the main server
-    pub async fn stream(&self) -> Option<BlazeStream> {
-        Self::stream_to(&self.host, self.port).await
     }
 }
 
