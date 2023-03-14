@@ -1,6 +1,6 @@
 use super::{
     models::{OriginLoginRequest, OriginLoginResponse, SettingsResponse},
-    RetSession, Retriever,
+    RetSession, Retriever, RetrieverResult,
 };
 use crate::utils::components::{Authentication, Components, Util};
 use blaze_pk::types::TdfMap;
@@ -31,13 +31,6 @@ impl OriginFlowService {
     }
 }
 
-/// Structure for the data return after retrieving the data
-/// from an Origin account using the official servers.
-pub struct OriginDetails {
-    pub email: String,
-    pub display_name: String,
-}
-
 /// Flow structure for complete authentication through
 /// origin and optionally loading the player data
 pub struct OriginFlow {
@@ -50,36 +43,29 @@ impl OriginFlow {
     /// return Origin details if the authentication process went without error
     ///
     /// `token` The token to authenticate with
-    pub async fn authenticate(&mut self, token: &str) -> Option<OriginDetails> {
+    pub async fn authenticate(&mut self, token: &str) -> RetrieverResult<OriginLoginResponse> {
         let value = self
             .session
             .request::<OriginLoginRequest, OriginLoginResponse>(
                 Components::Authentication(Authentication::OriginLogin),
                 OriginLoginRequest { token },
             )
-            .await
-            .ok()?;
-
-        let details = OriginDetails {
-            email: value.email,
-            display_name: value.display_name,
-        };
+            .await?;
 
         debug!(
             "Retrieved origin details (Name: {}, Email: {})",
-            &details.display_name, &details.email
+            &value.display_name, &value.email
         );
-        Some(details)
+        Ok(value)
     }
 
     /// Loads the user settings from the official server. Must be called after
     /// authenticate or it will thrown an error.
-    pub async fn get_settings(&mut self) -> Option<TdfMap<String, String>> {
+    pub async fn get_settings(&mut self) -> RetrieverResult<TdfMap<String, String>> {
         let value = self
             .session
             .request_empty::<SettingsResponse>(Components::Util(Util::UserSettingsLoadAll))
-            .await
-            .ok()?;
-        Some(value.settings)
+            .await?;
+        Ok(value.settings)
     }
 }
