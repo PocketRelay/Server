@@ -103,9 +103,8 @@ impl Retriever {
     ///
     /// `host` The host of the server
     /// `port` The port of the server
-    pub async fn stream_to(host: &String, port: Port) -> Option<BlazeStream> {
-        let addr = (host.clone(), port);
-        match BlazeStream::connect(addr).await {
+    pub async fn stream_to(host: &str, port: Port) -> Option<BlazeStream> {
+        match BlazeStream::connect((host, port)).await {
             Ok(value) => Some(value),
             Err(err) => {
                 error!(
