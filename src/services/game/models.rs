@@ -218,6 +218,7 @@ impl Encodable for AttributesChange<'_> {
 }
 
 pub struct PlayerJoining<'a> {
+    pub game_id: GameID,
     /// The slot the player is joining into
     pub slot: GameSlot,
     /// The player that is joining
@@ -226,10 +227,10 @@ pub struct PlayerJoining<'a> {
 
 impl Encodable for PlayerJoining<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"GID", self.player.game_id);
+        writer.tag_u32(b"GID", self.game_id);
 
         writer.tag_group(b"PDAT");
-        self.player.encode(self.slot, writer);
+        self.player.encode(self.game_id, self.slot, writer);
     }
 }
 
@@ -308,14 +309,19 @@ pub fn encode_game_data(writer: &mut TdfWriter, game: &Game, player: &GamePlayer
     writer.tag_group_end();
 }
 
-pub fn encode_players_list(writer: &mut TdfWriter, players: &Vec<GamePlayer>, player: &GamePlayer) {
+pub fn encode_players_list(
+    writer: &mut TdfWriter,
+    game_id: GameID,
+    players: &Vec<GamePlayer>,
+    player: &GamePlayer,
+) {
     writer.tag_list_start(b"PROS", TdfType::Group, players.len() + 1);
     let mut slot = 0;
     for player in players {
-        player.encode(slot, writer);
+        player.encode(game_id, slot, writer);
         slot += 1;
     }
-    player.encode(slot, writer);
+    player.encode(game_id, slot, writer);
 }
 
 pub struct GameDetails<'a> {
@@ -327,7 +333,7 @@ pub struct GameDetails<'a> {
 impl Encodable for GameDetails<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
         encode_game_data(writer, self.game, self.player);
-        encode_players_list(writer, &self.game.players, self.player);
+        encode_players_list(writer, self.game.id, &self.game.players, self.player);
         let union_value = self.ty.value();
         writer.tag_union_start(b"REAS", union_value);
         writer.tag_group(b"VALU");

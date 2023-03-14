@@ -15,8 +15,6 @@ use serde::Serialize;
 pub struct GamePlayer {
     /// ID of the session associated to this player
     pub session_id: SessionID,
-    /// ID of the game this player is apart of
-    pub game_id: GameID,
     /// Session player
     pub player: Player,
     /// Session address
@@ -51,7 +49,6 @@ impl GamePlayer {
             player,
             link,
             net,
-            game_id: 1,
             state: PlayerState::Connecting,
         }
     }
@@ -71,17 +68,20 @@ impl GamePlayer {
         }
     }
 
-    pub fn create_set_session(&self) -> Packet {
+    pub fn create_set_session(&self, game_id: GameID) -> Packet {
         Packet::notify(
             Components::UserSessions(UserSessions::SetSession),
-            SetPlayer { player: self },
+            SetPlayer {
+                player: self,
+                game_id,
+            },
         )
     }
 
-    pub fn encode(&self, slot: usize, writer: &mut TdfWriter) {
+    pub fn encode(&self, game_id: GameID, slot: usize, writer: &mut TdfWriter) {
         writer.tag_empty_blob(b"BLOB");
         writer.tag_u8(b"EXID", 0);
-        writer.tag_u32(b"GID", self.game_id);
+        writer.tag_u32(b"GID", game_id);
         writer.tag_u32(b"LOC", 0x64654445);
         writer.tag_str(b"NAME", &self.player.display_name);
         writer.tag_u32(b"PID", self.player.id);
@@ -96,7 +96,7 @@ impl GamePlayer {
         writer.tag_group_end();
     }
 
-    pub fn encode_data(&self, writer: &mut TdfWriter) {
+    pub fn encode_data(&self, game_id: GameID, writer: &mut TdfWriter) {
         self.net.tag_groups(b"ADDR", writer);
         writer.tag_str(b"BPS", "ea-sjc");
         writer.tag_str_empty(b"CTY");
@@ -114,7 +114,7 @@ impl GamePlayer {
         writer.tag_value(b"QDAT", &self.net.qos);
         writer.tag_u8(b"UATT", 0);
         writer.tag_list_start(b"ULST", TdfType::Triple, 1);
-        (4, 1, self.game_id).encode(writer);
+        (4, 1, game_id).encode(writer);
         writer.tag_group_end();
     }
 }
@@ -128,12 +128,13 @@ impl Drop for GamePlayer {
 
 pub struct SetPlayer<'a> {
     pub player: &'a GamePlayer,
+    pub game_id: GameID,
 }
 
 impl Encodable for SetPlayer<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_group(b"DATA");
-        self.player.encode_data(writer);
+        self.player.encode_data(self.game_id, writer);
         writer.tag_u32(b"USID", self.player.player.id);
     }
 }

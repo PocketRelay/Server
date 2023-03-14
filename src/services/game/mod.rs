@@ -54,6 +54,7 @@ impl Game {
     }
 }
 
+/// Snapshot of the current game state and players
 #[derive(Serialize)]
 pub struct GameSnapshot {
     pub id: GameID,
@@ -319,7 +320,6 @@ impl Game {
 
     fn add_player(&mut self, mut player: GamePlayer) {
         let slot = self.aquire_slot();
-        player.game_id = self.id;
 
         self.notify_player_joining(&player, slot);
         self.update_clients(&player);
@@ -330,7 +330,7 @@ impl Game {
             game: Some(self.id),
         });
 
-        let packet = player.create_set_session();
+        let packet = player.create_set_session(self.id);
         self.push_all(&packet);
 
         self.players.push(player);
@@ -371,7 +371,11 @@ impl Game {
         }
         let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerJoining),
-            PlayerJoining { slot, player },
+            PlayerJoining {
+                slot,
+                player,
+                game_id: self.id,
+            },
         );
         self.push_all(&packet);
         player.link.push(packet);
