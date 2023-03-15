@@ -1,8 +1,12 @@
 use super::{player::GamePlayer, AttrMap, Game};
-use crate::utils::types::{GameID, GameSlot, PlayerID};
+use crate::utils::{
+    components::{Components, GameManager},
+    types::{GameID, GameSlot, PlayerID, SessionID},
+};
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeResult,
+    packet::Packet,
     reader::TdfReader,
     tag::TdfType,
     value_type,
@@ -15,14 +19,14 @@ pub enum GameDetailsType {
     /// The player created the game the details are for
     Created,
     /// The player joined the game
-    Joined,
+    Joined(SessionID),
 }
 
 impl GameDetailsType {
     pub fn value(&self) -> u8 {
         match self {
             Self::Created => 0x0,
-            Self::Joined => 0x3,
+            Self::Joined(_) => 0x3,
         }
     }
 }
@@ -234,20 +238,23 @@ impl Encodable for PlayerJoining<'_> {
     }
 }
 
-pub fn encode_game_data(writer: &mut TdfWriter, game: &Game, player: &GamePlayer) {
-    let mut player_ids = game
-        .players
-        .iter()
-        .map(|value| value.player.id)
-        .collect::<Vec<_>>();
-    player_ids.push(player.player.id);
-    let host_player = game.players.first().unwrap_or(player);
+pub fn encode_game_data(writer: &mut TdfWriter, game: &Game) {
+    let host_player = match game.players.first() {
+        Some(value) => value,
+        None => return,
+    };
 
     writer.tag_group(b"GAME");
 
     let game_name = &host_player.player.display_name;
 
-    writer.tag_value(b"ADMN", &player_ids);
+    {
+        writer.tag_list_start(b"ADMN", TdfType::VarInt, game.players.len());
+        for player in &game.players {
+            writer.write_u32(player.player.id);
+        }
+    }
+
     writer.tag_value(b"ATTR", &game.attributes);
     {
         writer.tag_list_start(b"CAP", TdfType::VarInt, 2);
@@ -309,31 +316,24 @@ pub fn encode_game_data(writer: &mut TdfWriter, game: &Game, player: &GamePlayer
     writer.tag_group_end();
 }
 
-pub fn encode_players_list(
-    writer: &mut TdfWriter,
-    game_id: GameID,
-    players: &Vec<GamePlayer>,
-    player: &GamePlayer,
-) {
-    writer.tag_list_start(b"PROS", TdfType::Group, players.len() + 1);
+pub fn encode_players_list(writer: &mut TdfWriter, game_id: GameID, players: &Vec<GamePlayer>) {
+    writer.tag_list_start(b"PROS", TdfType::Group, players.len());
     let mut slot = 0;
     for player in players {
         player.encode(game_id, slot, writer);
         slot += 1;
     }
-    player.encode(game_id, slot, writer);
 }
 
 pub struct GameDetails<'a> {
     pub game: &'a Game,
-    pub player: &'a GamePlayer,
     pub ty: GameDetailsType,
 }
 
 impl Encodable for GameDetails<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
-        encode_game_data(writer, self.game, self.player);
-        encode_players_list(writer, self.game.id, &self.game.players, self.player);
+        encode_game_data(writer, self.game);
+        encode_players_list(writer, self.game.id, &self.game.players);
         let union_value = self.ty.value();
         writer.tag_union_start(b"REAS", union_value);
         writer.tag_group(b"VALU");
@@ -341,8 +341,7 @@ impl Encodable for GameDetails<'_> {
             GameDetailsType::Created => {
                 writer.tag_u8(b"DCTX", 0x0);
             }
-            GameDetailsType::Joined => {
-                let session_id = self.player.session_id;
+            GameDetailsType::Joined(session_id) => {
                 writer.tag_u16(b"FIT", 0x3f7a);
                 writer.tag_u16(b"MAXF", 0x5460);
                 writer.tag_u32(b"MSID", session_id);
@@ -505,6 +504,15 @@ impl Encodable for HostMigrateStart {
     }
 }
 
+impl From<HostMigrateStart> for Packet {
+    fn from(value: HostMigrateStart) -> Self {
+        Packet::notify(
+            Components::GameManager(GameManager::HostMigrationStart),
+            value,
+        )
+    }
+}
+
 pub struct HostMigrateFinished {
     pub game_id: GameID,
 }
@@ -512,6 +520,15 @@ pub struct HostMigrateFinished {
 impl Encodable for HostMigrateFinished {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_u32(b"GID", self.game_id)
+    }
+}
+
+impl From<HostMigrateFinished> for Packet {
+    fn from(value: HostMigrateFinished) -> Self {
+        Packet::notify(
+            Components::GameManager(GameManager::HostMigrationFinished),
+            value,
+        )
     }
 }
 

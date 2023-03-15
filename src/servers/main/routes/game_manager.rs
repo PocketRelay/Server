@@ -253,7 +253,9 @@ async fn handle_remove_player(req: RemovePlayerRequest) {
         .game_manager
         .send(RemovePlayerMessage {
             game_id: req.game_id,
-            ty: RemovePlayerType::Player(req.player_id, req.reason),
+            reason: req.reason,
+            id: req.player_id,
+            ty: RemovePlayerType::Player,
         })
         .await;
 }

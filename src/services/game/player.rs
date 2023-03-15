@@ -2,12 +2,11 @@ use super::models::PlayerState;
 use crate::{
     servers::main::session::{Session, SetGameMessage},
     utils::{
-        components::{Components, UserSessions},
         models::NetData,
         types::{GameID, PlayerID, SessionID},
     },
 };
-use blaze_pk::{codec::Encodable, packet::Packet, tag::TdfType, writer::TdfWriter};
+use blaze_pk::writer::TdfWriter;
 use database::Player;
 use interlink::prelude::Link;
 use serde::Serialize;
@@ -53,6 +52,10 @@ impl GamePlayer {
         }
     }
 
+    pub fn set_game(&self, game: Option<GameID>) {
+        let _ = self.link.do_send(SetGameMessage { game });
+    }
+
     /// Takes a snapshot of the current player state
     /// for serialization
     pub fn snapshot(&self, include_net: bool) -> GamePlayerSnapshot {
@@ -66,16 +69,6 @@ impl GamePlayer {
                 None
             },
         }
-    }
-
-    pub fn create_set_session(&self, game_id: GameID) -> Packet {
-        Packet::notify(
-            Components::UserSessions(UserSessions::SetSession),
-            SetPlayer {
-                player: self,
-                game_id,
-            },
-        )
     }
 
     pub fn encode(&self, game_id: GameID, slot: usize, writer: &mut TdfWriter) {
@@ -95,46 +88,11 @@ impl GamePlayer {
         writer.tag_u32(b"UID", self.session_id);
         writer.tag_group_end();
     }
-
-    pub fn encode_data(&self, game_id: GameID, writer: &mut TdfWriter) {
-        self.net.tag_groups(b"ADDR", writer);
-        writer.tag_str(b"BPS", "ea-sjc");
-        writer.tag_str_empty(b"CTY");
-        writer.tag_var_int_list_empty(b"CVAR");
-        {
-            writer.tag_map_start(b"DMAP", TdfType::VarInt, TdfType::VarInt, 1);
-            writer.write_u32(0x70001);
-            writer.write_u16(0x409a);
-        }
-        writer.tag_u16(b"HWFG", self.net.hardware_flags);
-        {
-            writer.tag_list_start(b"PSLM", TdfType::VarInt, 1);
-            writer.write_u32(0xfff0fff);
-        }
-        writer.tag_value(b"QDAT", &self.net.qos);
-        writer.tag_u8(b"UATT", 0);
-        writer.tag_list_start(b"ULST", TdfType::Triple, 1);
-        (4, 1, game_id).encode(writer);
-        writer.tag_group_end();
-    }
 }
 
 impl Drop for GamePlayer {
     fn drop(&mut self) {
         // Clear player game when game player is dropped
-        let _ = self.link.do_send(SetGameMessage { game: None });
-    }
-}
-
-pub struct SetPlayer<'a> {
-    pub player: &'a GamePlayer,
-    pub game_id: GameID,
-}
-
-impl Encodable for SetPlayer<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_group(b"DATA");
-        self.player.encode_data(self.game_id, writer);
-        writer.tag_u32(b"USID", self.player.player.id);
+        self.set_game(None);
     }
 }
