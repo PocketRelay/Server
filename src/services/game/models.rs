@@ -318,10 +318,8 @@ pub fn encode_game_data(writer: &mut TdfWriter, game: &Game) {
 
 pub fn encode_players_list(writer: &mut TdfWriter, game_id: GameID, players: &Vec<GamePlayer>) {
     writer.tag_list_start(b"PROS", TdfType::Group, players.len());
-    let mut slot = 0;
-    for player in players {
+    for (slot, player) in players.iter().enumerate() {
         player.encode(game_id, slot, writer);
-        slot += 1;
     }
 }
 

@@ -99,11 +99,11 @@ impl Handler<AddPlayerMessage> for Game {
             );
 
             // Update other players with the client details
-            self.update_clients(&player);
+            self.update_clients(player);
         }
 
         // Notify the joiner of the game details
-        self.notify_game_setup(&player, slot);
+        self.notify_game_setup(player, slot);
 
         // Set current game of this player
         player.set_game(Some(self.id));
@@ -260,6 +260,12 @@ pub struct RemovePlayerMessage {
     pub id: u32,
     pub reason: RemoveReason,
     pub ty: RemovePlayerType,
+}
+
+#[derive(Debug)]
+pub enum RemovePlayerType {
+    Session,
+    Player,
 }
 
 impl Handler<RemovePlayerMessage> for Game {
@@ -546,10 +552,4 @@ impl Game {
 
         debug!("Finished host migration (GID: {})", self.id);
     }
-}
-
-#[derive(Debug)]
-pub enum RemovePlayerType {
-    Session,
-    Player,
 }
