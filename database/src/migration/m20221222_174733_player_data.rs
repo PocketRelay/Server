@@ -18,12 +18,12 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(PlayerData::Id)
-                            .integer()
+                            .unsigned()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(PlayerData::PlayerId).integer().not_null())
+                    .col(ColumnDef::new(PlayerData::PlayerId).unsigned().not_null())
                     .col(ColumnDef::new(PlayerData::Key).string().not_null())
                     .col(ColumnDef::new(PlayerData::Value).text().not_null())
                     .foreign_key(

@@ -16,7 +16,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(Players::Id)
-                            .integer()
+                            .unsigned()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
@@ -35,7 +35,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Players::Password).string().null())
                     .col(
                         ColumnDef::new(Players::Role)
-                            .tiny_integer()
+                            .tiny_unsigned()
                             .default(0)
                             .not_null(),
                     )
