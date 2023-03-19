@@ -1,5 +1,6 @@
+use super::matchmaking::rules::RuleSet;
 use crate::{
-    servers::main::session::{DetailsMessage, PushExt, SetGameMessage},
+    servers::main::session::{DetailsMessage, InformSessions, PushExt, Session},
     utils::{
         components::{Components, GameManager, UserSessions},
         types::{GameID, GameSlot, PlayerID, SessionID},
@@ -12,8 +13,6 @@ use models::*;
 use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
 use std::sync::Arc;
-
-use super::matchmaking::rules::RuleSet;
 
 pub mod manager;
 pub mod models;
@@ -30,8 +29,6 @@ pub struct Game {
     pub attributes: AttrMap,
     /// The list of players in this game
     pub players: Vec<GamePlayer>,
-    /// The number of the next available slot
-    pub next_slot: GameSlot,
 }
 
 impl Service for Game {
@@ -47,13 +44,14 @@ impl Game {
             state: GameState::Init,
             setting,
             attributes,
-            players: Vec::new(),
-            next_slot: 0,
+            players: Vec::with_capacity(4),
         };
+
         this.start()
     }
 }
 
+/// Snapshot of the current game state and players
 #[derive(Serialize)]
 pub struct GameSnapshot {
     pub id: GameID,
@@ -76,7 +74,49 @@ impl Handler<AddPlayerMessage> for Game {
     type Response = ();
 
     fn handle(&mut self, msg: AddPlayerMessage, _ctx: &mut ServiceContext<Self>) {
-        self.add_player(msg.player);
+        let slot = self.players.len();
+
+        self.players.push(msg.player);
+
+        // Obtain the player that was just added
+        let player = match self.players.last() {
+            Some(value) => value,
+            None => return,
+        };
+
+        // Whether the player was not the host player
+        let is_other = slot != 0;
+
+        if is_other {
+            // Notify other players of the joined player
+            self.notify_all(
+                Components::GameManager(GameManager::PlayerJoining),
+                PlayerJoining {
+                    slot,
+                    player,
+                    game_id: self.id,
+                },
+            );
+
+            // Update other players with the client details
+            self.update_clients(player);
+        }
+
+        // Notify the joiner of the game details
+        self.notify_game_setup(player, slot);
+
+        // Set current game of this player
+        player.set_game(Some(self.id));
+
+        if is_other {
+            // Provide the new players session details to the other players
+            let links: Vec<Link<Session>> = self
+                .players
+                .iter()
+                .map(|player| player.link.clone())
+                .collect();
+            let _ = player.link.do_send(InformSessions { links });
+        }
     }
 }
 
@@ -91,7 +131,8 @@ impl Handler<SetStateMessage> for Game {
     type Response = ();
 
     fn handle(&mut self, msg: SetStateMessage, _ctx: &mut ServiceContext<Self>) {
-        self.set_state(msg.state);
+        self.state = msg.state;
+        self.notify_state();
     }
 }
 
@@ -161,23 +202,54 @@ impl Handler<UpdateMeshMessage> for Game {
 
     fn handle(&mut self, msg: UpdateMeshMessage, _ctx: &mut ServiceContext<Self>) {
         let state = msg.state;
-        let session = msg.session;
-        debug!("Updating mesh connection");
-        match state {
-            PlayerState::Disconnected => {
-                debug!("Disconnected mesh")
+        if let PlayerState::Connected = state {
+            // Ensure the target player is in the game
+            if !self
+                .players
+                .iter()
+                .any(|value| value.player.id == msg.target)
+            {
+                return;
             }
-            PlayerState::Connecting => {
-                if self.is_player_sid(session) && self.is_player_pid(msg.target) {
-                    self.set_player_state(session, PlayerState::Connected);
-                    self.on_join_complete(session);
-                    debug!("Connected player to game")
-                } else {
-                    debug!("Connected player mesh")
-                }
-            }
-            PlayerState::Connected => {}
-            _ => {}
+
+            // Find the index of the session player
+            let session = self
+                .players
+                .iter_mut()
+                .find(|value| value.session_id == msg.session);
+
+            let session = match session {
+                Some(value) => value,
+                None => return,
+            };
+
+            // Update the session state
+            session.state = PlayerState::Connected;
+
+            let player_id = session.player.id;
+            let state_change = PlayerStateChange {
+                gid: self.id,
+                pid: player_id,
+                state: session.state,
+            };
+
+            // Notify players of the player state change
+            self.notify_all(
+                Components::GameManager(GameManager::GamePlayerStateChange),
+                state_change,
+            );
+
+            // Notify players of the completed connection
+            self.notify_all(
+                Components::GameManager(GameManager::PlayerJoinCompleted),
+                JoinComplete {
+                    game_id: self.id,
+                    player_id,
+                },
+            );
+
+            // Add the player to the admin list
+            self.modify_admin_list(player_id, AdminListOperation::Add);
         }
     }
 }
@@ -185,7 +257,15 @@ impl Handler<UpdateMeshMessage> for Game {
 #[derive(Message)]
 #[msg(rtype = "bool")]
 pub struct RemovePlayerMessage {
+    pub id: u32,
+    pub reason: RemoveReason,
     pub ty: RemovePlayerType,
+}
+
+#[derive(Debug)]
+pub enum RemovePlayerType {
+    Session,
+    Player,
 }
 
 impl Handler<RemovePlayerMessage> for Game {
@@ -195,7 +275,44 @@ impl Handler<RemovePlayerMessage> for Game {
         msg: RemovePlayerMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        Mr(self.remove_player(msg.ty))
+        // Already empty game handling
+        if self.players.is_empty() {
+            return Mr(true);
+        }
+
+        // Find the player index
+        let index = match msg.ty {
+            RemovePlayerType::Player => self.players.iter().position(|v| v.player.id == msg.id),
+            RemovePlayerType::Session => self.players.iter().position(|v| v.session_id == msg.id),
+        };
+
+        let index = match index {
+            Some(value) => value,
+            None => return Mr(false),
+        };
+
+        // Remove the player
+        let player = self.players.remove(index);
+
+        // Set current game of this player
+        player.set_game(None);
+
+        // Update the other players
+        self.notify_player_removed(&player, msg.reason);
+        self.notify_fetch_data(&player);
+        self.modify_admin_list(player.player.id, AdminListOperation::Remove);
+
+        debug!(
+            "Removed player from game (PID: {}, GID: {})",
+            player.player.id, self.id
+        );
+
+        // If the player was in the host slot attempt migration
+        if index == 0 {
+            self.try_migrate_host();
+        }
+
+        Mr(self.players.is_empty())
     }
 }
 
@@ -213,7 +330,7 @@ impl Handler<CheckJoinableMessage> for Game {
         msg: CheckJoinableMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        let is_joinable = self.next_slot < Self::MAX_PLAYERS;
+        let is_joinable = self.players.len() < Self::MAX_PLAYERS;
         if !msg.rule_set.matches(&self.attributes) {
             return Mr(GameJoinableState::NotMatch);
         }
@@ -286,17 +403,14 @@ impl Game {
         self.push_all(&packet);
     }
 
-    /// Sets the current game state in the game data and
-    /// sends an update notification to all connected clients
-    /// notifying them of the changed state
-    ///
-    /// `state` The new state value
-    fn set_state(&mut self, state: GameState) {
-        debug!("Updating game state (Value: {state:?})");
-        self.state = state;
+    /// Notifies all players of the current game state
+    fn notify_state(&self) {
         self.notify_all(
             Components::GameManager(GameManager::GameStateChange),
-            StateChange { id: self.id, state },
+            StateChange {
+                id: self.id,
+                state: self.state,
+            },
         );
     }
 
@@ -308,73 +422,15 @@ impl Game {
     fn update_clients(&self, player: &GamePlayer) {
         debug!("Updating clients with new session details");
         self.players.iter().for_each(|value| {
-            let addr1 = player.link.clone();
-            let addr2 = value.link.clone();
+            if value.session_id != player.session_id {
+                let addr1 = player.link.clone();
+                let addr2 = value.link.clone();
 
-            // Queue the session details to be sent to this client
-            let _ = player.link.do_send(DetailsMessage { link: addr2 });
-            let _ = value.link.do_send(DetailsMessage { link: addr1 });
+                // Queue the session details to be sent to this client
+                let _ = player.link.do_send(DetailsMessage { link: addr2 });
+                let _ = value.link.do_send(DetailsMessage { link: addr1 });
+            }
         });
-    }
-
-    fn add_player(&mut self, mut player: GamePlayer) {
-        let slot = self.aquire_slot();
-        player.game_id = self.id;
-
-        self.notify_player_joining(&player, slot);
-        self.update_clients(&player);
-        self.notify_game_setup(&player, slot);
-
-        // Set current game of this player
-        let _ = player.link.do_send(SetGameMessage {
-            game: Some(self.id),
-        });
-
-        let packet = player.create_set_session();
-        self.push_all(&packet);
-
-        self.players.push(player);
-
-        debug!("Adding player complete");
-    }
-
-    /// Checks whether the provided session is a player in this game
-    ///
-    /// `session` The session to check for
-    fn is_player_sid(&self, sid: SessionID) -> bool {
-        self.players.iter().any(|value| value.session_id == sid)
-    }
-
-    /// Checks whether this game contains a player with the provided
-    /// player ID
-    ///
-    /// `pid` The player ID
-    fn is_player_pid(&self, pid: PlayerID) -> bool {
-        self.players.iter().any(|value| value.player.id == pid)
-    }
-
-    fn aquire_slot(&mut self) -> usize {
-        let slot = self.next_slot;
-        self.next_slot += 1;
-        slot
-    }
-
-    fn release_slot(&mut self) {
-        self.next_slot -= 1;
-    }
-
-    /// Notifies all the players in the game that a new player has
-    /// joined the game.
-    fn notify_player_joining(&self, player: &GamePlayer, slot: GameSlot) {
-        if slot == 0 {
-            return;
-        }
-        let packet = Packet::notify(
-            Components::GameManager(GameManager::PlayerJoining),
-            PlayerJoining { slot, player },
-        );
-        self.push_all(&packet);
-        player.link.push(packet);
     }
 
     /// Notifies the provided player that the game has been setup and
@@ -383,49 +439,16 @@ impl Game {
     /// `session` The session to notify
     /// `slot`    The slot the player is joining into
     fn notify_game_setup(&self, player: &GamePlayer, slot: GameSlot) {
-        let ty = match slot {
-            0 => GameDetailsType::Created,
-            _ => GameDetailsType::Joined,
+        let ty = if slot == 0 {
+            GameDetailsType::Created
+        } else {
+            GameDetailsType::Joined(player.session_id)
         };
-
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameSetup),
-            GameDetails {
-                game: self,
-                player,
-                ty,
-            },
+            GameDetails { game: self, ty },
         );
-
         player.link.push(packet);
-    }
-
-    /// Sets the state for the provided session notifying all
-    /// the players that the players state has changed.
-    ///
-    /// `session` The session to change the state of
-    /// `state`   The new state value
-    fn set_player_state(&mut self, session: SessionID, state: PlayerState) -> Option<PlayerState> {
-        let (player_id, old_state) = {
-            let player = self
-                .players
-                .iter_mut()
-                .find(|value| value.session_id == session)?;
-            let old_state = player.state;
-            player.state = state;
-            (player.player.id, old_state)
-        };
-
-        let packet = Packet::notify(
-            Components::GameManager(GameManager::GamePlayerStateChange),
-            PlayerStateChange {
-                gid: self.id,
-                pid: player_id,
-                state,
-            },
-        );
-        self.push_all(&packet);
-        Some(old_state)
     }
 
     /// Modifies the psudo admin list this list doesn't actually exist in
@@ -435,92 +458,20 @@ impl Game {
     /// `target`    The player to target for the admin list
     /// `operation` Whether to add or remove the player from the admin list
     fn modify_admin_list(&self, target: PlayerID, operation: AdminListOperation) {
-        let host_id = {
-            let Some(host) = self.players.first() else {
-                return;
-            };
-            host.player.id
+        let host = match self.players.first() {
+            Some(value) => value,
+            None => return,
         };
-        let packet = Packet::notify(
+
+        self.notify_all(
             Components::GameManager(GameManager::AdminListChange),
             AdminListChange {
                 game_id: self.id,
                 player_id: target,
                 operation,
-                host_id,
+                host_id: host.player.id,
             },
         );
-        self.push_all(&packet);
-    }
-
-    /// Handles informing the other players in the game when a player joining
-    /// is complete (After the mesh connection is updated) and modifies the
-    /// admin list to include the newly added session
-    ///
-    /// `session` The session that completed joining
-    fn on_join_complete(&self, session: SessionID) {
-        let Some(player) = self.players.iter().find(|value| value.session_id == session) else {
-            return;
-        };
-        let packet = Packet::notify(
-            Components::GameManager(GameManager::PlayerJoinCompleted),
-            JoinComplete {
-                game_id: self.id,
-                player_id: player.player.id,
-            },
-        );
-        self.push_all(&packet);
-        self.modify_admin_list(player.player.id, AdminListOperation::Add);
-    }
-
-    fn remove_player(&mut self, ty: RemovePlayerType) -> bool {
-        let (player, slot, reason, is_empty) = {
-            if self.players.is_empty() {
-                return true;
-            }
-            let (index, reason) = match ty {
-                RemovePlayerType::Player(player_id, reason) => (
-                    self.players
-                        .iter()
-                        .position(|value| value.player.id == player_id),
-                    reason,
-                ),
-                RemovePlayerType::Session(session_id) => (
-                    self.players
-                        .iter()
-                        .position(|value| value.session_id == session_id),
-                    RemoveReason::Generic,
-                ),
-            };
-
-            let (player, index) = match index {
-                Some(index) => (self.players.remove(index), index),
-                None => return false,
-            };
-            (player, index, reason, self.players.is_empty())
-        };
-
-        // Set current game of this player
-        let _ = player.link.do_send(SetGameMessage { game: None });
-
-        self.notify_player_removed(&player, reason);
-        self.notify_fetch_data(&player);
-        self.modify_admin_list(player.player.id, AdminListOperation::Remove);
-
-        // Possibly not needed
-        // let packet = player.create_set_session();
-        // self.push_all(&packet);
-        debug!(
-            "Removed player from game (PID: {}, GID: {})",
-            player.player.id, self.id
-        );
-        // If the player was in the host slot
-        if slot == 0 {
-            self.try_migrate_host();
-        }
-        self.release_slot();
-
-        is_empty
     }
 
     /// Notifies all the session and the removed session that a
@@ -549,13 +500,12 @@ impl Game {
     /// `session`   The session to update with the other clients
     /// `player_id` The player id of the session to update
     fn notify_fetch_data(&self, player: &GamePlayer) {
-        let removed_packet = Packet::notify(
+        self.notify_all(
             Components::UserSessions(UserSessions::FetchExtendedData),
             FetchExtendedData {
                 player_id: player.player.id,
             },
         );
-        self.push_all(&removed_packet);
 
         for other_player in &self.players {
             let packet = Packet::notify(
@@ -571,45 +521,35 @@ impl Game {
     /// Attempts to migrate the host of this game if there are still players
     /// left in the game.
     fn try_migrate_host(&mut self) {
-        self.set_state(GameState::HostMigration);
+        // Obtain the new player at the first index
+        let new_host = match self.players.first() {
+            Some(value) => value,
+            None => return,
+        };
+
         debug!("Starting host migration (GID: {})", self.id);
-        self.notify_migrate_start();
-        self.set_state(GameState::InGame);
-        self.notify_migrate_finish();
-        let Some(new_host) = self.players.first() else { return; };
-        self.update_clients(new_host);
 
-        debug!("Finished host migration (GID: {})", self.id);
-    }
-
-    /// Notifies all the sessions in this game that host migration has
-    /// begun.
-    ///
-    /// `new_host` The session that is being migrated to host
-    fn notify_migrate_start(&self) {
-        let Some(new_host) = self.players.first() else { return; };
-        let packet = Packet::notify(
+        // Start host migration
+        self.state = GameState::HostMigration;
+        self.notify_state();
+        self.notify_all(
             Components::GameManager(GameManager::HostMigrationStart),
             HostMigrateStart {
                 game_id: self.id,
                 host_id: new_host.player.id,
             },
         );
-        self.push_all(&packet);
-    }
 
-    /// Notifies to all sessions that the migration is complete
-    fn notify_migrate_finish(&self) {
-        let packet = Packet::notify(
+        // Finished host migration
+        self.state = GameState::InGame;
+        self.notify_state();
+        self.notify_all(
             Components::GameManager(GameManager::HostMigrationFinished),
             HostMigrateFinished { game_id: self.id },
         );
-        self.push_all(&packet);
-    }
-}
 
-#[derive(Debug)]
-pub enum RemovePlayerType {
-    Session(SessionID),
-    Player(PlayerID, RemoveReason),
+        self.update_clients(new_host);
+
+        debug!("Finished host migration (GID: {})", self.id);
+    }
 }

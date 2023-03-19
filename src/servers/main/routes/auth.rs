@@ -221,7 +221,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
     };
 
     // Authenticate with the official servers
-    let Some(details) = flow.authenticate(token).await else {
+    let Ok(details) = flow.authenticate(token).await else {
         error!("Unable to authenticate Origin: Failed to retrieve details from official server");
         return Err(ServerError::ServerUnavailable);
     };
@@ -245,7 +245,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
     }
 
     // Load the player settings from origin
-    let Some(settings) = flow.get_settings().await else {
+    let Ok(settings) = flow.get_settings().await else {
         warn!(
             "Unable to load origin player settings from official servers (Name: {}, Email: {})",
             &player.display_name, &player.email

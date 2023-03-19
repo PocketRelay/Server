@@ -1,4 +1,6 @@
-//! Module for retrieving data from the official Mass Effect 3 Servers
+//! Retriever system for connecting and retrieving data from the official
+//! Mass Effect 3 servers.
+
 use self::origin::OriginFlowService;
 use crate::utils::{
     components::{Components, Redirector},
@@ -68,11 +70,18 @@ impl Retriever {
         })
     }
 
+    /// Creates a connection to the redirector server and sends
+    /// the Redirector->GetInstance packet to obtain the details
+    /// of the main official server.
+    ///
+    /// Will respond with the host string and port of the official
+    /// server if the process succeeded or else None
+    ///
     /// Makes a instance request to the redirect server at the provided
     /// host and returns the instance response.
     async fn get_main_host(host: String) -> Option<(String, Port)> {
         debug!("Connecting to official redirector");
-        let stream = Self::stream_to(&host, Self::REDIRECT_PORT).await?;
+        let stream = Self::stream(&host, Self::REDIRECT_PORT).await?;
         let mut session = RetSession::new(stream)?;
         debug!("Connected to official redirector");
         debug!("Requesting details from official server");
@@ -81,16 +90,21 @@ impl Retriever {
         Some((net.host.into(), net.port))
     }
 
-    /// Returns a new session to the main server
+    /// Creates a stream to the main server and wraps it with a
+    /// session returning that session. Will return None if the
+    /// stream failed.
     pub async fn session(&self) -> Option<RetSession> {
-        let stream = self.stream().await?;
+        let stream = Self::stream(&self.host, self.port).await?;
         RetSession::new(stream)
     }
 
-    /// Returns a new stream to the mian server
-    pub async fn stream_to(host: &String, port: Port) -> Option<BlazeStream> {
-        let addr = (host.clone(), port);
-        match BlazeStream::connect(addr).await {
+    /// Creates a BlazeStream to the provided host and port
+    /// returning None if the connection failed
+    ///
+    /// `host` The host of the server
+    /// `port` The port of the server
+    pub async fn stream(host: &str, port: Port) -> Option<BlazeStream> {
+        match BlazeStream::connect((host, port)).await {
             Ok(value) => Some(value),
             Err(err) => {
                 error!(
@@ -100,11 +114,6 @@ impl Retriever {
                 None
             }
         }
-    }
-
-    /// Returns a new stream to the main server
-    pub async fn stream(&self) -> Option<BlazeStream> {
-        Self::stream_to(&self.host, self.port).await
     }
 }
 

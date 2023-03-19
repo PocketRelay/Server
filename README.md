@@ -10,7 +10,7 @@
 ![Cargo Downloads](https://img.shields.io/crates/d/pocket-relay?style=for-the-badge)
 ![Build](https://img.shields.io/github/actions/workflow/status/PocketRelay/ServerRust/rust.yml?style=for-the-badge)
 
-[Discord Server (https://discord.gg/yvycWW8RgR)](https://discord.gg/yvycWW8RgR)
+[Discord Server (discord.gg/yvycWW8RgR)](https://discord.gg/yvycWW8RgR)
 
 
 > **📌 Update Notice**
@@ -29,9 +29,7 @@ The **Pocket Relay** software in all its forms are in no way or form supported, 
 
 ## 📖 Starting your own server
 
-If you would like to host your own **Pocket Relay** serveryou can follow this guide [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_SERVER.md) 
-
-If you would like to join an existing **Pocket Relay** server you can follow this guide [Here](https://github.com/PocketRelay/.github/blob/main/manual/SETUP_CLIENT.md)
+For guides check out the [Website (pocket-relay.pages.dev)](https://pocket-relay.pages.dev/)
 
 ## 📦 Downloads
 

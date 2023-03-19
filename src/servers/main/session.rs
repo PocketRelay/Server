@@ -4,6 +4,7 @@
 
 use super::router;
 use crate::services::game::manager::RemovePlayerMessage;
+use crate::services::game::models::RemoveReason;
 use crate::services::matchmaking::RemoveQueueMessage;
 use crate::utils::components;
 use crate::utils::types::PlayerID;
@@ -235,6 +236,34 @@ impl Handler<UpdateClientMessage> for Session {
     }
 }
 
+/// Creates a set session packet and sends it to all the
+/// provided session links
+#[derive(Message)]
+pub struct InformSessions {
+    /// The link to send the set session to
+    pub links: Vec<Link<Session>>,
+}
+
+impl Handler<InformSessions> for Session {
+    type Response = ();
+
+    fn handle(&mut self, msg: InformSessions, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        if let Some(player) = &self.player {
+            let packet = Packet::notify(
+                Components::UserSessions(UserSessions::SetSession),
+                SetSession {
+                    player_id: player.id,
+                    session: self,
+                },
+            );
+
+            for link in msg.links {
+                link.push(packet.clone());
+            }
+        }
+    }
+}
+
 /// Message to update the hardware flag of a session
 #[derive(Message)]
 pub struct HardwareFlagMessage {
@@ -406,7 +435,9 @@ impl Session {
         let _ = if let Some(game_id) = game {
             services.game_manager.do_send(RemovePlayerMessage {
                 game_id,
-                ty: RemovePlayerType::Session(self.id),
+                id: self.id,
+                reason: RemoveReason::Generic,
+                ty: RemovePlayerType::Session,
             })
         } else {
             services.matchmaking.do_send(RemoveQueueMessage {

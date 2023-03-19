@@ -1,6 +1,8 @@
 use super::{
-    models::PlayerState, player::GamePlayer, AddPlayerMessage, AttrMap, CheckJoinableMessage, Game,
-    GameJoinableState, GameSnapshot, RemovePlayerType,
+    models::{PlayerState, RemoveReason},
+    player::GamePlayer,
+    AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GameSnapshot,
+    RemovePlayerType,
 };
 use crate::{services::matchmaking::rules::RuleSet, utils::types::GameID};
 use futures::FutureExt;
@@ -156,10 +158,10 @@ impl Handler<CreateMessage> for GameManager {
     ) -> Self::Response {
         let id = self.next_id;
         self.next_id += 1;
+        msg.host.state = PlayerState::Connected;
+
         let link = Game::start(id, msg.attributes, msg.setting);
         self.games.insert(id, link.clone());
-
-        msg.host.state = PlayerState::Connected;
 
         let _ = link.do_send(AddPlayerMessage { player: msg.host });
 
@@ -241,6 +243,10 @@ impl Handler<TryAddMessage> for GameManager {
 pub struct RemovePlayerMessage {
     /// The ID of the game to remove from
     pub game_id: GameID,
+    /// The ID of the player (Session or PID depending on RemovePlayerType)
+    pub id: u32,
+    /// The reason for removing the player
+    pub reason: RemoveReason,
     /// The type of player removal
     pub ty: RemovePlayerType,
 }
@@ -266,7 +272,14 @@ impl Handler<RemovePlayerMessage> for GameManager {
                     None => return,
                 };
 
-                let is_empty = match link.send(super::RemovePlayerMessage { ty: msg.ty }).await {
+                let is_empty = match link
+                    .send(super::RemovePlayerMessage {
+                        id: msg.id,
+                        reason: msg.reason,
+                        ty: msg.ty,
+                    })
+                    .await
+                {
                     Ok(value) => value,
                     Err(_) => return,
                 };
