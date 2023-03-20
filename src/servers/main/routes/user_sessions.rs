@@ -5,8 +5,12 @@ use crate::{
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
-        session::{HardwareFlagMessage, NetworkInfoMessage, SessionLink, SetPlayerMessage},
+        session::{
+            GetLookupMessage, HardwareFlagMessage, LookupResponse, NetworkInfoMessage, SessionLink,
+            SetPlayerMessage,
+        },
     },
+    services::sessions::LookupMessage,
     state::GlobalState,
     utils::components::{Components as C, UserSessions as U},
 };
@@ -25,6 +29,49 @@ pub fn route(router: &mut Router<C, SessionLink>) {
         C::UserSessions(U::UpdateHardwareFlags),
         handle_update_hardware_flag,
     );
+    router.route(C::UserSessions(U::LookupUser), handle_lookup_user);
+}
+
+/// Attempts to lookup another authenticated session details
+///
+/// ```
+/// Component: UserSessions(LookupUser)
+/// Type: Request
+/// ID: 70
+/// Content: {
+///     "AID": 0,
+///     "ALOC": 0,
+///     "EXBB": Blob [],
+///     "EXID": 0,
+///     "ID": 397394528,
+///     "NAME": "",
+/// }
+/// ```
+async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> {
+    let services = GlobalState::services();
+
+    // Lookup the session
+    let session = services
+        .sessions
+        .send(LookupMessage {
+            player_id: req.player_id,
+        })
+        .await;
+
+    // Ensure there wasn't an error
+    let session = match session {
+        Ok(Some(value)) => value,
+        _ => return Err(ServerError::InvalidInformation),
+    };
+
+    // Get the lookup response from the session
+    let response = session.send(GetLookupMessage {}).await;
+    let response = match response {
+        Ok(Some(value)) => value,
+        _ => return Err(ServerError::InvalidInformation),
+    };
+
+    Ok(response)
 }
 
 /// Attempts to resume an existing session for a player that has the

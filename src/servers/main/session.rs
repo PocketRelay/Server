@@ -22,6 +22,7 @@ use crate::{
 use blaze_pk::packet::PacketDebug;
 use blaze_pk::packet::{Packet, PacketComponents};
 use blaze_pk::router::HandleError;
+use blaze_pk::value_type;
 use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
 use database::Player;
 use interlink::prelude::*;
@@ -37,18 +38,23 @@ pub struct Session {
     /// Unique identifier for this session.
     id: SessionID,
 
+    /// Packet writer sink for the session
     writer: SinkLink<Packet>,
 
     /// The socket connection address of the client
     socket_addr: SocketAddr,
 
+    /// Data associated with this session
+    data: SessionData,
+}
+
+#[derive(Default, Clone)]
+pub struct SessionData {
     /// If the session is authenticated it will have a linked
     /// player model from the database
     player: Option<Player>,
-
     /// Networking information
     net: NetData,
-
     /// The id of the game if connected to one
     game: Option<GameID>,
 }
@@ -76,7 +82,7 @@ impl Handler<GetPlayerMessage> for Session {
         _msg: GetPlayerMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        Mr(self.player.clone())
+        Mr(self.data.player.clone())
     }
 }
 
@@ -92,7 +98,7 @@ impl Handler<GetPlayerIdMessage> for Session {
         _msg: GetPlayerIdMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        Mr(self.player.as_ref().map(|value| value.id))
+        Mr(self.data.player.as_ref().map(|value| value.id))
     }
 }
 
@@ -107,14 +113,14 @@ impl Handler<GetGamePlayerMessage> for Session {
         _msg: GetGamePlayerMessage,
         ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        let player = match self.player.clone() {
+        let player = match self.data.player.clone() {
             Some(value) => value,
             None => return Mr(None),
         };
         Mr(Some(GamePlayer::new(
             self.id,
             player,
-            self.net.clone(),
+            self.data.net.clone(),
             ctx.link(),
         )))
     }
@@ -129,7 +135,7 @@ impl Handler<SetPlayerMessage> for Session {
         let services = GlobalState::services();
 
         // Take the old player and remove it if possible
-        if let Some(old_player) = self.player.take() {
+        if let Some(old_player) = self.data.player.take() {
             let _ = services.sessions.do_send(RemoveMessage {
                 player_id: old_player.id,
             });
@@ -142,7 +148,7 @@ impl Handler<SetPlayerMessage> for Session {
                 player_id: player.id,
                 link: ctx.link(),
             });
-            self.player = Some(player);
+            self.data.player = Some(player);
         }
     }
 }
@@ -183,6 +189,34 @@ impl Handler<GetIdMessage> for Session {
 
     fn handle(&mut self, _msg: GetIdMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         Mr(self.id)
+    }
+}
+
+#[derive(Message)]
+#[msg(rtype = "Option<LookupResponse>")]
+pub struct GetLookupMessage;
+
+impl Handler<GetLookupMessage> for Session {
+    type Response = Mr<GetLookupMessage>;
+
+    fn handle(
+        &mut self,
+        _msg: GetLookupMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let data = &self.data;
+        let player = match &data.player {
+            Some(value) => value,
+            None => return Mr(None),
+        };
+
+        let response = LookupResponse {
+            session_data: data.clone(),
+            player_id: player.id,
+            display_name: player.display_name.clone(),
+        };
+
+        Mr(Some(response))
     }
 }
 
@@ -244,7 +278,7 @@ impl Handler<UpdateClientMessage> for Session {
     type Response = ();
 
     fn handle(&mut self, _msg: UpdateClientMessage, _ctx: &mut ServiceContext<Self>) {
-        if let Some(player) = &self.player {
+        if let Some(player) = &self.data.player {
             let packet = Packet::notify(
                 Components::UserSessions(UserSessions::SetSession),
                 SetSession {
@@ -269,7 +303,7 @@ impl Handler<InformSessions> for Session {
     type Response = ();
 
     fn handle(&mut self, msg: InformSessions, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        if let Some(player) = &self.player {
+        if let Some(player) = &self.data.player {
             let packet = Packet::notify(
                 Components::UserSessions(UserSessions::SetSession),
                 SetSession {
@@ -296,7 +330,7 @@ impl Handler<HardwareFlagMessage> for Session {
     type Response = ();
 
     fn handle(&mut self, msg: HardwareFlagMessage, ctx: &mut ServiceContext<Self>) {
-        self.net.hardware_flags = msg.value;
+        self.data.net.hardware_flags = msg.value;
 
         // Notify the client of the change via a message rather than
         // directly so its sent after the response
@@ -314,7 +348,7 @@ impl Handler<NetworkInfoMessage> for Session {
     type Response = ();
 
     fn handle(&mut self, msg: NetworkInfoMessage, ctx: &mut ServiceContext<Self>) {
-        let net = &mut &mut self.net;
+        let net = &mut &mut self.data.net;
         net.qos = msg.qos;
         net.groups = Some(msg.groups);
 
@@ -333,7 +367,7 @@ impl Handler<SetGameMessage> for Session {
     type Response = ();
 
     fn handle(&mut self, msg: SetGameMessage, ctx: &mut ServiceContext<Self>) {
-        self.game = msg.game;
+        self.data.game = msg.game;
 
         // Notify the client of the change via a message rather than
         // directly so its sent after the response
@@ -352,7 +386,7 @@ impl Handler<DetailsMessage> for Session {
     type Response = ();
 
     fn handle(&mut self, msg: DetailsMessage, _ctx: &mut ServiceContext<Self>) {
-        let player = match self.player.as_ref() {
+        let player = match self.data.player.as_ref() {
             Some(value) => value,
             None => return,
         };
@@ -392,9 +426,7 @@ impl Session {
             id,
             socket_addr,
             writer,
-            player: None,
-            net: NetData::default(),
-            game: None,
+            data: SessionData::default(),
         }
     }
 
@@ -451,7 +483,7 @@ impl Session {
     /// Removes the session from any connected games and the
     /// matchmaking queue
     pub fn remove_games(&mut self, services: &Services) {
-        let game = self.game.take();
+        let game = self.data.game.take();
         let _ = if let Some(game_id) = game {
             services.game_manager.do_send(RemovePlayerMessage {
                 game_id,
@@ -470,7 +502,7 @@ impl Session {
     /// if the player is authenticated
     pub fn clear_auth(&mut self, services: &Services) {
         // Check that theres authentication
-        let player = match &self.player {
+        let player = match &self.data.player {
             Some(value) => value,
             None => return,
         };
@@ -497,7 +529,7 @@ impl Debug for SessionPacketDebug<'_> {
 
         let component = &self.component;
 
-        if let Some(player) = &self.session.player {
+        if let Some(player) = &self.session.data.player {
             writeln!(
                 f,
                 "Info: (Name: {}, ID: {}, SID: {})",
@@ -527,35 +559,34 @@ impl Debug for SessionPacketDebug<'_> {
     }
 }
 
-/// Encodes the session details for the provided session using
-/// the provided writer
-///
-/// `session` The session to encode
-/// `writer`  The writer to encode with
-fn encode_session(session: &Session, writer: &mut TdfWriter) {
-    session.net.tag_groups(b"ADDR", writer);
-    writer.tag_str(b"BPS", "ea-sjc");
-    writer.tag_str_empty(b"CTY");
-    writer.tag_var_int_list_empty(b"CVAR");
-    {
-        writer.tag_map_start(b"DMAP", TdfType::VarInt, TdfType::VarInt, 1);
-        writer.write_u32(0x70001);
-        writer.write_u16(0x409a);
+impl Encodable for SessionData {
+    fn encode(&self, writer: &mut TdfWriter) {
+        self.net.tag_groups(b"ADDR", writer);
+        writer.tag_str(b"BPS", "ea-sjc");
+        writer.tag_str_empty(b"CTY");
+        writer.tag_var_int_list_empty(b"CVAR");
+        {
+            writer.tag_map_start(b"DMAP", TdfType::VarInt, TdfType::VarInt, 1);
+            writer.write_u32(0x70001);
+            writer.write_u16(0x409a);
+        }
+        writer.tag_u16(b"HWFG", self.net.hardware_flags);
+        {
+            // Ping latency to the Quality of service servers
+            writer.tag_list_start(b"PSLM", TdfType::VarInt, 1);
+            0xfff0fff.encode(writer);
+        }
+        writer.tag_value(b"QDAT", &self.net.qos);
+        writer.tag_u8(b"UATT", 0);
+        if let Some(game_id) = &self.game {
+            writer.tag_list_start(b"ULST", TdfType::Triple, 1);
+            (4, 1, *game_id).encode(writer);
+        }
+        writer.tag_group_end();
     }
-    writer.tag_u16(b"HWFG", session.net.hardware_flags);
-    {
-        // Ping latency to the Quality of service servers
-        writer.tag_list_start(b"PSLM", TdfType::VarInt, 1);
-        0xfff0fff.encode(writer);
-    }
-    writer.tag_value(b"QDAT", &session.net.qos);
-    writer.tag_u8(b"UATT", 0);
-    if let Some(game_id) = &session.game {
-        writer.tag_list_start(b"ULST", TdfType::Triple, 1);
-        (4, 1, *game_id).encode(writer);
-    }
-    writer.tag_group_end();
 }
+
+value_type!(SessionData, TdfType::Group);
 
 /// Session update for a session other than ourselves
 /// which contains the details for that session
@@ -570,8 +601,7 @@ struct SessionUpdate<'a> {
 
 impl Encodable for SessionUpdate<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_group(b"DATA");
-        encode_session(self.session, writer);
+        writer.tag_value(b"DATA", &self.session.data);
 
         writer.tag_group(b"USER");
         writer.tag_u32(b"AID", self.player_id);
@@ -580,6 +610,29 @@ impl Encodable for SessionUpdate<'_> {
         writer.tag_u8(b"EXID", 0);
         writer.tag_u32(b"ID", self.player_id);
         writer.tag_str(b"NAME", self.display_name);
+        writer.tag_group_end();
+    }
+}
+
+pub struct LookupResponse {
+    session_data: SessionData,
+    player_id: PlayerID,
+    display_name: String,
+}
+
+impl Encodable for LookupResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_value(b"EDAT", &self.session_data);
+
+        writer.tag_u8(b"FLGS", 2);
+
+        writer.tag_group(b"USER");
+        writer.tag_u32(b"AID", self.player_id);
+        writer.tag_u32(b"ALOC", 0x64654445);
+        writer.tag_empty_blob(b"EXBB");
+        writer.tag_u8(b"EXID", 0);
+        writer.tag_u32(b"ID", self.player_id);
+        writer.tag_str(b"NAME", &self.display_name);
         writer.tag_group_end();
     }
 }
@@ -594,8 +647,7 @@ struct SetSession<'a> {
 
 impl Encodable for SetSession<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_group(b"DATA");
-        encode_session(self.session, writer);
+        writer.tag_value(b"DATA", &self.session.data);
         writer.tag_u32(b"USID", self.player_id);
     }
 }
