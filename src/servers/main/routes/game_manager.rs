@@ -495,7 +495,8 @@ async fn handle_start_matchmaking(
 async fn handle_cancel_matchmaking(session: &mut SessionLink) {
     session
         .exec(|session, _| {
-            session.remove_games();
+            let services = GlobalState::services();
+            session.remove_games(services);
         })
         .await
         .ok();

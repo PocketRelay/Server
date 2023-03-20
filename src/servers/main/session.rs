@@ -6,6 +6,8 @@ use super::router;
 use crate::services::game::manager::RemovePlayerMessage;
 use crate::services::game::models::RemoveReason;
 use crate::services::matchmaking::RemoveQueueMessage;
+use crate::services::sessions::{AddMessage, RemoveMessage};
+use crate::services::Services;
 use crate::utils::components;
 use crate::utils::types::PlayerID;
 use crate::{
@@ -53,7 +55,9 @@ pub struct Session {
 
 impl Service for Session {
     fn stopping(&mut self) {
-        self.remove_games();
+        let services = GlobalState::services();
+        self.remove_games(services);
+        self.clear_auth(services);
         debug!("Session stopped (SID: {})", self.id);
     }
 }
@@ -121,8 +125,25 @@ pub struct SetPlayerMessage(pub Option<Player>);
 
 impl Handler<SetPlayerMessage> for Session {
     type Response = ();
-    fn handle(&mut self, msg: SetPlayerMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        self.player = msg.0;
+    fn handle(&mut self, msg: SetPlayerMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
+        let services = GlobalState::services();
+
+        // Take the old player and remove it if possible
+        if let Some(old_player) = self.player.take() {
+            let _ = services.sessions.do_send(RemoveMessage {
+                player_id: old_player.id,
+            });
+        }
+
+        // If we are setting a new player
+        if let Some(player) = msg.0 {
+            // Add the session to authenticated sessions
+            let _ = services.sessions.do_send(AddMessage {
+                player_id: player.id,
+                link: ctx.link(),
+            });
+            self.player = Some(player);
+        }
     }
 }
 
@@ -429,9 +450,8 @@ impl Session {
 
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    pub fn remove_games(&mut self) {
+    pub fn remove_games(&mut self, services: &Services) {
         let game = self.game.take();
-        let services = GlobalState::services();
         let _ = if let Some(game_id) = game {
             services.game_manager.do_send(RemovePlayerMessage {
                 game_id,
@@ -444,6 +464,21 @@ impl Session {
                 session_id: self.id,
             })
         };
+    }
+
+    /// Removes the player from the authenticated sessions list
+    /// if the player is authenticated
+    pub fn clear_auth(&mut self, services: &Services) {
+        // Check that theres authentication
+        let player = match &self.player {
+            Some(value) => value,
+            None => return,
+        };
+
+        // Send the remove session message
+        let _ = services.sessions.do_send(RemoveMessage {
+            player_id: player.id,
+        });
     }
 }
 
