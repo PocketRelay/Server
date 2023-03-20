@@ -5,6 +5,7 @@ use super::{
     RemovePlayerType,
 };
 use crate::{services::matchmaking::rules::RuleSet, utils::types::GameID};
+use blaze_pk::packet::PacketBody;
 use futures::FutureExt;
 use interlink::prelude::*;
 use log::debug;
@@ -313,5 +314,37 @@ impl Handler<RemoveGameMessage> for GameManager {
         if let Some(value) = self.games.remove(&msg.game_id) {
             value.stop();
         }
+    }
+}
+
+#[derive(Message)]
+#[msg(rtype = "Option<PacketBody>")]
+pub struct GetGameDataMessage {
+    /// The ID of the game to get the data for
+    pub game_id: GameID,
+}
+
+impl Handler<GetGameDataMessage> for GameManager {
+    type Response = Fr<GetGameDataMessage>;
+
+    fn handle(
+        &mut self,
+        msg: GetGameDataMessage,
+        ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let link = self.games.get(&msg.game_id).cloned();
+
+        let link = match link {
+            Some(value) => value,
+            None => return Fr::ready(None),
+        };
+
+        Fr::new(
+            async move {
+                let data = link.send(super::GetGameDataMessage {}).await.ok()?;
+                Some(data)
+            }
+            .boxed(),
+        )
     }
 }

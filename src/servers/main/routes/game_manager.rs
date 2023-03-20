@@ -11,7 +11,8 @@ use crate::{
     services::{
         game::{
             manager::{
-                CreateMessage, GetGameMessage, RemovePlayerMessage, TryAddMessage, TryAddResult,
+                CreateMessage, GetGameDataMessage, GetGameMessage, RemovePlayerMessage,
+                TryAddMessage, TryAddResult,
             },
             player::GamePlayer,
             RemovePlayerType, SetAttributesMessage, SetSettingMessage, SetStateMessage,
@@ -22,7 +23,7 @@ use crate::{
     state::GlobalState,
     utils::components::{Components as C, GameManager as G},
 };
-use blaze_pk::router::Router;
+use blaze_pk::{packet::PacketBody, router::Router};
 use log::info;
 
 /// Routing function for adding all the routes in this file to the
@@ -48,6 +49,30 @@ pub fn route(router: &mut Router<C, SessionLink>) {
         C::GameManager(G::CancelMatchmaking),
         handle_cancel_matchmaking,
     );
+    router.route(C::GameManager(G::GetGameDataFromID), handle_get_game_data);
+}
+
+async fn handle_get_game_data(mut req: GetGameDataRequest) -> ServerResult<PacketBody> {
+    let services = GlobalState::services();
+
+    if req.game_list.is_empty() {
+        return Err(ServerError::InvalidInformation);
+    }
+
+    let game_id = req.game_list.remove(0);
+
+    let link = services
+        .game_manager
+        .send(GetGameDataMessage { game_id })
+        .await
+        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+
+    let link = match link {
+        Some(value) => value,
+        None => return Err(ServerError::InvalidInformation),
+    };
+
+    Ok(link)
 }
 
 /// Handles creating a game for the provided session.

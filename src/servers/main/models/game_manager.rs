@@ -193,3 +193,14 @@ impl Encodable for MatchmakingResponse {
         writer.tag_u32(b"MSID", self.id);
     }
 }
+
+pub struct GetGameDataRequest {
+    pub game_list: Vec<GameID>,
+}
+
+impl Decodable for GetGameDataRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let game_list: Vec<GameID> = reader.tag("GLST")?;
+        Ok(Self { game_list })
+    }
+}

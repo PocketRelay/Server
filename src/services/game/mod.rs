@@ -6,7 +6,11 @@ use crate::{
         types::{GameID, GameSlot, PlayerID, SessionID},
     },
 };
-use blaze_pk::{codec::Encodable, packet::Packet, types::TdfMap};
+use blaze_pk::{
+    codec::Encodable,
+    packet::{Packet, PacketBody},
+    types::TdfMap,
+};
 use interlink::prelude::*;
 use log::debug;
 use models::*;
@@ -365,6 +369,24 @@ impl Handler<SnapshotMessage> for Game {
             attributes: self.attributes.clone(),
             players,
         })
+    }
+}
+
+#[derive(Message)]
+#[msg(rtype = "PacketBody")]
+pub struct GetGameDataMessage;
+
+impl Handler<GetGameDataMessage> for Game {
+    type Response = Mr<GetGameDataMessage>;
+
+    fn handle(
+        &mut self,
+        msg: GetGameDataMessage,
+        ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let data = GetGameDetails { game: self };
+        let data: PacketBody = data.into();
+        Mr(data)
     }
 }
 
