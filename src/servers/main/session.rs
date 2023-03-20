@@ -193,6 +193,22 @@ impl Handler<GetIdMessage> for Session {
 }
 
 #[derive(Message)]
+#[msg(rtype = "Option<GameID>")]
+pub struct GetPlayerGameMessage;
+
+impl Handler<GetPlayerGameMessage> for Session {
+    type Response = Mr<GetPlayerGameMessage>;
+
+    fn handle(
+        &mut self,
+        _msg: GetPlayerGameMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        Mr(self.data.game.clone())
+    }
+}
+
+#[derive(Message)]
 #[msg(rtype = "Option<LookupResponse>")]
 pub struct GetLookupMessage;
 

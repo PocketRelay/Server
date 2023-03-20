@@ -216,7 +216,7 @@ impl Handler<TryAddMessage> for GameManager {
                 for (id, link) in &service.games {
                     let join_state = match link
                         .send(CheckJoinableMessage {
-                            rule_set: msg.rule_set.clone(),
+                            rule_set: Some(msg.rule_set.clone()),
                         })
                         .await
                     {

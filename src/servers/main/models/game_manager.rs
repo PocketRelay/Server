@@ -204,3 +204,27 @@ impl Decodable for GetGameDataRequest {
         Ok(Self { game_list })
     }
 }
+
+pub struct JoinGameRequest {
+    /// The join target
+    pub target_id: PlayerID,
+}
+
+impl Decodable for JoinGameRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        reader.until_tag("USER", TdfType::Group)?;
+        let target_id: PlayerID = reader.tag("ID")?;
+        Ok(Self { target_id })
+    }
+}
+
+pub struct JoinGameResponse {
+    pub game_id: GameID,
+}
+
+impl Encodable for JoinGameResponse {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_u32(b"GID", self.game_id);
+        writer.tag_zero(b"JGS");
+    }
+}

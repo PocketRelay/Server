@@ -323,7 +323,7 @@ impl Handler<RemovePlayerMessage> for Game {
 #[derive(Message)]
 #[msg(rtype = "GameJoinableState")]
 pub struct CheckJoinableMessage {
-    pub rule_set: Arc<RuleSet>,
+    pub rule_set: Option<Arc<RuleSet>>,
 }
 
 impl Handler<CheckJoinableMessage> for Game {
@@ -335,8 +335,10 @@ impl Handler<CheckJoinableMessage> for Game {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         let is_joinable = self.players.len() < Self::MAX_PLAYERS;
-        if !msg.rule_set.matches(&self.attributes) {
-            return Mr(GameJoinableState::NotMatch);
+        if let Some(rule_set) = msg.rule_set {
+            if !rule_set.matches(&self.attributes) {
+                return Mr(GameJoinableState::NotMatch);
+            }
         }
 
         Mr(if is_joinable {
