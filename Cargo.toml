@@ -2,7 +2,7 @@
 edition = "2021"
 license = "MIT"
 authors = ["Jacobtread <jacobtread@gmail.com>"]
-repository = "https://github.com/PocketRelay/ServerRust"
+repository = "https://github.com/PocketRelay/Server"
 
 [workspace]
 members = [".", "database"]
@@ -24,12 +24,12 @@ features = ["std", "serde"]
 name = "pocket-relay"
 version = "0.3.3"
 description = "Pocket Relay Server"
-repository = "https://github.com/PocketRelay/Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
 # Glob to ensure resources is included 
 include = ["src/**/*"]
 
+repository.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
