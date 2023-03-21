@@ -1,5 +1,3 @@
-use std::path::{Path, PathBuf};
-
 use crate::utils::{env, net::public_address};
 use log::{info, LevelFilter};
 use log4rs::{
@@ -13,7 +11,7 @@ use log4rs::{
 const LOGGING_PATTERN: &str = "[{d} {h({l})} {M}] {m}{n}";
 
 /// Log file name
-pub const LOG_FILE_NAME: &str = "server.log";
+pub const LOG_FILE_NAME: &str = "data/server.log";
 
 /// Setup function for setting up the Log4rs logging configuring it
 /// for all the different modules and and setting up file and stdout logging
