@@ -7,7 +7,7 @@ services:
       - 80:80/tcp
       # Main Server port
       - 42128:42128/tcp
-      # Reidrector Server port
+      # Redirector Server port
       - 42127:42127/tcp
       # Telemetry Server port
       - 42129:42129/tcp
