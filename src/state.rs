@@ -29,8 +29,7 @@ impl GlobalState {
     /// Initializes the connection with the database using the url or file
     /// from the environment variables
     async fn init_database() -> DatabaseConnection {
-        let file = env::env(env::DATABASE_FILE);
-        let db = database::connect(file).await;
+        let db = database::init().await;
         info!("Connected to database..");
         Self::init_database_admin(&db).await;
         db

@@ -56,8 +56,6 @@ ENV PR_TELEMETRY_PORT=9988
 ENV PR_QOS_PORT=17499
 
 ENV PR_LOG_LEVEL=info
-ENV PR_DATABASE_FILE=data/app.db
-
 
 # Volume for storing database file data
 VOLUME /app/data
