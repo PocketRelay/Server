@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use crate::env;
+use crate::state::GlobalState;
 use axum::Server;
 use log::{error, info};
 
@@ -10,7 +10,8 @@ mod routes;
 
 /// Starts the HTTP server
 pub async fn start_server() {
-    let port = env::from_env(env::HTTP_PORT);
+    let config = GlobalState::config();
+    let port = config.ports.http;
     info!("Starting HTTP Server on (Port: {port})");
 
     let router = routes::router();

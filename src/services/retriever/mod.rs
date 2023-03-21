@@ -2,11 +2,13 @@
 //! Mass Effect 3 servers.
 
 use self::origin::OriginFlowService;
-use crate::utils::{
-    components::{Components, Redirector},
-    env,
-    models::{InstanceDetails, Port},
-    net::lookup_host,
+use crate::{
+    config::RetrieverConfig,
+    utils::{
+        components::{Components, Redirector},
+        models::{InstanceDetails, Port},
+        net::lookup_host,
+    },
 };
 use blaze_pk::{
     codec::{Decodable, Encodable},
@@ -45,8 +47,8 @@ impl Retriever {
     /// ip address of the gosredirector.ea.com host and then creates a
     /// connection to the redirector server and obtains the IP and Port
     /// of the Official server.
-    pub async fn new() -> Option<Retriever> {
-        if !env::from_env(env::RETRIEVER) {
+    pub async fn new(config: RetrieverConfig) -> Option<Retriever> {
+        if !config.enabled {
             return None;
         }
 
@@ -55,9 +57,9 @@ impl Retriever {
         let (host, port) = Self::get_main_host(redirector_host).await?;
         debug!("Retriever setup complete. (Host: {} Port: {})", &host, port);
 
-        let origin_flow = if env::from_env(env::ORIGIN_FETCH) {
+        let origin_flow = if config.origin_fetch {
             Some(OriginFlowService {
-                data: env::from_env(env::ORIGIN_FETCH_DATA),
+                data: config.origin_fetch_data,
             })
         } else {
             None

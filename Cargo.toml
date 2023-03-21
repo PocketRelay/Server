@@ -35,7 +35,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-log = { workspace = true }
+log = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 
 # Blaze packet system 
@@ -56,8 +56,6 @@ base64ct = { version = "1.5", features = ["alloc"] }
 flate2 = { version = "1", features = ["zlib"], default-features = false }
 ring = "0.16"
 
-# .env file loader
-dotenvy = "0.15"
 
 # Library for obtaining the local IP address of the device
 local-ip-address = "0.5"
@@ -68,6 +66,7 @@ validator = { version = "0.16", features = ["derive"] }
 interlink = "0.1"
 tokio-util = { version = "0.7", features = ["codec"] }
 futures = "0.3"
+serde_json = "1.0.94"
 
 # Tokio async runtime
 [dependencies.tokio]

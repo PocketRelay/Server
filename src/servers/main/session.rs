@@ -204,7 +204,7 @@ impl Handler<GetPlayerGameMessage> for Session {
         _msg: GetPlayerGameMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        Mr(self.data.game.clone())
+        Mr(self.data.game)
     }
 }
 

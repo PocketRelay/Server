@@ -1,0 +1,24 @@
+{
+    "ports": {
+        "redirector": 42127,
+        "main": 42128,
+        "telemetry": 42129,
+        "qos": 42130,
+        "http": 80
+    },
+    "dashboard": {
+        "super_email": "example@example.com",
+        "super_password": "password"
+    },
+    "menu_message": "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>",
+    "galaxy_at_war": {
+        "decay": 0.0,
+        "promotions": true
+    },
+    "logging": "info",
+    "retriever": {
+        "enabled": true,
+        "origin_fetch": true,
+        "origin_fetch_data": true
+    }
+}

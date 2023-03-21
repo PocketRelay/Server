@@ -50,15 +50,16 @@ COPY --from=builder /pocket-relay/target/x86_64-unknown-linux-musl/release/pocke
 ENV PR_EXT_HOST=gosredirector.ea.com
 # Ports
 ENV PR_REDIRECTOR_PORT=42127
-ENV PR_MAIN_PORT=14219
+ENV PR_MAIN_PORT=42128
+ENV PR_TELEMETRY_PORT=42129
+ENV PR_QOS_PORT=42130
 ENV PR_HTTP_PORT=80
-ENV PR_TELEMETRY_PORT=9988
-ENV PR_QOS_PORT=17499
 
 ENV PR_LOG_LEVEL=info
 
 # Volume for storing database file data
 VOLUME /app/data
+
 
 # Expore main and http ports
 EXPOSE $PR_REDIRECTOR_PORT

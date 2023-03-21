@@ -1036,6 +1036,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if",
+ "serde",
 ]
 
 [[package]]
@@ -1380,7 +1381,6 @@ dependencies = [
  "base64ct",
  "blaze-pk",
  "blaze-ssl-async",
- "dotenvy",
  "flate2",
  "futures",
  "interlink",
@@ -1392,6 +1392,7 @@ dependencies = [
  "ring",
  "rust-embed",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tokio-util",

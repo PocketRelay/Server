@@ -1,10 +1,12 @@
-use dotenvy::dotenv;
 use log::info;
 use servers::*;
 use state::GlobalState;
 use tokio::signal;
-use utils::{env, logging};
+use utils::logging;
 
+use crate::config::load_config;
+
+mod config;
 mod servers;
 mod services;
 mod state;
@@ -17,16 +19,16 @@ fn main() {
         .build()
         .expect("Failed building the tokio Runtime");
 
-    // Load environment variables from nearest .env
-    dotenv().ok();
+    // Load configuration
+    let config = runtime.block_on(load_config()).unwrap_or_default();
 
     // Initialize logging
-    logging::setup();
+    logging::setup(config.logging);
 
-    info!("Starting Pocket Relay v{}", env::VERSION);
+    info!("Starting Pocket Relay v{}", state::VERSION);
 
     // Initialize global state
-    runtime.block_on(GlobalState::init());
+    runtime.block_on(GlobalState::init(config));
 
     // Display the connection urls message
     runtime.block_on(logging::log_connection_urls());

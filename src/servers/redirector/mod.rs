@@ -2,7 +2,7 @@
 //! to the correct address for the main server.
 
 use crate::{
-    env,
+    state::{self, GlobalState},
     utils::{
         components::{Components, Redirector},
         models::{InstanceDetails, InstanceNet},
@@ -22,7 +22,8 @@ use tokio_util::codec::Framed;
 pub async fn start_server() {
     // Initializing the underlying TCP listener
     let listener = {
-        let port = env::from_env(env::REDIRECTOR_PORT);
+        let config = GlobalState::config();
+        let port = config.ports.redirector;
         match BlazeListener::bind(("0.0.0.0", port)).await {
             Ok(value) => {
                 info!("Started Redirector server (Port: {})", port);
@@ -99,8 +100,9 @@ async fn handle_client(accept: BlazeAccept) -> io::Result<()> {
         if let Components::Redirector(Redirector::GetServerInstance) = component {
             debug!("Redirecting client (Addr: {addr:?})");
 
-            let host = env::EXTERNAL_HOST;
-            let port = env::from_env(env::MAIN_PORT);
+            let host = state::EXTERNAL_HOST;
+            let config = GlobalState::config();
+            let port = config.ports.main;
             let instance = InstanceDetails {
                 net: InstanceNet::from((host.to_string(), port)),
                 secure: false,

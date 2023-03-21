@@ -1,7 +1,7 @@
 //! Module for the Redirector server which handles redirecting the clients
 //! to the correct address for the main server.
 
-use crate::env;
+use crate::state::GlobalState;
 use log::{debug, error, info};
 use std::io;
 use tokio::{
@@ -14,7 +14,8 @@ use tokio::{
 pub async fn start_server() {
     // Initializing the underlying TCP listener
     let listener = {
-        let port = env::from_env(env::TELEMETRY_PORT);
+        let config = GlobalState::config();
+        let port = config.ports.telemetry;
         match TcpListener::bind(("0.0.0.0", port)).await {
             Ok(value) => {
                 info!("Started Telemetry server (Port: {})", port);

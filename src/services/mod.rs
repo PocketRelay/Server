@@ -1,3 +1,5 @@
+use crate::config::ServicesConfig;
+
 use self::{
     game::manager::GameManager, leaderboard::Leaderboard, matchmaking::Matchmaking,
     retriever::Retriever, sessions::AuthedSessions, tokens::Tokens,
@@ -22,8 +24,8 @@ pub struct Services {
 }
 
 impl Services {
-    pub async fn init() -> Self {
-        let (retriever, tokens) = join!(Retriever::new(), Tokens::new());
+    pub async fn init(config: ServicesConfig) -> Self {
+        let (retriever, tokens) = join!(Retriever::new(config.retriever), Tokens::new());
         let game_manager = GameManager::start();
         let matchmaking = Matchmaking::start();
         let leaderboard = Leaderboard::start();

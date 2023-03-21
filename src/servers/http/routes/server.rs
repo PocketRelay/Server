@@ -3,7 +3,8 @@
 
 use crate::{
     servers::http::{ext::ErrorStatusCode, middleware::auth::AdminAuth},
-    utils::{env, logging::LOG_FILE_NAME},
+    state,
+    utils::logging::LOG_FILE_NAME,
 };
 use axum::{
     http::StatusCode,
@@ -41,7 +42,7 @@ struct ServerDetails {
 async fn server_details() -> Json<ServerDetails> {
     Json(ServerDetails {
         ident: "POCKET_RELAY_SERVER",
-        version: env::VERSION,
+        version: state::VERSION,
     })
 }
 

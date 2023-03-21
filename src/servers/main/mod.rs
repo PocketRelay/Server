@@ -1,5 +1,5 @@
 use self::session::{Session, SessionLink};
-use crate::utils::{components::Components, env};
+use crate::{state::GlobalState, utils::components::Components};
 use blaze_pk::{packet::PacketCodec, router::Router};
 use interlink::prelude::*;
 use log::{error, info};
@@ -26,7 +26,8 @@ fn router() -> &'static Router<Components, SessionLink> {
 pub async fn start_server() {
     // Initializing the underlying TCP listener
     let listener = {
-        let port = env::from_env(env::MAIN_PORT);
+        let config = GlobalState::config();
+        let port = config.ports.main;
         match TcpListener::bind(("0.0.0.0", port)).await {
             Ok(value) => {
                 info!("Started Main server (Port: {})", port);
