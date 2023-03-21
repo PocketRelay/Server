@@ -22,7 +22,7 @@ features = ["std", "serde"]
 
 [package]
 name = "pocket-relay"
-version = "0.3.3"
+version = "0.4.0"
 description = "Pocket Relay Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
