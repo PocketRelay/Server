@@ -1,4 +1,7 @@
-use crate::utils::models::{NetGroups, QosNetworkData};
+use crate::utils::{
+    models::{NetGroups, QosNetworkData},
+    types::PlayerID,
+};
 use blaze_pk::{
     codec::Decodable,
     error::{DecodeError, DecodeResult},
@@ -50,5 +53,16 @@ impl Decodable for HardwareFlagRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
         let hardware_flag: u16 = reader.tag("HWFG")?;
         Ok(Self { hardware_flag })
+    }
+}
+
+pub struct LookupRequest {
+    pub player_id: PlayerID,
+}
+
+impl Decodable for LookupRequest {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let player_id: PlayerID = reader.tag("ID")?;
+        Ok(Self { player_id })
     }
 }

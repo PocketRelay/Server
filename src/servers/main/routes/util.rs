@@ -6,10 +6,9 @@ use crate::{
         },
         session::{DetailsMessage, GetPlayerIdMessage, SessionLink},
     },
-    state::GlobalState,
+    state::{self, GlobalState},
     utils::{
         components::{Components as C, Util as U},
-        env,
         models::Port,
     },
 };
@@ -54,9 +53,9 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// ```
 ///
 async fn handle_get_telemetry_server() -> TelemetryServer {
-    TelemetryServer {
-        port: env::from_env(env::TELEMETRY_PORT),
-    }
+    let config = GlobalState::config();
+    let port = config.ports.telemetry;
+    TelemetryServer { port }
 }
 
 const TICKER_PORT: Port = 8999;
@@ -105,7 +104,8 @@ async fn handle_get_ticker_server() -> TickerServer {
 /// }
 /// ```
 async fn handle_pre_auth() -> PreAuthResponse {
-    let qos_port: Port = env::from_env(env::HTTP_PORT);
+    let config = GlobalState::config();
+    let qos_port = config.ports.http;
     PreAuthResponse { qos_port }
 }
 
@@ -129,10 +129,11 @@ async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthRes
         link: Link::clone(&*session),
     });
 
+    let config = GlobalState::config();
+    let port = config.ports.telemetry;
+
     Ok(PostAuthResponse {
-        telemetry: TelemetryServer {
-            port: env::from_env(env::TELEMETRY_PORT),
-        },
+        telemetry: TelemetryServer { port },
         ticker: TickerServer { port: TICKER_PORT },
         player_id,
     })
@@ -372,7 +373,7 @@ fn messages() -> TdfMap<String, String> {
         title: Some("Pocket Relay".to_owned()),
         message: format!(
             "You are connected to Pocket Relay <font color='#FFFF66'>(v{})</font>",
-            env::VERSION,
+            state::VERSION,
         ),
         priority: 1,
         tracking_id: Some(1),
@@ -488,9 +489,11 @@ impl Message {
 /// Telemetry Server: 159.153.235.32:9988
 ///
 fn data_config() -> TdfMap<String, String> {
-    let http_port = env::from_env(env::HTTP_PORT);
-    let tele_port = env::from_env(env::TELEMETRY_PORT);
-    let prefix = format!("http://{}:{}", env::EXTERNAL_HOST, http_port);
+    let config = GlobalState::config();
+    let http_port = config.ports.http;
+    let tele_port = config.ports.telemetry;
+
+    let prefix = format!("http://{}:{}", state::EXTERNAL_HOST, http_port);
 
     let mut config = TdfMap::with_capacity(15);
     config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/gaw"));
@@ -508,7 +511,7 @@ fn data_config() -> TdfMap<String, String> {
     config.insert("TEL_PORT", tele_port.to_string());
     config.insert("TEL_SEND_DELAY", "15000");
     config.insert("TEL_SEND_PCT", "75");
-    config.insert("TEL_SERVER", env::EXTERNAL_HOST);
+    config.insert("TEL_SERVER", state::EXTERNAL_HOST);
     config
 }
 

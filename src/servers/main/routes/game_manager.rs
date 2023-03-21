@@ -6,24 +6,26 @@ use crate::{
             errors::{ServerError, ServerResult},
             game_manager::*,
         },
-        session::{GetGamePlayerMessage, GetIdMessage, SessionLink},
+        session::{GetGamePlayerMessage, GetIdMessage, GetPlayerGameMessage, SessionLink},
     },
     services::{
         game::{
             manager::{
-                CreateMessage, GetGameMessage, RemovePlayerMessage, TryAddMessage, TryAddResult,
+                CreateMessage, GetGameDataMessage, GetGameMessage, RemovePlayerMessage,
+                TryAddMessage, TryAddResult,
             },
             player::GamePlayer,
-            RemovePlayerType, SetAttributesMessage, SetSettingMessage, SetStateMessage,
-            UpdateMeshMessage,
+            AddPlayerMessage, CheckJoinableMessage, GameJoinableState, RemovePlayerType,
+            SetAttributesMessage, SetSettingMessage, SetStateMessage, UpdateMeshMessage,
         },
         matchmaking::{GameCreatedMessage, QueuePlayerMessage},
+        sessions::LookupMessage,
     },
     state::GlobalState,
     utils::components::{Components as C, GameManager as G},
 };
-use blaze_pk::router::Router;
-use log::info;
+use blaze_pk::{packet::PacketBody, router::Router};
+use log::{debug, info};
 
 /// Routing function for adding all the routes in this file to the
 /// provided router
@@ -48,6 +50,93 @@ pub fn route(router: &mut Router<C, SessionLink>) {
         C::GameManager(G::CancelMatchmaking),
         handle_cancel_matchmaking,
     );
+    router.route(C::GameManager(G::GetGameDataFromID), handle_get_game_data);
+    router.route(C::GameManager(G::JoinGame), handle_join_game)
+}
+
+async fn handle_join_game(
+    session: &mut SessionLink,
+    req: JoinGameRequest,
+) -> ServerResult<JoinGameResponse> {
+    let services = GlobalState::services();
+
+    // Load the session
+    let player: GamePlayer = session
+        .send(GetGamePlayerMessage)
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?
+        .ok_or(ServerError::FailedNoLoginAction)?;
+
+    // Lookup the session join target
+    let session = services
+        .sessions
+        .send(LookupMessage {
+            player_id: req.target_id,
+        })
+        .await;
+
+    // Ensure there wasn't an error
+    let session = match session {
+        Ok(Some(value)) => value,
+        _ => return Err(ServerError::InvalidInformation),
+    };
+
+    // Find the game ID for the target session
+    let game_id = session.send(GetPlayerGameMessage {}).await;
+    let game_id = match game_id {
+        Ok(Some(value)) => value,
+        _ => return Err(ServerError::InvalidInformation),
+    };
+
+    let game = services
+        .game_manager
+        .send(GetGameMessage { game_id })
+        .await
+        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+
+    let game = match game {
+        Some(value) => value,
+        None => return Err(ServerError::InvalidInformation),
+    };
+
+    // Check the game is joinable
+    let join_state = match game.send(CheckJoinableMessage { rule_set: None }).await {
+        Ok(value) => value,
+        // Game is no longer available
+        Err(_) => return Err(ServerError::InvalidInformation),
+    };
+
+    // Join the game
+    if let GameJoinableState::Joinable = join_state {
+        debug!("Joining game from invite (GID: {})", game_id);
+        let _ = game.do_send(AddPlayerMessage { player });
+        Ok(JoinGameResponse { game_id })
+    } else {
+        Err(ServerError::InvalidInformation)
+    }
+}
+
+async fn handle_get_game_data(mut req: GetGameDataRequest) -> ServerResult<PacketBody> {
+    let services = GlobalState::services();
+
+    if req.game_list.is_empty() {
+        return Err(ServerError::InvalidInformation);
+    }
+
+    let game_id = req.game_list.remove(0);
+
+    let link = services
+        .game_manager
+        .send(GetGameDataMessage { game_id })
+        .await
+        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+
+    let link = match link {
+        Some(value) => value,
+        None => return Err(ServerError::InvalidInformation),
+    };
+
+    Ok(link)
 }
 
 /// Handles creating a game for the provided session.
@@ -495,7 +584,8 @@ async fn handle_start_matchmaking(
 async fn handle_cancel_matchmaking(session: &mut SessionLink) {
     session
         .exec(|session, _| {
-            session.remove_games();
+            let services = GlobalState::services();
+            session.remove_games(services);
         })
         .await
         .ok();

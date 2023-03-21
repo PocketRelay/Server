@@ -11,3 +11,6 @@ build-release.nu
 
 tools/target
 
+/config.json
+
+/private

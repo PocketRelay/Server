@@ -238,23 +238,72 @@ impl Encodable for PlayerJoining<'_> {
     }
 }
 
+fn write_admin_list(writer: &mut TdfWriter, game: &Game) {
+    writer.tag_list_start(b"ADMN", TdfType::VarInt, game.players.len());
+    for player in &game.players {
+        writer.write_u32(player.player.id);
+    }
+}
+
+const VSTR: &str = "ME3-295976325-179181965240128";
+
+pub fn encode_game_data_alt(writer: &mut TdfWriter, game: &Game) {
+    let host_player = match game.players.first() {
+        Some(value) => value,
+        None => return,
+    };
+
+    let game_name = &host_player.player.display_name;
+
+    write_admin_list(writer, game);
+    writer.tag_value(b"ATTR", &game.attributes);
+    {
+        writer.tag_list_start(b"CAP", TdfType::VarInt, 2);
+        writer.write_u8(4);
+        writer.write_u8(0);
+    }
+    writer.tag_u32(b"GID", game.id);
+    writer.tag_str(b"GNAM", game_name);
+    writer.tag_u16(b"GSET", game.setting);
+    writer.tag_value(b"GSTA", &game.state);
+    {
+        writer.tag_list_start(b"HNET", TdfType::Group, 1);
+        writer.write_byte(2);
+        if let Some(groups) = &host_player.net.groups {
+            groups.encode(writer);
+        }
+    }
+    writer.tag_u32(b"HOST", host_player.player.id);
+    writer.tag_zero(b"NTOP");
+
+    {
+        writer.tag_list_start(b"PCNT", TdfType::VarInt, 2);
+        writer.write_u8(1);
+        writer.write_u8(0);
+    }
+
+    writer.tag_u8(b"PRES", 0x2);
+    writer.tag_str(b"PSAS", "ea-sjc");
+    writer.tag_str_empty(b"PSID");
+    writer.tag_zero(b"QCAP");
+    writer.tag_zero(b"QCNT");
+    writer.tag_zero(b"SID");
+    writer.tag_zero(b"TCAP");
+    writer.tag_u8(b"VOIP", 0x2);
+    writer.tag_str(b"VSTR", VSTR);
+    writer.tag_group_end();
+}
+
 pub fn encode_game_data(writer: &mut TdfWriter, game: &Game) {
     let host_player = match game.players.first() {
         Some(value) => value,
         None => return,
     };
 
-    writer.tag_group(b"GAME");
-
     let game_name = &host_player.player.display_name;
 
-    {
-        writer.tag_list_start(b"ADMN", TdfType::VarInt, game.players.len());
-        for player in &game.players {
-            writer.write_u32(player.player.id);
-        }
-    }
-
+    writer.tag_group(b"GAME");
+    write_admin_list(writer, game);
     writer.tag_value(b"ATTR", &game.attributes);
     {
         writer.tag_list_start(b"CAP", TdfType::VarInt, 2);
@@ -310,7 +359,7 @@ pub fn encode_game_data(writer: &mut TdfWriter, game: &Game) {
 
     writer.tag_str(b"UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
     writer.tag_u8(b"VOIP", 0x2);
-    writer.tag_str(b"VSTR", "ME3-295976325-179181965240128");
+    writer.tag_str(b"VSTR", VSTR);
     writer.tag_empty_blob(b"XNNC");
     writer.tag_empty_blob(b"XSES");
     writer.tag_group_end();
@@ -331,6 +380,7 @@ pub struct GameDetails<'a> {
 impl Encodable for GameDetails<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
         encode_game_data(writer, self.game);
+
         encode_players_list(writer, self.game.id, &self.game.players);
         let union_value = self.ty.value();
         writer.tag_union_start(b"REAS", union_value);
@@ -348,6 +398,17 @@ impl Encodable for GameDetails<'_> {
             }
         }
         writer.tag_group_end();
+    }
+}
+
+pub struct GetGameDetails<'a> {
+    pub game: &'a Game,
+}
+
+impl Encodable for GetGameDetails<'_> {
+    fn encode(&self, writer: &mut TdfWriter) {
+        writer.tag_list_start(b"GDAT", TdfType::Group, 1);
+        encode_game_data_alt(writer, self.game);
     }
 }
 

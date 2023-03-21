@@ -3,7 +3,8 @@
 
 use crate::{
     servers::http::{ext::ErrorStatusCode, middleware::auth::AdminAuth},
-    utils::{env, logging::get_log_path},
+    state,
+    utils::logging::LOG_FILE_NAME,
 };
 use axum::{
     http::StatusCode,
@@ -41,7 +42,7 @@ struct ServerDetails {
 async fn server_details() -> Json<ServerDetails> {
     Json(ServerDetails {
         ident: "POCKET_RELAY_SERVER",
-        version: env::VERSION,
+        version: state::VERSION,
     })
 }
 
@@ -63,7 +64,7 @@ async fn get_log(auth: AdminAuth) -> Result<String, LogsError> {
     if auth.role < PlayerRole::SuperAdmin {
         return Err(LogsError::InvalidPermission);
     }
-    let path = get_log_path();
+    let path = std::path::Path::new(LOG_FILE_NAME);
     let file = read_to_string(path).await?;
     Ok(file)
 }

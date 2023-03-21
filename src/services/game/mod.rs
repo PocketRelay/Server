@@ -6,7 +6,11 @@ use crate::{
         types::{GameID, GameSlot, PlayerID, SessionID},
     },
 };
-use blaze_pk::{codec::Encodable, packet::Packet, types::TdfMap};
+use blaze_pk::{
+    codec::Encodable,
+    packet::{Packet, PacketBody},
+    types::TdfMap,
+};
 use interlink::prelude::*;
 use log::debug;
 use models::*;
@@ -319,7 +323,7 @@ impl Handler<RemovePlayerMessage> for Game {
 #[derive(Message)]
 #[msg(rtype = "GameJoinableState")]
 pub struct CheckJoinableMessage {
-    pub rule_set: Arc<RuleSet>,
+    pub rule_set: Option<Arc<RuleSet>>,
 }
 
 impl Handler<CheckJoinableMessage> for Game {
@@ -331,8 +335,10 @@ impl Handler<CheckJoinableMessage> for Game {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         let is_joinable = self.players.len() < Self::MAX_PLAYERS;
-        if !msg.rule_set.matches(&self.attributes) {
-            return Mr(GameJoinableState::NotMatch);
+        if let Some(rule_set) = msg.rule_set {
+            if !rule_set.matches(&self.attributes) {
+                return Mr(GameJoinableState::NotMatch);
+            }
         }
 
         Mr(if is_joinable {
@@ -365,6 +371,24 @@ impl Handler<SnapshotMessage> for Game {
             attributes: self.attributes.clone(),
             players,
         })
+    }
+}
+
+#[derive(Message)]
+#[msg(rtype = "PacketBody")]
+pub struct GetGameDataMessage;
+
+impl Handler<GetGameDataMessage> for Game {
+    type Response = Mr<GetGameDataMessage>;
+
+    fn handle(
+        &mut self,
+        _msg: GetGameDataMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let data = GetGameDetails { game: self };
+        let data: PacketBody = data.into();
+        Mr(data)
     }
 }
 

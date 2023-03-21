@@ -3,7 +3,7 @@
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-use crate::{env, utils::net::public_address};
+use crate::{state::GlobalState, utils::net::public_address};
 use log::{error, info};
 use tokio::net::UdpSocket;
 
@@ -11,7 +11,8 @@ use tokio::net::UdpSocket;
 /// address values to the clients that connect.
 pub async fn start_server() {
     let socket = {
-        let port = env::from_env(env::QOS_PORT);
+        let config = GlobalState::config();
+        let port = config.ports.qos;
         match UdpSocket::bind(("0.0.0.0", port)).await {
             Ok(value) => {
                 info!("Started QOS server (Port: {})", port);

@@ -72,7 +72,7 @@ impl Handler<GameCreatedMessage> for Matchmaking {
                 while let Some(entry) = queue.pop_front() {
                     let join_state = match link
                         .send(CheckJoinableMessage {
-                            rule_set: entry.rule_set.clone(),
+                            rule_set: Some(entry.rule_set.clone()),
                         })
                         .await
                     {

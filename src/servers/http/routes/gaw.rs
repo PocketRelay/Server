@@ -5,7 +5,6 @@
 //! other than the Mass Effect 3 client itself.
 
 use crate::{
-    env,
     servers::http::ext::{ErrorStatusCode, Xml},
     state::GlobalState,
     utils::parsing::PlayerClass,
@@ -112,15 +111,18 @@ async fn get_player_gaw_data(
     let player = Player::by_id(db, player_id)
         .await?
         .ok_or(GAWError::InvalidToken)?;
+    let config = GlobalState::config();
+
     let (gaw_data, promotions) = try_join!(
-        GalaxyAtWar::find_or_create(db, &player, env::from_env(env::GAW_DAILY_DECAY)),
+        GalaxyAtWar::find_or_create(db, &player, config.galaxy_at_war.decay),
         get_promotions(db, &player)
     )?;
     Ok((gaw_data, promotions))
 }
 
 async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u32> {
-    if !env::from_env(env::GAW_PROMOTIONS) {
+    let config = GlobalState::config();
+    if !config.galaxy_at_war.promotions {
         return Ok(0);
     }
     Ok(player

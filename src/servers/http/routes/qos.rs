@@ -3,7 +3,7 @@
 //! or the client doesn't seem to know its external IP
 use crate::{
     servers::http::ext::Xml,
-    utils::env::{self, EXTERNAL_HOST},
+    state::{GlobalState, EXTERNAL_HOST},
 };
 use axum::{extract::Query, routing::get, Router};
 use log::debug;
@@ -44,8 +44,8 @@ struct QosQuery {
 /// `query` The query string from the client
 async fn qos(Query(query): Query<QosQuery>) -> Xml {
     debug!("Recieved QOS query: (Port: {})", query.port);
-
-    let port: u16 = env::from_env(env::QOS_PORT);
+    let config = GlobalState::config();
+    let port = config.ports.qos;
 
     let response = format!(
         r"<qos> <numprobes>0</numprobes>

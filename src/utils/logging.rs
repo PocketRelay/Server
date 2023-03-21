@@ -1,6 +1,4 @@
-use std::path::{Path, PathBuf};
-
-use crate::utils::{env, net::public_address};
+use crate::{state::GlobalState, utils::net::public_address};
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -13,18 +11,11 @@ use log4rs::{
 const LOGGING_PATTERN: &str = "[{d} {h({l})} {M}] {m}{n}";
 
 /// Log file name
-const LOG_FILE_NAME: &str = "server.log";
-
-pub fn get_log_path() -> PathBuf {
-    let logging_path = env::env(env::LOGGING_DIR);
-    Path::new(&logging_path).join(LOG_FILE_NAME)
-}
+pub const LOG_FILE_NAME: &str = "data/server.log";
 
 /// Setup function for setting up the Log4rs logging configuring it
 /// for all the different modules and and setting up file and stdout logging
-pub fn setup() {
-    // Configuration from environment
-    let logging_level = env::from_env(env::LOGGING_LEVEL);
+pub fn setup(logging_level: LevelFilter) {
     if logging_level == LevelFilter::Off {
         // Don't initialize logger at all if logging is disabled
         return;
@@ -36,7 +27,7 @@ pub fn setup() {
     let file = Box::new(
         FileAppender::builder()
             .encoder(pattern)
-            .build(get_log_path())
+            .build(LOG_FILE_NAME)
             .expect("Unable to create logging file appender"),
     );
 
@@ -64,7 +55,8 @@ pub fn setup() {
 /// Prints a list of possible urls that can be used to connect to
 /// this Pocket relay server
 pub async fn log_connection_urls() {
-    let http_port = env::from_env(env::HTTP_PORT);
+    let config = GlobalState::config();
+    let http_port = config.ports.http;
     let mut output = String::new();
     if let Ok(local_address) = local_ip_address::local_ip() {
         output.push_str("LAN: ");
