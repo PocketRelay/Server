@@ -383,8 +383,8 @@ impl Handler<GetGameDataMessage> for Game {
 
     fn handle(
         &mut self,
-        msg: GetGameDataMessage,
-        ctx: &mut ServiceContext<Self>,
+        _msg: GetGameDataMessage,
+        _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         let data = GetGameDetails { game: self };
         let data: PacketBody = data.into();

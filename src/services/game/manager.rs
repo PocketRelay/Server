@@ -330,7 +330,7 @@ impl Handler<GetGameDataMessage> for GameManager {
     fn handle(
         &mut self,
         msg: GetGameDataMessage,
-        ctx: &mut ServiceContext<Self>,
+        _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         let link = self.games.get(&msg.game_id).cloned();
 
