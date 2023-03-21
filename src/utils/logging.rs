@@ -13,12 +13,7 @@ use log4rs::{
 const LOGGING_PATTERN: &str = "[{d} {h({l})} {M}] {m}{n}";
 
 /// Log file name
-const LOG_FILE_NAME: &str = "server.log";
-
-pub fn get_log_path() -> PathBuf {
-    let logging_path = env::env(env::LOGGING_DIR);
-    Path::new(&logging_path).join(LOG_FILE_NAME)
-}
+pub const LOG_FILE_NAME: &str = "server.log";
 
 /// Setup function for setting up the Log4rs logging configuring it
 /// for all the different modules and and setting up file and stdout logging
@@ -36,7 +31,7 @@ pub fn setup() {
     let file = Box::new(
         FileAppender::builder()
             .encoder(pattern)
-            .build(get_log_path())
+            .build(LOG_FILE_NAME)
             .expect("Unable to create logging file appender"),
     );
 

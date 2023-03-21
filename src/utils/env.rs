@@ -31,8 +31,6 @@ pub const ORIGIN_FETCH: (&str, bool) = ("PR_ORIGIN_FETCH", true);
 pub const ORIGIN_FETCH_DATA: (&str, bool) = ("PR_ORIGIN_FETCH_DATA", true);
 
 pub const LOGGING_LEVEL: (&str, LevelFilter) = ("PR_LOG_LEVEL", LevelFilter::Info);
-pub const LOGGING_DIR: (&str, &str) = ("PR_LOGGING_DIR", "data/logs");
-
 pub const SUPER_ADMIN_EMAIL: &str = "PR_SUPER_ADMIN_EMAIL";
 
 pub fn env(pair: (&str, &str)) -> String {
