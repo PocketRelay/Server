@@ -1,4 +1,5 @@
 use crate::{
+    config::TELEMETRY_PORT,
     servers::main::{
         models::{
             errors::{ServerError, ServerResult},
@@ -53,9 +54,9 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// ```
 ///
 async fn handle_get_telemetry_server() -> TelemetryServer {
-    let config = GlobalState::config();
-    let port = config.ports.telemetry;
-    TelemetryServer { port }
+    TelemetryServer {
+        port: TELEMETRY_PORT,
+    }
 }
 
 const TICKER_PORT: Port = 8999;
@@ -105,7 +106,7 @@ async fn handle_get_ticker_server() -> TickerServer {
 /// ```
 async fn handle_pre_auth() -> PreAuthResponse {
     let config = GlobalState::config();
-    let qos_port = config.ports.http;
+    let qos_port = config.port;
     PreAuthResponse { qos_port }
 }
 
@@ -129,11 +130,10 @@ async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthRes
         link: Link::clone(&*session),
     });
 
-    let config = GlobalState::config();
-    let port = config.ports.telemetry;
-
     Ok(PostAuthResponse {
-        telemetry: TelemetryServer { port },
+        telemetry: TelemetryServer {
+            port: TELEMETRY_PORT,
+        },
         ticker: TickerServer { port: TICKER_PORT },
         player_id,
     })
@@ -490,8 +490,8 @@ impl Message {
 ///
 fn data_config() -> TdfMap<String, String> {
     let config = GlobalState::config();
-    let http_port = config.ports.http;
-    let tele_port = config.ports.telemetry;
+    let http_port = config.port;
+    let tele_port = TELEMETRY_PORT;
 
     let prefix = format!("http://{}:{}", state::EXTERNAL_HOST, http_port);
 
@@ -511,7 +511,7 @@ fn data_config() -> TdfMap<String, String> {
     config.insert("TEL_PORT", tele_port.to_string());
     config.insert("TEL_SEND_DELAY", "15000");
     config.insert("TEL_SEND_PCT", "75");
-    config.insert("TEL_SERVER", state::EXTERNAL_HOST);
+    config.insert("TEL_SERVER", "127.0.0.1");
     config
 }
 

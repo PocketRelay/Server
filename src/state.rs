@@ -41,7 +41,7 @@ impl GlobalState {
 
         // Config data persisted to runtime
         let runtime_config = RuntimeConfig {
-            ports: config.ports,
+            port: config.port,
             galaxy_at_war: config.galaxy_at_war,
             menu_message: config.menu_message,
         };

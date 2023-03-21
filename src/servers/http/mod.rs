@@ -11,7 +11,7 @@ mod routes;
 /// Starts the HTTP server
 pub async fn start_server() {
     let config = GlobalState::config();
-    let port = config.ports.http;
+    let port = config.port;
     info!("Starting HTTP Server on (Port: {port})");
 
     let router = routes::router();

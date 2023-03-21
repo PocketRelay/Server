@@ -1383,6 +1383,7 @@ dependencies = [
  "blaze-ssl-async",
  "flate2",
  "futures",
+ "hyper",
  "interlink",
  "local-ip-address",
  "log",

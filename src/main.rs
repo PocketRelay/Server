@@ -33,16 +33,10 @@ fn main() {
     // Display the connection urls message
     runtime.block_on(logging::log_connection_urls());
 
-    // Spawn redirector in its own task
-    runtime.spawn(redirector::start_server());
-    // Spawn QOS server in its own task
-    runtime.spawn(qos::start_server());
+    main::init_router();
+
     // Spawn the HTTP server in its own task
     runtime.spawn(http::start_server());
-    // Spawn the Main server in its own task
-    runtime.spawn(main::start_server());
-    // Spawn the Telemetry server in its own task
-    runtime.spawn(telemetry::start_server());
 
     // Block until shutdown is recieved
     runtime.block_on(signal::ctrl_c()).ok();

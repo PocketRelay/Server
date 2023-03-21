@@ -1,10 +1,7 @@
 //! Routes for the Quality of Service server. Unknown whether any of the
 //! response address and ports are correct however this request must succeed
 //! or the client doesn't seem to know its external IP
-use crate::{
-    servers::http::ext::Xml,
-    state::{GlobalState, EXTERNAL_HOST},
-};
+use crate::{config::QOS_PORT, servers::http::ext::Xml};
 use axum::{extract::Query, routing::get, Router};
 use log::debug;
 use serde::Deserialize;
@@ -44,18 +41,16 @@ struct QosQuery {
 /// `query` The query string from the client
 async fn qos(Query(query): Query<QosQuery>) -> Xml {
     debug!("Recieved QOS query: (Port: {})", query.port);
-    let config = GlobalState::config();
-    let port = config.ports.qos;
 
     let response = format!(
         r"<qos> <numprobes>0</numprobes>
     <qosport>{}</qosport>
     <probesize>0</probesize>
-    <qoshost>{}</qoshost>
+    <qoshost>127.0.0.1</qoshost>
     <requestid>1</requestid>
     <reqsecret>0</reqsecret>
 </qos>",
-        port, EXTERNAL_HOST
+        QOS_PORT
     );
     Xml(response)
 }

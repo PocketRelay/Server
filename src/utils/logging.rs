@@ -56,7 +56,7 @@ pub fn setup(logging_level: LevelFilter) {
 /// this Pocket relay server
 pub async fn log_connection_urls() {
     let config = GlobalState::config();
-    let http_port = config.ports.http;
+    let http_port = config.port;
     let mut output = String::new();
     if let Ok(local_address) = local_ip_address::local_ip() {
         output.push_str("LAN: ");

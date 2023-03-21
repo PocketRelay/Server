@@ -1,7 +1,4 @@
-use crate::{
-    state,
-    utils::{models::Port, types::PlayerID},
-};
+use crate::utils::{models::Port, types::PlayerID};
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeResult,
@@ -36,7 +33,7 @@ impl Encodable for TelemetryServer {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_group(b"TELE");
         // Last known telemetry addresses: 159.153.235.32, gostelemetry.blaze3.ea.com
-        writer.tag_str(b"ADRS", state::EXTERNAL_HOST);
+        writer.tag_str(b"ADRS", "127.0.0.1");
         writer.tag_zero(b"ANON");
         writer.tag_str(b"DISA", TELEMTRY_DISA);
         writer.tag_str(b"FILT", "-UION/****");
@@ -69,7 +66,7 @@ impl Encodable for TickerServer {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_group(b"TICK");
         // Last known ticker addresses: 10.23.15.2, 10.10.78.150
-        writer.tag_str(b"ADRS", state::EXTERNAL_HOST);
+        writer.tag_str(b"ADRS", "127.0.0.1");
         // Last known ticker port: 8999
         writer.tag_u16(b"PORT", self.port);
         writer.tag_str(b"SKEY", TICKER_KEY);
@@ -133,7 +130,7 @@ impl Encodable for PreAuthResponse {
         // in two locations
         let mut qoss_group: TdfWriter = TdfWriter::default();
         {
-            qoss_group.tag_str(b"PSA", state::EXTERNAL_HOST);
+            qoss_group.tag_str(b"PSA", "127.0.0.1");
             qoss_group.tag_u16(b"PSP", self.qos_port);
             qoss_group.tag_str(b"SNA", "prod-sjc");
             qoss_group.tag_group_end();
