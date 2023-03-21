@@ -1,5 +1,5 @@
 use crate::{env, services::Services};
-use database::{self, DatabaseConnection, DatabaseType, Player, PlayerRole};
+use database::{self, DatabaseConnection, Player, PlayerRole};
 use log::{error, info};
 use tokio::join;
 
@@ -29,16 +29,8 @@ impl GlobalState {
     /// Initializes the connection with the database using the url or file
     /// from the environment variables
     async fn init_database() -> DatabaseConnection {
-        let ty = if cfg!(feature = "database-sqlite") {
-            let file = env::env(env::DATABASE_FILE);
-            DatabaseType::Sqlite(file)
-        } else {
-            let url = std::env::var(env::DATABASE_URL).expect(
-                "Environment PR_DATABASE_URL is required for non-sqlite versions of Pocket Relay",
-            );
-            DatabaseType::MySQL(url)
-        };
-        let db = database::connect(ty).await;
+        let file = env::env(env::DATABASE_FILE);
+        let db = database::connect(file).await;
         info!("Connected to database..");
         Self::init_database_admin(&db).await;
         db

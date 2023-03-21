@@ -34,11 +34,6 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
-[features]
-default = ["database-sqlite"]
-database-sqlite = ["database/sqlite"]
-database-mysql = ["database/mysql"]
-
 [dependencies]
 log = { workspace = true }
 serde = { workspace = true }

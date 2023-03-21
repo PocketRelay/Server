@@ -20,25 +20,12 @@ pub use sea_orm::DbErr;
 
 /// Database error result type
 pub type DbResult<T> = Result<T, DbErr>;
-
-/// Type of database to connect to with the relevant
-/// connection string / file
-pub enum DatabaseType {
-    /// SQLite database connection with the file name / path
-    Sqlite(String),
-    /// MySQL database connection with the MySQL Url
-    MySQL(String),
-}
-
 /// Connects to the database returning a Database connection
 /// which allows accessing the database without accessing sea_orm
 ///
 /// `ty` The type of database to connect to
-pub async fn connect(ty: DatabaseType) -> DatabaseConnection {
-    let url = match ty {
-        DatabaseType::Sqlite(file) => init_sqlite(file),
-        DatabaseType::MySQL(url) => url,
-    };
+pub async fn connect(file: String) -> DatabaseConnection {
+    let url = init_sqlite(file);
     let connection = SeaDatabase::connect(&url)
         .await
         .expect("Unable to create database connection");
