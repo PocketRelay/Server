@@ -1,15 +1,10 @@
-use std::{
-    f32::consts::E,
-    future::ready,
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use axum::{
-    extract::{ConnectInfo, FromRequestParts},
+    extract::FromRequestParts,
     http::{Method, StatusCode},
 };
 use hyper::upgrade::{OnUpgrade, Upgraded};
-use std::io;
 
 pub struct BlazeUpgrade {
     socket_addr: SocketAddr,
@@ -43,7 +38,7 @@ where
 
     fn from_request_parts<'life0, 'life1, 'async_trait>(
         parts: &'life0 mut axum::http::request::Parts,
-        state: &'life1 S,
+        _state: &'life1 S,
     ) -> core::pin::Pin<
         Box<
             dyn core::future::Future<Output = Result<Self, Self::Rejection>>

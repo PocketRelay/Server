@@ -1,5 +1,5 @@
 use crate::{
-    servers::http::{
+    http::{
         ext::ErrorStatusCode,
         middleware::auth::{AdminAuth, Auth},
     },

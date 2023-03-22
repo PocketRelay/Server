@@ -2,7 +2,6 @@
 //! data such as player data for when they become authenticated and
 //! networking data.
 
-use super::router;
 use crate::services::game::manager::RemovePlayerMessage;
 use crate::services::game::models::RemoveReason;
 use crate::services::matchmaking::RemoveQueueMessage;
@@ -21,7 +20,7 @@ use crate::{
 };
 use blaze_pk::packet::PacketDebug;
 use blaze_pk::packet::{Packet, PacketComponents};
-use blaze_pk::router::HandleError;
+use blaze_pk::router::{HandleError, Router};
 use blaze_pk::value_type;
 use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
 use database::Player;
@@ -30,6 +29,26 @@ use log::{debug, error, log_enabled};
 use std::fmt::Debug;
 use std::io;
 use std::net::SocketAddr;
+
+pub mod models;
+pub mod routes;
+
+static mut ROUTER: Option<Router<Components, SessionLink>> = None;
+
+pub fn router() -> &'static Router<Components, SessionLink> {
+    unsafe {
+        match &ROUTER {
+            Some(value) => value,
+            None => panic!("Main server router not yet initialized"),
+        }
+    }
+}
+
+pub fn init_router() {
+    unsafe {
+        ROUTER = Some(routes::router());
+    }
+}
 
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and

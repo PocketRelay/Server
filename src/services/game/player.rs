@@ -1,6 +1,6 @@
 use super::models::PlayerState;
 use crate::{
-    servers::main::session::{Session, SetGameMessage},
+    session::{Session, SetGameMessage},
     utils::{
         models::NetData,
         types::{GameID, PlayerID, SessionID},

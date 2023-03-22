@@ -1,11 +1,11 @@
 use crate::{
     config::TELEMETRY_PORT,
-    servers::main::{
+    session::{
         models::{
             errors::{ServerError, ServerResult},
             util::*,
         },
-        session::{DetailsMessage, GetPlayerIdMessage, SessionLink},
+        DetailsMessage, GetPlayerIdMessage, SessionLink,
     },
     state::{self, GlobalState},
     utils::{
@@ -159,9 +159,9 @@ async fn handle_ping() -> PingResponse {
 }
 
 /// Contents of the entitlements dmap file
-const ME3_ENT: &str = include_str!("../../../resources/data/entitlements.dmap");
+const ME3_ENT: &str = include_str!("../../resources/data/entitlements.dmap");
 /// Contents of the dime.xml file
-const ME3_DIME: &str = include_str!("../../../resources/data/dime.xml");
+const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 
 /// Handles the client requesting to fetch a configuration from the server. The different
 /// types of configuration are as follows:
@@ -247,7 +247,7 @@ async fn load_coalesced() -> ServerResult<ChunkMap> {
 ///
 /// src/resources/data/coalesced.bin
 fn default_coalesced() -> ServerResult<ChunkMap> {
-    let bytes: &[u8] = include_bytes!("../../../resources/data/coalesced.bin");
+    let bytes: &[u8] = include_bytes!("../../resources/data/coalesced.bin");
     generate_coalesced(bytes)
 }
 
@@ -359,7 +359,7 @@ fn default_talk_file(lang: &str) -> ChunkMap {
     if let Some(file) = DefaultTlkFiles::get(&file_name) {
         create_base64_map(&file.data)
     } else {
-        let bytes: &[u8] = include_bytes!("../../../resources/data/tlk/default.tlk");
+        let bytes: &[u8] = include_bytes!("../../resources/data/tlk/default.tlk");
         create_base64_map(bytes)
     }
 }

@@ -1,8 +1,5 @@
 use crate::{
-    servers::main::{
-        models::messaging::*,
-        session::{GetPlayerMessage, GetSocketMessage, PushExt, SessionLink},
-    },
+    session::{models::messaging::*, GetPlayerMessage, GetSocketMessage, PushExt, SessionLink},
     state::{self, GlobalState},
     utils::components::{Components as C, Messaging as M},
 };

@@ -1,6 +1,6 @@
 use super::matchmaking::rules::RuleSet;
 use crate::{
-    servers::main::session::{DetailsMessage, InformSessions, PushExt, Session},
+    session::{DetailsMessage, InformSessions, PushExt, Session},
     utils::{
         components::{Components, GameManager, UserSessions},
         types::{GameID, GameSlot, PlayerID, SessionID},

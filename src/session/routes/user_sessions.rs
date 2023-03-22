@@ -1,16 +1,14 @@
 use crate::{
-    servers::main::{
+    services::sessions::LookupMessage,
+    session::{
         models::{
             auth::AuthResponse,
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
-        session::{
-            GetLookupMessage, HardwareFlagMessage, LookupResponse, NetworkInfoMessage, SessionLink,
-            SetPlayerMessage,
-        },
+        GetLookupMessage, HardwareFlagMessage, LookupResponse, NetworkInfoMessage, SessionLink,
+        SetPlayerMessage,
     },
-    services::sessions::LookupMessage,
     state::GlobalState,
     utils::components::{Components as C, UserSessions as U},
 };

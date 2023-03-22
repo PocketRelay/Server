@@ -1,5 +1,5 @@
 use crate::{
-    servers::http::ext::ErrorStatusCode,
+    http::ext::ErrorStatusCode,
     services::leaderboard::{models::*, QueryMessage},
     state::GlobalState,
     utils::types::PlayerID,

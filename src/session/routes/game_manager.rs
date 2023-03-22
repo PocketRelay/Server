@@ -1,13 +1,6 @@
 use std::sync::Arc;
 
 use crate::{
-    servers::main::{
-        models::{
-            errors::{ServerError, ServerResult},
-            game_manager::*,
-        },
-        session::{GetGamePlayerMessage, GetIdMessage, GetPlayerGameMessage, SessionLink},
-    },
     services::{
         game::{
             manager::{
@@ -20,6 +13,13 @@ use crate::{
         },
         matchmaking::{GameCreatedMessage, QueuePlayerMessage},
         sessions::LookupMessage,
+    },
+    session::{
+        models::{
+            errors::{ServerError, ServerResult},
+            game_manager::*,
+        },
+        GetGamePlayerMessage, GetIdMessage, GetPlayerGameMessage, SessionLink,
     },
     state::GlobalState,
     utils::components::{Components as C, GameManager as G},

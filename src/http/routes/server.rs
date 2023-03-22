@@ -4,18 +4,16 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::{
-    servers::{
-        http::{
-            ext::{blaze_upgrade::BlazeUpgrade, ErrorStatusCode},
-            middleware::auth::AdminAuth,
-        },
-        main::session::Session,
+    http::{
+        ext::{blaze_upgrade::BlazeUpgrade, ErrorStatusCode},
+        middleware::auth::AdminAuth,
     },
+    session::Session,
     state,
     utils::logging::LOG_FILE_NAME,
 };
 use axum::{
-    body::{BoxBody, Empty},
+    body::BoxBody,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
@@ -25,7 +23,6 @@ use blaze_pk::packet::PacketCodec;
 use database::PlayerRole;
 use hyper::header;
 use interlink::service::Service;
-use log::info;
 use serde::Serialize;
 use thiserror::Error;
 use tokio::{
@@ -64,15 +61,10 @@ async fn upgrade(upgrade: BlazeUpgrade) -> Response {
         });
     });
 
-    #[allow(clippy::declare_interior_mutable_const)]
-    const UPGRADE: HeaderValue = HeaderValue::from_static("upgrade");
-    #[allow(clippy::declare_interior_mutable_const)]
-    const BLAZE: HeaderValue = HeaderValue::from_static("blaze");
-
     Response::builder()
         .status(StatusCode::SWITCHING_PROTOCOLS)
-        .header(header::CONNECTION, UPGRADE)
-        .header(header::UPGRADE, BLAZE)
+        .header(header::CONNECTION, HeaderValue::from_static("upgrade"))
+        .header(header::UPGRADE, HeaderValue::from_static("blaze"))
         .body(BoxBody::default())
         .unwrap()
 }

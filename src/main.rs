@@ -1,14 +1,13 @@
+use config::load_config;
 use log::info;
-use servers::*;
 use state::GlobalState;
 use tokio::signal;
 use utils::logging;
 
-use crate::config::load_config;
-
 mod config;
-mod servers;
+mod http;
 mod services;
+mod session;
 mod state;
 mod utils;
 
@@ -33,7 +32,7 @@ fn main() {
     // Display the connection urls message
     runtime.block_on(logging::log_connection_urls());
 
-    main::init_router();
+    session::init_router();
 
     // Spawn the HTTP server in its own task
     runtime.spawn(http::start_server());
