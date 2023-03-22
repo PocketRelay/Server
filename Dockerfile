@@ -16,13 +16,8 @@ RUN chmod +x ./pocket-relay-linux
 # Volume for storing database file data
 VOLUME /app/data
 
-# Expore app ports
-EXPOSE 42127
-EXPOSE 42128
-EXPOSE 42129
-EXPOSE 42130
+# Expore app port
 EXPOSE 80
-
 
 CMD ["/app/pocket-relay-linux"]
 

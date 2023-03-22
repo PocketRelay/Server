@@ -3,14 +3,6 @@ services:
   pocket-relay:
     container_name: pocket-relay
     ports:
-      # HTTP Server port
+      # Server port
       - 80:80/tcp
-      # Main Server port
-      - 42128:42128/tcp
-      # Redirector Server port
-      - 42127:42127/tcp
-      # Telemetry Server port
-      - 42129:42129/tcp
-      # Quality of Service port
-      - 42130:42130/udp
     image: jacobtread/pocket-relay:latest
