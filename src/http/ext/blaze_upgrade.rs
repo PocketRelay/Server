@@ -109,7 +109,7 @@ where
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.parse().ok())
             .unwrap_or_else(|| {
-                debug!("Failed to extract scheme");
+                debug!("Failed to extract port");
                 if scheme == "https" {
                     443
                 } else {
