@@ -1,4 +1,4 @@
-use crate::utils::{models::Port, types::PlayerID};
+use crate::{session::SessionHostTarget, utils::types::PlayerID};
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeResult,
@@ -81,9 +81,7 @@ pub const PING_PERIOD: &str = "15s";
 
 /// Structure for the response to a pre authentication request
 pub struct PreAuthResponse {
-    /// Port for the Quality Of Service server in our case this is
-    /// the HTTP server port
-    pub qos_port: Port,
+    pub host_target: SessionHostTarget,
 }
 
 impl Encodable for PreAuthResponse {
@@ -130,8 +128,8 @@ impl Encodable for PreAuthResponse {
         // in two locations
         let mut qoss_group: TdfWriter = TdfWriter::default();
         {
-            qoss_group.tag_str(b"PSA", "127.0.0.1");
-            qoss_group.tag_u16(b"PSP", self.qos_port);
+            qoss_group.tag_str(b"PSA", &self.host_target.host);
+            qoss_group.tag_u16(b"PSP", self.host_target.port);
             qoss_group.tag_str(b"SNA", "prod-sjc");
             qoss_group.tag_group_end();
         }

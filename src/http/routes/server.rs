@@ -67,7 +67,7 @@ async fn upgrade(upgrade: BlazeUpgrade) -> Result<Response, StatusCode> {
             ctx.attach_stream(read, true);
             let writer = ctx.attach_sink(write);
 
-            Session::new(session_id, socket.scheme, writer)
+            Session::new(session_id, socket.host_target, writer)
         });
     });
 

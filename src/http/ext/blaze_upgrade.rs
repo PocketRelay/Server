@@ -4,8 +4,11 @@ use axum::{
     response::IntoResponse,
 };
 use hyper::upgrade::{OnUpgrade, Upgraded};
+use log::debug;
 use std::future::ready;
 use thiserror::Error;
+
+use crate::session::SessionHostTarget;
 
 #[derive(Debug, Error)]
 pub enum BlazeUpgradeError {
@@ -21,8 +24,7 @@ pub enum BlazeUpgradeError {
 pub struct BlazeUpgrade {
     /// The upgrade handle
     on_upgrade: OnUpgrade,
-    /// The client scheme
-    scheme: String,
+    host_target: SessionHostTarget,
 }
 
 /// HTTP request upgraded into a Blaze socket along with
@@ -30,8 +32,8 @@ pub struct BlazeUpgrade {
 pub struct BlazeSocket {
     /// The upgraded connection
     pub upgrade: Upgraded,
-    /// The client scheme
-    pub scheme: String,
+
+    pub host_target: SessionHostTarget,
 }
 
 impl BlazeUpgrade {
@@ -45,13 +47,17 @@ impl BlazeUpgrade {
 
         Ok(BlazeSocket {
             upgrade,
-            scheme: self.scheme,
+            host_target: self.host_target,
         })
     }
 }
 
 /// Header for the Pocket Relay connection scheme used by the client
 const HEADER_SCHEME: &str = "X-Pocket-Relay-Scheme";
+/// Header for the Pocket Relay connection port used by the client
+const HEADER_PORT: &str = "X-Pocket-Relay-Port";
+/// Header for the Pocket Relay connection host used by the client
+const HEADER_HOST: &str = "X-Pocket-Relay-Host";
 
 impl<S> FromRequestParts<S> for BlazeUpgrade
 where
@@ -91,9 +97,41 @@ where
             .get(HEADER_SCHEME)
             .and_then(|value| value.to_str().ok())
             .map(|value| value.to_string())
-            .unwrap_or_else(|| "http".to_string());
+            .unwrap_or_else(|| {
+                debug!("Failed to extract scheme");
+                "http".to_string()
+            });
 
-        Box::pin(ready(Ok(Self { on_upgrade, scheme })))
+        // Get the client port header
+        let port: u16 = parts
+            .headers
+            .get(HEADER_PORT)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse().ok())
+            .unwrap_or_else(|| {
+                debug!("Failed to extract scheme");
+                if scheme == "https" {
+                    443
+                } else {
+                    80
+                }
+            });
+
+        let host = parts
+            .headers
+            .get(HEADER_HOST)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.to_string());
+
+        let host = match host {
+            Some(value) => value,
+            None => return Box::pin(ready(Err(BlazeUpgradeError::CannotUpgrade))),
+        };
+
+        Box::pin(ready(Ok(Self {
+            on_upgrade,
+            host_target: SessionHostTarget { scheme, host, port },
+        })))
     }
 }
 

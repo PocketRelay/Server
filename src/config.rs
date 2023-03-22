@@ -7,7 +7,6 @@ use tokio::fs::read_to_string;
 use crate::utils::models::Port;
 
 pub struct RuntimeConfig {
-    pub port: Port,
     pub galaxy_at_war: GalaxyAtWarConfig,
     pub menu_message: String,
 }

@@ -21,6 +21,8 @@ fn main() {
     // Load configuration
     let config = runtime.block_on(load_config()).unwrap_or_default();
 
+    let port = config.port;
+
     // Initialize logging
     logging::setup(config.logging);
 
@@ -30,12 +32,12 @@ fn main() {
     runtime.block_on(GlobalState::init(config));
 
     // Display the connection urls message
-    runtime.block_on(logging::log_connection_urls());
+    runtime.block_on(logging::log_connection_urls(port));
 
     session::init_router();
 
     // Spawn the HTTP server in its own task
-    runtime.spawn(http::start_server());
+    runtime.spawn(http::start_server(port));
 
     // Block until shutdown is recieved
     runtime.block_on(signal::ctrl_c()).ok();

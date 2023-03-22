@@ -60,7 +60,7 @@ pub struct Session {
     writer: SinkLink<Packet>,
 
     /// The session scheme
-    scheme: String,
+    host_target: SessionHostTarget,
 
     /// Data associated with this session
     data: SessionData,
@@ -105,15 +105,22 @@ impl Handler<GetPlayerMessage> for Session {
 }
 
 #[derive(Message)]
-#[msg(rtype = "String")]
-pub struct GetScheme;
+#[msg(rtype = "SessionHostTarget")]
+pub struct GetHostTarget;
 
-impl Handler<GetScheme> for Session {
-    type Response = Mr<GetScheme>;
+impl Handler<GetHostTarget> for Session {
+    type Response = Mr<GetHostTarget>;
 
-    fn handle(&mut self, _msg: GetScheme, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        Mr(self.scheme.clone())
+    fn handle(&mut self, _msg: GetHostTarget, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        Mr(self.host_target.clone())
     }
+}
+
+#[derive(Clone)]
+pub struct SessionHostTarget {
+    pub scheme: String,
+    pub host: String,
+    pub port: u16,
 }
 
 #[derive(Message)]
@@ -451,12 +458,12 @@ impl Session {
     /// `id`             The unique session ID
     /// `values`         The networking TcpStream and address
     /// `message_sender` The message sender for session messages
-    pub fn new(id: SessionID, scheme: String, writer: SinkLink<Packet>) -> Self {
+    pub fn new(id: SessionID, host_target: SessionHostTarget, writer: SinkLink<Packet>) -> Self {
         Self {
             id,
             writer,
             data: SessionData::default(),
-            scheme,
+            host_target,
         }
     }
 

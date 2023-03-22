@@ -9,10 +9,6 @@ use tokio::join;
 
 /// The server version extracted from the Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The external address of the server. This address is whats used in
-/// the system hosts file as a redirect so theres no need to use any
-/// other address.
-pub const EXTERNAL_HOST: &str = "gosredirector.ea.com";
 
 /// Global state that is shared throughout the application this
 /// will be unset until the value is initialized then it will be
@@ -41,7 +37,6 @@ impl GlobalState {
 
         // Config data persisted to runtime
         let runtime_config = RuntimeConfig {
-            port: config.port,
             galaxy_at_war: config.galaxy_at_war,
             menu_message: config.menu_message,
         };

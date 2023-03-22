@@ -5,7 +5,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             util::*,
         },
-        DetailsMessage, GetPlayerIdMessage, GetScheme, SessionLink,
+        DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
     state::{self, GlobalState},
     utils::{
@@ -104,10 +104,13 @@ async fn handle_get_ticker_server() -> TickerServer {
 ///     }
 /// }
 /// ```
-async fn handle_pre_auth() -> PreAuthResponse {
-    let config = GlobalState::config();
-    let qos_port = config.port;
-    PreAuthResponse { qos_port }
+async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthResponse> {
+    let host_target = match session.send(GetHostTarget {}).await {
+        Ok(value) => value,
+        Err(_) => return Err(ServerError::InvalidInformation),
+    };
+
+    Ok(PreAuthResponse { host_target })
 }
 
 /// Handles post authentication requests. This provides information about other
@@ -492,16 +495,15 @@ impl Message {
 /// Telemetry Server: 159.153.235.32:9988
 ///
 async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
-    let scheme = session
-        .send(GetScheme {})
-        .await
-        .unwrap_or_else(|_| "http".to_string());
-
-    let config = GlobalState::config();
-    let http_port = config.port;
+    let host_target = match session.send(GetHostTarget {}).await {
+        Ok(value) => value,
+        Err(_) => return TdfMap::with_capacity(0),
+    };
     let tele_port = TELEMETRY_PORT;
-
-    let prefix = format!("{}://{}:{}", scheme, state::EXTERNAL_HOST, http_port);
+    let prefix = format!(
+        "{}://{}:{}",
+        host_target.scheme, host_target.host, host_target.port
+    );
 
     let mut config = TdfMap::with_capacity(15);
     config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/gaw"));
