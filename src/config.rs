@@ -15,11 +15,6 @@ pub struct RuntimeConfig {
 const CONFIG_ENV_KEY: &str = "PR_CONFIG_JSON";
 
 pub async fn load_config() -> Option<Config> {
-    let file = Path::new("config.json");
-    if !file.exists() {
-        return None;
-    }
-
     // Attempt to load the config from the env
     if let Ok(env) = env::var(CONFIG_ENV_KEY) {
         let config: Config = match serde_json::from_str(&env) {
@@ -30,6 +25,11 @@ pub async fn load_config() -> Option<Config> {
             }
         };
         return Some(config);
+    }
+
+    let file = Path::new("config.json");
+    if !file.exists() {
+        return None;
     }
 
     let data = match read_to_string(file).await {
