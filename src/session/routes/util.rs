@@ -5,7 +5,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             util::*,
         },
-        DetailsMessage, GetPlayerIdMessage, SessionLink,
+        DetailsMessage, GetPlayerIdMessage, GetScheme, SessionLink,
     },
     state::{self, GlobalState},
     utils::{
@@ -179,9 +179,12 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 ///     "CFID": "ME3_DATA"
 /// }
 /// ```
-async fn handle_fetch_client_config(req: FetchConfigRequest) -> ServerResult<FetchConfigResponse> {
+async fn handle_fetch_client_config(
+    session: &mut SessionLink,
+    req: FetchConfigRequest,
+) -> ServerResult<FetchConfigResponse> {
     let config = match req.id.as_ref() {
-        "ME3_DATA" => data_config(),
+        "ME3_DATA" => data_config(session).await,
         "ME3_MSG" => messages(),
         "ME3_ENT" => load_entitlements(),
         "ME3_DIME" => {
@@ -488,12 +491,17 @@ impl Message {
 /// Image Server: http://eaassets-a.akamaihd.net/gameplayservices/prod/MassEffect/3/
 /// Telemetry Server: 159.153.235.32:9988
 ///
-fn data_config() -> TdfMap<String, String> {
+async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
+    let scheme = session
+        .send(GetScheme {})
+        .await
+        .unwrap_or_else(|_| "http".to_string());
+
     let config = GlobalState::config();
     let http_port = config.port;
     let tele_port = TELEMETRY_PORT;
 
-    let prefix = format!("http://{}:{}", state::EXTERNAL_HOST, http_port);
+    let prefix = format!("{}://{}:{}", scheme, state::EXTERNAL_HOST, http_port);
 
     let mut config = TdfMap::with_capacity(15);
     config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/gaw"));

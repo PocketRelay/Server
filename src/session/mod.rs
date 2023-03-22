@@ -28,7 +28,6 @@ use interlink::prelude::*;
 use log::{debug, error, log_enabled};
 use std::fmt::Debug;
 use std::io;
-use std::net::SocketAddr;
 
 pub mod models;
 pub mod routes;
@@ -60,8 +59,8 @@ pub struct Session {
     /// Packet writer sink for the session
     writer: SinkLink<Packet>,
 
-    /// The socket connection address of the client
-    socket_addr: SocketAddr,
+    /// The session scheme
+    scheme: String,
 
     /// Data associated with this session
     data: SessionData,
@@ -102,6 +101,18 @@ impl Handler<GetPlayerMessage> for Session {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         Mr(self.data.player.clone())
+    }
+}
+
+#[derive(Message)]
+#[msg(rtype = "String")]
+pub struct GetScheme;
+
+impl Handler<GetScheme> for Session {
+    type Response = Mr<GetScheme>;
+
+    fn handle(&mut self, _msg: GetScheme, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        Mr(self.scheme.clone())
     }
 }
 
@@ -169,22 +180,6 @@ impl Handler<SetPlayerMessage> for Session {
             });
             self.data.player = Some(player);
         }
-    }
-}
-
-#[derive(Message)]
-#[msg(rtype = "SocketAddr")]
-pub struct GetSocketMessage;
-
-impl Handler<GetSocketMessage> for Session {
-    type Response = Mr<GetSocketMessage>;
-
-    fn handle(
-        &mut self,
-        _msg: GetSocketMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        Mr(self.socket_addr)
     }
 }
 
@@ -456,12 +451,12 @@ impl Session {
     /// `id`             The unique session ID
     /// `values`         The networking TcpStream and address
     /// `message_sender` The message sender for session messages
-    pub fn new(id: SessionID, socket_addr: SocketAddr, writer: SinkLink<Packet>) -> Self {
+    pub fn new(id: SessionID, scheme: String, writer: SinkLink<Packet>) -> Self {
         Self {
             id,
-            socket_addr,
             writer,
             data: SessionData::default(),
+            scheme,
         }
     }
 

@@ -1,23 +1,43 @@
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
-
 use axum::{
     extract::FromRequestParts,
     http::{Method, StatusCode},
+    response::IntoResponse,
 };
 use hyper::upgrade::{OnUpgrade, Upgraded};
+use std::future::ready;
+use thiserror::Error;
 
-pub struct BlazeUpgrade {
-    socket_addr: SocketAddr,
-    on_upgrade: OnUpgrade,
+#[derive(Debug, Error)]
+pub enum BlazeUpgradeError {
+    #[error("Cannot upgrade not GET requests")]
+    UnacceptableMethod,
+    #[error("Failed to upgrade connection")]
+    FailedUpgrade,
+    #[error("Cannot upgrade connection")]
+    CannotUpgrade,
 }
 
-#[derive(Debug)]
-pub enum BlazeUpgradeError {
-    FailedUpgrade,
+/// Extractor for initiated the upgrade process for a request
+pub struct BlazeUpgrade {
+    /// The upgrade handle
+    on_upgrade: OnUpgrade,
+    /// The client scheme
+    scheme: String,
+}
+
+/// HTTP request upgraded into a Blaze socket along with
+/// extra information
+pub struct BlazeSocket {
+    /// The upgraded connection
+    pub upgrade: Upgraded,
+    /// The client scheme
+    pub scheme: String,
 }
 
 impl BlazeUpgrade {
+    /// Upgrades the underlying hook returning the newly created socket
     pub async fn upgrade(self) -> Result<BlazeSocket, BlazeUpgradeError> {
+        // Attempt to upgrade the connection
         let upgrade = match self.on_upgrade.await {
             Ok(value) => value,
             Err(_) => return Err(BlazeUpgradeError::FailedUpgrade),
@@ -25,16 +45,19 @@ impl BlazeUpgrade {
 
         Ok(BlazeSocket {
             upgrade,
-            socket_addr: self.socket_addr,
+            scheme: self.scheme,
         })
     }
 }
+
+/// Header for the Pocket Relay connection scheme used by the client
+const HEADER_SCHEME: &str = "X-Pocket-Relay-Scheme";
 
 impl<S> FromRequestParts<S> for BlazeUpgrade
 where
     S: Send + Sync,
 {
-    type Rejection = StatusCode;
+    type Rejection = BlazeUpgradeError;
 
     fn from_request_parts<'life0, 'life1, 'async_trait>(
         parts: &'life0 mut axum::http::request::Parts,
@@ -51,35 +74,31 @@ where
         'life1: 'async_trait,
         Self: 'async_trait,
     {
-        // let remote_addr = parts
-        //     .extensions
-        //     .get::<ConnectInfo<SocketAddr>>()
-        //     .map(|ci| ci.0)
-        //     .unwrap();
+        // Ensure the method is GET
+        if parts.method != Method::GET {
+            return Box::pin(ready(Err(BlazeUpgradeError::UnacceptableMethod)));
+        }
 
-        Box::pin(async move {
-            if parts.method != Method::GET {
-                return Err(StatusCode::BAD_REQUEST);
-            }
+        // Get the upgrade hook
+        let on_upgrade = match parts.extensions.remove::<OnUpgrade>() {
+            Some(value) => value,
+            None => return Box::pin(ready(Err(BlazeUpgradeError::CannotUpgrade))),
+        };
 
-            println!("WAIT UPGRADE");
+        // Get the client scheme header
+        let scheme = parts
+            .headers
+            .get(HEADER_SCHEME)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "http".to_string());
 
-            let on_upgrade = parts
-                .extensions
-                .remove::<OnUpgrade>()
-                .ok_or(StatusCode::BAD_REQUEST)?;
-
-            println!("UPGRADING");
-
-            Ok(Self {
-                on_upgrade,
-                socket_addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080)),
-            })
-        })
+        Box::pin(ready(Ok(Self { on_upgrade, scheme })))
     }
 }
 
-pub struct BlazeSocket {
-    pub upgrade: Upgraded,
-    pub socket_addr: SocketAddr,
+impl IntoResponse for BlazeUpgradeError {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::BAD_REQUEST, self.to_string()).into_response()
+    }
 }
