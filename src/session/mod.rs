@@ -2,7 +2,6 @@
 //! data such as player data for when they become authenticated and
 //! networking data.
 
-use super::router;
 use crate::services::game::manager::RemovePlayerMessage;
 use crate::services::game::models::RemoveReason;
 use crate::services::matchmaking::RemoveQueueMessage;
@@ -21,7 +20,7 @@ use crate::{
 };
 use blaze_pk::packet::PacketDebug;
 use blaze_pk::packet::{Packet, PacketComponents};
-use blaze_pk::router::HandleError;
+use blaze_pk::router::{HandleError, Router};
 use blaze_pk::value_type;
 use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
 use database::Player;
@@ -29,7 +28,26 @@ use interlink::prelude::*;
 use log::{debug, error, log_enabled};
 use std::fmt::Debug;
 use std::io;
-use std::net::SocketAddr;
+
+pub mod models;
+pub mod routes;
+
+static mut ROUTER: Option<Router<Components, SessionLink>> = None;
+
+pub fn router() -> &'static Router<Components, SessionLink> {
+    unsafe {
+        match &ROUTER {
+            Some(value) => value,
+            None => panic!("Main server router not yet initialized"),
+        }
+    }
+}
+
+pub fn init_router() {
+    unsafe {
+        ROUTER = Some(routes::router());
+    }
+}
 
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
@@ -41,8 +59,8 @@ pub struct Session {
     /// Packet writer sink for the session
     writer: SinkLink<Packet>,
 
-    /// The socket connection address of the client
-    socket_addr: SocketAddr,
+    /// The session scheme
+    host_target: SessionHostTarget,
 
     /// Data associated with this session
     data: SessionData,
@@ -84,6 +102,25 @@ impl Handler<GetPlayerMessage> for Session {
     ) -> Self::Response {
         Mr(self.data.player.clone())
     }
+}
+
+#[derive(Message)]
+#[msg(rtype = "SessionHostTarget")]
+pub struct GetHostTarget;
+
+impl Handler<GetHostTarget> for Session {
+    type Response = Mr<GetHostTarget>;
+
+    fn handle(&mut self, _msg: GetHostTarget, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+        Mr(self.host_target.clone())
+    }
+}
+
+#[derive(Clone)]
+pub struct SessionHostTarget {
+    pub scheme: String,
+    pub host: String,
+    pub port: u16,
 }
 
 #[derive(Message)]
@@ -150,22 +187,6 @@ impl Handler<SetPlayerMessage> for Session {
             });
             self.data.player = Some(player);
         }
-    }
-}
-
-#[derive(Message)]
-#[msg(rtype = "SocketAddr")]
-pub struct GetSocketMessage;
-
-impl Handler<GetSocketMessage> for Session {
-    type Response = Mr<GetSocketMessage>;
-
-    fn handle(
-        &mut self,
-        _msg: GetSocketMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        Mr(self.socket_addr)
     }
 }
 
@@ -437,12 +458,12 @@ impl Session {
     /// `id`             The unique session ID
     /// `values`         The networking TcpStream and address
     /// `message_sender` The message sender for session messages
-    pub fn new(id: SessionID, socket_addr: SocketAddr, writer: SinkLink<Packet>) -> Self {
+    pub fn new(id: SessionID, host_target: SessionHostTarget, writer: SinkLink<Packet>) -> Self {
         Self {
             id,
-            socket_addr,
             writer,
             data: SessionData::default(),
+            host_target,
         }
     }
 

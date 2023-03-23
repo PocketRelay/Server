@@ -1,7 +1,7 @@
 //! Service for storing links to all the currenly active
 //! authenticated sessions on the server
 
-use crate::{servers::main::session::Session, utils::types::PlayerID};
+use crate::{session::Session, utils::types::PlayerID};
 use interlink::prelude::*;
 use std::collections::HashMap;
 

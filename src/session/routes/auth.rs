@@ -1,10 +1,10 @@
 use crate::{
-    servers::main::{
+    session::{
         models::{
             auth::*,
             errors::{ServerError, ServerResult},
         },
-        session::{GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage},
+        GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage,
     },
     state::GlobalState,
     utils::{
@@ -534,9 +534,9 @@ impl LegalType {
         }
         let fallback = match self {
             Self::TermsOfService => {
-                include_str!("../../../resources/defaults/terms_of_service.html")
+                include_str!("../../resources/defaults/terms_of_service.html")
             }
-            Self::PrivacyPolicy => include_str!("../../../resources/defaults/privacy_policy.html"),
+            Self::PrivacyPolicy => include_str!("../../resources/defaults/privacy_policy.html"),
         };
 
         (Cow::Borrowed(fallback), web_path, col)

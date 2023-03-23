@@ -1,6 +1,6 @@
 use crate::utils::components::Components;
 
-use super::session::SessionLink;
+use super::SessionLink;
 use blaze_pk::router::Router;
 
 mod auth;

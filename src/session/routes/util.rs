@@ -1,10 +1,11 @@
 use crate::{
-    servers::main::{
+    config::TELEMETRY_PORT,
+    session::{
         models::{
             errors::{ServerError, ServerResult},
             util::*,
         },
-        session::{DetailsMessage, GetPlayerIdMessage, SessionLink},
+        DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
     state::{self, GlobalState},
     utils::{
@@ -53,9 +54,9 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// ```
 ///
 async fn handle_get_telemetry_server() -> TelemetryServer {
-    let config = GlobalState::config();
-    let port = config.ports.telemetry;
-    TelemetryServer { port }
+    TelemetryServer {
+        port: TELEMETRY_PORT,
+    }
 }
 
 const TICKER_PORT: Port = 8999;
@@ -103,10 +104,13 @@ async fn handle_get_ticker_server() -> TickerServer {
 ///     }
 /// }
 /// ```
-async fn handle_pre_auth() -> PreAuthResponse {
-    let config = GlobalState::config();
-    let qos_port = config.ports.http;
-    PreAuthResponse { qos_port }
+async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthResponse> {
+    let host_target = match session.send(GetHostTarget {}).await {
+        Ok(value) => value,
+        Err(_) => return Err(ServerError::InvalidInformation),
+    };
+
+    Ok(PreAuthResponse { host_target })
 }
 
 /// Handles post authentication requests. This provides information about other
@@ -129,11 +133,10 @@ async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthRes
         link: Link::clone(&*session),
     });
 
-    let config = GlobalState::config();
-    let port = config.ports.telemetry;
-
     Ok(PostAuthResponse {
-        telemetry: TelemetryServer { port },
+        telemetry: TelemetryServer {
+            port: TELEMETRY_PORT,
+        },
         ticker: TickerServer { port: TICKER_PORT },
         player_id,
     })
@@ -159,9 +162,9 @@ async fn handle_ping() -> PingResponse {
 }
 
 /// Contents of the entitlements dmap file
-const ME3_ENT: &str = include_str!("../../../resources/data/entitlements.dmap");
+const ME3_ENT: &str = include_str!("../../resources/data/entitlements.dmap");
 /// Contents of the dime.xml file
-const ME3_DIME: &str = include_str!("../../../resources/data/dime.xml");
+const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 
 /// Handles the client requesting to fetch a configuration from the server. The different
 /// types of configuration are as follows:
@@ -179,9 +182,12 @@ const ME3_DIME: &str = include_str!("../../../resources/data/dime.xml");
 ///     "CFID": "ME3_DATA"
 /// }
 /// ```
-async fn handle_fetch_client_config(req: FetchConfigRequest) -> ServerResult<FetchConfigResponse> {
+async fn handle_fetch_client_config(
+    session: &mut SessionLink,
+    req: FetchConfigRequest,
+) -> ServerResult<FetchConfigResponse> {
     let config = match req.id.as_ref() {
-        "ME3_DATA" => data_config(),
+        "ME3_DATA" => data_config(session).await,
         "ME3_MSG" => messages(),
         "ME3_ENT" => load_entitlements(),
         "ME3_DIME" => {
@@ -247,7 +253,7 @@ async fn load_coalesced() -> ServerResult<ChunkMap> {
 ///
 /// src/resources/data/coalesced.bin
 fn default_coalesced() -> ServerResult<ChunkMap> {
-    let bytes: &[u8] = include_bytes!("../../../resources/data/coalesced.bin");
+    let bytes: &[u8] = include_bytes!("../../resources/data/coalesced.bin");
     generate_coalesced(bytes)
 }
 
@@ -359,7 +365,7 @@ fn default_talk_file(lang: &str) -> ChunkMap {
     if let Some(file) = DefaultTlkFiles::get(&file_name) {
         create_base64_map(&file.data)
     } else {
-        let bytes: &[u8] = include_bytes!("../../../resources/data/tlk/default.tlk");
+        let bytes: &[u8] = include_bytes!("../../resources/data/tlk/default.tlk");
         create_base64_map(bytes)
     }
 }
@@ -488,12 +494,16 @@ impl Message {
 /// Image Server: http://eaassets-a.akamaihd.net/gameplayservices/prod/MassEffect/3/
 /// Telemetry Server: 159.153.235.32:9988
 ///
-fn data_config() -> TdfMap<String, String> {
-    let config = GlobalState::config();
-    let http_port = config.ports.http;
-    let tele_port = config.ports.telemetry;
-
-    let prefix = format!("http://{}:{}", state::EXTERNAL_HOST, http_port);
+async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
+    let host_target = match session.send(GetHostTarget {}).await {
+        Ok(value) => value,
+        Err(_) => return TdfMap::with_capacity(0),
+    };
+    let tele_port = TELEMETRY_PORT;
+    let prefix = format!(
+        "{}://{}:{}",
+        host_target.scheme, host_target.host, host_target.port
+    );
 
     let mut config = TdfMap::with_capacity(15);
     config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/gaw"));
@@ -511,7 +521,7 @@ fn data_config() -> TdfMap<String, String> {
     config.insert("TEL_PORT", tele_port.to_string());
     config.insert("TEL_SEND_DELAY", "15000");
     config.insert("TEL_SEND_PCT", "75");
-    config.insert("TEL_SERVER", state::EXTERNAL_HOST);
+    config.insert("TEL_SERVER", "127.0.0.1");
     config
 }
 

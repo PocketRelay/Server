@@ -1,5 +1,5 @@
 use crate::{
-    servers::http::ext::ErrorStatusCode, services::tokens::VerifyError, state::GlobalState,
+    http::ext::ErrorStatusCode, services::tokens::VerifyError, state::GlobalState,
     utils::types::BoxFuture,
 };
 use axum::{

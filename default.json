@@ -1,11 +1,5 @@
 {
-    "ports": {
-        "redirector": 42127,
-        "main": 42128,
-        "telemetry": 42129,
-        "qos": 42130,
-        "http": 80
-    },
+    "port": 80,
     "dashboard": {
         "super_email": "example@example.com",
         "super_password": "password"

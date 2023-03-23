@@ -1,0 +1,8 @@
+version: "3"
+services:
+  pocket-relay:
+    container_name: pocket-relay
+    ports:
+      # Server port
+      - 80:80/tcp
+    image: jacobtread/pocket-relay:latest

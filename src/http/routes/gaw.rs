@@ -5,7 +5,7 @@
 //! other than the Mass Effect 3 client itself.
 
 use crate::{
-    servers::http::ext::{ErrorStatusCode, Xml},
+    http::ext::{ErrorStatusCode, Xml},
     state::GlobalState,
     utils::parsing::PlayerClass,
 };

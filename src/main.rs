@@ -1,14 +1,13 @@
+use config::load_config;
 use log::info;
-use servers::*;
 use state::GlobalState;
 use tokio::signal;
 use utils::logging;
 
-use crate::config::load_config;
-
 mod config;
-mod servers;
+mod http;
 mod services;
+mod session;
 mod state;
 mod utils;
 
@@ -22,6 +21,8 @@ fn main() {
     // Load configuration
     let config = runtime.block_on(load_config()).unwrap_or_default();
 
+    let port = config.port;
+
     // Initialize logging
     logging::setup(config.logging);
 
@@ -31,18 +32,12 @@ fn main() {
     runtime.block_on(GlobalState::init(config));
 
     // Display the connection urls message
-    runtime.block_on(logging::log_connection_urls());
+    runtime.block_on(logging::log_connection_urls(port));
 
-    // Spawn redirector in its own task
-    runtime.spawn(redirector::start_server());
-    // Spawn QOS server in its own task
-    runtime.spawn(qos::start_server());
+    session::init_router();
+
     // Spawn the HTTP server in its own task
-    runtime.spawn(http::start_server());
-    // Spawn the Main server in its own task
-    runtime.spawn(main::start_server());
-    // Spawn the Telemetry server in its own task
-    runtime.spawn(telemetry::start_server());
+    runtime.spawn(http::start_server(port));
 
     // Block until shutdown is recieved
     runtime.block_on(signal::ctrl_c()).ok();

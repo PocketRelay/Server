@@ -1,8 +1,5 @@
 use crate::{
-    servers::main::{
-        models::messaging::*,
-        session::{GetPlayerMessage, GetSocketMessage, PushExt, SessionLink},
-    },
+    session::{models::messaging::*, GetPlayerMessage, PushExt, SessionLink},
     state::{self, GlobalState},
     utils::components::{Components as C, Messaging as M},
 };
@@ -41,7 +38,7 @@ async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageRespons
         // Not authenticated return empty count
         return FetchMessageResponse { count: 0 };
     };
-    let message = get_menu_message(session, &player.display_name).await;
+    let message = get_menu_message(&player.display_name).await;
     let notify = Packet::notify(
         C::Messaging(M::SendMessage),
         MessageNotify {
@@ -61,20 +58,18 @@ async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageRespons
 /// - {v} = Server Version
 /// - {n} = Player Display Name
 /// - {ip} = Session IP Address
-async fn get_menu_message(session: &SessionLink, player_name: &str) -> String {
+async fn get_menu_message(player_name: &str) -> String {
     let config = GlobalState::config();
     let mut message = config.menu_message.clone();
+
     if message.contains("{v}") {
         message = message.replace("{v}", state::VERSION);
     }
+
     if message.contains("{n}") {
         message = message.replace("{n}", player_name);
     }
-    if message.contains("{ip}") {
-        if let Ok(addr) = session.send(GetSocketMessage).await {
-            message = message.replace("{ip}", &addr.to_string());
-        }
-    }
+
     // Line terminator for the end of the message
     message.push(char::from(0x0A));
     message

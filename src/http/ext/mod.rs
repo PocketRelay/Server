@@ -6,6 +6,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+pub mod blaze_upgrade;
+
 /// Wrapping structure for creating XML respones from
 /// a string value
 pub struct Xml(pub String);

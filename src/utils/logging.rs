@@ -1,4 +1,4 @@
-use crate::{state::GlobalState, utils::net::public_address};
+use crate::utils::net::public_address;
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -6,6 +6,8 @@ use log4rs::{
     encode::pattern::PatternEncoder,
     init_config, Config,
 };
+
+use super::models::Port;
 
 /// The pattern to use when logging
 const LOGGING_PATTERN: &str = "[{d} {h({l})} {M}] {m}{n}";
@@ -54,9 +56,7 @@ pub fn setup(logging_level: LevelFilter) {
 
 /// Prints a list of possible urls that can be used to connect to
 /// this Pocket relay server
-pub async fn log_connection_urls() {
-    let config = GlobalState::config();
-    let http_port = config.ports.http;
+pub async fn log_connection_urls(http_port: Port) {
     let mut output = String::new();
     if let Ok(local_address) = local_ip_address::local_ip() {
         output.push_str("LAN: ");

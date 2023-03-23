@@ -7,7 +7,6 @@ use tokio::fs::read_to_string;
 use crate::utils::models::Port;
 
 pub struct RuntimeConfig {
-    pub ports: PortsConfig,
     pub galaxy_at_war: GalaxyAtWarConfig,
     pub menu_message: String,
 }
@@ -15,11 +14,6 @@ pub struct RuntimeConfig {
 const CONFIG_ENV_KEY: &str = "PR_CONFIG_JSON";
 
 pub async fn load_config() -> Option<Config> {
-    let file = Path::new("config.json");
-    if !file.exists() {
-        return None;
-    }
-
     // Attempt to load the config from the env
     if let Ok(env) = env::var(CONFIG_ENV_KEY) {
         let config: Config = match serde_json::from_str(&env) {
@@ -30,6 +24,11 @@ pub async fn load_config() -> Option<Config> {
             }
         };
         return Some(config);
+    }
+
+    let file = Path::new("config.json");
+    if !file.exists() {
+        return None;
     }
 
     let data = match read_to_string(file).await {
@@ -58,7 +57,7 @@ pub struct ServicesConfig {
 #[derive(Deserialize)]
 #[serde(default)]
 pub struct Config {
-    pub ports: PortsConfig,
+    pub port: Port,
     pub dashboard: DashboardConfig,
     pub menu_message: String,
     pub galaxy_at_war: GalaxyAtWarConfig,
@@ -69,7 +68,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            ports: Default::default(),
+            port: 80,
             dashboard: Default::default(),
             menu_message:  "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>".to_string(),
             galaxy_at_war: Default::default(),
@@ -79,28 +78,8 @@ impl Default for Config {
     }
 }
 
-/// Server ports configuration data
-#[derive(Deserialize)]
-#[serde(default)]
-pub struct PortsConfig {
-    pub redirector: Port,
-    pub main: Port,
-    pub telemetry: Port,
-    pub qos: Port,
-    pub http: Port,
-}
-
-impl Default for PortsConfig {
-    fn default() -> Self {
-        Self {
-            redirector: 42127,
-            main: 42128,
-            telemetry: 42129,
-            qos: 42130,
-            http: 80,
-        }
-    }
-}
+pub const TELEMETRY_PORT: Port = 42129;
+pub const QOS_PORT: Port = 42130;
 
 #[derive(Deserialize)]
 #[serde(default)]

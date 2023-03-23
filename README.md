@@ -11,7 +11,7 @@
 ![Build](https://img.shields.io/github/actions/workflow/status/PocketRelay/ServerRust/rust.yml?style=for-the-badge)
 
 [Discord Server (discord.gg/yvycWW8RgR)](https://discord.gg/yvycWW8RgR)
-
+[Website (pocket-relay.pages.dev)](https://pocket-relay.pages.dev/)
 
 > **📌 Update Notice**
 > If you are updating from a version lower than 0.3 you will need to 
@@ -29,7 +29,8 @@ The **Pocket Relay** software in all its forms are in no way or form supported, 
 
 ## 📖 Starting your own server
 
-For guides check out the [Website (pocket-relay.pages.dev)](https://pocket-relay.pages.dev/)
+For guides check out the [Website (pocket-relay.pages.dev)](https://pocket-relay.pages.dev/) or refer directly to 
+the [Server Setup Guide](https://pocket-relay.pages.dev/guide/server/)
 
 ## 📦 Downloads
 
@@ -43,16 +44,6 @@ The **SQLite** version of **Pocket Relay** this version requires no additional d
 | -------- | ------------------------------------------------------------------------------------------------------- |
 | Windows  | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-windows.exe) |
 | Linux    | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-linux)       |
-
-### MySQL
-
-The **MySQL** version which requires that you have a **MySQL** database to use. This version expects you to have some understanding of **MySQL** and a server prepared to use it with
-
-| Platform | Download                                                                                                      |
-| -------- | ------------------------------------------------------------------------------------------------------------- |
-| Windows  | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-windows-mysql.exe) |
-| Linux    | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-linux-mysql)       |
-
 
 
 ## 🔧 Configuration
@@ -80,7 +71,7 @@ on Windows, Linux, etc. *Note the server will store the player data and logging 
 
 ## 🚀 Manual Building
 
-Instructions for building the server can be found [Here](https://github.com/PocketRelay/.github/blob/main/manual/BUILDING.md)
+Instructions for building the server can be found [Here](https://dev.pocket-relay.pages.dev/guide/server/building/)
 
 > Note: Building the server can be quite a heavy load on your computer
 
