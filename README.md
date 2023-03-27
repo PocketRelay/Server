@@ -49,7 +49,7 @@ The **SQLite** version of **Pocket Relay** this version requires no additional d
 ## 🔧 Configuration
 
 In order to configure the server such as changing the ports you can see the
-configuration documentation [Here (docs/CONFIG.md)](docs/CONFIG.md)
+configuration documentation [Here (docs/CONFIG.md)](https://pocket-relay.pages.dev/guide/config/)
 
 
 ## ⚙️ Features
@@ -71,7 +71,7 @@ on Windows, Linux, etc. *Note the server will store the player data and logging 
 
 ## 🚀 Manual Building
 
-Instructions for building the server can be found [Here](https://dev.pocket-relay.pages.dev/guide/server/building/)
+Instructions for building the server can be found [Here](https://pocket-relay.pages.dev/guide/server/building/)
 
 > Note: Building the server can be quite a heavy load on your computer
 
