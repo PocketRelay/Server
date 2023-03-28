@@ -111,3 +111,14 @@ lto = true
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+# Bininstall meta
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }{ archive-suffix }"
+pkg-fmt = "binary-ext"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/pocket-relay-windows.exe"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-musl]
+pkg-url = "{ repo }/releases/download/v{ version }/pocket-relay-linux"
