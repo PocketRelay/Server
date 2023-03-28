@@ -115,7 +115,7 @@ lto = "thin"
 # Bininstall meta
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }{ archive-suffix }"
-pkg-fmt = "binary-ext"
+pkg-fmt = "bin"
 
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-url = "{ repo }/releases/download/v{ version }/pocket-relay-windows.exe"
