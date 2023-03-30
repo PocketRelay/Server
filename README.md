@@ -73,13 +73,15 @@ on Windows, Linux, etc. *Note the server will store the player data and logging 
 
 Instructions for building the server can be found [Here](https://pocket-relay.pages.dev/guide/server/building/)
 
-> Note: Building the server can be quite a heavy load on your computer
+> **Note**
+> Building the server can be quite a heavy load on your computer
 
 ## Dashboard
 
 Below are some screenshots of the included dashboard. You can access the dashboard by visting the server connection URL this 
 URL will be present in the server logs / output upon launching.
 
+> **Note**
 > If you are running the server on the same computer you can access the dashboard using http://localhost
 
 ![Dashboard Login](images/3.png)
