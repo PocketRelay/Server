@@ -334,18 +334,19 @@ impl Handler<CheckJoinableMessage> for Game {
         msg: CheckJoinableMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        let is_joinable = self.players.len() < Self::MAX_PLAYERS;
+        // Handle full game
+        if self.players.len() >= Self::MAX_PLAYERS {
+            return Mr(GameJoinableState::Full);
+        }
+
+        // Check ruleset matches
         if let Some(rule_set) = msg.rule_set {
             if !rule_set.matches(&self.attributes) {
                 return Mr(GameJoinableState::NotMatch);
             }
         }
 
-        Mr(if is_joinable {
-            GameJoinableState::Joinable
-        } else {
-            GameJoinableState::Full
-        })
+        Mr(GameJoinableState::Joinable)
     }
 }
 
