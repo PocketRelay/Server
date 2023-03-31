@@ -1,7 +1,7 @@
 use crate::{
     config::{Config, DashboardConfig, RuntimeConfig, ServicesConfig},
     services::Services,
-    utils::hashing::hash_password,
+    utils::hashing::{hash_password, verify_password},
 };
 use database::{self, DatabaseConnection, Player, PlayerRole};
 use log::{error, info};
@@ -97,14 +97,16 @@ impl GlobalState {
         };
 
         if let Some(password) = config.super_password {
-            let password = hash_password(&password).expect("Failed to hash super user password");
+            let password_hash =
+                hash_password(&password).expect("Failed to hash super user password");
+
             let matches = match &player.password {
-                Some(value) => value.eq(&password),
+                Some(value) => verify_password(&password, value),
                 None => false,
             };
 
             if !matches {
-                if let Err(err) = player.set_password(db, password).await {
+                if let Err(err) = player.set_password(db, password_hash).await {
                     error!("Failed to set super admin password: {:?}", err)
                 } else {
                     info!("Updated super admin password")
