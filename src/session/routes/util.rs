@@ -491,8 +491,10 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
     };
     let tele_port = TELEMETRY_PORT;
     let prefix = format!(
-        "{}://{}:{}",
-        host_target.scheme, host_target.host, host_target.port
+        "{}{}:{}",
+        host_target.scheme.value(),
+        host_target.host,
+        host_target.port
     );
 
     let mut config = TdfMap::with_capacity(15);

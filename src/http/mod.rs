@@ -4,7 +4,7 @@ use crate::utils::models::Port;
 use axum::Server;
 use log::{error, info};
 
-mod ext;
+pub mod ext;
 mod middleware;
 mod routes;
 
