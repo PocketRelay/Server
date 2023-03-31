@@ -8,7 +8,7 @@ use log::debug;
 use std::future::ready;
 use thiserror::Error;
 
-use crate::session::SessionHostTarget;
+use crate::{session::SessionHostTarget, utils::types::BoxFuture};
 
 #[derive(Debug, Error)]
 pub enum BlazeUpgradeError {
@@ -65,20 +65,14 @@ where
 {
     type Rejection = BlazeUpgradeError;
 
-    fn from_request_parts<'life0, 'life1, 'async_trait>(
-        parts: &'life0 mut axum::http::request::Parts,
-        _state: &'life1 S,
-    ) -> core::pin::Pin<
-        Box<
-            dyn core::future::Future<Output = Result<Self, Self::Rejection>>
-                + core::marker::Send
-                + 'async_trait,
-        >,
-    >
+    fn from_request_parts<'a, 'b, 'c>(
+        parts: &'a mut axum::http::request::Parts,
+        _state: &'b S,
+    ) -> BoxFuture<'c, Result<Self, Self::Rejection>>
     where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        Self: 'async_trait,
+        'a: 'c,
+        'b: 'c,
+        Self: 'c,
     {
         // Ensure the method is GET
         if parts.method != Method::GET {
