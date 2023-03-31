@@ -463,14 +463,14 @@ impl Game {
     /// `session` The session to notify
     /// `slot`    The slot the player is joining into
     fn notify_game_setup(&self, player: &GamePlayer, slot: GameSlot) {
-        let ty = if slot == 0 {
-            GameDetailsType::Created
+        let msid = if slot == 0 {
+            None
         } else {
-            GameDetailsType::Joined(player.session_id)
+            Some(player.session_id)
         };
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameSetup),
-            GameDetails { game: self, ty },
+            GameDetails { game: self, msid },
         );
         player.link.push(packet);
     }

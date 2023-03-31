@@ -14,23 +14,6 @@ use blaze_pk::{
 };
 use serde::Serialize;
 
-#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
-pub enum GameDetailsType {
-    /// The player created the game the details are for
-    Created,
-    /// The player joined the game
-    Joined(SessionID),
-}
-
-impl GameDetailsType {
-    pub fn value(&self) -> u8 {
-        match self {
-            Self::Created => 0x0,
-            Self::Joined(_) => 0x3,
-        }
-    }
-}
-
 /// Values: 285 (0x11d), 287 (0x11f), 1311 (0x51f)
 #[allow(unused)]
 pub enum GameSetting {}
@@ -374,7 +357,7 @@ pub fn encode_players_list(writer: &mut TdfWriter, game_id: GameID, players: &Ve
 
 pub struct GameDetails<'a> {
     pub game: &'a Game,
-    pub ty: GameDetailsType,
+    pub msid: Option<SessionID>,
 }
 
 impl Encodable for GameDetails<'_> {
@@ -382,21 +365,21 @@ impl Encodable for GameDetails<'_> {
         encode_game_data(writer, self.game);
 
         encode_players_list(writer, self.game.id, &self.game.players);
-        let union_value = self.ty.value();
+
+        let union_value = if self.msid.is_some() { 0x3 } else { 0x0 };
         writer.tag_union_start(b"REAS", union_value);
         writer.tag_group(b"VALU");
-        match self.ty {
-            GameDetailsType::Created => {
-                writer.tag_u8(b"DCTX", 0x0);
-            }
-            GameDetailsType::Joined(session_id) => {
-                writer.tag_u16(b"FIT", 0x3f7a);
-                writer.tag_u16(b"MAXF", 0x5460);
-                writer.tag_u32(b"MSID", session_id);
-                writer.tag_u8(b"RSLT", 0x2);
-                writer.tag_u32(b"USID", session_id);
-            }
+
+        if let Some(msid) = self.msid {
+            writer.tag_u16(b"FIT", 0x3f7a);
+            writer.tag_u16(b"MAXF", 0x5460);
+            writer.tag_u32(b"MSID", msid);
+            writer.tag_u8(b"RSLT", 0x2);
+            writer.tag_u32(b"USID", msid);
+        } else {
+            writer.tag_u8(b"DCTX", 0x0);
         }
+
         writer.tag_group_end();
     }
 }

@@ -485,7 +485,7 @@ impl Message {
 /// Telemetry Server: 159.153.235.32:9988
 ///
 async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
-    let host_target = match session.send(GetHostTarget {}).await {
+    let host_target = match session.send(GetHostTarget).await {
         Ok(value) => value,
         Err(_) => return TdfMap::with_capacity(0),
     };
