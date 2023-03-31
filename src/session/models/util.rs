@@ -1,4 +1,7 @@
-use crate::{session::SessionHostTarget, utils::types::PlayerID};
+use crate::{
+    session::SessionHostTarget,
+    utils::{models::Port, types::PlayerID},
+};
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeResult,
@@ -23,11 +26,13 @@ const TELEMETRY_KEY: &[u8] = &[
     0x88, 0x95, 0xD2, 0x80, 0x20,
 ];
 
+/// The constant port for the ticker server
+pub const TICKER_PORT: Port = 8999;
+/// The constant port for the telemetry server
+pub const TELEMETRY_PORT: Port = 42129;
+
 /// Structure for encoding the telemetry server details
-pub struct TelemetryServer {
-    /// The port for the telemetry server
-    pub port: u16,
-}
+pub struct TelemetryServer;
 
 impl Encodable for TelemetryServer {
     fn encode(&self, writer: &mut TdfWriter) {
@@ -40,7 +45,7 @@ impl Encodable for TelemetryServer {
         writer.tag_u32(b"LOC", 1701727834);
         writer.tag_str(b"NOOK", "US,CA,MX");
         // Last known telemetry port: 9988
-        writer.tag_u16(b"PORT", self.port);
+        writer.tag_u16(b"PORT", TELEMETRY_PORT);
         writer.tag_u16(b"SDLY", 15000);
         writer.tag_str(b"SESS", "pcwdjtOCVpD");
         let key: Cow<str> = String::from_utf8_lossy(TELEMETRY_KEY);
@@ -57,10 +62,7 @@ impl Encodable for TelemetryServer {
 const TICKER_KEY: &str = "1,10.23.15.2:8999,masseffect-3-pc,10,50,50,50,50,0,12";
 
 /// Structure for encoding the ticker server details
-pub struct TickerServer {
-    /// The port for the ticker server
-    pub port: u16,
-}
+pub struct TickerServer;
 
 impl Encodable for TickerServer {
     fn encode(&self, writer: &mut TdfWriter) {
@@ -68,7 +70,7 @@ impl Encodable for TickerServer {
         // Last known ticker addresses: 10.23.15.2, 10.10.78.150
         writer.tag_str(b"ADRS", "127.0.0.1");
         // Last known ticker port: 8999
-        writer.tag_u16(b"PORT", self.port);
+        writer.tag_u16(b"PORT", TICKER_PORT);
         writer.tag_str(b"SKEY", TICKER_KEY);
         writer.tag_group_end();
     }

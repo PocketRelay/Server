@@ -1,5 +1,4 @@
 use crate::{
-    config::TELEMETRY_PORT,
     session::{
         models::{
             errors::{ServerError, ServerResult},
@@ -8,10 +7,7 @@ use crate::{
         DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
     state::{self, GlobalState},
-    utils::{
-        components::{Components as C, Util as U},
-        models::Port,
-    },
+    utils::components::{Components as C, Util as U},
 };
 
 use base64ct::{Base64, Encoding};
@@ -54,12 +50,8 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// ```
 ///
 async fn handle_get_telemetry_server() -> TelemetryServer {
-    TelemetryServer {
-        port: TELEMETRY_PORT,
-    }
+    TelemetryServer
 }
-
-const TICKER_PORT: Port = 8999;
 
 /// Handles retrieving the details about the ticker server
 ///
@@ -70,7 +62,7 @@ const TICKER_PORT: Port = 8999;
 /// ```
 ///
 async fn handle_get_ticker_server() -> TickerServer {
-    TickerServer { port: TICKER_PORT }
+    TickerServer
 }
 
 /// Handles responding to pre-auth requests which is the first request
@@ -134,10 +126,8 @@ async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthRes
     });
 
     Ok(PostAuthResponse {
-        telemetry: TelemetryServer {
-            port: TELEMETRY_PORT,
-        },
-        ticker: TickerServer { port: TICKER_PORT },
+        telemetry: TelemetryServer,
+        ticker: TickerServer,
         player_id,
     })
 }
