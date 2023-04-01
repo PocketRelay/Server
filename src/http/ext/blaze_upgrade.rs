@@ -1,3 +1,7 @@
+use crate::{
+    session::SessionHostTarget,
+    utils::{models::Port, types::BoxFuture},
+};
 use axum::{
     extract::FromRequestParts,
     http::{HeaderValue, Method, StatusCode},
@@ -10,11 +14,7 @@ use hyper::{
 use std::future::ready;
 use thiserror::Error;
 
-use crate::{
-    session::SessionHostTarget,
-    utils::{models::Port, types::BoxFuture},
-};
-
+/// Errors that could occur while upgrading
 #[derive(Debug, Error)]
 pub enum BlazeUpgradeError {
     #[error("Cannot upgrade not GET requests")]
@@ -37,7 +37,7 @@ pub struct BlazeUpgrade {
 pub struct BlazeSocket {
     /// The upgraded connection
     pub upgrade: Upgraded,
-
+    /// The client side target for this host
     pub host_target: SessionHostTarget,
 }
 
