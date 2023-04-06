@@ -3,7 +3,8 @@
 .env
 
 app.db
-.vscode/
+.vscode/**
+!.vscode/extensions.json
 /data/
 
 .release
