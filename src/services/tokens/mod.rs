@@ -23,6 +23,8 @@ impl Tokens {
     /// Expiry time for tokens
     const EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24 * 30 /* 30 Days */);
 
+    /// Creates a new instance of the tokens structure loading/creating
+    /// the secret bytes that are used for signing authentication tokens
     pub async fn new() -> Self {
         // Path to the file containing the server secret value
         let secret_path = Path::new("data/secret.bin");
@@ -136,10 +138,13 @@ impl Tokens {
     }
 }
 
+/// Errors that can occur while verifying a token
 #[derive(Debug, Error)]
 pub enum VerifyError {
+    /// The token is expired
     #[error("Expired token")]
     Expired,
+    /// The token is invalid
     #[error("Invalid token")]
     Invalid,
 }
