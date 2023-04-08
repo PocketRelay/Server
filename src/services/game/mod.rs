@@ -206,7 +206,7 @@ impl Handler<UpdateMeshMessage> for Game {
 
     fn handle(&mut self, msg: UpdateMeshMessage, _ctx: &mut ServiceContext<Self>) {
         let state = msg.state;
-        if let PlayerState::Connected = state {
+        if let PlayerState::Connecting = state {
             // Ensure the target player is in the game
             if !self
                 .players

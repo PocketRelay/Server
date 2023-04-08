@@ -5,8 +5,10 @@ use crate::{session::Session, utils::types::PlayerID};
 use interlink::prelude::*;
 use std::collections::HashMap;
 
+/// Service for storing links to authenticated sessions
 #[derive(Service)]
 pub struct AuthedSessions {
+    /// Map of the authenticated players to their session links
     values: HashMap<PlayerID, Link<Session>>,
 }
 
