@@ -5,10 +5,10 @@
 *Mass Effect 3 Server Emulator / Private Server*
 
 
-![License](https://img.shields.io/github/license/PocketRelay/ServerRust?style=for-the-badge)
+![License](https://img.shields.io/github/license/PocketRelay/Server?style=for-the-badge)
 ![Cargo Version](https://img.shields.io/crates/v/pocket-relay?style=for-the-badge)
 ![Cargo Downloads](https://img.shields.io/crates/d/pocket-relay?style=for-the-badge)
-![Build](https://img.shields.io/github/actions/workflow/status/PocketRelay/ServerRust/rust.yml?style=for-the-badge)
+![Build](https://img.shields.io/github/actions/workflow/status/PocketRelay/Server/rust.yml?style=for-the-badge)
 
 [Discord Server (discord.gg/yvycWW8RgR)](https://discord.gg/yvycWW8RgR)
 [Website (pocket-relay.pages.dev)](https://pocket-relay.pages.dev/)
@@ -34,16 +34,12 @@ the [Server Setup Guide](https://pocket-relay.pages.dev/guide/server/)
 
 ## 📦 Downloads
 
-Below is a table of the download links for the different platforms and server types
-
-### Normal
-
-The **SQLite** version of **Pocket Relay** this version requires no additional database setup and is the ideal choice for most 
+Below is a table of the download links for the different platforms
 
 | Platform | Download                                                                                                |
 | -------- | ------------------------------------------------------------------------------------------------------- |
-| Windows  | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-windows.exe) |
-| Linux    | [Download](https://github.com/PocketRelay/ServerRust/releases/latest/download/pocket-relay-linux)       |
+| Windows  | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-windows.exe) |
+| Linux    | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-linux)       |
 
 
 ## 🔧 Configuration
