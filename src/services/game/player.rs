@@ -11,6 +11,8 @@ use database::Player;
 use interlink::prelude::Link;
 use serde::Serialize;
 
+/// Player structure containing details and state for a player
+/// within a game
 pub struct GamePlayer {
     /// ID of the session associated to this player
     pub session_id: SessionID,
@@ -29,9 +31,13 @@ pub struct GamePlayer {
 
 #[derive(Serialize)]
 pub struct GamePlayerSnapshot {
+    /// The session ID of the snapshot
     pub session_id: SessionID,
+    /// The player ID of the snapshot
     pub player_id: PlayerID,
+    /// The player name of the snapshot
     pub display_name: String,
+    /// The player net data of the snapshot if collected
     pub net: Option<NetData>,
 }
 

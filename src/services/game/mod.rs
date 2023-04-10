@@ -1,5 +1,5 @@
-use super::matchmaking::rules::RuleSet;
 use crate::{
+    services::matchmaking::rules::RuleSet,
     session::{DetailsMessage, InformSessions, PushExt, Session},
     utils::{
         components::{Components, GameManager, UserSessions},
@@ -22,6 +22,7 @@ pub mod manager;
 pub mod models;
 pub mod player;
 
+/// Game service running within the server
 pub struct Game {
     /// Unique ID for this game
     pub id: GameID,
@@ -42,6 +43,11 @@ impl Service for Game {
 }
 
 impl Game {
+    /// Starts a new game service with the provided initial state
+    ///
+    /// `id`         The unique ID for the game
+    /// `attributes` The initial game attributes
+    /// `setting`    The initial game setting value
     pub fn start(id: GameID, attributes: AttrMap, setting: u16) -> Link<Game> {
         let this = Game {
             id,
@@ -58,15 +64,21 @@ impl Game {
 /// Snapshot of the current game state and players
 #[derive(Serialize)]
 pub struct GameSnapshot {
+    /// The ID of the game the snapshot is for
     pub id: GameID,
+    /// The current game state
     pub state: GameState,
+    /// The current game setting
     pub setting: u16,
+    /// The game attributes
     pub attributes: AttrMap,
+    /// Snapshots of the game players
     pub players: Vec<GamePlayerSnapshot>,
 }
 
 /// Attributes map type
 pub type AttrMap = TdfMap<String, String>;
+
 /// Message to add a new player to this game
 #[derive(Message)]
 pub struct AddPlayerMessage {
@@ -74,6 +86,7 @@ pub struct AddPlayerMessage {
     pub player: GamePlayer,
 }
 
+/// Handler for adding a player to the game
 impl Handler<AddPlayerMessage> for Game {
     type Response = ();
 
@@ -131,6 +144,7 @@ pub struct SetStateMessage {
     pub state: GameState,
 }
 
+/// Handler for setting the game state
 impl Handler<SetStateMessage> for Game {
     type Response = ();
 
@@ -147,6 +161,7 @@ pub struct SetSettingMessage {
     pub setting: u16,
 }
 
+/// Handler for setting the game setting
 impl Handler<SetSettingMessage> for Game {
     type Response = ();
 
@@ -171,6 +186,7 @@ pub struct SetAttributesMessage {
     pub attributes: AttrMap,
 }
 
+/// Handler for setting the game attributes
 impl Handler<SetAttributesMessage> for Game {
     type Response = ();
 
@@ -201,6 +217,7 @@ pub struct UpdateMeshMessage {
     pub state: PlayerState,
 }
 
+/// Handler for updating mesh connections
 impl Handler<UpdateMeshMessage> for Game {
     type Response = ();
 
@@ -258,20 +275,28 @@ impl Handler<UpdateMeshMessage> for Game {
     }
 }
 
+/// Message for removing a player from the game
 #[derive(Message)]
 #[msg(rtype = "bool")]
 pub struct RemovePlayerMessage {
+    /// The ID of the player/session to remove
     pub id: u32,
+    /// The reason for removing the player
     pub reason: RemoveReason,
+    /// The type of removal
     pub ty: RemovePlayerType,
 }
 
+/// The type of player to remove
 #[derive(Debug)]
 pub enum RemovePlayerType {
+    /// Remove by a player session ID
     Session,
+    /// Remove by a player ID
     Player,
 }
 
+/// Handler for removing a player from the game
 impl Handler<RemovePlayerMessage> for Game {
     type Response = Mr<RemovePlayerMessage>;
     fn handle(
@@ -320,12 +345,26 @@ impl Handler<RemovePlayerMessage> for Game {
     }
 }
 
+/// Handler for checking if a game is joinable
 #[derive(Message)]
 #[msg(rtype = "GameJoinableState")]
 pub struct CheckJoinableMessage {
+    /// The player rule set if one is provided
     pub rule_set: Option<Arc<RuleSet>>,
 }
 
+/// Different results for checking if a game is
+/// joinable
+pub enum GameJoinableState {
+    /// Game is currenlty joinable
+    Joinable,
+    /// Game is full
+    Full,
+    /// The game doesn't match the provided rules
+    NotMatch,
+}
+
+/// Handler for checking if a game is joinable
 impl Handler<CheckJoinableMessage> for Game {
     type Response = Mr<CheckJoinableMessage>;
 
@@ -350,12 +389,15 @@ impl Handler<CheckJoinableMessage> for Game {
     }
 }
 
+/// Message to take a snapshot of the game and its state
 #[derive(Message)]
 #[msg(rtype = "GameSnapshot")]
 pub struct SnapshotMessage {
+    /// Whether to include the networking details in the snapshot
     pub include_net: bool,
 }
 
+/// Handler for taking snapshots of the game and its state
 impl Handler<SnapshotMessage> for Game {
     type Response = Mr<SnapshotMessage>;
 
@@ -375,10 +417,12 @@ impl Handler<SnapshotMessage> for Game {
     }
 }
 
+/// Message for getting an encoded packet body of the game data
 #[derive(Message)]
 #[msg(rtype = "PacketBody")]
 pub struct GetGameDataMessage;
 
+/// Handler for getting an encoded packet body of the game data
 impl Handler<GetGameDataMessage> for Game {
     type Response = Mr<GetGameDataMessage>;
 
@@ -391,15 +435,6 @@ impl Handler<GetGameDataMessage> for Game {
         let data: PacketBody = data.into();
         Mr(data)
     }
-}
-
-pub enum GameJoinableState {
-    /// Game is currenlty joinable
-    Joinable,
-    /// Game is full
-    Full,
-    /// The game doesn't match the provided rules
-    NotMatch,
 }
 
 impl Game {

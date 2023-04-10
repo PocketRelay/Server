@@ -56,6 +56,12 @@ impl LeaderboardGroup {
         now.ge(&self.expires)
     }
 
+    /// Gets a normal collection of leaderboard entries at the start offset of the
+    /// provided count. Will return the slice of entires as well as whether there are
+    /// more entries after the desired offset
+    ///
+    /// `start` The start offset index
+    /// `count` The number of leaderboard entries
     pub fn get_normal(&self, start: usize, count: usize) -> Option<(&[LeaderboardEntry], bool)> {
         let values = &self.values;
         let values_len = values.len();
@@ -68,11 +74,19 @@ impl LeaderboardGroup {
             .map(|value| (value, values_len > end_index))
     }
 
+    /// Gets a leaderboard entry for the provided player ID if one is present
+    ///
+    /// `player_id` The ID of the player to find the entry for
     pub fn get_entry(&self, player_id: PlayerID) -> Option<&LeaderboardEntry> {
         let values = &self.values;
         values.iter().find(|value| value.player_id == player_id)
     }
 
+    /// Gets a collection of leaderboard entries centered on the provided player with
+    /// half `count` items before and after if possible.
+    ///
+    /// `player_id` The ID of the player to center on
+    /// `count`     The total number of players to center on
     pub fn get_centered(&self, player_id: PlayerID, count: usize) -> Option<&[LeaderboardEntry]> {
         let values = &self.values;
         let values_len = values.len();
@@ -102,7 +116,9 @@ impl LeaderboardGroup {
 /// Type of leaderboard entity
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq)]
 pub enum LeaderboardType {
+    /// Leaderboard based on the player N7 ratings
     N7Rating,
+    /// Leaderboard based on the player challenge point number
     ChallengePoints,
 }
 

@@ -32,7 +32,6 @@ pub struct Retriever {
     host: String,
     /// The port of the official server.
     port: u16,
-
     /// Optional service for creating origin flows if enabled
     pub origin_flow: Option<OriginFlowService>,
 }

@@ -14,59 +14,7 @@ use blaze_pk::{
 };
 use serde::Serialize;
 
-/// Values: 285 (0x11d), 287 (0x11f), 1311 (0x51f)
-#[allow(unused)]
-pub enum GameSetting {}
-
-// TODO: Game privacy
-
-/// States that can be matched from the ME3gameState attribute
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[allow(unused)]
-pub enum GameStateAttr {
-    /// Game has no state attribute
-    None,
-    /// IN_LOBBY: Players are waiting in lobby
-    InLobby,
-    /// IN_LOBBY_LONGTIME: Players have been waiting in lobby a long time
-    InLobbyLongtime,
-    /// IN_GAME_STARTING: Players in lobby all ready game almost started
-    InGameStarting,
-    /// IN_GAME_MIDGAME: The game is started and the players are playing
-    InGameMidgame,
-    /// IN_GAME_FINISHING: Game has finished and players returning to lobby
-    InGameFinishing,
-    /// MATCH_MAKING: Unknown how this state could be achieved but its present
-    /// as a matchable value in async matchmaking status values
-    ///
-    /// Notice: Posibly joining two players together who are both searching for
-    /// the same matchmaking game details
-    MatchMaking,
-    /// Unknown state not mentioned above
-    Unknown(String),
-}
-
-#[allow(unused)]
-impl GameStateAttr {
-    const ATTR_KEY: &str = "ME3gameState";
-
-    pub fn from_attrs(attrs: &AttrMap) -> Self {
-        if let Some(value) = attrs.get(Self::ATTR_KEY) {
-            match value as &str {
-                "IN_LOBBY" => Self::InLobby,
-                "IN_LOBBY_LONGTIME" => Self::InLobbyLongtime,
-                "IN_GAME_STARTING" => Self::InGameStarting,
-                "IN_GAME_MIDGAME" => Self::InGameMidgame,
-                "IN_GAME_FINISHING" => Self::InGameFinishing,
-                "MATCH_MAKING" => Self::MatchMaking,
-                value => Self::Unknown(value.to_string()),
-            }
-        } else {
-            Self::None
-        }
-    }
-}
-
+/// Different states the game can be in
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 pub enum GameState {
     /// Initial game state
@@ -79,10 +27,12 @@ pub enum GameState {
     GameFinished,
     /// Host is migrating
     HostMigration,
+    /// Unknown state
     Unknown(u8),
 }
 
 impl GameState {
+    /// Gets the int value of the state
     pub fn value(&self) -> u8 {
         match self {
             Self::Init => 0x1,
@@ -94,6 +44,9 @@ impl GameState {
         }
     }
 
+    /// Gets the state from the provided value
+    ///
+    /// `value` The value to get the state of
     pub fn from_value(value: u8) -> Self {
         match value {
             0x1 => Self::Init,
@@ -125,13 +78,18 @@ value_type!(GameState, TdfType::VarInt);
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[allow(unused)]
 pub enum PlayerState {
+    /// Link between the mesh points is not connected
     Disconnected,
+    /// Link is being formed between two mesh points
     Connecting,
+    /// Link is connected between two mesh points
     Connected,
+    /// Unknown mesh link state
     Unknown(u8),
 }
 
 impl PlayerState {
+    /// Converts the mesh state into its byte value
     pub fn value(&self) -> u8 {
         match self {
             Self::Disconnected => 0x0,
@@ -141,6 +99,9 @@ impl PlayerState {
         }
     }
 
+    /// Gets the mesh state from the provided value
+    ///
+    /// `value` The value of the mesh state
     pub fn from_value(value: u8) -> Self {
         match value {
             0x0 => Self::Disconnected,
@@ -165,8 +126,11 @@ impl Decodable for PlayerState {
 
 value_type!(PlayerState, TdfType::VarInt);
 
+/// Message for a game state changing
 pub struct StateChange {
+    /// The ID of the game
     pub id: GameID,
+    /// The game state
     pub state: GameState,
 }
 
@@ -177,8 +141,11 @@ impl Encodable for StateChange {
     }
 }
 
+/// Message for a game setting changing
 pub struct SettingChange {
+    /// The game setting
     pub setting: u16,
+    /// The ID of the game
     pub id: GameID,
 }
 
@@ -204,7 +171,9 @@ impl Encodable for AttributesChange<'_> {
     }
 }
 
+/// Message for a player joining notification
 pub struct PlayerJoining<'a> {
+    /// The ID of the game
     pub game_id: GameID,
     /// The slot the player is joining into
     pub slot: GameSlot,
