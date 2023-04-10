@@ -1,5 +1,5 @@
 use super::{
-    models::{PlayerState, RemoveReason},
+    models::{MeshState, RemoveReason},
     player::GamePlayer,
     AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GameSnapshot,
     RemovePlayerType,
@@ -164,7 +164,7 @@ impl Handler<CreateMessage> for GameManager {
     ) -> Self::Response {
         let id = self.next_id;
         self.next_id += 1;
-        msg.host.state = PlayerState::Connected;
+        msg.host.state = MeshState::Connected;
 
         let link = Game::start(id, msg.attributes, msg.setting);
         self.games.insert(id, link.clone());

@@ -213,8 +213,8 @@ pub struct UpdateMeshMessage {
     pub session: SessionID,
     /// The target player that its updating with
     pub target: PlayerID,
-    /// The mesh player state
-    pub state: PlayerState,
+    /// The player mesh state
+    pub state: MeshState,
 }
 
 /// Handler for updating mesh connections
@@ -223,7 +223,7 @@ impl Handler<UpdateMeshMessage> for Game {
 
     fn handle(&mut self, msg: UpdateMeshMessage, _ctx: &mut ServiceContext<Self>) {
         let state = msg.state;
-        if let PlayerState::Connecting = state {
+        if let MeshState::Connecting = state {
             // Ensure the target player is in the game
             if !self
                 .players
@@ -245,7 +245,7 @@ impl Handler<UpdateMeshMessage> for Game {
             };
 
             // Update the session state
-            session.state = PlayerState::Connected;
+            session.state = MeshState::Connected;
 
             let player_id = session.player.id;
             let state_change = PlayerStateChange {

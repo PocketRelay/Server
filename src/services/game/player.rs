@@ -1,4 +1,4 @@
-use super::models::PlayerState;
+use super::models::MeshState;
 use crate::{
     session::{Session, SetGameMessage},
     utils::{
@@ -22,8 +22,8 @@ pub struct GamePlayer {
     pub link: Link<Session>,
     /// Networking information for the player
     pub net: NetData,
-    /// State of the game player
-    pub state: PlayerState,
+    /// The mesh state of the player
+    pub state: MeshState,
 }
 
 /// Structure for taking a snapshot of the players current
@@ -54,7 +54,7 @@ impl GamePlayer {
             player,
             link,
             net,
-            state: PlayerState::Connecting,
+            state: MeshState::Connecting,
         }
     }
 
