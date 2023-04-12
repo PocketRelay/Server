@@ -1,5 +1,4 @@
 use crate::{
-    config::TELEMETRY_PORT,
     session::{
         models::{
             errors::{ServerError, ServerResult},
@@ -8,10 +7,7 @@ use crate::{
         DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
     state::{self, GlobalState},
-    utils::{
-        components::{Components as C, Util as U},
-        models::Port,
-    },
+    utils::components::{Components as C, Util as U},
 };
 
 use base64ct::{Base64, Encoding};
@@ -54,12 +50,8 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// ```
 ///
 async fn handle_get_telemetry_server() -> TelemetryServer {
-    TelemetryServer {
-        port: TELEMETRY_PORT,
-    }
+    TelemetryServer
 }
-
-const TICKER_PORT: Port = 8999;
 
 /// Handles retrieving the details about the ticker server
 ///
@@ -70,7 +62,7 @@ const TICKER_PORT: Port = 8999;
 /// ```
 ///
 async fn handle_get_ticker_server() -> TickerServer {
-    TickerServer { port: TICKER_PORT }
+    TickerServer
 }
 
 /// Handles responding to pre-auth requests which is the first request
@@ -134,10 +126,8 @@ async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthRes
     });
 
     Ok(PostAuthResponse {
-        telemetry: TelemetryServer {
-            port: TELEMETRY_PORT,
-        },
-        ticker: TickerServer { port: TICKER_PORT },
+        telemetry: TelemetryServer,
+        ticker: TickerServer,
         player_id,
     })
 }
@@ -495,14 +485,16 @@ impl Message {
 /// Telemetry Server: 159.153.235.32:9988
 ///
 async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
-    let host_target = match session.send(GetHostTarget {}).await {
+    let host_target = match session.send(GetHostTarget).await {
         Ok(value) => value,
         Err(_) => return TdfMap::with_capacity(0),
     };
     let tele_port = TELEMETRY_PORT;
     let prefix = format!(
-        "{}://{}:{}",
-        host_target.scheme, host_target.host, host_target.port
+        "{}{}:{}",
+        host_target.scheme.value(),
+        host_target.host,
+        host_target.port
     );
 
     let mut config = TdfMap::with_capacity(15);

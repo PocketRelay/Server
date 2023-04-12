@@ -5,13 +5,15 @@ use crate::{session::Session, utils::types::PlayerID};
 use interlink::prelude::*;
 use std::collections::HashMap;
 
+/// Service for storing links to authenticated sessions
 #[derive(Service)]
 pub struct AuthedSessions {
+    /// Map of the authenticated players to their session links
     values: HashMap<PlayerID, Link<Session>>,
 }
 
 impl AuthedSessions {
-    /// Starts a new matchmaking service returning its link
+    /// Starts a new service returning its link
     pub fn start() -> Link<Self> {
         let this = Self {
             values: Default::default(),
@@ -24,6 +26,7 @@ impl AuthedSessions {
 /// sessions list
 #[derive(Message)]
 pub struct RemoveMessage {
+    /// The ID of the player to remove
     pub player_id: PlayerID,
 }
 
@@ -31,7 +34,9 @@ pub struct RemoveMessage {
 /// sessions list
 #[derive(Message)]
 pub struct AddMessage {
+    /// The ID of the player the link belongs to
     pub player_id: PlayerID,
+    /// The link to the player session
     pub link: Link<Session>,
 }
 
@@ -40,9 +45,11 @@ pub struct AddMessage {
 #[derive(Message)]
 #[msg(rtype = "Option<Link<Session>>")]
 pub struct LookupMessage {
+    /// The ID of the player to lookup
     pub player_id: PlayerID,
 }
 
+/// Handle messages to add authenticated sessions
 impl Handler<AddMessage> for AuthedSessions {
     type Response = ();
 
@@ -51,6 +58,7 @@ impl Handler<AddMessage> for AuthedSessions {
     }
 }
 
+/// Handle messages to remove authenticated sessions
 impl Handler<RemoveMessage> for AuthedSessions {
     type Response = ();
 
@@ -59,6 +67,7 @@ impl Handler<RemoveMessage> for AuthedSessions {
     }
 }
 
+/// Handle messages to lookup authenticated sessions
 impl Handler<LookupMessage> for AuthedSessions {
     type Response = Mr<LookupMessage>;
 

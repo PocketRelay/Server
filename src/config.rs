@@ -11,6 +11,7 @@ pub struct RuntimeConfig {
     pub menu_message: String,
 }
 
+/// Environment variable key to load the config from
 const CONFIG_ENV_KEY: &str = "PR_CONFIG_JSON";
 
 pub async fn load_config() -> Option<Config> {
@@ -26,6 +27,7 @@ pub async fn load_config() -> Option<Config> {
         return Some(config);
     }
 
+    // Attempt to load the config from disk
     let file = Path::new("config.json");
     if !file.exists() {
         return None;
@@ -77,9 +79,6 @@ impl Default for Config {
         }
     }
 }
-
-pub const TELEMETRY_PORT: Port = 42129;
-pub const QOS_PORT: Port = 42130;
 
 #[derive(Deserialize)]
 #[serde(default)]

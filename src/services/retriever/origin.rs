@@ -1,3 +1,6 @@
+//! Retriever service for completing the Origin account authentication
+//! and data loading flow
+
 use super::{
     models::{OriginLoginRequest, OriginLoginResponse, SettingsResponse},
     RetSession, Retriever, RetrieverResult,
@@ -34,7 +37,9 @@ impl OriginFlowService {
 /// Flow structure for complete authentication through
 /// origin and optionally loading the player data
 pub struct OriginFlow {
+    /// The session to the official server
     session: RetSession,
+    /// Whether to load the origin account data
     pub data: bool,
 }
 
@@ -53,7 +58,7 @@ impl OriginFlow {
             .await?;
 
         debug!(
-            "Retrieved origin details (Name: {}, Email: {})",
+            "Retrieved Origin details (Name: {}, Email: {})",
             &value.display_name, &value.email
         );
         Ok(value)

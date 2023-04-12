@@ -1,5 +1,5 @@
 use super::{
-    models::{PlayerState, RemoveReason},
+    models::{MeshState, RemoveReason},
     player::GamePlayer,
     AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GameSnapshot,
     RemovePlayerType,
@@ -39,12 +39,15 @@ impl GameManager {
 #[derive(Message)]
 #[msg(rtype = "(Vec<GameSnapshot>, bool)")]
 pub struct SnapshotQueryMessage {
+    /// The offset to start querying games from
     pub offset: usize,
+    /// The number of games to query
     pub count: usize,
     /// Whether to include sensitively player net info
     pub include_net: bool,
 }
 
+/// Handler for snapshot query messages
 impl Handler<SnapshotQueryMessage> for GameManager {
     type Response = Fr<SnapshotQueryMessage>;
 
@@ -111,6 +114,7 @@ pub struct SnapshotMessage {
     pub include_net: bool,
 }
 
+/// Handler for snapshot messages for a specific game
 impl Handler<SnapshotMessage> for GameManager {
     type Response = Fr<SnapshotMessage>;
 
@@ -149,6 +153,7 @@ pub struct CreateMessage {
     pub host: GamePlayer,
 }
 
+/// Handler for creating games
 impl Handler<CreateMessage> for GameManager {
     type Response = Mr<CreateMessage>;
 
@@ -159,7 +164,7 @@ impl Handler<CreateMessage> for GameManager {
     ) -> Self::Response {
         let id = self.next_id;
         self.next_id += 1;
-        msg.host.state = PlayerState::Connected;
+        msg.host.state = MeshState::Connected;
 
         let link = Game::start(id, msg.attributes, msg.setting);
         self.games.insert(id, link.clone());
@@ -179,6 +184,7 @@ pub struct GetGameMessage {
     pub game_id: GameID,
 }
 
+/// Handler for getting a specific game
 impl Handler<GetGameMessage> for GameManager {
     type Response = Mr<GetGameMessage>;
 
@@ -203,10 +209,13 @@ pub struct TryAddMessage {
 /// consume the game player and Failure will return the
 /// game player back
 pub enum TryAddResult {
+    /// The player was added to the game
     Success,
+    /// The player failed to be added and was returned back
     Failure(GamePlayer),
 }
 
+/// Handler for attempting to add a player
 impl Handler<TryAddMessage> for GameManager {
     type Response = Sfr<Self, TryAddMessage>;
 
@@ -252,6 +261,7 @@ pub struct RemovePlayerMessage {
     pub ty: RemovePlayerType,
 }
 
+/// Handler for removing a player from a game
 impl Handler<RemovePlayerMessage> for GameManager {
     type Response = Fr<RemovePlayerMessage>;
 
@@ -306,6 +316,7 @@ pub struct RemoveGameMessage {
     pub game_id: GameID,
 }
 
+/// Handler for removing a game
 impl Handler<RemoveGameMessage> for GameManager {
     type Response = ();
 
@@ -317,6 +328,8 @@ impl Handler<RemoveGameMessage> for GameManager {
     }
 }
 
+/// Message for getting the encoded packet data for a game. Used
+/// by the game lookup messages from Origin invites
 #[derive(Message)]
 #[msg(rtype = "Option<PacketBody>")]
 pub struct GetGameDataMessage {
@@ -324,6 +337,7 @@ pub struct GetGameDataMessage {
     pub game_id: GameID,
 }
 
+/// Handler for getting game data
 impl Handler<GetGameDataMessage> for GameManager {
     type Response = Fr<GetGameDataMessage>;
 

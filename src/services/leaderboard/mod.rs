@@ -21,8 +21,13 @@ pub struct Leaderboard {
     groups: HashMap<LeaderboardType, GroupState>,
 }
 
+/// Extra state wrapper around a leaderboard group which
+/// holds the state of whether the group is being actively
+/// recomputed
 struct GroupState {
+    /// Whether the group is being computed
     computing: bool,
+    /// The underlying group
     group: Arc<LeaderboardGroup>,
 }
 
@@ -85,7 +90,9 @@ impl Handler<QueryMessage> for Leaderboard {
 /// computed
 #[derive(Message)]
 struct SetGroupMessage {
+    /// The leaderboard type to set
     ty: LeaderboardType,
+    /// The new leaderboard value
     group: Arc<LeaderboardGroup>,
 }
 
@@ -104,6 +111,7 @@ impl Handler<SetGroupMessage> for Leaderboard {
 }
 
 impl Leaderboard {
+    /// Starts a new leaderboard service
     pub fn start() -> Link<Leaderboard> {
         let this = Leaderboard {
             groups: Default::default(),

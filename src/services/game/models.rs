@@ -14,76 +14,7 @@ use blaze_pk::{
 };
 use serde::Serialize;
 
-#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
-pub enum GameDetailsType {
-    /// The player created the game the details are for
-    Created,
-    /// The player joined the game
-    Joined(SessionID),
-}
-
-impl GameDetailsType {
-    pub fn value(&self) -> u8 {
-        match self {
-            Self::Created => 0x0,
-            Self::Joined(_) => 0x3,
-        }
-    }
-}
-
-/// Values: 285 (0x11d), 287 (0x11f), 1311 (0x51f)
-#[allow(unused)]
-pub enum GameSetting {}
-
-// TODO: Game privacy
-
-/// States that can be matched from the ME3gameState attribute
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[allow(unused)]
-pub enum GameStateAttr {
-    /// Game has no state attribute
-    None,
-    /// IN_LOBBY: Players are waiting in lobby
-    InLobby,
-    /// IN_LOBBY_LONGTIME: Players have been waiting in lobby a long time
-    InLobbyLongtime,
-    /// IN_GAME_STARTING: Players in lobby all ready game almost started
-    InGameStarting,
-    /// IN_GAME_MIDGAME: The game is started and the players are playing
-    InGameMidgame,
-    /// IN_GAME_FINISHING: Game has finished and players returning to lobby
-    InGameFinishing,
-    /// MATCH_MAKING: Unknown how this state could be achieved but its present
-    /// as a matchable value in async matchmaking status values
-    ///
-    /// Notice: Posibly joining two players together who are both searching for
-    /// the same matchmaking game details
-    MatchMaking,
-    /// Unknown state not mentioned above
-    Unknown(String),
-}
-
-#[allow(unused)]
-impl GameStateAttr {
-    const ATTR_KEY: &str = "ME3gameState";
-
-    pub fn from_attrs(attrs: &AttrMap) -> Self {
-        if let Some(value) = attrs.get(Self::ATTR_KEY) {
-            match value as &str {
-                "IN_LOBBY" => Self::InLobby,
-                "IN_LOBBY_LONGTIME" => Self::InLobbyLongtime,
-                "IN_GAME_STARTING" => Self::InGameStarting,
-                "IN_GAME_MIDGAME" => Self::InGameMidgame,
-                "IN_GAME_FINISHING" => Self::InGameFinishing,
-                "MATCH_MAKING" => Self::MatchMaking,
-                value => Self::Unknown(value.to_string()),
-            }
-        } else {
-            Self::None
-        }
-    }
-}
-
+/// Different states the game can be in
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 pub enum GameState {
     /// Initial game state
@@ -96,10 +27,12 @@ pub enum GameState {
     GameFinished,
     /// Host is migrating
     HostMigration,
+    /// Unknown state
     Unknown(u8),
 }
 
 impl GameState {
+    /// Gets the int value of the state
     pub fn value(&self) -> u8 {
         match self {
             Self::Init => 0x1,
@@ -111,6 +44,9 @@ impl GameState {
         }
     }
 
+    /// Gets the state from the provided value
+    ///
+    /// `value` The value to get the state of
     pub fn from_value(value: u8) -> Self {
         match value {
             0x1 => Self::Init,
@@ -138,17 +74,21 @@ impl Decodable for GameState {
 
 value_type!(GameState, TdfType::VarInt);
 
-/// TODO: Maybe rename to mesh state?
+/// Mesh connection state type
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
-#[allow(unused)]
-pub enum PlayerState {
+pub enum MeshState {
+    /// Link between the mesh points is not connected
     Disconnected,
+    /// Link is being formed between two mesh points
     Connecting,
+    /// Link is connected between two mesh points
     Connected,
+    /// Unknown mesh link state
     Unknown(u8),
 }
 
-impl PlayerState {
+impl MeshState {
+    /// Converts the mesh state into its byte value
     pub fn value(&self) -> u8 {
         match self {
             Self::Disconnected => 0x0,
@@ -158,6 +98,9 @@ impl PlayerState {
         }
     }
 
+    /// Gets the mesh state from the provided value
+    ///
+    /// `value` The value of the mesh state
     pub fn from_value(value: u8) -> Self {
         match value {
             0x0 => Self::Disconnected,
@@ -168,22 +111,25 @@ impl PlayerState {
     }
 }
 
-impl Encodable for PlayerState {
+impl Encodable for MeshState {
     fn encode(&self, output: &mut TdfWriter) {
         output.write_u8(self.value())
     }
 }
 
-impl Decodable for PlayerState {
+impl Decodable for MeshState {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        Ok(PlayerState::from_value(reader.read_u8()?))
+        Ok(MeshState::from_value(reader.read_u8()?))
     }
 }
 
-value_type!(PlayerState, TdfType::VarInt);
+value_type!(MeshState, TdfType::VarInt);
 
+/// Message for a game state changing
 pub struct StateChange {
+    /// The ID of the game
     pub id: GameID,
+    /// The game state
     pub state: GameState,
 }
 
@@ -194,8 +140,11 @@ impl Encodable for StateChange {
     }
 }
 
+/// Message for a game setting changing
 pub struct SettingChange {
+    /// The game setting
     pub setting: u16,
+    /// The ID of the game
     pub id: GameID,
 }
 
@@ -221,7 +170,9 @@ impl Encodable for AttributesChange<'_> {
     }
 }
 
+/// Message for a player joining notification
 pub struct PlayerJoining<'a> {
+    /// The ID of the game
     pub game_id: GameID,
     /// The slot the player is joining into
     pub slot: GameSlot,
@@ -374,7 +325,7 @@ pub fn encode_players_list(writer: &mut TdfWriter, game_id: GameID, players: &Ve
 
 pub struct GameDetails<'a> {
     pub game: &'a Game,
-    pub ty: GameDetailsType,
+    pub msid: Option<SessionID>,
 }
 
 impl Encodable for GameDetails<'_> {
@@ -382,21 +333,21 @@ impl Encodable for GameDetails<'_> {
         encode_game_data(writer, self.game);
 
         encode_players_list(writer, self.game.id, &self.game.players);
-        let union_value = self.ty.value();
+
+        let union_value = if self.msid.is_some() { 0x3 } else { 0x0 };
         writer.tag_union_start(b"REAS", union_value);
         writer.tag_group(b"VALU");
-        match self.ty {
-            GameDetailsType::Created => {
-                writer.tag_u8(b"DCTX", 0x0);
-            }
-            GameDetailsType::Joined(session_id) => {
-                writer.tag_u16(b"FIT", 0x3f7a);
-                writer.tag_u16(b"MAXF", 0x5460);
-                writer.tag_u32(b"MSID", session_id);
-                writer.tag_u8(b"RSLT", 0x2);
-                writer.tag_u32(b"USID", session_id);
-            }
+
+        if let Some(msid) = self.msid {
+            writer.tag_u16(b"FIT", 0x3f7a);
+            writer.tag_u16(b"MAXF", 0x5460);
+            writer.tag_u32(b"MSID", msid);
+            writer.tag_u8(b"RSLT", 0x2);
+            writer.tag_u32(b"USID", msid);
+        } else {
+            writer.tag_u8(b"DCTX", 0x0);
         }
+
         writer.tag_group_end();
     }
 }
@@ -415,7 +366,7 @@ impl Encodable for GetGameDetails<'_> {
 pub struct PlayerStateChange {
     pub gid: GameID,
     pub pid: PlayerID,
-    pub state: PlayerState,
+    pub state: MeshState,
 }
 
 impl Encodable for PlayerStateChange {

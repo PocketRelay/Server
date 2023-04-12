@@ -14,15 +14,15 @@ use axum::{
     body::BoxBody,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use blaze_pk::packet::PacketCodec;
 use database::PlayerRole;
 use hyper::header;
 use interlink::service::Service;
-use log::error;
-use serde::Serialize;
+use log::{debug, error};
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU32, Ordering};
 use thiserror::Error;
 use tokio::{
@@ -40,6 +40,7 @@ pub fn router() -> Router {
         .route("/", get(server_details))
         .route("/log", get(get_log))
         .route("/upgrade", get(upgrade))
+        .route("/telemetry", post(submit_telemetry))
 }
 
 static SESSION_IDS: AtomicU32 = AtomicU32::new(1);
@@ -122,6 +123,16 @@ async fn get_log(auth: AdminAuth) -> Result<String, LogsError> {
     let path = std::path::Path::new(LOG_FILE_NAME);
     let file = read_to_string(path).await?;
     Ok(file)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TelemetryMessage {
+    pub values: Vec<(String, String)>,
+}
+
+async fn submit_telemetry(Json(data): Json<TelemetryMessage>) -> StatusCode {
+    debug!("[TELEMETRY] {:?}", data);
+    StatusCode::OK
 }
 
 /// Error status code implementation for the different error

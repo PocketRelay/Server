@@ -2,7 +2,7 @@
 //! HS256 signed tokens which are 12 bytes 4 for the player ID and 8 for
 //! the expiry date
 
-use crate::utils::random::random_string;
+use argon2::password_hash::rand_core::{OsRng, RngCore};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use log::error;
 use ring::hmac::{self, HMAC_SHA256};
@@ -11,7 +11,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
-use tokio::fs::{read_to_string, write};
+use tokio::fs::{read, write};
 
 /// Token provider and verification service
 pub struct Tokens {
@@ -23,13 +23,15 @@ impl Tokens {
     /// Expiry time for tokens
     const EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24 * 30 /* 30 Days */);
 
+    /// Creates a new instance of the tokens structure loading/creating
+    /// the secret bytes that are used for signing authentication tokens
     pub async fn new() -> Self {
         // Path to the file containing the server secret value
         let secret_path = Path::new("data/secret.bin");
 
         // Attempt to load existing secret
-        let secret: Option<String> = if secret_path.exists() {
-            match read_to_string(secret_path).await {
+        let secret: Option<Vec<u8>> = if secret_path.exists() {
+            match read(secret_path).await {
                 Ok(value) => Some(value),
                 Err(err) => {
                     error!("Failed to read secrets file: {:?}", err);
@@ -40,26 +42,25 @@ impl Tokens {
             None
         };
 
-        let secret = match secret {
-            Some(value) => value,
-            // Compute and save new secret
-            None => Self::create_secret(secret_path).await,
+        let key = match secret {
+            // Handle valid key cases
+            Some(ref value) if value.len() > 0 => hmac::Key::new(HMAC_SHA256, value),
+            // Invalid or missing key cases, compute a new secret to use as a key
+            _ => {
+                // Generate random secret bytes
+                let mut secret = [0u8; 64];
+                OsRng.fill_bytes(&mut secret);
+
+                // Save the created secret
+                if let Err(err) = write(secret_path, &secret).await {
+                    error!("Failed to write secrets file: {:?}", err);
+                }
+
+                hmac::Key::new(HMAC_SHA256, &secret)
+            }
         };
 
-        let key = hmac::Key::new(HMAC_SHA256, secret.as_bytes());
         Self { key }
-    }
-
-    /// Creates a new random 64 character secret and attempts to
-    /// save it in the secret.bin file
-    ///
-    /// `path` The path to the secret.bin file
-    async fn create_secret(path: &Path) -> String {
-        let value = random_string(64);
-        if let Err(err) = write(path, &value).await {
-            error!("Failed to write secret token to secret.bin: {:?}", err);
-        }
-        value
     }
 
     /// Creates a new claim using the provided claim value
@@ -137,10 +138,13 @@ impl Tokens {
     }
 }
 
+/// Errors that can occur while verifying a token
 #[derive(Debug, Error)]
 pub enum VerifyError {
+    /// The token is expired
     #[error("Expired token")]
     Expired,
+    /// The token is invalid
     #[error("Invalid token")]
     Invalid,
 }

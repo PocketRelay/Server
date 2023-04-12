@@ -1,4 +1,4 @@
-use super::models::PlayerState;
+use super::models::MeshState;
 use crate::{
     session::{Session, SetGameMessage},
     utils::{
@@ -11,6 +11,8 @@ use database::Player;
 use interlink::prelude::Link;
 use serde::Serialize;
 
+/// Player structure containing details and state for a player
+/// within a game
 pub struct GamePlayer {
     /// ID of the session associated to this player
     pub session_id: SessionID,
@@ -20,8 +22,8 @@ pub struct GamePlayer {
     pub link: Link<Session>,
     /// Networking information for the player
     pub net: NetData,
-    /// State of the game player
-    pub state: PlayerState,
+    /// The mesh state of the player
+    pub state: MeshState,
 }
 
 /// Structure for taking a snapshot of the players current
@@ -29,9 +31,13 @@ pub struct GamePlayer {
 
 #[derive(Serialize)]
 pub struct GamePlayerSnapshot {
+    /// The session ID of the snapshot
     pub session_id: SessionID,
+    /// The player ID of the snapshot
     pub player_id: PlayerID,
+    /// The player name of the snapshot
     pub display_name: String,
+    /// The player net data of the snapshot if collected
     pub net: Option<NetData>,
 }
 
@@ -48,7 +54,7 @@ impl GamePlayer {
             player,
             link,
             net,
-            state: PlayerState::Connecting,
+            state: MeshState::Connecting,
         }
     }
 

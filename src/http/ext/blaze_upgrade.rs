@@ -1,15 +1,20 @@
+use crate::{
+    session::SessionHostTarget,
+    utils::{models::Port, types::BoxFuture},
+};
 use axum::{
     extract::FromRequestParts,
-    http::{Method, StatusCode},
+    http::{HeaderValue, Method, StatusCode},
     response::IntoResponse,
 };
-use hyper::upgrade::{OnUpgrade, Upgraded};
-use log::debug;
+use hyper::{
+    upgrade::{OnUpgrade, Upgraded},
+    HeaderMap,
+};
 use std::future::ready;
 use thiserror::Error;
 
-use crate::session::SessionHostTarget;
-
+/// Errors that could occur while upgrading
 #[derive(Debug, Error)]
 pub enum BlazeUpgradeError {
     #[error("Cannot upgrade not GET requests")]
@@ -32,8 +37,44 @@ pub struct BlazeUpgrade {
 pub struct BlazeSocket {
     /// The upgraded connection
     pub upgrade: Upgraded,
-
+    /// The client side target for this host
     pub host_target: SessionHostTarget,
+}
+
+#[derive(Default, Clone, Copy)]
+pub enum BlazeScheme {
+    /// HTTP Scheme (http://)
+    #[default]
+    Http,
+    /// HTTPS Scheme (https://)
+    Https,
+}
+
+impl BlazeScheme {
+    /// Provides the default port used by the scheme
+    fn default_port(&self) -> u16 {
+        match self {
+            BlazeScheme::Http => 80,
+            BlazeScheme::Https => 443,
+        }
+    }
+
+    /// Returns the scheme value
+    pub fn value(&self) -> &'static str {
+        match self {
+            BlazeScheme::Http => "http://",
+            BlazeScheme::Https => "https://",
+        }
+    }
+}
+
+impl From<&HeaderValue> for BlazeScheme {
+    fn from(value: &HeaderValue) -> Self {
+        match value.as_bytes() {
+            b"https" => BlazeScheme::Https,
+            _ => BlazeScheme::default(),
+        }
+    }
 }
 
 impl BlazeUpgrade {
@@ -50,6 +91,38 @@ impl BlazeUpgrade {
             host_target: self.host_target,
         })
     }
+
+    /// Extracts the blaze scheme header from the provided headers map
+    /// returning the scheme. On failure will return the default scheme
+    fn extract_scheme(headers: &HeaderMap) -> BlazeScheme {
+        let header = match headers.get(HEADER_SCHEME) {
+            Some(value) => value,
+            None => return BlazeScheme::default(),
+        };
+        let scheme: BlazeScheme = header.into();
+        scheme
+    }
+
+    /// Extracts the client port from the provided headers map.
+    ///
+    /// `headers` The header map
+    fn extract_port(headers: &HeaderMap) -> Option<Port> {
+        // Get the port header
+        let header = headers.get(HEADER_PORT)?;
+        // Convert the header to a string
+        let header = header.to_str().ok()?;
+        // Parse the header value
+        header.parse().ok()
+    }
+
+    /// Extracts the host address from the provided headers map
+    fn extract_host(headers: &HeaderMap) -> Option<String> {
+        // Get the port header
+        let header = headers.get(HEADER_HOST)?;
+        // Convert the header to a string
+        let header = header.to_str().ok()?;
+        Some(header.to_string())
+    }
 }
 
 /// Header for the Pocket Relay connection scheme used by the client
@@ -65,20 +138,14 @@ where
 {
     type Rejection = BlazeUpgradeError;
 
-    fn from_request_parts<'life0, 'life1, 'async_trait>(
-        parts: &'life0 mut axum::http::request::Parts,
-        _state: &'life1 S,
-    ) -> core::pin::Pin<
-        Box<
-            dyn core::future::Future<Output = Result<Self, Self::Rejection>>
-                + core::marker::Send
-                + 'async_trait,
-        >,
-    >
+    fn from_request_parts<'a, 'b, 'c>(
+        parts: &'a mut axum::http::request::Parts,
+        _state: &'b S,
+    ) -> BoxFuture<'c, Result<Self, Self::Rejection>>
     where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        Self: 'async_trait,
+        'a: 'c,
+        'b: 'c,
+        Self: 'c,
     {
         // Ensure the method is GET
         if parts.method != Method::GET {
@@ -91,39 +158,19 @@ where
             None => return Box::pin(ready(Err(BlazeUpgradeError::CannotUpgrade))),
         };
 
+        let headers = &parts.headers;
+
         // Get the client scheme header
-        let scheme = parts
-            .headers
-            .get(HEADER_SCHEME)
-            .and_then(|value| value.to_str().ok())
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| {
-                debug!("Failed to extract scheme");
-                "http".to_string()
-            });
+        let scheme: BlazeScheme = BlazeUpgrade::extract_scheme(headers);
 
         // Get the client port header
-        let port: u16 = parts
-            .headers
-            .get(HEADER_PORT)
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.parse().ok())
-            .unwrap_or_else(|| {
-                debug!("Failed to extract port");
-                if scheme == "https" {
-                    443
-                } else {
-                    80
-                }
-            });
+        let port: Port = match BlazeUpgrade::extract_port(headers) {
+            Some(value) => value,
+            None => scheme.default_port(),
+        };
 
-        let host = parts
-            .headers
-            .get(HEADER_HOST)
-            .and_then(|value| value.to_str().ok())
-            .map(|value| value.to_string());
-
-        let host = match host {
+        // Get the client host
+        let host: String = match BlazeUpgrade::extract_host(headers) {
             Some(value) => value,
             None => return Box::pin(ready(Err(BlazeUpgradeError::CannotUpgrade))),
         };

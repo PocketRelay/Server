@@ -1,3 +1,4 @@
+use super::models::Port;
 use crate::utils::net::public_address;
 use log::{info, LevelFilter};
 use log4rs::{
@@ -6,8 +7,6 @@ use log4rs::{
     encode::pattern::PatternEncoder,
     init_config, Config,
 };
-
-use super::models::Port;
 
 /// The pattern to use when logging
 const LOGGING_PATTERN: &str = "[{d} {h({l})} {M}] {m}{n}";

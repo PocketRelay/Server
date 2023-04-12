@@ -2,12 +2,14 @@
 //! data such as player data for when they become authenticated and
 //! networking data.
 
+use crate::http::ext::blaze_upgrade::BlazeScheme;
 use crate::services::game::manager::RemovePlayerMessage;
 use crate::services::game::models::RemoveReason;
 use crate::services::matchmaking::RemoveQueueMessage;
 use crate::services::sessions::{AddMessage, RemoveMessage};
 use crate::services::Services;
 use crate::utils::components;
+use crate::utils::models::Port;
 use crate::utils::types::PlayerID;
 use crate::{
     services::game::{player::GamePlayer, RemovePlayerType},
@@ -118,9 +120,9 @@ impl Handler<GetHostTarget> for Session {
 
 #[derive(Clone)]
 pub struct SessionHostTarget {
-    pub scheme: String,
+    pub scheme: BlazeScheme,
     pub host: String,
-    pub port: u16,
+    pub port: Port,
 }
 
 #[derive(Message)]
