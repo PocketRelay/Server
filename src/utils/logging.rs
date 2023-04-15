@@ -1,5 +1,4 @@
 use super::models::Port;
-use crate::utils::net::public_address;
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -7,6 +6,7 @@ use log4rs::{
     encode::pattern::PatternEncoder,
     init_config, Config,
 };
+use std::net::Ipv4Addr;
 
 /// The pattern to use when logging
 const LOGGING_PATTERN: &str = "[{d} {h({l})} {M}] {m}{n}";
@@ -87,4 +87,31 @@ pub async fn log_connection_urls(http_port: Port) {
     }
 
     info!("Connection URLS ({output})");
+}
+
+/// Retrieves the public address of the server either using the cached
+/// value if its not expired or fetching the new value from the API using
+/// `fetch_public_addr`
+pub async fn public_address() -> Option<Ipv4Addr> {
+    // API addresses for IP lookup
+    let addresses = ["https://api.ipify.org/", "https://ipv4.icanhazip.com/"];
+
+    // Try all addresses using the first valid value
+    for address in addresses {
+        let response = match reqwest::get(address).await {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        let ip = match response.text().await {
+            Ok(value) => value.trim().replace('\n', ""),
+            Err(_) => continue,
+        };
+
+        if let Ok(parsed) = ip.parse() {
+            return Some(parsed);
+        }
+    }
+
+    None
 }
