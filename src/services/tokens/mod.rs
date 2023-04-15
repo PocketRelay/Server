@@ -44,7 +44,7 @@ impl Tokens {
 
         let key = match secret {
             // Handle valid key cases
-            Some(ref value) if value.len() > 0 => hmac::Key::new(HMAC_SHA256, value),
+            Some(ref value) if !value.is_empty() => hmac::Key::new(HMAC_SHA256, value),
             // Invalid or missing key cases, compute a new secret to use as a key
             _ => {
                 // Generate random secret bytes
