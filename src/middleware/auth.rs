@@ -1,3 +1,4 @@
+use crate::database::{DbErr, Player, PlayerRole};
 use crate::{
     ext::ErrorStatusCode, services::tokens::VerifyError, state::GlobalState,
     utils::types::BoxFuture,
@@ -8,7 +9,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use database::{DbErr, Player, PlayerRole};
 use futures::FutureExt;
 use std::marker::PhantomData;
 use thiserror::Error;

@@ -4,6 +4,7 @@
 //! This API is not documented as it is not intended to be used by anyone
 //! other than the Mass Effect 3 client itself.
 
+use crate::database::{DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player};
 use crate::{
     ext::{ErrorStatusCode, Xml},
     state::GlobalState,
@@ -16,7 +17,6 @@ use axum::{
     routing::get,
     Router,
 };
-use database::{DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player};
 use serde::Deserialize;
 use std::fmt::Display;
 use tokio::try_join;

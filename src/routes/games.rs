@@ -1,3 +1,4 @@
+use crate::database::PlayerRole;
 use crate::{
     middleware::auth::Auth,
     services::game::{
@@ -14,7 +15,6 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use database::PlayerRole;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

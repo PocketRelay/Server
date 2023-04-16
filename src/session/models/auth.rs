@@ -1,3 +1,4 @@
+use crate::database::Player;
 use crate::utils::types::PlayerID;
 use blaze_pk::{
     codec::{Decodable, Encodable},
@@ -7,7 +8,6 @@ use blaze_pk::{
     value_type,
     writer::TdfWriter,
 };
-use database::Player;
 use std::borrow::Cow;
 
 /// Different possible authentication request types.

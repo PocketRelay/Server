@@ -72,7 +72,7 @@ impl Default for Config {
         Self {
             port: 80,
             dashboard: Default::default(),
-            menu_message:  "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>".to_string(),
+            menu_message: "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>".to_string(),
             galaxy_at_war: Default::default(),
             logging: LevelFilter::Info,
             retriever: Default::default(),

@@ -1,4 +1,5 @@
 use crate::{
+    database::{Player, PlayerData},
     session::{
         models::{
             errors::{ServerError, ServerResult},
@@ -12,7 +13,6 @@ use crate::{
 
 use base64ct::{Base64, Encoding};
 use blaze_pk::{router::Router, types::TdfMap};
-use database::{Player, PlayerData};
 use flate2::{write::ZlibEncoder, Compression};
 use interlink::prelude::Link;
 use log::{error, warn};

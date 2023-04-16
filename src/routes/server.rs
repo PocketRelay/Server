@@ -1,6 +1,7 @@
 //! This modules contains routes that handle serving information
 //! about the server such as the version and services running
 
+use crate::database::PlayerRole;
 use crate::{
     ext::{blaze_upgrade::BlazeUpgrade, ErrorStatusCode},
     middleware::auth::AdminAuth,
@@ -16,7 +17,6 @@ use axum::{
     Json, Router,
 };
 use blaze_pk::packet::PacketCodec;
-use database::PlayerRole;
 use hyper::header;
 use interlink::service::Service;
 use log::{debug, error};

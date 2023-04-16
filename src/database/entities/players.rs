@@ -3,7 +3,7 @@
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
 
-use crate::data::user::PlayerRole;
+use crate::database::data::user::PlayerRole;
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "players")]

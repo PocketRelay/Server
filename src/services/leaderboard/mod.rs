@@ -1,4 +1,5 @@
 use self::models::*;
+use crate::database::{DatabaseConnection, DbResult, Player};
 use crate::{
     state::GlobalState,
     utils::{
@@ -6,7 +7,6 @@ use crate::{
         types::BoxFuture,
     },
 };
-use database::{DatabaseConnection, DbResult, Player};
 use futures::FutureExt;
 use interlink::prelude::*;
 use log::{debug, error};

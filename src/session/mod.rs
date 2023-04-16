@@ -2,6 +2,7 @@
 //! data such as player data for when they become authenticated and
 //! networking data.
 
+use crate::database::Player;
 use crate::ext::blaze_upgrade::BlazeScheme;
 use crate::services::game::manager::RemovePlayerMessage;
 use crate::services::game::models::RemoveReason;
@@ -25,7 +26,6 @@ use blaze_pk::packet::{Packet, PacketComponents};
 use blaze_pk::router::{HandleError, Router};
 use blaze_pk::value_type;
 use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
-use database::Player;
 use interlink::prelude::*;
 use log::{debug, error, log_enabled};
 use std::fmt::Debug;

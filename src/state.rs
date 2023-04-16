@@ -1,9 +1,10 @@
+use crate::database;
 use crate::{
     config::{Config, DashboardConfig, RuntimeConfig, ServicesConfig},
     services::Services,
     utils::hashing::{hash_password, verify_password},
 };
-use database::{self, DatabaseConnection, Player, PlayerRole};
+use database::{DatabaseConnection, Player, PlayerRole};
 use log::{error, info};
 use tokio::join;
 
@@ -14,6 +15,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// will be unset until the value is initialized then it will be
 /// set
 pub struct GlobalState {
+    /// Connection to the database
     pub db: DatabaseConnection,
     pub services: Services,
     pub config: RuntimeConfig,

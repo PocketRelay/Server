@@ -1,4 +1,5 @@
 use crate::{
+    database::{DatabaseConnection, Player},
     session::{
         models::{
             auth::*,
@@ -13,7 +14,6 @@ use crate::{
     },
 };
 use blaze_pk::router::Router;
-use database::{DatabaseConnection, Player};
 use log::{debug, error, warn};
 use std::borrow::Cow;
 use std::path::Path;

@@ -7,6 +7,7 @@ use tokio::{select, signal};
 use utils::logging;
 
 mod config;
+mod database;
 mod ext;
 mod middleware;
 mod routes;
@@ -54,7 +55,7 @@ async fn main() {
             panic!();
         }
        }
-       /* Handle the server being stopped with CTRL+C */
+       // Handle the server being stopped with CTRL+C
        _ = close_future => {}
     }
 

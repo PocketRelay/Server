@@ -1,4 +1,4 @@
-use crate::{
+use crate::database::{
     entities::{galaxy_at_war, players},
     DbResult, GalaxyAtWar,
 };

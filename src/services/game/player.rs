@@ -1,4 +1,5 @@
 use super::models::MeshState;
+use crate::database::Player;
 use crate::{
     session::{Session, SetGameMessage},
     utils::{
@@ -7,7 +8,6 @@ use crate::{
     },
 };
 use blaze_pk::writer::TdfWriter;
-use database::Player;
 use interlink::prelude::Link;
 use serde::Serialize;
 

@@ -1,3 +1,4 @@
+use crate::database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData, PlayerRole};
 use crate::{
     ext::ErrorStatusCode,
     middleware::auth::{AdminAuth, Auth},
@@ -14,7 +15,6 @@ use axum::{
     routing::{get, put},
     Json, Router,
 };
-use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData, PlayerRole};
 use log::error;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;

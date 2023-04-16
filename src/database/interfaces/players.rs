@@ -1,4 +1,4 @@
-use crate::{
+use crate::database::{
     entities::{player_data, players, PlayerData},
     DbResult, Player, PlayerRole,
 };
