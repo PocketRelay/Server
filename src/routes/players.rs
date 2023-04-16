@@ -1,8 +1,6 @@
 use crate::{
-    http::{
-        ext::ErrorStatusCode,
-        middleware::auth::{AdminAuth, Auth},
-    },
+    ext::ErrorStatusCode,
+    middleware::auth::{AdminAuth, Auth},
     state::GlobalState,
     utils::{
         hashing::{hash_password, verify_password},

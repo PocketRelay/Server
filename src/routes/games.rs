@@ -1,5 +1,5 @@
 use crate::{
-    http::middleware::auth::Auth,
+    middleware::auth::Auth,
     services::game::{
         manager::{SnapshotMessage, SnapshotQueryMessage},
         GameSnapshot,

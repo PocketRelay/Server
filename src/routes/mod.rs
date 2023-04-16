@@ -1,4 +1,4 @@
-use super::middleware::cors::cors_layer;
+use crate::middleware::cors::cors_layer;
 use axum::{middleware, Router};
 
 mod auth;

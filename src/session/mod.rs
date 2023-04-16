@@ -2,7 +2,7 @@
 //! data such as player data for when they become authenticated and
 //! networking data.
 
-use crate::http::ext::blaze_upgrade::BlazeScheme;
+use crate::ext::blaze_upgrade::BlazeScheme;
 use crate::services::game::manager::RemovePlayerMessage;
 use crate::services::game::models::RemoveReason;
 use crate::services::matchmaking::RemoveQueueMessage;

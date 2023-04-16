@@ -1,25 +1,24 @@
+use axum::Server;
 use config::load_config;
-use log::info;
+use log::{error, info};
 use state::GlobalState;
-use tokio::signal;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use tokio::{select, signal};
 use utils::logging;
 
 mod config;
-mod http;
+mod ext;
+mod middleware;
+mod routes;
 mod services;
 mod session;
 mod state;
 mod utils;
 
-fn main() {
-    // Create the tokio runtime
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("Failed building the tokio Runtime");
-
+#[tokio::main]
+async fn main() {
     // Load configuration
-    let config = runtime.block_on(load_config()).unwrap_or_default();
+    let config = load_config().await.unwrap_or_default();
 
     let port = config.port;
 
@@ -29,18 +28,35 @@ fn main() {
     info!("Starting Pocket Relay v{}", state::VERSION);
 
     // Initialize global state
-    runtime.block_on(GlobalState::init(config));
+    GlobalState::init(config).await;
 
     // Display the connection urls message
-    runtime.block_on(logging::log_connection_urls(port));
+    logging::log_connection_urls(port).await;
 
+    // Initialize session router
     session::init_router();
 
-    // Spawn the HTTP server in its own task
-    runtime.spawn(http::start_server(port));
+    info!("Starting Server on (Port: {port})");
 
-    // Block until shutdown is recieved
-    runtime.block_on(signal::ctrl_c()).ok();
+    // Create HTTP router and socket address
+    let router = routes::router();
+    let addr: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port));
+
+    // Create futures for server and shutdown signal
+    let server_future = Server::bind(&addr).serve(router.into_make_service());
+    let close_future = signal::ctrl_c();
+
+    // Await server termination or shutdown signal
+    select! {
+       result = server_future => {
+        if let Err(err) = result {
+            error!("Failed to bind HTTP server (Port: {}): {:?}", port, err);
+            panic!();
+        }
+       }
+       /* Handle the server being stopped with CTRL+C */
+       _ = close_future => {}
+    }
 
     info!("Shutting down...");
 }

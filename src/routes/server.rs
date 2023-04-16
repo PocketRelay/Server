@@ -2,10 +2,8 @@
 //! about the server such as the version and services running
 
 use crate::{
-    http::{
-        ext::{blaze_upgrade::BlazeUpgrade, ErrorStatusCode},
-        middleware::auth::AdminAuth,
-    },
+    ext::{blaze_upgrade::BlazeUpgrade, ErrorStatusCode},
+    middleware::auth::AdminAuth,
     session::Session,
     state,
     utils::logging::LOG_FILE_NAME,
