@@ -7,7 +7,6 @@ use crate::{
         types::BoxFuture,
     },
 };
-use futures::FutureExt;
 use interlink::prelude::*;
 use log::{debug, error};
 use std::{collections::HashMap, future::Future, sync::Arc, time::SystemTime};
@@ -66,22 +65,19 @@ impl Handler<QueryMessage> for Leaderboard {
 
         let link = ctx.link();
 
-        Fr::new(
-            async move {
-                // Compute new leaderboard values
-                let values = Self::compute(&ty).await;
-                let group = Arc::new(LeaderboardGroup::new(values));
+        Fr::new(Box::pin(async move {
+            // Compute new leaderboard values
+            let values = Self::compute(&ty).await;
+            let group = Arc::new(LeaderboardGroup::new(values));
 
-                // Store the group and respond to the request
-                let _ = link.do_send(SetGroupMessage {
-                    group: group.clone(),
-                    ty,
-                });
+            // Store the group and respond to the request
+            let _ = link.do_send(SetGroupMessage {
+                group: group.clone(),
+                ty,
+            });
 
-                group
-            }
-            .boxed(),
-        )
+            group
+        }))
     }
 }
 

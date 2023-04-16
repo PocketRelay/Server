@@ -15,7 +15,7 @@ use blaze_pk::{
     packet::{Packet, PacketCodec, PacketComponents, PacketDebug, PacketHeader, PacketType},
 };
 use blaze_ssl_async::stream::BlazeStream;
-use futures::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use log::{debug, error, log_enabled};
 use models::InstanceRequest;
 use reqwest;

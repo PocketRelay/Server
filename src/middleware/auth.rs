@@ -9,7 +9,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use futures::FutureExt;
 use std::marker::PhantomData;
 use thiserror::Error;
 
@@ -65,7 +64,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
         'b: 'c,
         Self: 'c,
     {
-        async move {
+        Box::pin(async move {
             // Extract the token from the headers
             let token = parts
                 .headers
@@ -84,8 +83,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
                 .ok_or(TokenError::InvalidToken)?;
 
             Ok(Self(player, PhantomData))
-        }
-        .boxed()
+        })
     }
 }
 
