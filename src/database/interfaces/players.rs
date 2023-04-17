@@ -6,36 +6,13 @@ use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
     ColumnTrait, DatabaseConnection, DeleteResult, EntityTrait, InsertResult, IntoActiveModel,
-    ModelTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    ModelTrait, QueryFilter,
 };
 use std::{future::Future, iter::Iterator, pin::Pin};
 
 type DbFuture<'a, T> = Pin<Box<dyn Future<Output = DbResult<T>> + Send + 'a>>;
 
 impl Player {
-    /// Takes all the player models using a cursor starting at the offset row
-    /// and finding the count number of values will check the count + 1 rows
-    /// in order to determine if there are more entires to come.
-    ///
-    /// `db`     The database connection
-    /// `offset` The number of rows to skip
-    /// `count`  The number of rows to collect
-    pub async fn all(
-        db: &DatabaseConnection,
-        page: u64,
-        count: u64,
-    ) -> DbResult<(Vec<Self>, bool)> {
-        let paginate = players::Entity::find()
-            .order_by_asc(players::Column::Id)
-            .paginate(db, count);
-
-        let total_pages = paginate.num_pages().await?;
-        let is_more = page < total_pages;
-        let values = paginate.fetch_page(page).await?;
-
-        Ok((values, is_more))
-    }
-
     /// Creates a new player with the proivded details and inserts
     /// it into the database
     ///
@@ -183,18 +160,6 @@ impl Player {
     ) -> impl Future<Output = DbResult<Vec<PlayerData>>> + Send + 'a {
         self.find_related(player_data::Entity)
             .filter(player_data::Column::Key.starts_with("class"))
-            .all(db)
-    }
-
-    /// Gets all the player character data for the current player
-    ///
-    /// `db` The database connection
-    pub fn get_characters<'a>(
-        &self,
-        db: &'a DatabaseConnection,
-    ) -> impl Future<Output = DbResult<Vec<PlayerData>>> + Send + 'a {
-        self.find_related(player_data::Entity)
-            .filter(player_data::Column::Key.starts_with("char"))
             .all(db)
     }
 

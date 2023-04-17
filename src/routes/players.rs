@@ -1,3 +1,4 @@
+use crate::database::entities::players;
 use crate::database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData, PlayerRole};
 use crate::{
     middleware::auth::{AdminAuth, Auth},
@@ -15,6 +16,7 @@ use axum::{
     Json, Router,
 };
 use log::error;
+use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;
 use validator::validate_email;
@@ -126,7 +128,14 @@ async fn get_players(
 
     let db = GlobalState::database();
     let count = query.count.unwrap_or(DEFAULT_COUNT);
-    let (players, more) = Player::all(&db, query.offset as u64, count as u64).await?;
+
+    let paginator = players::Entity::find()
+        .order_by_asc(players::Column::Id)
+        .paginate(&db, count as u64);
+    let page = query.offset as u64;
+    let total_pages = paginator.num_pages().await?;
+    let more = page < total_pages;
+    let players = paginator.fetch_page(page).await?;
 
     Ok(Json(PlayersResponse { players, more }))
 }

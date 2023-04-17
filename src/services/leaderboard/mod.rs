@@ -1,4 +1,5 @@
 use self::models::*;
+use crate::database::entities::players;
 use crate::database::{DatabaseConnection, DbResult, Player};
 use crate::{
     state::GlobalState,
@@ -9,8 +10,9 @@ use crate::{
 };
 use interlink::prelude::*;
 use log::{debug, error};
+use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use std::{collections::HashMap, future::Future, sync::Arc, time::SystemTime};
-use tokio::{task::JoinSet, try_join};
+use tokio::task::JoinSet;
 
 pub mod models;
 
@@ -129,8 +131,6 @@ impl Leaderboard {
 
         let db = GlobalState::database();
 
-        // The current players pagination page
-        let mut page = 0;
         let mut values: Vec<LeaderboardEntry> = Vec::new();
 
         // Decide the ranking function to use based on the type
@@ -138,15 +138,23 @@ impl Leaderboard {
 
         let mut join_set = JoinSet::new();
 
+        let mut paginator = players::Entity::find()
+            .order_by_asc(players::Column::Id)
+            .paginate(&db, BATCH_COUNT);
+
         loop {
-            let (players, more) = match Player::all(&db, page, BATCH_COUNT).await {
-                Ok((ref players, _)) if players.is_empty() => break,
-                Ok(value) => value,
+            let players = match paginator.fetch_and_next().await {
+                Ok(None) => break,
+                Ok(Some(value)) => value,
                 Err(err) => {
                     error!("Unable to load players for leaderboard: {:?}", err);
                     break;
                 }
             };
+
+            if players.is_empty() {
+                break;
+            }
 
             // Add the futures for all the players
             for player in players {
@@ -159,12 +167,6 @@ impl Leaderboard {
                     values.push(value)
                 }
             }
-
-            if !more {
-                break;
-            }
-
-            page += 1;
         }
 
         // Sort the values based on their value
@@ -179,7 +181,7 @@ impl Leaderboard {
 
         let end_time = SystemTime::now();
         if let Ok(duration) = end_time.duration_since(start_time) {
-            debug!("Computed leaderboard took: {}μs", duration.as_micros())
+            debug!("Computed leaderboard took: {:.2?}", duration)
         }
 
         values
@@ -230,17 +232,23 @@ where
 async fn compute_n7_player(db: DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
     let mut total_promotions = 0;
     let mut total_level: u32 = 0;
-    let (classes, characters) = try_join!(player.get_classes(&db), player.get_characters(&db),)?;
 
-    let classes: Vec<_> = classes
-        .iter()
-        .filter_map(|value| PlayerClass::parse(&value.value))
-        .collect();
+    let data = Player::all_data(player.id, &db).await?;
 
-    let characters: Vec<_> = characters
-        .iter()
-        .filter_map(|value| KitNameDeployed::parse(&value.value))
-        .collect();
+    let mut classes = Vec::new();
+    let mut characters = Vec::new();
+
+    for datum in &data {
+        if datum.key.starts_with("class") {
+            if let Some(value) = PlayerClass::parse(&datum.value) {
+                classes.push(value);
+            }
+        } else if datum.key.starts_with("char") {
+            if let Some(value) = KitNameDeployed::parse(&datum.value) {
+                characters.push(value);
+            }
+        }
+    }
 
     for class in classes {
         // Classes are active if atleast one character from the class is deployed
