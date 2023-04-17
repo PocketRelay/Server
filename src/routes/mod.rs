@@ -38,5 +38,5 @@ pub fn router() -> Router {
                 .layer(middleware::from_fn(cors_layer)),
         )
         .nest("/", dashboard::router())
-        .fallback(dashboard::serve_index)
+        .fallback(dashboard::fallback)
 }

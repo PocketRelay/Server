@@ -35,12 +35,12 @@ async fn content(Path(path): Path<String>) -> Result<Response, StatusCode> {
 
         serve_file(ext, file)
     } else {
-        serve_index().await
+        fallback().await
     }
 }
 
 /// Handles serving the index file
-pub async fn serve_index() -> Result<Response, StatusCode> {
+pub async fn fallback() -> Result<Response, StatusCode> {
     let index = DashboardContent::get("index.html").ok_or(StatusCode::NOT_FOUND)?;
     serve_file(Some("html"), index)
 }
