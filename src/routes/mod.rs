@@ -21,23 +21,22 @@ pub fn router() -> Router {
         .nest("/content", content::router())
         .nest("/gaw", gaw::router())
         .nest("/qos", qos::router())
-        .nest("/api", api_router())
+        .nest(
+            "/api",
+            Router::new()
+                // Games routing
+                .nest("/games", games::router())
+                // Players routing
+                .nest("/players", players::router())
+                // Authentication routes
+                .nest("/auth", auth::router())
+                // Leaderboard routing
+                .nest("/leaderboard", leaderboard::router())
+                // Server details routes
+                .nest("/server", server::router())
+                // CORS middleware is applied to all API routes to allow browser access
+                .layer(middleware::from_fn(cors_layer)),
+        )
         .nest("/", dashboard::router())
-}
-
-/// Creates a router for the routes that reside under /api
-fn api_router() -> Router {
-    Router::new()
-        // Games routing
-        .nest("/games", games::router())
-        // Players routing
-        .nest("/players", players::router())
-        // Authentication routes
-        .nest("/auth", auth::router())
-        // Leaderboard routing
-        .nest("/leaderboard", leaderboard::router())
-        // Server details routes
-        .nest("/server", server::router())
-        // CORS middleware is applied to all API routes to allow browser access
-        .layer(middleware::from_fn(cors_layer))
+        .fallback(dashboard::serve_index)
 }

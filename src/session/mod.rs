@@ -3,7 +3,7 @@
 //! networking data.
 
 use crate::database::Player;
-use crate::ext::blaze_upgrade::BlazeScheme;
+use crate::middleware::blaze_upgrade::BlazeScheme;
 use crate::services::game::manager::RemovePlayerMessage;
 use crate::services::game::models::RemoveReason;
 use crate::services::matchmaking::RemoveQueueMessage;

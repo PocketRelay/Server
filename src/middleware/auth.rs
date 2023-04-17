@@ -1,8 +1,5 @@
 use crate::database::{DbErr, Player, PlayerRole};
-use crate::{
-    ext::ErrorStatusCode, services::tokens::VerifyError, state::GlobalState,
-    utils::types::BoxFuture,
-};
+use crate::{services::tokens::VerifyError, state::GlobalState, utils::types::BoxFuture};
 use axum::{
     body::boxed,
     extract::FromRequestParts,
@@ -114,23 +111,17 @@ impl From<VerifyError> for TokenError {
     }
 }
 
-/// Error status code implementation for the different error
-/// status codes of each error
-impl ErrorStatusCode for TokenError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::MissingToken => StatusCode::BAD_REQUEST,
-            Self::InvalidToken | Self::ExpiredToken => StatusCode::UNAUTHORIZED,
-            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
 /// IntoResponse implementation for TokenError to allow it to be
 /// used within the result type as a error response
 impl IntoResponse for TokenError {
     #[inline]
     fn into_response(self) -> Response {
-        (self.status_code(), boxed(self.to_string())).into_response()
+        let status = match &self {
+            Self::MissingToken => StatusCode::BAD_REQUEST,
+            Self::InvalidToken | Self::ExpiredToken => StatusCode::UNAUTHORIZED,
+            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (status, boxed(self.to_string())).into_response()
     }
 }

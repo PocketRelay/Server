@@ -5,11 +5,7 @@
 //! other than the Mass Effect 3 client itself.
 
 use crate::database::{DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player};
-use crate::{
-    ext::{ErrorStatusCode, Xml},
-    state::GlobalState,
-    utils::parsing::PlayerClass,
-};
+use crate::{middleware::xml::Xml, state::GlobalState, utils::parsing::PlayerClass};
 use axum::{
     extract::{Path, Query},
     http::{header, HeaderValue, StatusCode},
@@ -260,25 +256,17 @@ impl From<DbErr> for GAWError {
     }
 }
 
-/// Error status code implementation for the different error
-/// status codes of each error.
-///
-/// These response codes match that of the official servers
-impl ErrorStatusCode for GAWError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            GAWError::InvalidToken => StatusCode::OK,
-            GAWError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
 /// IntoResponse implementation for GAWError to allow it to be
 /// used within the result type as a error response
 impl IntoResponse for GAWError {
     fn into_response(self) -> Response {
+        let status = match &self {
+            GAWError::InvalidToken => StatusCode::OK,
+            GAWError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
         let mut response = self.to_string().into_response();
-        *response.status_mut() = self.status_code();
+        *response.status_mut() = status;
         response
             .headers_mut()
             .insert(header::CONTENT_TYPE, HeaderValue::from_static("text/xml"));

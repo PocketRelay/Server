@@ -1,6 +1,5 @@
 use crate::database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData, PlayerRole};
 use crate::{
-    ext::ErrorStatusCode,
     middleware::auth::{AdminAuth, Auth},
     state::GlobalState,
     utils::{
@@ -615,20 +614,6 @@ async fn get_player_gaw(
     Ok(Json(galax_at_war))
 }
 
-/// Error status code implementation for the different error
-/// status codes of each error
-impl ErrorStatusCode for PlayersError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::DataNotFound => StatusCode::NOT_FOUND,
-            Self::PlayerNotFound => StatusCode::NOT_FOUND,
-            Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
-            Self::InvalidPassword | Self::InvalidPermission => StatusCode::UNAUTHORIZED,
-            Self::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
 /// From implementation for converting database errors into
 /// players errors without needing to map the value
 impl From<DbErr> for PlayersError {
@@ -640,8 +625,15 @@ impl From<DbErr> for PlayersError {
 /// IntoResponse implementation for PlayersError to allow it to be
 /// used within the result type as a error response
 impl IntoResponse for PlayersError {
-    #[inline]
     fn into_response(self) -> Response {
-        (self.status_code(), self.to_string()).into_response()
+        let status = match &self {
+            Self::DataNotFound => StatusCode::NOT_FOUND,
+            Self::PlayerNotFound => StatusCode::NOT_FOUND,
+            Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
+            Self::InvalidPassword | Self::InvalidPermission => StatusCode::UNAUTHORIZED,
+            Self::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (status, self.to_string()).into_response()
     }
 }

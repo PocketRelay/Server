@@ -8,7 +8,6 @@ use utils::logging;
 
 mod config;
 mod database;
-mod ext;
 mod middleware;
 mod routes;
 mod services;

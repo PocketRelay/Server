@@ -1,7 +1,7 @@
 //! Routes for the Quality of Service server. Unknown whether any of the
 //! response address and ports are correct however this request must succeed
 //! or the client doesn't seem to know its external IP
-use crate::{ext::Xml, utils::models::Port};
+use crate::{middleware::xml::Xml, utils::models::Port};
 use axum::{extract::Query, routing::get, Router};
 use log::debug;
 use serde::Deserialize;

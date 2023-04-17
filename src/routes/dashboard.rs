@@ -16,9 +16,7 @@ struct DashboardContent;
 ///
 /// Prefix: /content
 pub fn router() -> Router {
-    Router::new()
-        .route("/*filename", get(content))
-        .fallback(serve_index)
+    Router::new().route("/*filename", get(content))
 }
 /// Function for serving content from the embedded public
 /// content. Directory structure matches the paths vistied
@@ -42,7 +40,7 @@ async fn content(Path(path): Path<String>) -> Result<Response, StatusCode> {
 }
 
 /// Handles serving the index file
-async fn serve_index() -> Result<Response, StatusCode> {
+pub async fn serve_index() -> Result<Response, StatusCode> {
     let index = DashboardContent::get("index.html").ok_or(StatusCode::NOT_FOUND)?;
     serve_file(Some("html"), index)
 }
