@@ -18,7 +18,7 @@ mod utils;
 #[tokio::main]
 async fn main() {
     // Load configuration
-    let config = load_config().await.unwrap_or_default();
+    let config = load_config().unwrap_or_default();
 
     let port = config.port;
 
