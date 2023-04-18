@@ -111,11 +111,11 @@ impl Model {
     /// `db`        The database connection
     /// `player_id` The ID of the player to set the data for
     /// `data`      Iterator of the data keys and values
-    pub fn set_bulk<'a>(
-        db: &'a DatabaseConnection,
+    pub fn set_bulk(
+        db: &DatabaseConnection,
         player_id: PlayerID,
         data: impl Iterator<Item = (String, String)>,
-    ) -> impl Future<Output = DbResult<InsertResult<ActiveModel>>> + Send + 'a {
+    ) -> impl Future<Output = DbResult<InsertResult<ActiveModel>>> + Send + '_ {
         // Transform the provided key values into active models
         let models_iter = data.map(|(key, value)| ActiveModel {
             id: NotSet,
@@ -163,10 +163,10 @@ impl Model {
     ///
     /// `db`        The database connection
     /// `player_id` The ID of the player to get the classes for
-    pub fn get_classes<'a>(
-        db: &'a DatabaseConnection,
+    pub fn get_classes(
+        db: &DatabaseConnection,
         player_id: PlayerID,
-    ) -> impl Future<Output = DbResult<Vec<Self>>> + Send + 'a {
+    ) -> impl Future<Output = DbResult<Vec<Self>>> + Send + '_ {
         Entity::find()
             .filter(
                 Column::PlayerId
