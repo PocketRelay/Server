@@ -1,7 +1,6 @@
 use self::models::*;
-use crate::database::entities::players;
-use crate::database::{DatabaseConnection, DbResult, Player};
 use crate::{
+    database::{entities::players, DatabaseConnection, DbResult, Player},
     state::GlobalState,
     utils::{
         parsing::{KitNameDeployed, PlayerClass},

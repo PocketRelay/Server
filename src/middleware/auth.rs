@@ -1,5 +1,9 @@
-use crate::database::{DbErr, Player, PlayerRole};
-use crate::{services::tokens::VerifyError, state::GlobalState, utils::types::BoxFuture};
+use crate::{
+    database::{DbErr, Player, PlayerRole},
+    services::tokens::VerifyError,
+    state::GlobalState,
+    utils::types::BoxFuture,
+};
 use axum::{
     body::boxed,
     extract::FromRequestParts,

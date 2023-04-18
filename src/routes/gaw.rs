@@ -4,8 +4,12 @@
 //! This API is not documented as it is not intended to be used by anyone
 //! other than the Mass Effect 3 client itself.
 
-use crate::database::{DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player};
-use crate::{middleware::xml::Xml, state::GlobalState, utils::parsing::PlayerClass};
+use crate::{
+    database::{DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player},
+    middleware::xml::Xml,
+    state::GlobalState,
+    utils::parsing::PlayerClass,
+};
 use axum::{
     extract::{Path, Query},
     http::{header, HeaderValue, StatusCode},

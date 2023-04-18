@@ -1,6 +1,7 @@
-use crate::database::entities::players;
-use crate::database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData, PlayerRole};
 use crate::{
+    database::{
+        entities::players, DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData, PlayerRole,
+    },
     middleware::auth::{AdminAuth, Auth},
     state::GlobalState,
     utils::{

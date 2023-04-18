@@ -1,8 +1,8 @@
 //! This modules contains routes that handle serving information
 //! about the server such as the version and services running
 
-use crate::database::PlayerRole;
 use crate::{
+    database::PlayerRole,
     middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade},
     session::Session,
     state,

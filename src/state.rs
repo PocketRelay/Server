@@ -1,10 +1,9 @@
-use crate::database;
 use crate::{
     config::{Config, DashboardConfig, RuntimeConfig, ServicesConfig},
+    database::{self, DatabaseConnection, Player, PlayerRole},
     services::Services,
     utils::hashing::{hash_password, verify_password},
 };
-use database::{DatabaseConnection, Player, PlayerRole};
 use log::{error, info};
 use tokio::join;
 

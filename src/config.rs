@@ -1,10 +1,8 @@
-use std::{env, path::Path};
-
+use crate::utils::models::Port;
 use log::LevelFilter;
 use serde::Deserialize;
+use std::{env, path::Path};
 use tokio::fs::read_to_string;
-
-use crate::utils::models::Port;
 
 pub struct RuntimeConfig {
     pub galaxy_at_war: GalaxyAtWarConfig,

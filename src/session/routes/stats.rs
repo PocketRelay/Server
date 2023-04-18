@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     services::leaderboard::{models::*, QueryMessage},
     session::{
@@ -16,6 +14,7 @@ use blaze_pk::{
     packet::{Request, Response},
     router::Router,
 };
+use std::sync::Arc;
 
 /// Routing function for adding all the routes in this file to the
 /// provided router

@@ -1,5 +1,5 @@
-use crate::database::PlayerRole;
 use crate::{
+    database::PlayerRole,
     middleware::auth::Auth,
     services::game::{
         manager::{SnapshotMessage, SnapshotQueryMessage},
