@@ -1,6 +1,10 @@
 use self::models::*;
 use crate::{
-    database::{entities::players, entities::Player, DatabaseConnection, DbResult},
+    database::{
+        entities::players,
+        entities::{Player, PlayerData},
+        DatabaseConnection, DbResult,
+    },
     state::GlobalState,
     utils::{
         parsing::{KitNameDeployed, PlayerClass},
@@ -232,7 +236,7 @@ async fn compute_n7_player(db: DatabaseConnection, player: Player) -> DbResult<L
     let mut total_promotions = 0;
     let mut total_level: u32 = 0;
 
-    let data = Player::all_data(player.id, &db).await?;
+    let data = PlayerData::all(&db, player.id).await?;
 
     let mut classes = Vec::new();
     let mut characters = Vec::new();
@@ -276,7 +280,9 @@ async fn compute_n7_player(db: DatabaseConnection, player: Player) -> DbResult<L
 /// `db`     The database connection
 /// `player` The player to rank
 async fn compute_cp_player(db: DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
-    let value = player.get_challenge_points(&db).await.unwrap_or(0);
+    let value = PlayerData::get_challenge_points(&db, player.id)
+        .await
+        .unwrap_or(0);
     Ok(LeaderboardEntry {
         player_id: player.id,
         player_name: player.display_name,

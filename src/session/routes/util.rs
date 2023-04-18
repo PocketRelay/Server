@@ -1,5 +1,5 @@
 use crate::{
-    database::entities::{Player, PlayerData},
+    database::entities::PlayerData,
     session::{
         models::{
             errors::{ServerError, ServerResult},
@@ -556,7 +556,7 @@ async fn handle_user_settings_save(
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let db = GlobalState::database();
-    if let Err(err) = Player::set_data(player, &db, req.key, req.value).await {
+    if let Err(err) = PlayerData::set(&db, player, req.key, req.value).await {
         warn!("Failed to update player data: {err:?}");
         Err(ServerError::ServerUnavailable)
     } else {
@@ -582,7 +582,7 @@ async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<Setting
     let db = GlobalState::database();
 
     // Load the player data from the database
-    let data: Vec<PlayerData> = match Player::all_data(player, &db).await {
+    let data: Vec<PlayerData> = match PlayerData::all(&db, player).await {
         Ok(value) => value,
         Err(err) => {
             error!("Failed to load player data: {err:?}");

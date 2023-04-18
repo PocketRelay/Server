@@ -516,8 +516,7 @@ async fn all_data(
     _admin: AdminAuth,
 ) -> PlayersJsonResult<PlayerDataMap> {
     let db = GlobalState::database();
-    let player: Player = find_player(&db, player_id).await?;
-    let data = Player::all_data(player.id, &db).await?;
+    let data = PlayerData::all(&db, player_id).await?;
     Ok(Json(PlayerDataMap(data)))
 }
 
@@ -542,8 +541,7 @@ async fn get_data(
         return Err(PlayersError::InvalidPermission);
     }
 
-    let value = player
-        .get_data(&db, &key)
+    let value = PlayerData::get(&db, player.id, &key)
         .await?
         .ok_or(PlayersError::DataNotFound)?;
     Ok(Json(value))
@@ -580,7 +578,7 @@ async fn set_data(
         return Err(PlayersError::InvalidPermission);
     }
 
-    let data = Player::set_data(player.id, &db, key, req.value).await?;
+    let data = PlayerData::set(&db, player.id, key, req.value).await?;
     Ok(Json(data))
 }
 
@@ -606,7 +604,8 @@ async fn delete_data(
         return Err(PlayersError::InvalidPermission);
     }
 
-    player.delete_data(&db, &key).await?;
+    PlayerData::delete(&db, player.id, &key).await?;
+
     Ok(Json(()))
 }
 

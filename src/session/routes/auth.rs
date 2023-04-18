@@ -1,5 +1,8 @@
 use crate::{
-    database::{entities::Player, DatabaseConnection},
+    database::{
+        entities::{Player, PlayerData},
+        DatabaseConnection,
+    },
     session::{
         models::{
             auth::*,
@@ -255,7 +258,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
 
     debug!("Loaded origin data from official server");
 
-    if let Err(err) = player.bulk_insert_data(db, settings.into_iter()).await {
+    if let Err(err) = PlayerData::set_bulk(db, player.id, settings.into_iter()).await {
         error!("Failed to set origin data: {err:?}");
         return Err(ServerError::ServerUnavailable);
     }

@@ -6,7 +6,7 @@
 
 use crate::{
     database::{
-        entities::{GalaxyAtWar, Player},
+        entities::{GalaxyAtWar, Player, PlayerData},
         DatabaseConnection, DbErr, DbResult,
     },
     middleware::xml::Xml,
@@ -128,8 +128,8 @@ async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u3
     if !config.galaxy_at_war.promotions {
         return Ok(0);
     }
-    Ok(player
-        .get_classes(db)
+
+    Ok(PlayerData::get_classes(db, player.id)
         .await?
         .iter()
         .filter_map(|value| PlayerClass::parse(&value.value))
