@@ -1,5 +1,5 @@
 use crate::{
-    database::{DatabaseConnection, Player},
+    database::{entities::Player, DatabaseConnection},
     session::{
         models::{
             auth::*,

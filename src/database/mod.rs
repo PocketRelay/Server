@@ -5,14 +5,8 @@ use std::{
     path::Path,
 };
 
-pub mod data;
 pub mod entities;
-pub mod interfaces;
 mod migration;
-
-// Re-exports of named entities
-pub use data::user::PlayerRole;
-pub use entities::{GalaxyAtWar, Player, PlayerData};
 
 // Re-exports of database types
 pub use sea_orm::DatabaseConnection;

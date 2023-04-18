@@ -2,7 +2,7 @@
 //! about the server such as the version and services running
 
 use crate::{
-    database::PlayerRole,
+    database::entities::players::PlayerRole,
     middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade},
     session::Session,
     state,

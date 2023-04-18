@@ -1,6 +1,6 @@
 use super::models::MeshState;
 use crate::{
-    database::Player,
+    database::entities::Player,
     session::{Session, SetGameMessage},
     utils::{
         models::NetData,

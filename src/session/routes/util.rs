@@ -1,5 +1,5 @@
 use crate::{
-    database::{Player, PlayerData},
+    database::entities::{Player, PlayerData},
     session::{
         models::{
             errors::{ServerError, ServerResult},

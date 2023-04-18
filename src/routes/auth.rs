@@ -1,5 +1,5 @@
 use crate::{
-    database::Player,
+    database::entities::Player,
     state::GlobalState,
     utils::hashing::{hash_password, verify_password},
 };

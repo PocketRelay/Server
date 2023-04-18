@@ -3,7 +3,7 @@
 //! networking data.
 
 use crate::{
-    database::Player,
+    database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
     services::{
         game::{

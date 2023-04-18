@@ -5,7 +5,10 @@
 //! other than the Mass Effect 3 client itself.
 
 use crate::{
-    database::{DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player},
+    database::{
+        entities::{GalaxyAtWar, Player},
+        DatabaseConnection, DbErr, DbResult,
+    },
     middleware::xml::Xml,
     state::GlobalState,
     utils::parsing::PlayerClass,

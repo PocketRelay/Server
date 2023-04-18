@@ -1,5 +1,8 @@
 use crate::{
-    database::{DbErr, Player, PlayerRole},
+    database::{
+        entities::{players::PlayerRole, Player},
+        DbErr,
+    },
     services::tokens::VerifyError,
     state::GlobalState,
     utils::types::BoxFuture,

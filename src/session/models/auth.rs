@@ -1,5 +1,4 @@
-use crate::database::Player;
-use crate::utils::types::PlayerID;
+use crate::{database::entities::Player, utils::types::PlayerID};
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::{DecodeError, DecodeResult},

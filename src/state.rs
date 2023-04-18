@@ -1,6 +1,10 @@
 use crate::{
     config::{Config, DashboardConfig, RuntimeConfig, ServicesConfig},
-    database::{self, DatabaseConnection, Player, PlayerRole},
+    database::{
+        self,
+        entities::{players::PlayerRole, Player},
+        DatabaseConnection,
+    },
     services::Services,
     utils::hashing::{hash_password, verify_password},
 };

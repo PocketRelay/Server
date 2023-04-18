@@ -1,5 +1,5 @@
 use crate::{
-    database::Player,
+    database::entities::Player,
     services::sessions::LookupMessage,
     session::{
         models::{
