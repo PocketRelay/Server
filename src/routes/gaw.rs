@@ -117,7 +117,7 @@ async fn get_player_gaw_data(
     let config = GlobalState::config();
 
     let (gaw_data, promotions) = try_join!(
-        GalaxyAtWar::find_or_create(db, &player, config.galaxy_at_war.decay),
+        GalaxyAtWar::find_or_create(db, player.id, config.galaxy_at_war.decay),
         get_promotions(db, &player)
     )?;
     Ok((gaw_data, promotions))

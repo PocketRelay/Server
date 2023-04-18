@@ -622,7 +622,7 @@ async fn get_player_gaw(
 ) -> PlayersJsonResult<GalaxyAtWar> {
     let db = GlobalState::database();
     let player = find_player(&db, player_id).await?;
-    let galax_at_war = GalaxyAtWar::find_or_create(&db, &player, 0.0).await?;
+    let galax_at_war = GalaxyAtWar::find_or_create(&db, player.id, 0.0).await?;
     Ok(Json(galax_at_war))
 }
 
