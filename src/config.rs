@@ -1,10 +1,7 @@
-use std::{env, path::Path};
-
+use crate::utils::models::Port;
 use log::LevelFilter;
 use serde::Deserialize;
-use tokio::fs::read_to_string;
-
-use crate::utils::models::Port;
+use std::{env, fs::read_to_string, path::Path};
 
 pub struct RuntimeConfig {
     pub galaxy_at_war: GalaxyAtWarConfig,
@@ -14,7 +11,7 @@ pub struct RuntimeConfig {
 /// Environment variable key to load the config from
 const CONFIG_ENV_KEY: &str = "PR_CONFIG_JSON";
 
-pub async fn load_config() -> Option<Config> {
+pub fn load_config() -> Option<Config> {
     // Attempt to load the config from the env
     if let Ok(env) = env::var(CONFIG_ENV_KEY) {
         let config: Config = match serde_json::from_str(&env) {
@@ -33,7 +30,7 @@ pub async fn load_config() -> Option<Config> {
         return None;
     }
 
-    let data = match read_to_string(file).await {
+    let data = match read_to_string(file) {
         Ok(value) => value,
         Err(err) => {
             eprintln!("Failed to load config file (Using defaults): {:?}", err);
@@ -72,7 +69,7 @@ impl Default for Config {
         Self {
             port: 80,
             dashboard: Default::default(),
-            menu_message:  "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>".to_string(),
+            menu_message: "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>".to_string(),
             galaxy_at_war: Default::default(),
             logging: LevelFilter::Info,
             retriever: Default::default(),

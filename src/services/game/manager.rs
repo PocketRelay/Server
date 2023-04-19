@@ -6,7 +6,6 @@ use super::{
 };
 use crate::{services::matchmaking::rules::RuleSet, utils::types::GameID};
 use blaze_pk::packet::PacketBody;
-use futures::FutureExt;
 use interlink::prelude::*;
 use log::debug;
 use std::{collections::HashMap, sync::Arc};
@@ -87,18 +86,15 @@ impl Handler<SnapshotQueryMessage> for GameManager {
             (keys_count, more)
         };
 
-        Fr::new(
-            async move {
-                let mut snapshots = Vec::with_capacity(count);
-                while let Some(result) = join_set.join_next().await {
-                    if let Ok(Some(snapshot)) = result {
-                        snapshots.push(snapshot);
-                    }
+        Fr::new(Box::pin(async move {
+            let mut snapshots = Vec::with_capacity(count);
+            while let Some(result) = join_set.join_next().await {
+                if let Ok(Some(snapshot)) = result {
+                    snapshots.push(snapshot);
                 }
-                (snapshots, more)
             }
-            .boxed(),
-        )
+            (snapshots, more)
+        }))
     }
 }
 
@@ -122,21 +118,18 @@ impl Handler<SnapshotMessage> for GameManager {
         // Link to the game
         let link = self.games.get(&msg.game_id).cloned();
 
-        Fr::new(
-            async move {
-                let link = match link {
-                    Some(value) => value,
-                    None => return None,
-                };
+        Fr::new(Box::pin(async move {
+            let link = match link {
+                Some(value) => value,
+                None => return None,
+            };
 
-                link.send(super::SnapshotMessage {
-                    include_net: msg.include_net,
-                })
-                .await
-                .ok()
-            }
-            .boxed(),
-        )
+            link.send(super::SnapshotMessage {
+                include_net: msg.include_net,
+            })
+            .await
+            .ok()
+        }))
     }
 }
 
@@ -221,7 +214,7 @@ impl Handler<TryAddMessage> for GameManager {
 
     fn handle(&mut self, msg: TryAddMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         Sfr::new(move |service: &mut GameManager, _ctx| {
-            async move {
+            Box::pin(async move {
                 for (id, link) in &service.games {
                     let join_state = match link
                         .send(CheckJoinableMessage {
@@ -242,8 +235,7 @@ impl Handler<TryAddMessage> for GameManager {
                     }
                 }
                 TryAddResult::Failure(msg.player)
-            }
-            .boxed()
+            })
         })
     }
 }
@@ -276,36 +268,33 @@ impl Handler<RemovePlayerMessage> for GameManager {
         // Link to the target game
         let link = self.games.get(&msg.game_id).cloned();
 
-        Fr::new(
-            async move {
-                let link = match link {
-                    Some(value) => value,
-                    None => return,
-                };
+        Fr::new(Box::pin(async move {
+            let link = match link {
+                Some(value) => value,
+                None => return,
+            };
 
-                let is_empty = match link
-                    .send(super::RemovePlayerMessage {
-                        id: msg.id,
-                        reason: msg.reason,
-                        ty: msg.ty,
+            let is_empty = match link
+                .send(super::RemovePlayerMessage {
+                    id: msg.id,
+                    reason: msg.reason,
+                    ty: msg.ty,
+                })
+                .await
+            {
+                Ok(value) => value,
+                Err(_) => return,
+            };
+
+            if is_empty {
+                // Remove the empty game
+                let _ = return_link
+                    .send(RemoveGameMessage {
+                        game_id: msg.game_id,
                     })
-                    .await
-                {
-                    Ok(value) => value,
-                    Err(_) => return,
-                };
-
-                if is_empty {
-                    // Remove the empty game
-                    let _ = return_link
-                        .send(RemoveGameMessage {
-                            game_id: msg.game_id,
-                        })
-                        .await;
-                }
+                    .await;
             }
-            .boxed(),
-        )
+        }))
     }
 }
 
@@ -353,12 +342,9 @@ impl Handler<GetGameDataMessage> for GameManager {
             None => return Fr::ready(None),
         };
 
-        Fr::new(
-            async move {
-                let data = link.send(super::GetGameDataMessage {}).await.ok()?;
-                Some(data)
-            }
-            .boxed(),
-        )
+        Fr::new(Box::pin(async move {
+            let data = link.send(super::GetGameDataMessage {}).await.ok()?;
+            Some(data)
+        }))
     }
 }

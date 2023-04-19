@@ -2,10 +2,8 @@
 //! about the server such as the version and services running
 
 use crate::{
-    http::{
-        ext::{blaze_upgrade::BlazeUpgrade, ErrorStatusCode},
-        middleware::auth::AdminAuth,
-    },
+    database::entities::players::PlayerRole,
+    middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade},
     session::Session,
     state,
     utils::logging::LOG_FILE_NAME,
@@ -18,7 +16,6 @@ use axum::{
     Json, Router,
 };
 use blaze_pk::packet::PacketCodec;
-use database::PlayerRole;
 use hyper::header;
 use interlink::service::Service;
 use log::{debug, error};
@@ -135,22 +132,14 @@ async fn submit_telemetry(Json(data): Json<TelemetryMessage>) -> StatusCode {
     StatusCode::OK
 }
 
-/// Error status code implementation for the different error
-/// status codes of each error
-impl ErrorStatusCode for LogsError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::InvalidPermission => StatusCode::UNAUTHORIZED,
-            Self::IO(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
 /// IntoResponse implementation for PlayersError to allow it to be
 /// used within the result type as a error response
 impl IntoResponse for LogsError {
-    #[inline]
     fn into_response(self) -> Response {
-        (self.status_code(), self.to_string()).into_response()
+        let status = match &self {
+            Self::InvalidPermission => StatusCode::UNAUTHORIZED,
+            Self::IO(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        (status, self.to_string()).into_response()
     }
 }

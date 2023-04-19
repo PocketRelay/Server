@@ -4,7 +4,6 @@ use crate::{
     },
     utils::types::{GameID, SessionID},
 };
-use futures::FutureExt;
 use interlink::prelude::*;
 use log::debug;
 use rules::RuleSet;
@@ -60,7 +59,7 @@ impl Handler<GameCreatedMessage> for Matchmaking {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         Sfr::new(move |service: &mut Matchmaking, _ctx| {
-            async move {
+            Box::pin(async move {
                 let link = msg.link;
                 let queue = &mut service.queue;
                 if queue.is_empty() {
@@ -121,8 +120,7 @@ impl Handler<GameCreatedMessage> for Matchmaking {
                 }
 
                 queue.append(&mut requeue)
-            }
-            .boxed()
+            })
         })
     }
 }

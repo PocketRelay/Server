@@ -2,34 +2,36 @@
 //! data such as player data for when they become authenticated and
 //! networking data.
 
-use crate::http::ext::blaze_upgrade::BlazeScheme;
-use crate::services::game::manager::RemovePlayerMessage;
-use crate::services::game::models::RemoveReason;
-use crate::services::matchmaking::RemoveQueueMessage;
-use crate::services::sessions::{AddMessage, RemoveMessage};
-use crate::services::Services;
-use crate::utils::components;
-use crate::utils::models::Port;
-use crate::utils::types::PlayerID;
 use crate::{
-    services::game::{player::GamePlayer, RemovePlayerType},
+    database::entities::Player,
+    middleware::blaze_upgrade::BlazeScheme,
+    services::{
+        game::{
+            manager::RemovePlayerMessage, models::RemoveReason, player::GamePlayer,
+            RemovePlayerType,
+        },
+        matchmaking::RemoveQueueMessage,
+        sessions::{AddMessage, RemoveMessage},
+        Services,
+    },
     state::GlobalState,
     utils::{
-        components::{Components, UserSessions},
-        models::{NetData, NetGroups, QosNetworkData, UpdateExtDataAttr},
-        types::{GameID, SessionID},
+        components::{self, Components, UserSessions},
+        models::{NetData, NetGroups, Port, QosNetworkData, UpdateExtDataAttr},
+        types::{GameID, PlayerID, SessionID},
     },
 };
-use blaze_pk::packet::PacketDebug;
-use blaze_pk::packet::{Packet, PacketComponents};
-use blaze_pk::router::{HandleError, Router};
-use blaze_pk::value_type;
-use blaze_pk::{codec::Encodable, tag::TdfType, writer::TdfWriter};
-use database::Player;
+use blaze_pk::{
+    codec::Encodable,
+    packet::{Packet, PacketComponents, PacketDebug},
+    router::{HandleError, Router},
+    tag::TdfType,
+    value_type,
+    writer::TdfWriter,
+};
 use interlink::prelude::*;
 use log::{debug, error, log_enabled};
-use std::fmt::Debug;
-use std::io;
+use std::{fmt::Debug, io};
 
 pub mod models;
 pub mod routes;

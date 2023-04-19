@@ -5,7 +5,11 @@
 //! other than the Mass Effect 3 client itself.
 
 use crate::{
-    http::ext::{ErrorStatusCode, Xml},
+    database::{
+        entities::{GalaxyAtWar, Player, PlayerData},
+        DatabaseConnection, DbErr, DbResult,
+    },
+    middleware::xml::Xml,
     state::GlobalState,
     utils::parsing::PlayerClass,
 };
@@ -16,7 +20,6 @@ use axum::{
     routing::get,
     Router,
 };
-use database::{DatabaseConnection, DbErr, DbResult, GalaxyAtWar, Player};
 use serde::Deserialize;
 use std::fmt::Display;
 use tokio::try_join;
@@ -114,7 +117,7 @@ async fn get_player_gaw_data(
     let config = GlobalState::config();
 
     let (gaw_data, promotions) = try_join!(
-        GalaxyAtWar::find_or_create(db, &player, config.galaxy_at_war.decay),
+        GalaxyAtWar::find_or_create(db, player.id, config.galaxy_at_war.decay),
         get_promotions(db, &player)
     )?;
     Ok((gaw_data, promotions))
@@ -125,8 +128,8 @@ async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u3
     if !config.galaxy_at_war.promotions {
         return Ok(0);
     }
-    Ok(player
-        .get_classes(db)
+
+    Ok(PlayerData::get_classes(db, player.id)
         .await?
         .iter()
         .filter_map(|value| PlayerClass::parse(&value.value))
@@ -260,25 +263,17 @@ impl From<DbErr> for GAWError {
     }
 }
 
-/// Error status code implementation for the different error
-/// status codes of each error.
-///
-/// These response codes match that of the official servers
-impl ErrorStatusCode for GAWError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            GAWError::InvalidToken => StatusCode::OK,
-            GAWError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
 /// IntoResponse implementation for GAWError to allow it to be
 /// used within the result type as a error response
 impl IntoResponse for GAWError {
     fn into_response(self) -> Response {
+        let status = match &self {
+            GAWError::InvalidToken => StatusCode::OK,
+            GAWError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
         let mut response = self.to_string().into_response();
-        *response.status_mut() = self.status_code();
+        *response.status_mut() = status;
         response
             .headers_mut()
             .insert(header::CONTENT_TYPE, HeaderValue::from_static("text/xml"));

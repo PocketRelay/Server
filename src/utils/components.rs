@@ -302,6 +302,7 @@ pub enum Redirector {
     GetServerInstance,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Hash, PartialEq, Eq, PacketComponent)]
 pub enum Stats {
     #[command(target = 0x1)]

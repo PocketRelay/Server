@@ -1,4 +1,5 @@
 use crate::{
+    database::entities::Player,
     services::sessions::LookupMessage,
     session::{
         models::{
@@ -13,7 +14,6 @@ use crate::{
     utils::components::{Components as C, UserSessions as U},
 };
 use blaze_pk::router::Router;
-use database::Player;
 use log::error;
 
 /// Routing function for adding all the routes in this file to the

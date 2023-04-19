@@ -1,5 +1,10 @@
 use crate::{
-    http::ext::ErrorStatusCode, services::tokens::VerifyError, state::GlobalState,
+    database::{
+        entities::{players::PlayerRole, Player},
+        DbErr,
+    },
+    services::tokens::VerifyError,
+    state::GlobalState,
     utils::types::BoxFuture,
 };
 use axum::{
@@ -8,8 +13,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use database::{DbErr, Player, PlayerRole};
-use futures::FutureExt;
 use std::marker::PhantomData;
 use thiserror::Error;
 
@@ -65,7 +68,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
         'b: 'c,
         Self: 'c,
     {
-        async move {
+        Box::pin(async move {
             // Extract the token from the headers
             let token = parts
                 .headers
@@ -84,8 +87,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
                 .ok_or(TokenError::InvalidToken)?;
 
             Ok(Self(player, PhantomData))
-        }
-        .boxed()
+        })
     }
 }
 
@@ -116,23 +118,17 @@ impl From<VerifyError> for TokenError {
     }
 }
 
-/// Error status code implementation for the different error
-/// status codes of each error
-impl ErrorStatusCode for TokenError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::MissingToken => StatusCode::BAD_REQUEST,
-            Self::InvalidToken | Self::ExpiredToken => StatusCode::UNAUTHORIZED,
-            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
 /// IntoResponse implementation for TokenError to allow it to be
 /// used within the result type as a error response
 impl IntoResponse for TokenError {
     #[inline]
     fn into_response(self) -> Response {
-        (self.status_code(), boxed(self.to_string())).into_response()
+        let status = match &self {
+            Self::MissingToken => StatusCode::BAD_REQUEST,
+            Self::InvalidToken | Self::ExpiredToken => StatusCode::UNAUTHORIZED,
+            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (status, boxed(self.to_string())).into_response()
     }
 }

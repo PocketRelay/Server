@@ -1,5 +1,4 @@
 use crate::{
-    http::ext::ErrorStatusCode,
     services::leaderboard::{models::*, QueryMessage},
     state::GlobalState,
     utils::types::PlayerID,
@@ -134,22 +133,15 @@ async fn get_player_ranking(
     Ok(response.into_response())
 }
 
-/// Error status code implementation for the different error
-/// status codes of each error
-impl ErrorStatusCode for LeaderboardError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::PlayerNotFound | Self::UnknownLeaderboard => StatusCode::NOT_FOUND,
-            Self::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
 /// IntoResponse implementation for LeaderboardError to allow it to be
 /// used within the result type as a error response
 impl IntoResponse for LeaderboardError {
     #[inline]
     fn into_response(self) -> Response {
-        (self.status_code(), self.to_string()).into_response()
+        let status = match &self {
+            Self::PlayerNotFound | Self::UnknownLeaderboard => StatusCode::NOT_FOUND,
+            Self::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        (status, self.to_string()).into_response()
     }
 }

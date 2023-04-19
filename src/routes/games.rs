@@ -1,5 +1,6 @@
 use crate::{
-    http::middleware::auth::Auth,
+    database::entities::players::PlayerRole,
+    middleware::auth::Auth,
     services::game::{
         manager::{SnapshotMessage, SnapshotQueryMessage},
         GameSnapshot,
@@ -14,7 +15,6 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use database::PlayerRole;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

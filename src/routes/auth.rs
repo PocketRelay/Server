@@ -1,4 +1,5 @@
 use crate::{
+    database::entities::Player,
     state::GlobalState,
     utils::hashing::{hash_password, verify_password},
 };
@@ -8,7 +9,6 @@ use axum::{
     routing::post,
     Json, Router,
 };
-use database::Player;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

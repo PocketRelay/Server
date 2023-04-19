@@ -7,7 +7,6 @@ use crate::{
     utils::{
         components::{Components, Redirector},
         models::{InstanceDetails, Port},
-        net::lookup_host,
     },
 };
 use blaze_pk::{
@@ -16,9 +15,11 @@ use blaze_pk::{
     packet::{Packet, PacketCodec, PacketComponents, PacketDebug, PacketHeader, PacketType},
 };
 use blaze_ssl_async::stream::BlazeStream;
-use futures::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use log::{debug, error, log_enabled};
 use models::InstanceRequest;
+use reqwest;
+use serde::Deserialize;
 use tokio::io;
 use tokio_util::codec::Framed;
 
@@ -51,7 +52,7 @@ impl Retriever {
             return None;
         }
 
-        let redirector_host = lookup_host(Self::REDIRECTOR_HOST).await?;
+        let redirector_host = Self::lookup_host().await?;
         debug!("Completed host lookup: {}", &redirector_host);
         let (host, port) = Self::get_main_host(redirector_host).await?;
         debug!("Retriever setup complete. (Host: {} Port: {})", &host, port);
@@ -69,6 +70,44 @@ impl Retriever {
             port,
             origin_flow,
         })
+    }
+
+    /// Attempts to resolve the address of the official gosredirector. First attempts
+    /// to use the system DNS with tokio but if the resolved address is loopback it
+    /// is ignored and the google HTTP DNS will be attempted instead
+    ///
+    /// `host` The host to lookup
+    async fn lookup_host() -> Option<String> {
+        let host = Self::REDIRECTOR_HOST;
+
+        // Attempt to lookup using the system DNS
+        {
+            let tokio = tokio::net::lookup_host(host)
+                .await
+                .ok()
+                .and_then(|mut value| value.next());
+
+            if let Some(tokio) = tokio {
+                let ip = tokio.ip();
+                // Loopback value means it was probbably redirected in the hosts file
+                // so those are ignored
+                if !ip.is_loopback() {
+                    return Some(format!("{}", ip));
+                }
+            }
+        }
+
+        // Attempt to lookup using google HTTP DNS
+        let url = format!("https://dns.google/resolve?name={host}&type=A");
+        let mut request = reqwest::get(url)
+            .await
+            .ok()?
+            .json::<LookupResponse>()
+            .await
+            .ok()?;
+
+        let answer = request.answer.pop()?;
+        Some(answer.data)
     }
 
     /// Creates a connection to the redirector server and sends
@@ -266,4 +305,56 @@ impl From<io::Error> for RetrieverError {
     fn from(err: io::Error) -> Self {
         RetrieverError::IO(err)
     }
+}
+
+/// Structure for the lookup responses from the google DNS API
+///
+/// # Structure
+///
+/// ```
+/// {
+///   "Status": 0,
+///   "TC": false,
+///   "RD": true,
+///   "RA": true,
+///   "AD": false,
+///   "CD": false,
+///   "Question": [
+///     {
+///       "name": "gosredirector.ea.com.",
+///       "type": 1
+///     }
+///   ],
+///   "Answer": [
+///     {
+///       "name": "gosredirector.ea.com.",
+///       "type": 1,
+///       "TTL": 300,
+///       "data": "159.153.64.175"
+///     }
+///   ],
+///   "Comment": "Response from 2600:1403:a::43."
+/// }
+/// ```
+#[derive(Deserialize)]
+struct LookupResponse {
+    #[serde(rename = "Answer")]
+    answer: Vec<Answer>,
+}
+
+/// Structure for answer portion of request. Only the data value is
+/// being used so only that is present here.
+///
+/// # Structure
+/// ```
+/// {
+///   "name": "gosredirector.ea.com.",
+///   "type": 1,
+///   "TTL": 300,
+///   "data": "159.153.64.175"
+/// }
+/// ```
+#[derive(Deserialize)]
+struct Answer {
+    data: String,
 }

@@ -1,8 +1,11 @@
 use crate::{
-    http::{
-        ext::ErrorStatusCode,
-        middleware::auth::{AdminAuth, Auth},
+    database::{
+        entities::players,
+        entities::players::PlayerRole,
+        entities::{GalaxyAtWar, Player, PlayerData},
+        DatabaseConnection, DbErr,
     },
+    middleware::auth::{AdminAuth, Auth},
     state::GlobalState,
     utils::{
         hashing::{hash_password, verify_password},
@@ -16,8 +19,8 @@ use axum::{
     routing::{get, put},
     Json, Router,
 };
-use database::{DatabaseConnection, DbErr, GalaxyAtWar, Player, PlayerData, PlayerRole};
 use log::error;
+use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;
 use validator::validate_email;
@@ -129,7 +132,14 @@ async fn get_players(
 
     let db = GlobalState::database();
     let count = query.count.unwrap_or(DEFAULT_COUNT);
-    let (players, more) = Player::all(&db, query.offset as u64, count as u64).await?;
+
+    let paginator = players::Entity::find()
+        .order_by_asc(players::Column::Id)
+        .paginate(&db, count as u64);
+    let page = query.offset as u64;
+    let total_pages = paginator.num_pages().await?;
+    let more = page < total_pages;
+    let players = paginator.fetch_page(page).await?;
 
     Ok(Json(PlayersResponse { players, more }))
 }
@@ -506,8 +516,7 @@ async fn all_data(
     _admin: AdminAuth,
 ) -> PlayersJsonResult<PlayerDataMap> {
     let db = GlobalState::database();
-    let player: Player = find_player(&db, player_id).await?;
-    let data = Player::all_data(player.id, &db).await?;
+    let data = PlayerData::all(&db, player_id).await?;
     Ok(Json(PlayerDataMap(data)))
 }
 
@@ -532,8 +541,7 @@ async fn get_data(
         return Err(PlayersError::InvalidPermission);
     }
 
-    let value = player
-        .get_data(&db, &key)
+    let value = PlayerData::get(&db, player.id, &key)
         .await?
         .ok_or(PlayersError::DataNotFound)?;
     Ok(Json(value))
@@ -570,7 +578,7 @@ async fn set_data(
         return Err(PlayersError::InvalidPermission);
     }
 
-    let data = Player::set_data(player.id, &db, key, req.value).await?;
+    let data = PlayerData::set(&db, player.id, key, req.value).await?;
     Ok(Json(data))
 }
 
@@ -596,7 +604,8 @@ async fn delete_data(
         return Err(PlayersError::InvalidPermission);
     }
 
-    player.delete_data(&db, &key).await?;
+    PlayerData::delete(&db, player.id, &key).await?;
+
     Ok(Json(()))
 }
 
@@ -613,22 +622,8 @@ async fn get_player_gaw(
 ) -> PlayersJsonResult<GalaxyAtWar> {
     let db = GlobalState::database();
     let player = find_player(&db, player_id).await?;
-    let galax_at_war = GalaxyAtWar::find_or_create(&db, &player, 0.0).await?;
+    let galax_at_war = GalaxyAtWar::find_or_create(&db, player.id, 0.0).await?;
     Ok(Json(galax_at_war))
-}
-
-/// Error status code implementation for the different error
-/// status codes of each error
-impl ErrorStatusCode for PlayersError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::DataNotFound => StatusCode::NOT_FOUND,
-            Self::PlayerNotFound => StatusCode::NOT_FOUND,
-            Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
-            Self::InvalidPassword | Self::InvalidPermission => StatusCode::UNAUTHORIZED,
-            Self::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
 }
 
 /// From implementation for converting database errors into
@@ -642,8 +637,15 @@ impl From<DbErr> for PlayersError {
 /// IntoResponse implementation for PlayersError to allow it to be
 /// used within the result type as a error response
 impl IntoResponse for PlayersError {
-    #[inline]
     fn into_response(self) -> Response {
-        (self.status_code(), self.to_string()).into_response()
+        let status = match &self {
+            Self::DataNotFound => StatusCode::NOT_FOUND,
+            Self::PlayerNotFound => StatusCode::NOT_FOUND,
+            Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
+            Self::InvalidPassword | Self::InvalidPermission => StatusCode::UNAUTHORIZED,
+            Self::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (status, self.to_string()).into_response()
     }
 }

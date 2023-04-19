@@ -1,9 +1,8 @@
-use crate::config::ServicesConfig;
-
 use self::{
     game::manager::GameManager, leaderboard::Leaderboard, matchmaking::Matchmaking,
     retriever::Retriever, sessions::AuthedSessions, tokens::Tokens,
 };
+use crate::config::ServicesConfig;
 use interlink::prelude::Link;
 use tokio::join;
 
