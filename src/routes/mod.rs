@@ -1,5 +1,4 @@
-use crate::middleware::cors::cors_layer;
-use axum::{middleware, Router};
+use axum::Router;
 
 mod auth;
 mod content;
@@ -33,9 +32,7 @@ pub fn router() -> Router {
                 // Leaderboard routing
                 .nest("/leaderboard", leaderboard::router())
                 // Server details routes
-                .nest("/server", server::router())
-                // CORS middleware is applied to all API routes to allow browser access
-                .layer(middleware::from_fn(cors_layer)),
+                .nest("/server", server::router()),
         )
         .nest("/", dashboard::router())
         .fallback(dashboard::fallback)
