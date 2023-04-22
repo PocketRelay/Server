@@ -23,8 +23,6 @@ async fn main() {
     // Initialize logging
     logging::setup(config.logging);
 
-    info!("Starting Pocket Relay v{}", state::VERSION);
-
     // Create the server socket address while the port is still available
     let addr: SocketAddr = (Ipv4Addr::UNSPECIFIED, config.port).into();
 
@@ -38,7 +36,7 @@ async fn main() {
     let server_future = Server::bind(&addr).serve(router);
     let close_future = signal::ctrl_c();
 
-    info!("Started server on {}", addr);
+    info!("Started server on {} (v{})", addr, state::VERSION);
 
     // Await server termination or shutdown signal
     select! {
