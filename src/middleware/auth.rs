@@ -82,7 +82,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
 
             // Load the claimed player
             let db = App::database();
-            let player = Player::by_id(&db, player_id)
+            let player = Player::by_id(db, player_id)
                 .await?
                 .ok_or(TokenError::InvalidToken)?;
 

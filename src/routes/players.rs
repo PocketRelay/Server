@@ -134,7 +134,7 @@ async fn get_players(
 
     let paginator = players::Entity::find()
         .order_by_asc(players::Column::Id)
-        .paginate(&db, count as u64);
+        .paginate(db, count as u64);
     let page = query.offset as u64;
     let total_pages = paginator.num_pages().await?;
     let more = page < total_pages;
@@ -165,7 +165,7 @@ async fn get_player(
     _auth: AdminAuth,
 ) -> PlayersJsonResult<Player> {
     let db = App::database();
-    let player = find_player(&db, player_id).await?;
+    let player = find_player(db, player_id).await?;
     Ok(Json(player))
 }
 
@@ -199,7 +199,7 @@ async fn set_details(
 
     // Get the target player
     let db = App::database();
-    let player = find_player(&db, player_id).await?;
+    let player = find_player(db, player_id).await?;
 
     // Check modification permission
     if !auth.has_permission_over(&player) {
@@ -245,7 +245,7 @@ async fn update_details(
 /// `player` The player to set the details for
 /// `req`    The update request
 async fn attempt_set_details(
-    db: DatabaseConnection,
+    db: &DatabaseConnection,
     player: Player,
     req: UpdateDetailsRequest,
 ) -> PlayersResult<()> {
@@ -254,7 +254,7 @@ async fn attempt_set_details(
     let email = if player.email == req.email {
         None
     } else {
-        match Player::by_email(&db, &req.email).await {
+        match Player::by_email(db, &req.email).await {
             Ok(None) => {}
             // Error if email is taken
             Ok(Some(_)) => return Err(PlayersError::EmailTaken),
@@ -277,7 +277,7 @@ async fn attempt_set_details(
     };
 
     // Update the details
-    if let Err(err) = player.set_details(&db, username, email).await {
+    if let Err(err) = player.set_details(db, username, email).await {
         error!("Failed to update player password: {:?}", err);
         return Err(PlayersError::ServerError);
     }
@@ -310,7 +310,7 @@ async fn set_password(
 
     // Get the target player
     let db = App::database();
-    let player = find_player(&db, player_id).await?;
+    let player = find_player(db, player_id).await?;
 
     // Check modification permission
     if !auth.has_permission_over(&player) {
@@ -353,9 +353,9 @@ async fn set_role(
 
     // Get the target player
     let db = App::database();
-    let player = find_player(&db, player_id).await?;
+    let player = find_player(db, player_id).await?;
 
-    if let Err(err) = player.set_role(&db, role).await {
+    if let Err(err) = player.set_role(db, role).await {
         error!("Failed to set player role: {:?}", err);
         return Err(PlayersError::ServerError);
     }
@@ -408,7 +408,7 @@ async fn update_password(
 /// `player`   The player to set the password for
 /// `password` The password to set
 async fn attempt_set_password(
-    db: DatabaseConnection,
+    db: &'static DatabaseConnection,
     player: Player,
     password: String,
 ) -> PlayersResult<()> {
@@ -423,7 +423,7 @@ async fn attempt_set_password(
     };
 
     // Update the password
-    if let Err(err) = player.set_password(&db, password).await {
+    if let Err(err) = player.set_password(db, password).await {
         error!("Failed to update player password: {:?}", err);
         return Err(PlayersError::ServerError);
     }
@@ -445,13 +445,13 @@ async fn delete_player(
     let auth = auth.into_inner();
 
     let db = App::database();
-    let player: Player = find_player(&db, player_id).await?;
+    let player: Player = find_player(db, player_id).await?;
 
     if auth.id != player.id && auth.role <= player.role {
         return Err(PlayersError::InvalidPermission);
     }
 
-    player.delete(&db).await?;
+    player.delete(db).await?;
     Ok(StatusCode::OK.into_response())
 }
 /// Request to update the password of the current user account
@@ -482,7 +482,7 @@ async fn delete_self(
     }
 
     let db = App::database();
-    auth.delete(&db).await?;
+    auth.delete(db).await?;
     Ok(StatusCode::OK.into_response())
 }
 
@@ -515,7 +515,7 @@ async fn all_data(
     _admin: AdminAuth,
 ) -> PlayersJsonResult<PlayerDataMap> {
     let db = App::database();
-    let data = PlayerData::all(&db, player_id).await?;
+    let data = PlayerData::all(db, player_id).await?;
     Ok(Json(PlayerDataMap(data)))
 }
 
@@ -534,13 +534,13 @@ async fn get_data(
 ) -> PlayersJsonResult<PlayerData> {
     let auth = auth.into_inner();
     let db = App::database();
-    let player: Player = find_player(&db, player_id).await?;
+    let player: Player = find_player(db, player_id).await?;
 
     if auth.id != player.id && auth.role <= player.role {
         return Err(PlayersError::InvalidPermission);
     }
 
-    let value = PlayerData::get(&db, player.id, &key)
+    let value = PlayerData::get(db, player.id, &key)
         .await?
         .ok_or(PlayersError::DataNotFound)?;
     Ok(Json(value))
@@ -571,13 +571,13 @@ async fn set_data(
     let auth = auth.into_inner();
 
     let db = App::database();
-    let player: Player = find_player(&db, player_id).await?;
+    let player: Player = find_player(db, player_id).await?;
 
     if auth.id != player.id && auth.role <= player.role {
         return Err(PlayersError::InvalidPermission);
     }
 
-    let data = PlayerData::set(&db, player.id, key, req.value).await?;
+    let data = PlayerData::set(db, player.id, key, req.value).await?;
     Ok(Json(data))
 }
 
@@ -597,13 +597,13 @@ async fn delete_data(
     let auth = auth.into_inner();
 
     let db = App::database();
-    let player: Player = find_player(&db, player_id).await?;
+    let player: Player = find_player(db, player_id).await?;
 
     if auth.id != player.id && auth.role <= player.role {
         return Err(PlayersError::InvalidPermission);
     }
 
-    PlayerData::delete(&db, player.id, &key).await?;
+    PlayerData::delete(db, player.id, &key).await?;
 
     Ok(Json(()))
 }
@@ -620,8 +620,8 @@ async fn get_player_gaw(
     _admin: AdminAuth,
 ) -> PlayersJsonResult<GalaxyAtWar> {
     let db = App::database();
-    let player = find_player(&db, player_id).await?;
-    let galax_at_war = GalaxyAtWar::find_or_create(&db, player.id, 0.0).await?;
+    let player = find_player(db, player_id).await?;
+    let galax_at_war = GalaxyAtWar::find_or_create(db, player.id, 0.0).await?;
     Ok(Json(galax_at_war))
 }
 

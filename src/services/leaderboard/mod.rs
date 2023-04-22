@@ -143,7 +143,7 @@ impl Leaderboard {
 
         let mut paginator = players::Entity::find()
             .order_by_asc(players::Column::Id)
-            .paginate(&db, BATCH_COUNT);
+            .paginate(db, BATCH_COUNT);
 
         loop {
             let players = match paginator.fetch_and_next().await {
@@ -161,7 +161,7 @@ impl Leaderboard {
 
             // Add the futures for all the players
             for player in players {
-                join_set.spawn(ranking.compute_ranking(db.clone(), player));
+                join_set.spawn(ranking.compute_ranking(db, player));
             }
 
             // Await computed results
@@ -207,7 +207,7 @@ type RankerFut = BoxFuture<'static, DbResult<LeaderboardEntry>>;
 trait Ranker: Send {
     /// Function for producing the future that on completion will result
     /// in the leaderboard entry value
-    fn compute_ranking(&self, db: DatabaseConnection, player: Player) -> RankerFut;
+    fn compute_ranking(&self, db: &'static DatabaseConnection, player: Player) -> RankerFut;
 }
 
 /// Ranker implementaion for function types
@@ -219,10 +219,10 @@ trait Ranker: Send {
 /// ```
 impl<F, Fut> Ranker for F
 where
-    F: Fn(DatabaseConnection, Player) -> Fut + Send,
+    F: Fn(&'static DatabaseConnection, Player) -> Fut + Send,
     Fut: Future<Output = DbResult<LeaderboardEntry>> + Send + 'static,
 {
-    fn compute_ranking(&self, db: DatabaseConnection, player: Player) -> RankerFut {
+    fn compute_ranking(&self, db: &'static DatabaseConnection, player: Player) -> RankerFut {
         Box::pin(self(db, player))
     }
 }
@@ -232,11 +232,14 @@ where
 ///
 /// `db`     The database connection
 /// `player` The player to rank
-async fn compute_n7_player(db: DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
+async fn compute_n7_player(
+    db: &'static DatabaseConnection,
+    player: Player,
+) -> DbResult<LeaderboardEntry> {
     let mut total_promotions = 0;
     let mut total_level: u32 = 0;
 
-    let data = PlayerData::all(&db, player.id).await?;
+    let data = PlayerData::all(db, player.id).await?;
 
     let mut classes = Vec::new();
     let mut characters = Vec::new();
@@ -279,8 +282,11 @@ async fn compute_n7_player(db: DatabaseConnection, player: Player) -> DbResult<L
 ///
 /// `db`     The database connection
 /// `player` The player to rank
-async fn compute_cp_player(db: DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
-    let value = PlayerData::get_challenge_points(&db, player.id)
+async fn compute_cp_player(
+    db: &'static DatabaseConnection,
+    player: Player,
+) -> DbResult<LeaderboardEntry> {
+    let value = PlayerData::get_challenge_points(db, player.id)
         .await
         .unwrap_or(0);
     Ok(LeaderboardEntry {

@@ -79,9 +79,9 @@ impl App {
 
     /// Obtains a database connection by cloning the global
     /// database pool
-    pub fn database() -> DatabaseConnection {
+    pub fn database() -> &'static DatabaseConnection {
         match unsafe { &GLOBAL_STATE } {
-            Some(value) => value.db.clone(),
+            Some(value) => &value.db,
             None => panic!("Global state not initialized"),
         }
     }

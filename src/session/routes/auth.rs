@@ -108,9 +108,9 @@ async fn handle_auth_request(
     let silent = req.is_silent();
     let db = App::database();
     let player: Player = match &req {
-        AuthRequest::Silent { token, .. } => handle_login_token(&db, token).await,
-        AuthRequest::Login { email, password } => handle_login_email(&db, email, password).await,
-        AuthRequest::Origin { token } => handle_login_origin(&db, token).await,
+        AuthRequest::Silent { token, .. } => handle_login_token(db, token).await,
+        AuthRequest::Login { email, password } => handle_login_email(db, email, password).await,
+        AuthRequest::Origin { token } => handle_login_origin(db, token).await,
     }?;
 
     // Failing to set the player likely the player disconnected or
@@ -440,7 +440,7 @@ async fn handle_create_account(
 
     let db = App::database();
 
-    match Player::by_email(&db, &email).await {
+    match Player::by_email(db, &email).await {
         // Continue normally for non taken emails
         Ok(None) => {}
         // Handle email address is already in use
@@ -465,7 +465,7 @@ async fn handle_create_account(
     let display_name: String = email.chars().take(99).collect::<String>();
 
     // Create a new player
-    let player: Player = match Player::create(&db, email, display_name, Some(hashed_password)).await
+    let player: Player = match Player::create(db, email, display_name, Some(hashed_password)).await
     {
         Ok(value) => value,
         Err(err) => {

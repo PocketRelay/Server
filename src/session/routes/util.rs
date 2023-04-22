@@ -556,7 +556,7 @@ async fn handle_user_settings_save(
         .ok_or(ServerError::FailedNoLoginAction)?;
 
     let db = App::database();
-    if let Err(err) = PlayerData::set(&db, player, req.key, req.value).await {
+    if let Err(err) = PlayerData::set(db, player, req.key, req.value).await {
         warn!("Failed to update player data: {err:?}");
         Err(ServerError::ServerUnavailable)
     } else {
@@ -582,7 +582,7 @@ async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<Setting
     let db = App::database();
 
     // Load the player data from the database
-    let data: Vec<PlayerData> = match PlayerData::all(&db, player).await {
+    let data: Vec<PlayerData> = match PlayerData::all(db, player).await {
         Ok(value) => value,
         Err(err) => {
             error!("Failed to load player data: {err:?}");

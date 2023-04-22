@@ -54,7 +54,7 @@ pub struct TokenResponse {
 /// Route for logging into a non origin account
 async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, AuthError> {
     let db = App::database();
-    let player = Player::by_email(&db, &req.email)
+    let player = Player::by_email(db, &req.email)
         .await
         .map_err(|_| AuthError::ServerError)?
         .ok_or(AuthError::InvalidCredentails)?;
@@ -93,7 +93,7 @@ async fn create(Json(req): Json<CreateRequest>) -> Result<Json<TokenResponse>, A
     }
 
     // Validate email taken status
-    match Player::by_email(&db, &req.email).await {
+    match Player::by_email(db, &req.email).await {
         Ok(Some(_)) => return Err(AuthError::EmailTaken),
         Ok(None) => {}
         Err(_) => return Err(AuthError::ServerError),
@@ -104,7 +104,7 @@ async fn create(Json(req): Json<CreateRequest>) -> Result<Json<TokenResponse>, A
         Err(_) => return Err(AuthError::ServerError),
     };
 
-    let player = Player::create(&db, req.email, req.username, Some(password))
+    let player = Player::create(db, req.email, req.username, Some(password))
         .await
         .map_err(|_| AuthError::ServerError)?;
 
