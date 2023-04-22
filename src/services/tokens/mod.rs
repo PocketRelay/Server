@@ -5,18 +5,21 @@
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use log::error;
-use ring::hmac::{self, HMAC_SHA256};
+use ring::hmac::{self, Key, HMAC_SHA256};
 use std::{
     path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
-use tokio::fs::{read, write};
+use tokio::{
+    fs::{write, File},
+    io::{self, AsyncReadExt},
+};
 
 /// Token provider and verification service
 pub struct Tokens {
     /// HMAC key used for computing signatures
-    key: hmac::Key,
+    key: Key,
 }
 
 impl Tokens {
@@ -29,38 +32,41 @@ impl Tokens {
         // Path to the file containing the server secret value
         let secret_path = Path::new("data/secret.bin");
 
+        // The bytes of the secret
+        let mut secret = [0u8; 64];
+
         // Attempt to load existing secret
-        let secret: Option<Vec<u8>> = if secret_path.exists() {
-            match read(secret_path).await {
-                Ok(value) => Some(value),
-                Err(err) => {
-                    error!("Failed to read secrets file: {:?}", err);
-                    None
-                }
+        if secret_path.exists() {
+            if let Err(err) = Self::read_secret(&mut secret, secret_path).await {
+                error!("Failed to read secrets file: {:?}", err);
+            } else {
+                let key = Key::new(HMAC_SHA256, &secret);
+
+                // Return the loaded secret key
+                return Self { key };
             }
-        } else {
-            None
-        };
+        }
 
-        let key = match secret {
-            // Handle valid key cases
-            Some(ref value) if !value.is_empty() => hmac::Key::new(HMAC_SHA256, value),
-            // Invalid or missing key cases, compute a new secret to use as a key
-            _ => {
-                // Generate random secret bytes
-                let mut secret = [0u8; 64];
-                OsRng.fill_bytes(&mut secret);
+        // Generate random secret bytes
+        OsRng.fill_bytes(&mut secret);
 
-                // Save the created secret
-                if let Err(err) = write(secret_path, &secret).await {
-                    error!("Failed to write secrets file: {:?}", err);
-                }
+        // Save the created secret
+        if let Err(err) = write(secret_path, &secret).await {
+            error!("Failed to write secrets file: {:?}", err);
+        }
 
-                hmac::Key::new(HMAC_SHA256, &secret)
-            }
-        };
-
+        let key = Key::new(HMAC_SHA256, &secret);
         Self { key }
+    }
+
+    /// Reads the secret from the secrets file into the provided buffer
+    /// returning whether the entire secret could be read
+    ///
+    /// `out` The buffer to read the secret to
+    async fn read_secret(out: &mut [u8], path: &Path) -> io::Result<()> {
+        let mut file = File::open(path).await?;
+        file.read_exact(out).await?;
+        Ok(())
     }
 
     /// Creates a new claim using the provided claim value

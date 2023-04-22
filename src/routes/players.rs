@@ -128,7 +128,6 @@ async fn get_players(
     _auth: AdminAuth,
 ) -> PlayersJsonResult<PlayersResponse> {
     const DEFAULT_COUNT: u8 = 20;
-    const DEFAULT_OFFSET: u16 = 0;
 
     let db = GlobalState::database();
     let count = query.count.unwrap_or(DEFAULT_COUNT);
