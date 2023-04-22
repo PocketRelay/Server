@@ -51,6 +51,4 @@ async fn main() {
        // Handle the server being stopped with CTRL+C
        _ = close_future => {}
     }
-
-    info!("Shutting down...");
 }
