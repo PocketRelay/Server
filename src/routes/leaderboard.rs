@@ -1,6 +1,6 @@
 use crate::{
     services::leaderboard::{models::*, QueryMessage},
-    state::GlobalState,
+    state::App,
     utils::types::PlayerID,
 };
 use axum::{
@@ -76,7 +76,7 @@ async fn get_leaderboard(
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-    let services = GlobalState::services();
+    let services = App::services();
     let leaderboard = &services.leaderboard;
 
     /// The default number of entries to return in a leaderboard response
@@ -116,7 +116,7 @@ async fn get_player_ranking(
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-    let services = GlobalState::services();
+    let services = App::services();
     let leaderboard = &services.leaderboard;
 
     let group = leaderboard

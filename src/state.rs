@@ -14,7 +14,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Global state that is shared throughout the application this
 /// will be unset until the value is initialized then it will be
 /// set
-pub struct GlobalState {
+pub struct App {
     /// Connection to the database
     pub db: DatabaseConnection,
     /// Global services
@@ -26,9 +26,9 @@ pub struct GlobalState {
 }
 
 /// Static global state value
-static mut GLOBAL_STATE: Option<GlobalState> = None;
+static mut GLOBAL_STATE: Option<App> = None;
 
-impl GlobalState {
+impl App {
     /// Initializes the global state updating the value stored in
     /// GLOBAL_STATE with a new set state. This function MUST be
     /// called before this state is accessed or else the app will
@@ -60,7 +60,7 @@ impl GlobalState {
         let router = session::routes::router();
 
         unsafe {
-            GLOBAL_STATE = Some(GlobalState {
+            GLOBAL_STATE = Some(App {
                 db,
                 services,
                 config: runtime_config,

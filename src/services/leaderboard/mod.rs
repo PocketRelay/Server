@@ -5,7 +5,7 @@ use crate::{
         entities::{Player, PlayerData},
         DatabaseConnection, DbResult,
     },
-    state::GlobalState,
+    state::App,
     utils::{
         parsing::{KitNameDeployed, PlayerClass},
         types::BoxFuture,
@@ -132,7 +132,7 @@ impl Leaderboard {
         // The amount of players to process in each database request
         const BATCH_COUNT: u64 = 20;
 
-        let db = GlobalState::database();
+        let db = App::database();
 
         let mut values: Vec<LeaderboardEntry> = Vec::new();
 

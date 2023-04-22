@@ -1,7 +1,7 @@
 use axum::Server;
 use config::load_config;
 use log::{error, info};
-use state::GlobalState;
+use state::App;
 use std::net::{Ipv4Addr, SocketAddr};
 use tokio::{select, signal};
 use utils::logging;
@@ -27,7 +27,7 @@ async fn main() {
     let addr: SocketAddr = (Ipv4Addr::UNSPECIFIED, config.port).into();
 
     // Initialize global state
-    GlobalState::init(config).await;
+    App::init(config).await;
 
     // Create the HTTP router
     let router = routes::router().into_make_service();

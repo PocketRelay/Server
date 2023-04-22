@@ -7,7 +7,7 @@ use crate::{
         },
         DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
-    state::{self, GlobalState},
+    state::{self, App},
     utils::components::{Components as C, Util as U},
 };
 use base64ct::{Base64, Encoding};
@@ -555,7 +555,7 @@ async fn handle_user_settings_save(
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    let db = GlobalState::database();
+    let db = App::database();
     if let Err(err) = PlayerData::set(&db, player, req.key, req.value).await {
         warn!("Failed to update player data: {err:?}");
         Err(ServerError::ServerUnavailable)
@@ -579,7 +579,7 @@ async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<Setting
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    let db = GlobalState::database();
+    let db = App::database();
 
     // Load the player data from the database
     let data: Vec<PlayerData> = match PlayerData::all(&db, player).await {

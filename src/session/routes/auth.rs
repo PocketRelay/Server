@@ -10,7 +10,7 @@ use crate::{
         },
         GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage,
     },
-    state::GlobalState,
+    state::App,
     utils::{
         components::{Authentication as A, Components as C},
         hashing::{hash_password, verify_password},
@@ -106,7 +106,7 @@ async fn handle_auth_request(
     req: AuthRequest,
 ) -> ServerResult<AuthResponse> {
     let silent = req.is_silent();
-    let db = GlobalState::database();
+    let db = App::database();
     let player: Player = match &req {
         AuthRequest::Silent { token, .. } => handle_login_token(&db, token).await,
         AuthRequest::Login { email, password } => handle_login_email(&db, email, password).await,
@@ -127,7 +127,7 @@ async fn handle_auth_request(
     let session_token = match req {
         AuthRequest::Silent { token, .. } => token,
         _ => {
-            let services = GlobalState::services();
+            let services = App::services();
             services.tokens.claim(player.id)
         }
     };
@@ -146,7 +146,7 @@ async fn handle_auth_request(
 /// `token`     The authentication token
 /// `player_id` The player ID
 async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
-    let services = GlobalState::services();
+    let services = App::services();
 
     let player_id = match services.tokens.verify(token) {
         Ok(value) => value,
@@ -204,7 +204,7 @@ async fn handle_login_email(
 /// `db`    The database connection
 /// `token` The origin authentication token
 async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
-    let services = GlobalState::services();
+    let services = App::services();
 
     // Ensure the retriever is enabled
     let Some(retriever) = &services.retriever else {
@@ -438,7 +438,7 @@ async fn handle_create_account(
         return Err(ServerError::InvalidEmail);
     }
 
-    let db = GlobalState::database();
+    let db = App::database();
 
     match Player::by_email(&db, &email).await {
         // Continue normally for non taken emails
@@ -484,7 +484,7 @@ async fn handle_create_account(
         return Err(ServerError::ServerUnavailable);
     }
 
-    let services = GlobalState::services();
+    let services = App::services();
     let session_token = services.tokens.claim(player.id);
 
     Ok(AuthResponse {
@@ -590,7 +590,7 @@ async fn handle_get_auth_token(session: &mut SessionLink) -> ServerResult<GetTok
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
     // Create a new token claim for the player to use with the API
-    let services = GlobalState::services();
+    let services = App::services();
     let token = services.tokens.claim(player_id);
     Ok(GetTokenResponse { token })
 }

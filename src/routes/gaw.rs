@@ -10,7 +10,7 @@ use crate::{
         DatabaseConnection, DbErr, DbResult,
     },
     middleware::xml::Xml,
-    state::GlobalState,
+    state::App,
     utils::parsing::PlayerClass,
 };
 use axum::{
@@ -106,7 +106,7 @@ async fn get_player_gaw_data(
     db: &DatabaseConnection,
     token: &str,
 ) -> Result<(GalaxyAtWar, u32), GAWError> {
-    let services = GlobalState::services();
+    let services = App::services();
     let player_id = services
         .tokens
         .verify(token)
@@ -114,7 +114,7 @@ async fn get_player_gaw_data(
     let player = Player::by_id(db, player_id)
         .await?
         .ok_or(GAWError::InvalidToken)?;
-    let config = GlobalState::config();
+    let config = App::config();
 
     let (gaw_data, promotions) = try_join!(
         GalaxyAtWar::find_or_create(db, player.id, config.galaxy_at_war.decay),
@@ -124,7 +124,7 @@ async fn get_player_gaw_data(
 }
 
 async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u32> {
-    let config = GlobalState::config();
+    let config = App::config();
     if !config.galaxy_at_war.promotions {
         return Ok(0);
     }
@@ -142,7 +142,7 @@ async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u3
 ///
 /// `id` The hex encoded ID of the player
 async fn get_ratings(Path(id): Path<String>) -> Result<Xml, GAWError> {
-    let db = GlobalState::database();
+    let db = App::database();
     let (gaw_data, promotions) = get_player_gaw_data(&db, &id).await?;
     Ok(ratings_response(gaw_data, promotions))
 }
@@ -178,7 +178,7 @@ async fn increase_ratings(
     Path(id): Path<String>,
     Query(query): Query<IncreaseQuery>,
 ) -> Result<Xml, GAWError> {
-    let db = GlobalState::database();
+    let db = App::database();
     let (gaw_data, promotions) = get_player_gaw_data(&db, &id).await?;
     let gaw_data = gaw_data
         .increase(&db, (query.a, query.b, query.c, query.d, query.e))

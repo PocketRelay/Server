@@ -5,7 +5,7 @@ use crate::{
         manager::{SnapshotMessage, SnapshotQueryMessage},
         GameSnapshot,
     },
-    state::GlobalState,
+    state::App,
     utils::types::GameID,
 };
 use axum::{
@@ -75,7 +75,7 @@ async fn get_games(
     // Calculate the start and ending indexes
     let start_index: usize = query.offset * count;
 
-    let services = GlobalState::services();
+    let services = App::services();
     // Retrieve the game snapshots
     let (games, more) = services
         .game_manager
@@ -99,7 +99,7 @@ async fn get_game(
     auth: Auth,
 ) -> Result<Json<GameSnapshot>, GamesError> {
     let auth = auth.into_inner();
-    let services = GlobalState::services();
+    let services = App::services();
     let games = services
         .game_manager
         .send(SnapshotMessage {

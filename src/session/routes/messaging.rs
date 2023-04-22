@@ -1,6 +1,6 @@
 use crate::{
     session::{models::messaging::*, GetPlayerMessage, PushExt, SessionLink},
-    state::{self, GlobalState},
+    state::{self, App},
     utils::components::{Components as C, Messaging as M},
 };
 use blaze_pk::{packet::Packet, router::Router};
@@ -59,7 +59,7 @@ async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageRespons
 /// - {n} = Player Display Name
 /// - {ip} = Session IP Address
 async fn get_menu_message(player_name: &str) -> String {
-    let config = GlobalState::config();
+    let config = App::config();
     let mut message = config.menu_message.clone();
 
     if message.contains("{v}") {

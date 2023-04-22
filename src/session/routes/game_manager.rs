@@ -21,7 +21,7 @@ use crate::{
         },
         GetGamePlayerMessage, GetIdMessage, GetPlayerGameMessage, SessionLink,
     },
-    state::GlobalState,
+    state::App,
     utils::components::{Components as C, GameManager as G},
 };
 use blaze_pk::{packet::PacketBody, router::Router};
@@ -58,7 +58,7 @@ async fn handle_join_game(
     session: &mut SessionLink,
     req: JoinGameRequest,
 ) -> ServerResult<JoinGameResponse> {
-    let services = GlobalState::services();
+    let services = App::services();
 
     // Load the session
     let player: GamePlayer = session
@@ -117,7 +117,7 @@ async fn handle_join_game(
 }
 
 async fn handle_get_game_data(mut req: GetGameDataRequest) -> ServerResult<PacketBody> {
-    let services = GlobalState::services();
+    let services = App::services();
 
     if req.game_list.is_empty() {
         return Err(ServerError::InvalidInformation);
@@ -199,7 +199,7 @@ async fn handle_create_game(
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
-    let services = GlobalState::services();
+    let services = App::services();
 
     let (link, game_id) = match services
         .game_manager
@@ -243,7 +243,7 @@ async fn handle_create_game(
 /// }
 /// ```
 async fn handle_set_attributes(req: SetAttributesRequest) -> ServerResult<()> {
-    let services = GlobalState::services();
+    let services = App::services();
     let link = services
         .game_manager
         .send(GetGameMessage {
@@ -274,7 +274,7 @@ async fn handle_set_attributes(req: SetAttributesRequest) -> ServerResult<()> {
 /// }
 /// ```
 async fn handle_set_state(req: SetStateRequest) -> ServerResult<()> {
-    let services = GlobalState::services();
+    let services = App::services();
     let link = services
         .game_manager
         .send(GetGameMessage {
@@ -303,7 +303,7 @@ async fn handle_set_state(req: SetStateRequest) -> ServerResult<()> {
 /// }
 /// ```
 async fn handle_set_setting(req: SetSettingRequest) -> ServerResult<()> {
-    let services = GlobalState::services();
+    let services = App::services();
     let link = services
         .game_manager
         .send(GetGameMessage {
@@ -337,7 +337,7 @@ async fn handle_set_setting(req: SetSettingRequest) -> ServerResult<()> {
 /// }
 /// ```
 async fn handle_remove_player(req: RemovePlayerRequest) {
-    let services = GlobalState::services();
+    let services = App::services();
     let _ = services
         .game_manager
         .send(RemovePlayerMessage {
@@ -379,7 +379,7 @@ async fn handle_update_mesh_connection(
         None => return Ok(()),
     };
 
-    let services = GlobalState::services();
+    let services = App::services();
 
     let link = services
         .game_manager
@@ -540,7 +540,7 @@ async fn handle_start_matchmaking(
 
     info!("Player {} started matchmaking", player.player.display_name);
 
-    let services = GlobalState::services();
+    let services = App::services();
 
     let rule_set = Arc::new(req.rules);
 
@@ -584,7 +584,7 @@ async fn handle_start_matchmaking(
 async fn handle_cancel_matchmaking(session: &mut SessionLink) {
     session
         .exec(|session, _| {
-            let services = GlobalState::services();
+            let services = App::services();
             session.remove_games(services);
         })
         .await

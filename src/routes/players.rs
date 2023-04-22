@@ -6,7 +6,7 @@ use crate::{
         DatabaseConnection, DbErr,
     },
     middleware::auth::{AdminAuth, Auth},
-    state::GlobalState,
+    state::App,
     utils::{
         hashing::{hash_password, verify_password},
         types::PlayerID,
@@ -129,7 +129,7 @@ async fn get_players(
 ) -> PlayersJsonResult<PlayersResponse> {
     const DEFAULT_COUNT: u8 = 20;
 
-    let db = GlobalState::database();
+    let db = App::database();
     let count = query.count.unwrap_or(DEFAULT_COUNT);
 
     let paginator = players::Entity::find()
@@ -164,7 +164,7 @@ async fn get_player(
     Path(player_id): Path<PlayerID>,
     _auth: AdminAuth,
 ) -> PlayersJsonResult<Player> {
-    let db = GlobalState::database();
+    let db = App::database();
     let player = find_player(&db, player_id).await?;
     Ok(Json(player))
 }
@@ -198,7 +198,7 @@ async fn set_details(
     let auth = auth.into_inner();
 
     // Get the target player
-    let db = GlobalState::database();
+    let db = App::database();
     let player = find_player(&db, player_id).await?;
 
     // Check modification permission
@@ -231,7 +231,7 @@ async fn update_details(
         return Err(PlayersError::InvalidEmail);
     }
 
-    let db = GlobalState::database();
+    let db = App::database();
     attempt_set_details(db, player, req).await?;
 
     // Ok status code indicating updated
@@ -309,7 +309,7 @@ async fn set_password(
     let auth = auth.into_inner();
 
     // Get the target player
-    let db = GlobalState::database();
+    let db = App::database();
     let player = find_player(&db, player_id).await?;
 
     // Check modification permission
@@ -352,7 +352,7 @@ async fn set_role(
     }
 
     // Get the target player
-    let db = GlobalState::database();
+    let db = App::database();
     let player = find_player(&db, player_id).await?;
 
     if let Err(err) = player.set_role(&db, role).await {
@@ -394,7 +394,7 @@ async fn update_password(
         return Err(PlayersError::InvalidPassword);
     }
 
-    let db = GlobalState::database();
+    let db = App::database();
     attempt_set_password(db, player, req.new_password).await?;
 
     // Ok status code indicating updated
@@ -444,7 +444,7 @@ async fn delete_player(
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
-    let db = GlobalState::database();
+    let db = App::database();
     let player: Player = find_player(&db, player_id).await?;
 
     if auth.id != player.id && auth.role <= player.role {
@@ -481,7 +481,7 @@ async fn delete_self(
         return Err(PlayersError::InvalidPassword);
     }
 
-    let db = GlobalState::database();
+    let db = App::database();
     auth.delete(&db).await?;
     Ok(StatusCode::OK.into_response())
 }
@@ -514,7 +514,7 @@ async fn all_data(
     Path(player_id): Path<PlayerID>,
     _admin: AdminAuth,
 ) -> PlayersJsonResult<PlayerDataMap> {
-    let db = GlobalState::database();
+    let db = App::database();
     let data = PlayerData::all(&db, player_id).await?;
     Ok(Json(PlayerDataMap(data)))
 }
@@ -533,7 +533,7 @@ async fn get_data(
     auth: Auth,
 ) -> PlayersJsonResult<PlayerData> {
     let auth = auth.into_inner();
-    let db = GlobalState::database();
+    let db = App::database();
     let player: Player = find_player(&db, player_id).await?;
 
     if auth.id != player.id && auth.role <= player.role {
@@ -570,7 +570,7 @@ async fn set_data(
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
-    let db = GlobalState::database();
+    let db = App::database();
     let player: Player = find_player(&db, player_id).await?;
 
     if auth.id != player.id && auth.role <= player.role {
@@ -596,7 +596,7 @@ async fn delete_data(
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
-    let db = GlobalState::database();
+    let db = App::database();
     let player: Player = find_player(&db, player_id).await?;
 
     if auth.id != player.id && auth.role <= player.role {
@@ -619,7 +619,7 @@ async fn get_player_gaw(
     Path(player_id): Path<PlayerID>,
     _admin: AdminAuth,
 ) -> PlayersJsonResult<GalaxyAtWar> {
-    let db = GlobalState::database();
+    let db = App::database();
     let player = find_player(&db, player_id).await?;
     let galax_at_war = GalaxyAtWar::find_or_create(&db, player.id, 0.0).await?;
     Ok(Json(galax_at_war))

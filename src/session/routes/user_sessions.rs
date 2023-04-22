@@ -10,7 +10,7 @@ use crate::{
         GetLookupMessage, HardwareFlagMessage, LookupResponse, NetworkInfoMessage, SessionLink,
         SetPlayerMessage,
     },
-    state::GlobalState,
+    state::App,
     utils::components::{Components as C, UserSessions as U},
 };
 use blaze_pk::router::Router;
@@ -46,7 +46,7 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// }
 /// ```
 async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> {
-    let services = GlobalState::services();
+    let services = App::services();
 
     // Lookup the session
     let session = services
@@ -86,8 +86,8 @@ async fn handle_resume_session(
     session: &mut SessionLink,
     req: ResumeSessionRequest,
 ) -> ServerResult<AuthResponse> {
-    let db = GlobalState::database();
-    let services = GlobalState::services();
+    let db = App::database();
+    let services = App::services();
 
     let session_token = req.session_token;
 

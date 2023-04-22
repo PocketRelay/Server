@@ -14,7 +14,7 @@ use crate::{
         sessions::{AddMessage, RemoveMessage},
         Services,
     },
-    state::GlobalState,
+    state::App,
     utils::{
         components::{self, Components, UserSessions},
         models::{NetData, NetGroups, Port, QosNetworkData, UpdateExtDataAttr},
@@ -66,7 +66,7 @@ pub struct SessionData {
 
 impl Service for Session {
     fn stopping(&mut self) {
-        let services = GlobalState::services();
+        let services = App::services();
         self.remove_games(services);
         self.clear_auth(services);
         debug!("Session stopped (SID: {})", self.id);
@@ -156,7 +156,7 @@ pub struct SetPlayerMessage(pub Option<Player>);
 impl Handler<SetPlayerMessage> for Session {
     type Response = ();
     fn handle(&mut self, msg: SetPlayerMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
-        let services = GlobalState::services();
+        let services = App::services();
 
         // Take the old player and remove it if possible
         if let Some(old_player) = self.data.player.take() {
@@ -261,7 +261,7 @@ impl StreamHandler<io::Result<Packet>> for Session {
             self.debug_log_packet("Read", &packet);
             let mut addr = ctx.link();
             tokio::spawn(async move {
-                let router = GlobalState::router();
+                let router = App::router();
                 let response = match router.handle(&mut addr, packet) {
                     // Await the handler response future
                     Ok(fut) => fut.await,

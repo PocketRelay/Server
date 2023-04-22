@@ -1,6 +1,6 @@
 use crate::{
     database::entities::Player,
-    state::GlobalState,
+    state::App,
     utils::hashing::{hash_password, verify_password},
 };
 use axum::{
@@ -53,7 +53,7 @@ pub struct TokenResponse {
 
 /// Route for logging into a non origin account
 async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, AuthError> {
-    let db = GlobalState::database();
+    let db = App::database();
     let player = Player::by_email(&db, &req.email)
         .await
         .map_err(|_| AuthError::ServerError)?
@@ -68,7 +68,7 @@ async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, Aut
         return Err(AuthError::InvalidCredentails);
     }
 
-    let services = GlobalState::services();
+    let services = App::services();
     let token = services.tokens.claim(player.id);
 
     Ok(Json(TokenResponse { token }))
@@ -85,7 +85,7 @@ pub struct CreateRequest {
 
 /// Route for creating accounts
 async fn create(Json(req): Json<CreateRequest>) -> Result<Json<TokenResponse>, AuthError> {
-    let db = GlobalState::database();
+    let db = App::database();
 
     // Validate the username is not empty
     if req.username.is_empty() {
@@ -108,7 +108,7 @@ async fn create(Json(req): Json<CreateRequest>) -> Result<Json<TokenResponse>, A
         .await
         .map_err(|_| AuthError::ServerError)?;
 
-    let services = GlobalState::services();
+    let services = App::services();
     let token = services.tokens.claim(player.id);
 
     Ok(Json(TokenResponse { token }))

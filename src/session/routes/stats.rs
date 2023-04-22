@@ -7,7 +7,7 @@ use crate::{
         },
         SessionLink,
     },
-    state::GlobalState,
+    state::App,
     utils::components::{Components as C, Stats as S},
 };
 use blaze_pk::{
@@ -94,7 +94,7 @@ async fn handle_leaderboard_entity_count(
 }
 
 async fn get_group(name: &str) -> ServerResult<Arc<LeaderboardGroup>> {
-    let services = GlobalState::services();
+    let services = App::services();
     let leaderboard = &services.leaderboard;
     let ty = LeaderboardType::from_value(name);
     leaderboard
