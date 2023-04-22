@@ -14,6 +14,7 @@ mod util;
 /// Function which creates a router for sessions to use
 pub fn router() -> Router<Components, SessionLink> {
     let mut router = Router::new();
+
     auth::route(&mut router);
     game_manager::route(&mut router);
     stats::route(&mut router);

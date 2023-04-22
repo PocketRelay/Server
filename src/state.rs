@@ -3,7 +3,7 @@ use crate::{
     database::{self, DatabaseConnection},
     services::Services,
     session::{self, SessionLink},
-    utils::components::Components,
+    utils::{components::Components, logging},
 };
 use blaze_pk::router::Router;
 use tokio::join;
@@ -47,9 +47,13 @@ impl GlobalState {
             menu_message: config.menu_message,
         };
 
-        let (db, services) = join!(
+        let (db, services, _) = join!(
+            // Initialize the database
             database::init(dashboard_config),
-            Services::init(services_config)
+            // Initialize the services
+            Services::init(services_config),
+            // Display the connection urls message
+            logging::log_connection_urls(config.port)
         );
 
         // Initialize session router

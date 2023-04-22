@@ -2,7 +2,7 @@ use axum::Server;
 use config::load_config;
 use log::{error, info};
 use state::GlobalState;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::net::{Ipv4Addr, SocketAddr};
 use tokio::{select, signal};
 use utils::logging;
 
@@ -20,34 +20,31 @@ async fn main() {
     // Load configuration
     let config = load_config().unwrap_or_default();
 
-    let port = config.port;
-
     // Initialize logging
     logging::setup(config.logging);
 
     info!("Starting Pocket Relay v{}", state::VERSION);
 
+    // Create the server socket address while the port is still available
+    let addr: SocketAddr = (Ipv4Addr::UNSPECIFIED, config.port).into();
+
     // Initialize global state
     GlobalState::init(config).await;
 
-    // Display the connection urls message
-    logging::log_connection_urls(port).await;
-
-    info!("Starting Server on (Port: {port})");
-
-    // Create HTTP router and socket address
-    let router = routes::router();
-    let addr: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port));
+    // Create the HTTP router
+    let router = routes::router().into_make_service();
 
     // Create futures for server and shutdown signal
-    let server_future = Server::bind(&addr).serve(router.into_make_service());
+    let server_future = Server::bind(&addr).serve(router);
     let close_future = signal::ctrl_c();
+
+    info!("Started server on {}", addr);
 
     // Await server termination or shutdown signal
     select! {
        result = server_future => {
         if let Err(err) = result {
-            error!("Failed to bind HTTP server (Port: {}): {:?}", port, err);
+            error!("Failed to bind HTTP server on {}: {:?}", addr, err);
             panic!();
         }
        }
