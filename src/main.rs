@@ -33,9 +33,6 @@ async fn main() {
     // Display the connection urls message
     logging::log_connection_urls(port).await;
 
-    // Initialize session router
-    session::init_router();
-
     info!("Starting Server on (Port: {port})");
 
     // Create HTTP router and socket address

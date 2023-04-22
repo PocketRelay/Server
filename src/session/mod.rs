@@ -24,7 +24,7 @@ use crate::{
 use blaze_pk::{
     codec::Encodable,
     packet::{Packet, PacketComponents, PacketDebug},
-    router::{HandleError, Router},
+    router::HandleError,
     tag::TdfType,
     value_type,
     writer::TdfWriter,
@@ -35,23 +35,6 @@ use std::{fmt::Debug, io};
 
 pub mod models;
 pub mod routes;
-
-static mut ROUTER: Option<Router<Components, SessionLink>> = None;
-
-pub fn router() -> &'static Router<Components, SessionLink> {
-    unsafe {
-        match &ROUTER {
-            Some(value) => value,
-            None => panic!("Main server router not yet initialized"),
-        }
-    }
-}
-
-pub fn init_router() {
-    unsafe {
-        ROUTER = Some(routes::router());
-    }
-}
 
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
@@ -278,7 +261,7 @@ impl StreamHandler<io::Result<Packet>> for Session {
             self.debug_log_packet("Read", &packet);
             let mut addr = ctx.link();
             tokio::spawn(async move {
-                let router = router();
+                let router = GlobalState::router();
                 let response = match router.handle(&mut addr, packet) {
                     // Await the handler response future
                     Ok(fut) => fut.await,
