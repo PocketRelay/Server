@@ -1,14 +1,8 @@
 use crate::{
-    config::{Config, DashboardConfig, RuntimeConfig, ServicesConfig},
-    database::{
-        self,
-        entities::{players::PlayerRole, Player},
-        DatabaseConnection,
-    },
+    config::{Config, RuntimeConfig, ServicesConfig},
+    database::{self, DatabaseConnection},
     services::Services,
-    utils::hashing::{hash_password, verify_password},
 };
-use log::{error, info};
 use tokio::join;
 
 /// The server version extracted from the Cargo.toml
@@ -20,7 +14,9 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub struct GlobalState {
     /// Connection to the database
     pub db: DatabaseConnection,
+    /// Global services
     pub services: Services,
+    /// Runtime global configuration
     pub config: RuntimeConfig,
 }
 
@@ -33,7 +29,7 @@ impl GlobalState {
     /// called before this state is accessed or else the app will
     /// panic and must not be called more than once.
     pub async fn init(config: Config) {
-        let admin_email = config.dashboard;
+        let dashboard_config = config.dashboard;
 
         // Config data passed onto the services
         let services_config = ServicesConfig {
@@ -47,7 +43,7 @@ impl GlobalState {
         };
 
         let (db, services) = join!(
-            Self::init_database(admin_email),
+            database::init(dashboard_config),
             Services::init(services_config)
         );
 
@@ -57,66 +53,6 @@ impl GlobalState {
                 services,
                 config: runtime_config,
             });
-        }
-    }
-
-    /// Initializes the connection with the database using the url or file
-    /// from the environment variables
-    async fn init_database(config: DashboardConfig) -> DatabaseConnection {
-        let db = database::init().await;
-        info!("Connected to database..");
-        Self::init_database_admin(&db, config).await;
-
-        db
-    }
-
-    /// Initializes the database super admin account using the
-    /// admin email stored within the environment variables if
-    /// one is present
-    ///
-    /// `db` The database connection
-    async fn init_database_admin(db: &DatabaseConnection, config: DashboardConfig) {
-        let admin_email = match config.super_email {
-            Some(value) => value,
-            None => return,
-        };
-
-        let player = match Player::by_email(db, &admin_email).await {
-            // Player exists
-            Ok(Some(value)) => value,
-            // Player doesn't exist yet
-            Ok(None) => return,
-            // Encountered an error
-            Err(err) => {
-                error!("Failed to find player to provide super admin: {:?}", err);
-                return;
-            }
-        };
-
-        let player = match player.set_role(db, PlayerRole::SuperAdmin).await {
-            Ok(value) => value,
-            Err(err) => {
-                error!("Failed to assign super admin role: {:?}", err);
-                return;
-            }
-        };
-
-        if let Some(password) = config.super_password {
-            let password_hash =
-                hash_password(&password).expect("Failed to hash super user password");
-
-            let matches = match &player.password {
-                Some(value) => verify_password(&password, value),
-                None => false,
-            };
-
-            if !matches {
-                if let Err(err) = player.set_password(db, password_hash).await {
-                    error!("Failed to set super admin password: {:?}", err)
-                } else {
-                    info!("Updated super admin password")
-                }
-            }
         }
     }
 
