@@ -15,7 +15,6 @@ use tokio::{
     fs::{write, File},
     io::{self, AsyncReadExt},
 };
-
 /// Token provider and verification service
 pub struct Tokens {
     /// HMAC key used for computing signatures
@@ -71,7 +70,6 @@ impl Tokens {
 
     /// Creates a new claim using the provided claim value
     ///
-    /// `claim` The token claim value
     /// `id`    The ID of the player to claim for
     pub fn claim(&self, id: u32) -> String {
         // Compute expiry timestamp
@@ -104,7 +102,7 @@ impl Tokens {
     /// `token` The token to verify
     pub fn verify(&self, token: &str) -> Result<u32, VerifyError> {
         // Split the token parts
-        let (msg_raw, sig) = match token.split_once('.') {
+        let (msg_raw, sig_raw) = match token.split_once('.') {
             Some(value) => value,
             None => return Err(VerifyError::Invalid),
         };
@@ -113,8 +111,9 @@ impl Tokens {
         let mut msg = [0u8; 12];
         Base64UrlUnpadded::decode(msg_raw, &mut msg)?;
 
-        // Decode the message signature
-        let sig: Vec<u8> = Base64UrlUnpadded::decode_vec(sig)?;
+        // Decode 32byte signature (SHA256)
+        let mut sig = [0u8; 32];
+        Base64UrlUnpadded::decode(sig_raw, &mut sig)?;
 
         // Verify the signature
         if hmac::verify(&self.key, &msg, &sig).is_err() {
