@@ -17,21 +17,21 @@ mod server;
 /// application routes.
 pub fn router() -> Router {
     Router::new()
+        // Content handling
         .route("/content/*filename", get(content::content))
-        .nest(
-            "/gaw",
-            Router::new()
-                .route(
-                    "/authentication/sharedTokenLogin",
-                    get(gaw::shared_token_login),
-                )
-                .route("/galaxyatwar/getRatings/:id", get(gaw::get_ratings))
-                .route(
-                    "/galaxyatwar/increaseRatings/:id",
-                    get(gaw::increase_ratings),
-                ),
+        // Galaxy at war
+        .route(
+            "/authentication/sharedTokenLogin",
+            get(gaw::shared_token_login),
         )
+        .route("/galaxyatwar/getRatings/:id", get(gaw::get_ratings))
+        .route(
+            "/galaxyatwar/increaseRatings/:id",
+            get(gaw::increase_ratings),
+        )
+        // Quality of service
         .route("/qos/qos", get(qos::qos))
+        // Dashboard API
         .nest(
             "/api",
             Router::new()
@@ -90,6 +90,8 @@ pub fn router() -> Router {
                         .route("/telemetry", post(server::submit_telemetry)),
                 ),
         )
+        // Dashboard static hosting
         .route("/*filename", get(dashboard::content))
+        // Dashboard fallback
         .fallback(dashboard::fallback)
 }

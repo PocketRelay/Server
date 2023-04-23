@@ -480,7 +480,7 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
     );
 
     let mut config = TdfMap::with_capacity(15);
-    config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/gaw"));
+    config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/"));
     config.insert("IMG_MNGR_BASE_URL", format!("{prefix}/content/"));
     config.insert("IMG_MNGR_MAX_BYTES", "1048576");
     config.insert("IMG_MNGR_MAX_IMAGES", "5");
