@@ -41,10 +41,20 @@ impl App {
             retriever: config.retriever,
         };
 
+        // Create menu message
+        let menu_message = {
+            // Message with server version variable replaced
+            let mut message: String = config.menu_message.replace("{v}", VERSION);
+
+            // Line terminator for the end of the message
+            message.push(char::from(0x0A));
+            message
+        };
+
         // Config data persisted to runtime
         let runtime_config = RuntimeConfig {
             galaxy_at_war: config.galaxy_at_war,
-            menu_message: config.menu_message,
+            menu_message,
         };
 
         let (db, services, _) = join!(

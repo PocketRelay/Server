@@ -392,6 +392,7 @@ async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> 
     if !validate_email(&req.email) {
         return Err(ServerError::InvalidEmail);
     }
+
     debug!("Got request for password rest for email: {}", &req.email);
     Ok(())
 }

@@ -1,6 +1,6 @@
 use crate::{
     session::{models::messaging::*, GetPlayerMessage, PushExt, SessionLink},
-    state::{self, App},
+    state::App,
     utils::components::{Components as C, Messaging as M},
 };
 use blaze_pk::{packet::Packet, router::Router};
@@ -34,11 +34,17 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// ```
 ///
 async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageResponse {
+    // Request a copy of the player data
     let Ok(Some(player)) = session.send(GetPlayerMessage).await else {
         // Not authenticated return empty count
         return FetchMessageResponse { count: 0 };
     };
-    let message = get_menu_message(&player.display_name).await;
+
+    // Message with player name replaced
+    let message: String = App::config()
+        .menu_message
+        .replace("{n}", &player.display_name);
+
     let notify = Packet::notify(
         C::Messaging(M::SendMessage),
         MessageNotify {
@@ -49,28 +55,4 @@ async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageRespons
 
     session.push(notify);
     FetchMessageResponse { count: 1 }
-}
-
-/// Retrieves the menu message from the environment variables and replaces
-/// any variables inside the message with the correct values for this session
-///
-/// # Variables
-/// - {v} = Server Version
-/// - {n} = Player Display Name
-/// - {ip} = Session IP Address
-async fn get_menu_message(player_name: &str) -> String {
-    let config = App::config();
-    let mut message = config.menu_message.clone();
-
-    if message.contains("{v}") {
-        message = message.replace("{v}", state::VERSION);
-    }
-
-    if message.contains("{n}") {
-        message = message.replace("{n}", player_name);
-    }
-
-    // Line terminator for the end of the message
-    message.push(char::from(0x0A));
-    message
 }
