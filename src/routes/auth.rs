@@ -6,21 +6,10 @@ use crate::{
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::post,
-    Json, Router,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-/// Router function creates a new router with all the underlying
-/// routes for this file.
-///
-/// Prefix: /api/auth
-pub fn router() -> Router {
-    Router::new()
-        .route("/login", post(login))
-        .route("/create", post(create))
-}
 
 #[derive(Debug, Error)]
 pub enum AuthError {
@@ -52,7 +41,7 @@ pub struct TokenResponse {
 }
 
 /// Route for logging into a non origin account
-async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, AuthError> {
+pub async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, AuthError> {
     let db = App::database();
     let player = Player::by_email(db, &req.email)
         .await
@@ -84,7 +73,7 @@ pub struct CreateRequest {
 }
 
 /// Route for creating accounts
-async fn create(Json(req): Json<CreateRequest>) -> Result<Json<TokenResponse>, AuthError> {
+pub async fn create(Json(req): Json<CreateRequest>) -> Result<Json<TokenResponse>, AuthError> {
     let db = App::database();
 
     // Validate the username is not empty

@@ -12,8 +12,7 @@ use axum::{
     body::BoxBody,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
-    Json, Router,
+    Json,
 };
 use blaze_pk::packet::PacketCodec;
 use hyper::header;
@@ -28,23 +27,11 @@ use tokio::{
 };
 use tokio_util::codec::{FramedRead, FramedWrite};
 
-/// Router function creates a new router with all the underlying
-/// routes for this file.
-///
-/// Prefix: /api/server
-pub fn router() -> Router {
-    Router::new()
-        .route("/", get(server_details))
-        .route("/log", get(get_log))
-        .route("/upgrade", get(upgrade))
-        .route("/telemetry", post(submit_telemetry))
-}
-
 static SESSION_IDS: AtomicU32 = AtomicU32::new(1);
 
 /// Route handling upgrading Blaze connections into streams that can
 /// be used as blaze sessions
-async fn upgrade(upgrade: BlazeUpgrade) -> Result<Response, StatusCode> {
+pub async fn upgrade(upgrade: BlazeUpgrade) -> Result<Response, StatusCode> {
     tokio::spawn(async move {
         let socket = match upgrade.upgrade().await {
             Ok(value) => value,
@@ -83,7 +70,7 @@ async fn upgrade(upgrade: BlazeUpgrade) -> Result<Response, StatusCode> {
 /// Response detailing the information about this Pocket Relay server
 /// contains the version information as well as the server information
 #[derive(Serialize)]
-struct ServerDetails {
+pub struct ServerDetails {
     /// Identifier used to ensure the server is a Pocket Relay server
     ident: &'static str,
     /// The server version
@@ -92,7 +79,7 @@ struct ServerDetails {
 
 /// Route for retrieving the server details responds with
 /// the list of servers and server version.
-async fn server_details() -> Json<ServerDetails> {
+pub async fn server_details() -> Json<ServerDetails> {
     Json(ServerDetails {
         ident: "POCKET_RELAY_SERVER",
         version: state::VERSION,
@@ -100,19 +87,19 @@ async fn server_details() -> Json<ServerDetails> {
 }
 
 #[derive(Serialize)]
-struct LogsList {
+pub struct LogsList {
     files: Vec<String>,
 }
 
 #[derive(Debug, Error)]
-enum LogsError {
+pub enum LogsError {
     #[error("Failed to read log file")]
     IO(#[from] io::Error),
     #[error("Invalid permission")]
     InvalidPermission,
 }
 
-async fn get_log(auth: AdminAuth) -> Result<String, LogsError> {
+pub async fn get_log(auth: AdminAuth) -> Result<String, LogsError> {
     let auth = auth.into_inner();
     if auth.role < PlayerRole::SuperAdmin {
         return Err(LogsError::InvalidPermission);
@@ -127,7 +114,7 @@ pub struct TelemetryMessage {
     pub values: Vec<(String, String)>,
 }
 
-async fn submit_telemetry(Json(data): Json<TelemetryMessage>) -> StatusCode {
+pub async fn submit_telemetry(Json(data): Json<TelemetryMessage>) -> StatusCode {
     debug!("[TELEMETRY] {:?}", data);
     StatusCode::OK
 }

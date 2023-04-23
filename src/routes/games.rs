@@ -12,25 +12,14 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
-    Json, Router,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Router function creates a new router with all the underlying
-/// routes for this file.
-///
-/// Prefix: /api/games
-pub fn router() -> Router {
-    Router::new()
-        .route("/", get(get_games))
-        .route("/:id", get(get_game))
-}
-
 /// The query structure for a players query
 #[derive(Deserialize)]
-struct GamesQuery {
+pub struct GamesQuery {
     /// The page offset (offset = offset * count)
     #[serde(default)]
     offset: usize,
@@ -51,7 +40,7 @@ pub enum GamesError {
 /// Response from the players endpoint which contains a list of
 /// players and whether there is more players after
 #[derive(Serialize)]
-struct GamesResponse {
+pub struct GamesResponse {
     /// The list of players retrieved
     games: Vec<GameSnapshot>,
     /// Whether there is more players left in the database
@@ -62,7 +51,7 @@ struct GamesResponse {
 /// Will take a snapshot of all the games.
 ///
 /// `query` The query containing the offset and count
-async fn get_games(
+pub async fn get_games(
     Query(query): Query<GamesQuery>,
     auth: Auth,
 ) -> Result<Json<GamesResponse>, GamesError> {
@@ -94,7 +83,7 @@ async fn get_games(
 ///
 /// `game_id` The ID of the game
 /// `auth`    The currently authenticated player
-async fn get_game(
+pub async fn get_game(
     Path(game_id): Path<GameID>,
     auth: Auth,
 ) -> Result<Json<GameSnapshot>, GamesError> {

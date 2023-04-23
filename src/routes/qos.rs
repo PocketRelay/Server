@@ -2,21 +2,13 @@
 //! response address and ports are correct however this request must succeed
 //! or the client doesn't seem to know its external IP
 use crate::{middleware::xml::Xml, utils::models::Port};
-use axum::{extract::Query, routing::get, Router};
+use axum::extract::Query;
 use log::debug;
 use serde::Deserialize;
 
-/// Router function creates a new router with all the underlying
-/// routes for this file.
-///
-/// Prefix: /qos
-pub fn router() -> Router {
-    Router::new().route("/qos", get(qos))
-}
-
 /// Query for the Qualitu Of Service route
 #[derive(Deserialize)]
-struct QosQuery {
+pub struct QosQuery {
     /// The port the client is using
     #[serde(rename = "prpt")]
     port: u16,
@@ -39,7 +31,7 @@ struct QosQuery {
 ///```
 ///
 /// `query` The query string from the client
-async fn qos(Query(query): Query<QosQuery>) -> Xml {
+pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
     /// Port for the local Quality of Service server
     const QOS_PORT: Port = 42130;
 

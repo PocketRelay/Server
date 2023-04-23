@@ -7,26 +7,16 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
-    Json, Router,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Router function creates a new router with all the underlying
-/// routes for this file.
-///
-/// Prefix: /api/leaderboard
-pub fn router() -> Router {
-    Router::new()
-        .route("/:name", get(get_leaderboard))
-        .route("/:name/:player_id", get(get_player_ranking))
-}
 /// Error type used in leaderboard routes to handle errors
 /// such as database errors and player not founds when
 /// searching for a specific player.
 #[derive(Debug, Error)]
-enum LeaderboardError {
+pub enum LeaderboardError {
     /// Some server error occurred like a database failure when computing
     /// the leaderboards
     #[error("Internal server error")]
@@ -43,7 +33,7 @@ enum LeaderboardError {
 /// options like offset, count and a player for finding a specific players
 /// ranking
 #[derive(Deserialize)]
-struct LeaderboardQuery {
+pub struct LeaderboardQuery {
     /// The number of ranks to offset by
     #[serde(default)]
     offset: usize,
@@ -56,7 +46,7 @@ struct LeaderboardQuery {
 /// The different types of respones that can be created
 /// from a leaderboard request
 #[derive(Serialize)]
-struct LeaderboardResponse<'a> {
+pub struct LeaderboardResponse<'a> {
     /// The total number of players in the entire leaderboard
     total: usize,
     /// The entries retrieved at the provided offset
@@ -70,7 +60,7 @@ struct LeaderboardResponse<'a> {
 ///
 /// `name`  The name of the leaderboard type to query
 /// `query` The leaderboard query
-async fn get_leaderboard(
+pub async fn get_leaderboard(
     Path(name): Path<String>,
     Query(query): Query<LeaderboardQuery>,
 ) -> Result<Response, LeaderboardError> {
@@ -111,7 +101,7 @@ async fn get_leaderboard(
 ///
 /// `name`      The name of the leaderboard type to query
 /// `player_id` The ID of the player to find the leaderboard ranking of
-async fn get_player_ranking(
+pub async fn get_player_ranking(
     Path((name, player_id)): Path<(String, PlayerID)>,
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =

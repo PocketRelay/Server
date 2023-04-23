@@ -16,8 +16,7 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, put},
-    Json, Router,
+    Json,
 };
 use log::error;
 use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
@@ -25,32 +24,10 @@ use serde::{ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;
 use validator::validate_email;
 
-/// Router function creates a new router with all the underlying
-/// routes for this file.
-///
-/// Prefix: /api/players
-pub fn router() -> Router {
-    Router::new()
-        .route("/", get(get_players))
-        .route("/self", get(get_self).delete(delete_self))
-        .route("/self/password", put(update_password))
-        .route("/self/details", put(update_details))
-        .route("/:id", get(get_player).delete(delete_player))
-        .route("/:id/data", get(all_data))
-        .route(
-            "/:id/data/:key",
-            get(get_data).put(set_data).delete(delete_data),
-        )
-        .route("/:id/galaxy_at_war", get(get_player_gaw))
-        .route("/:id/password", put(set_password))
-        .route("/:id/details", put(set_details))
-        .route("/:id/role", put(set_role))
-}
-
 /// Enum for errors that could occur when accessing any of
 /// the players routes
 #[derive(Debug, Error)]
-enum PlayersError {
+pub enum PlayersError {
     /// The player with the requested ID was not found
     #[error("Unable to find requested player")]
     PlayerNotFound,
@@ -95,7 +72,7 @@ async fn find_player(db: &DatabaseConnection, player_id: PlayerID) -> Result<Pla
 
 /// The query structure for a players query
 #[derive(Deserialize)]
-struct PlayersQuery {
+pub struct PlayersQuery {
     /// The offset in the database (offset = offset * count)
     #[serde(default)]
     offset: u32,
@@ -108,7 +85,7 @@ struct PlayersQuery {
 /// Response from the players endpoint which contains a list of
 /// players and whether there is more players after
 #[derive(Serialize)]
-struct PlayersResponse {
+pub struct PlayersResponse {
     /// The list of players retrieved
     players: Vec<Player>,
     /// Whether there is more players left in the database
@@ -123,7 +100,7 @@ struct PlayersResponse {
 ///
 /// `query` The query containing the offset and count values
 /// `_auth` The currently authenticated (Admin) player
-async fn get_players(
+pub async fn get_players(
     Query(query): Query<PlayersQuery>,
     _auth: AdminAuth,
 ) -> PlayersJsonResult<PlayersResponse> {
@@ -149,7 +126,7 @@ async fn get_players(
 /// authentication token
 ///
 /// `auth` The currently authenticated player
-async fn get_self(auth: Auth) -> Json<Player> {
+pub async fn get_self(auth: Auth) -> Json<Player> {
     Json(auth.into_inner())
 }
 
@@ -160,7 +137,7 @@ async fn get_self(auth: Auth) -> Json<Player> {
 ///
 /// `player_id` The ID of the player to get
 /// `_auth`     The currently authenticated (Admin) player
-async fn get_player(
+pub async fn get_player(
     Path(player_id): Path<PlayerID>,
     _auth: AdminAuth,
 ) -> PlayersJsonResult<Player> {
@@ -175,7 +152,7 @@ async fn get_player(
 /// Will ignore the fields that already match the current
 /// account details
 #[derive(Deserialize)]
-struct UpdateDetailsRequest {
+pub struct UpdateDetailsRequest {
     /// The new or current username
     username: String,
     /// The new or current email
@@ -190,7 +167,7 @@ struct UpdateDetailsRequest {
 /// `player_id` The ID of the player to set the details for
 /// `auth`      The currently authenticated player
 /// `req`       The update details request
-async fn set_details(
+pub async fn set_details(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
     Json(req): Json<UpdateDetailsRequest>,
@@ -220,7 +197,7 @@ async fn set_details(
 ///
 /// `auth` The currently authenticated player
 /// `req`  The details update request
-async fn update_details(
+pub async fn update_details(
     auth: Auth,
     Json(req): Json<UpdateDetailsRequest>,
 ) -> PlayersResult<StatusCode> {
@@ -287,7 +264,7 @@ async fn attempt_set_details(
 
 /// Request to set the password of another account
 #[derive(Deserialize)]
-struct SetPasswordRequest {
+pub struct SetPasswordRequest {
     /// The new password for the account
     password: String,
 }
@@ -301,7 +278,7 @@ struct SetPasswordRequest {
 /// `player_id` The ID of the player to set the password for
 /// `auth`      The currently authenticated (Admin) player
 /// `req`       The password set request
-async fn set_password(
+pub async fn set_password(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
     Json(req): Json<SetPasswordRequest>,
@@ -327,12 +304,12 @@ async fn set_password(
 /// to be used by SuperAdmin's and can only set
 /// between Default and Admin roles
 #[derive(Deserialize)]
-struct SetPlayerRoleRequest {
+pub struct SetPlayerRoleRequest {
     /// The role to give the player
     role: PlayerRole,
 }
 
-async fn set_role(
+pub async fn set_role(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
     Json(req): Json<SetPlayerRoleRequest>,
@@ -365,7 +342,7 @@ async fn set_role(
 
 /// Request to update the password of the current user account
 #[derive(Deserialize)]
-struct UpdatePasswordRequest {
+pub struct UpdatePasswordRequest {
     /// The current password for the account
     current_password: String,
     /// The new account password
@@ -377,7 +354,7 @@ struct UpdatePasswordRequest {
 /// Route for updating the password of the authenticated account
 /// takes the current account password and the new account password
 /// as the request data
-async fn update_password(
+pub async fn update_password(
     auth: Auth,
     Json(req): Json<UpdatePasswordRequest>,
 ) -> PlayersResult<StatusCode> {
@@ -437,7 +414,7 @@ async fn attempt_set_password(
 ///
 /// `player_id` The ID of the player to delete
 /// `auth`      The currently authenticated (Admin) player
-async fn delete_player(
+pub async fn delete_player(
     auth: AdminAuth,
     Path(player_id): Path<PlayerID>,
 ) -> Result<Response, PlayersError> {
@@ -456,7 +433,7 @@ async fn delete_player(
 }
 /// Request to update the password of the current user account
 #[derive(Deserialize)]
-struct DeleteSelfRequest {
+pub struct DeleteSelfRequest {
     /// Account password for deletion
     password: String,
 }
@@ -464,7 +441,7 @@ struct DeleteSelfRequest {
 /// DELETE /api/players/self
 ///
 /// Route for deleting the authenticated player
-async fn delete_self(
+pub async fn delete_self(
     auth: Auth,
     Json(req): Json<DeleteSelfRequest>,
 ) -> Result<Response, PlayersError> {
@@ -488,7 +465,7 @@ async fn delete_self(
 
 /// Structure wrapping a vec of player data in order to make
 /// it serializable without requiring a hashmap
-struct PlayerDataMap(Vec<PlayerData>);
+pub struct PlayerDataMap(Vec<PlayerData>);
 
 impl Serialize for PlayerDataMap {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -510,7 +487,7 @@ impl Serialize for PlayerDataMap {
 ///
 /// `player_id` The ID of the player
 /// `_admin`    The currently authenticated (Admin) player
-async fn all_data(
+pub async fn all_data(
     Path(player_id): Path<PlayerID>,
     _admin: AdminAuth,
 ) -> PlayersJsonResult<PlayerDataMap> {
@@ -528,7 +505,7 @@ async fn all_data(
 /// `player_id` The ID of the player
 /// `key`       The player data key
 /// `auth`      The currently authenticated player
-async fn get_data(
+pub async fn get_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: Auth,
 ) -> PlayersJsonResult<PlayerData> {
@@ -549,7 +526,7 @@ async fn get_data(
 /// Request structure for a request to update the level and or promotions
 /// of a class
 #[derive(Deserialize)]
-struct SetDataRequest {
+pub struct SetDataRequest {
     value: String,
 }
 
@@ -562,7 +539,7 @@ struct SetDataRequest {
 /// `key`       The player data key
 /// `auth`      The currently authenticated (Admin) player
 /// `req`       The request containing the data value
-async fn set_data(
+pub async fn set_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: AdminAuth,
     Json(req): Json<SetDataRequest>,
@@ -589,7 +566,7 @@ async fn set_data(
 /// `player_id` The ID of the player
 /// `key`       The player data key
 /// `auth`      The currently authenticated (Admin) player
-async fn delete_data(
+pub async fn delete_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: AdminAuth,
 ) -> PlayersJsonResult<()> {
@@ -615,7 +592,7 @@ async fn delete_data(
 ///
 /// `player_id` The ID of the player to get the GAW data for
 /// `_admin`    The currently authenticated (Admin) player
-async fn get_player_gaw(
+pub async fn get_player_gaw(
     Path(player_id): Path<PlayerID>,
     _admin: AdminAuth,
 ) -> PlayersJsonResult<GalaxyAtWar> {

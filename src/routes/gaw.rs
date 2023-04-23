@@ -17,28 +17,15 @@ use axum::{
     extract::{Path, Query},
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
-    Router,
 };
 use serde::Deserialize;
 use std::fmt::Display;
 use tokio::try_join;
 
-/// Router function creates a new router with all the underlying
-/// routes for this file.
-///
-/// Prefix: /gaw
-pub fn router() -> Router {
-    Router::new()
-        .route("/authentication/sharedTokenLogin", get(shared_token_login))
-        .route("/galaxyatwar/getRatings/:id", get(get_ratings))
-        .route("/galaxyatwar/increaseRatings/:id", get(increase_ratings))
-}
-
 /// Error type used in gaw routes to handle errors such
 /// as being unable to parse player IDs, find players
 /// or Database errors
-enum GAWError {
+pub enum GAWError {
     /// The player could not be found
     InvalidToken,
     /// There was a server error
@@ -47,7 +34,7 @@ enum GAWError {
 
 /// Query for authenticating with a shared login token.
 #[derive(Deserialize)]
-struct AuthQuery {
+pub struct AuthQuery {
     /// The authentication token (This is just a hex encoded player ID)
     auth: String,
 }
@@ -62,7 +49,7 @@ struct AuthQuery {
 /// so not nessicary to implement the fetching
 ///
 /// `query` The query containing the auth token (In this case the hex player ID)
-async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
+pub async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
     let response = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <fulllogin>
@@ -141,7 +128,7 @@ async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u3
 /// with the provied ID
 ///
 /// `id` The hex encoded ID of the player
-async fn get_ratings(Path(id): Path<String>) -> Result<Xml, GAWError> {
+pub async fn get_ratings(Path(id): Path<String>) -> Result<Xml, GAWError> {
     let db = App::database();
     let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
     Ok(ratings_response(gaw_data, promotions))
@@ -150,7 +137,7 @@ async fn get_ratings(Path(id): Path<String>) -> Result<Xml, GAWError> {
 /// The query structure for increasing the galaxy at war values
 /// for a player
 #[derive(Deserialize)]
-struct IncreaseQuery {
+pub struct IncreaseQuery {
     /// The increase amount for the first region
     #[serde(rename = "rinc|0", default)]
     a: u16,
@@ -174,7 +161,7 @@ struct IncreaseQuery {
 ///
 /// `id`    The hex encoded ID of the player
 /// `query` The query data containing the increase values
-async fn increase_ratings(
+pub async fn increase_ratings(
     Path(id): Path<String>,
     Query(query): Query<IncreaseQuery>,
 ) -> Result<Xml, GAWError> {
