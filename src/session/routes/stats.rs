@@ -1,43 +1,15 @@
 use crate::{
     services::leaderboard::{models::*, QueryMessage},
-    session::{
-        models::{
-            errors::{ServerError, ServerResult},
-            stats::*,
-        },
-        SessionLink,
+    session::models::{
+        errors::{ServerError, ServerResult},
+        stats::*,
     },
     state::App,
-    utils::components::{Components as C, Stats as S},
 };
-use blaze_pk::{
-    packet::{Request, Response},
-    router::Router,
-};
+use blaze_pk::packet::{Request, Response};
 use std::sync::Arc;
 
-/// Routing function for adding all the routes in this file to the
-/// provided router
-///
-/// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionLink>) {
-    router.route(
-        C::Stats(S::GetLeaderboardEntityCount),
-        handle_leaderboard_entity_count,
-    );
-    router.route(C::Stats(S::GetLeaderboard), handle_normal_leaderboard);
-    router.route(
-        C::Stats(S::GetCenteredLeaderboard),
-        handle_centered_leaderboard,
-    );
-    router.route(
-        C::Stats(S::GetFilteredLeaderboard),
-        handle_filtered_leaderboard,
-    );
-    router.route(C::Stats(S::GetLeaderboardGroup), handle_leaderboard_group);
-}
-
-async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> ServerResult<Response> {
+pub async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> ServerResult<Response> {
     let query = &*req;
     let group = get_group(&query.name).await?;
     let response = match group.get_normal(query.start, query.count) {
@@ -47,7 +19,7 @@ async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> ServerRe
     Ok(req.response(response))
 }
 
-async fn handle_centered_leaderboard(
+pub async fn handle_centered_leaderboard(
     req: Request<CenteredLeaderboardRequest>,
 ) -> ServerResult<Response> {
     let query = &*req;
@@ -58,7 +30,8 @@ async fn handle_centered_leaderboard(
     };
     Ok(req.response(response))
 }
-async fn handle_filtered_leaderboard(
+
+pub async fn handle_filtered_leaderboard(
     req: Request<FilteredLeaderboardRequest>,
 ) -> ServerResult<Response> {
     let query = &*req;
@@ -85,7 +58,7 @@ async fn handle_filtered_leaderboard(
 ///     "POFF": 0
 /// }
 /// ```
-async fn handle_leaderboard_entity_count(
+pub async fn handle_leaderboard_entity_count(
     req: EntityCountRequest,
 ) -> ServerResult<EntityCountResponse> {
     let group = get_group(&req.name).await?;
@@ -129,7 +102,7 @@ fn get_locale_name(code: &str) -> &str {
 ///     "NAME": "N7RatingGlobal"
 /// }
 /// ```
-async fn handle_leaderboard_group(
+pub async fn handle_leaderboard_group(
     req: LeaderboardGroupRequest,
 ) -> Option<LeaderboardGroupResponse<'static>> {
     let name = req.name;

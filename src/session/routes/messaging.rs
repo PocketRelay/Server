@@ -3,15 +3,7 @@ use crate::{
     state::App,
     utils::components::{Components as C, Messaging as M},
 };
-use blaze_pk::{packet::Packet, router::Router};
-
-/// Routing function for adding all the routes in this file to the
-/// provided router
-///
-/// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionLink>) {
-    router.route(C::Messaging(M::FetchMessages), handle_fetch_messages);
-}
+use blaze_pk::packet::Packet;
 
 /// Handles requests from the client to fetch the server messages. The initial response contains
 /// the amount of messages and then each message is sent using a SendMessage notification.
@@ -33,7 +25,7 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// }
 /// ```
 ///
-async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageResponse {
+pub async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageResponse {
     // Request a copy of the player data
     let Ok(Some(player)) = session.send(GetPlayerMessage).await else {
         // Not authenticated return empty count

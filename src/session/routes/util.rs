@@ -8,10 +8,9 @@ use crate::{
         DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
     state::{self, App},
-    utils::components::{Components as C, Util as U},
 };
 use base64ct::{Base64, Encoding};
-use blaze_pk::{router::Router, types::TdfMap};
+use blaze_pk::types::TdfMap;
 use flate2::{write::ZlibEncoder, Compression};
 use interlink::prelude::Link;
 use log::{error, warn};
@@ -24,22 +23,6 @@ use std::{
 };
 use tokio::fs::read;
 
-/// Routing function for adding all the routes in this file to the
-/// provided router
-///
-/// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionLink>) {
-    router.route(C::Util(U::PreAuth), handle_pre_auth);
-    router.route(C::Util(U::PostAuth), handle_post_auth);
-    router.route(C::Util(U::Ping), handle_ping);
-    router.route(C::Util(U::FetchClientConfig), handle_fetch_client_config);
-    router.route(C::Util(U::SuspendUserPing), handle_suspend_user_ping);
-    router.route(C::Util(U::UserSettingsSave), handle_user_settings_save);
-    router.route(C::Util(U::GetTelemetryServer), handle_get_telemetry_server);
-    router.route(C::Util(U::GetTickerServer), handle_get_ticker_server);
-    router.route(C::Util(U::UserSettingsLoadAll), handle_load_settings);
-}
-
 /// Handles retrieving the details about the telemetry server
 ///
 /// ```
@@ -48,7 +31,7 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// Content: {}
 /// ```
 ///
-async fn handle_get_telemetry_server() -> TelemetryServer {
+pub async fn handle_get_telemetry_server() -> TelemetryServer {
     TelemetryServer
 }
 
@@ -60,7 +43,7 @@ async fn handle_get_telemetry_server() -> TelemetryServer {
 /// Content: {}
 /// ```
 ///
-async fn handle_get_ticker_server() -> TickerServer {
+pub async fn handle_get_ticker_server() -> TickerServer {
     TickerServer
 }
 
@@ -95,7 +78,7 @@ async fn handle_get_ticker_server() -> TickerServer {
 ///     }
 /// }
 /// ```
-async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthResponse> {
+pub async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthResponse> {
     let host_target = match session.send(GetHostTarget {}).await {
         Ok(value) => value,
         Err(_) => return Err(ServerError::InvalidInformation),
@@ -112,7 +95,7 @@ async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthRespo
 /// ID: 27
 /// Content: {}
 /// ```
-async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthResponse> {
+pub async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthResponse> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await
@@ -141,7 +124,7 @@ async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthRes
 /// Content: {}
 /// ```
 ///
-async fn handle_ping() -> PingResponse {
+pub async fn handle_ping() -> PingResponse {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
@@ -171,7 +154,7 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 ///     "CFID": "ME3_DATA"
 /// }
 /// ```
-async fn handle_fetch_client_config(
+pub async fn handle_fetch_client_config(
     session: &mut SessionLink,
     req: FetchConfigRequest,
 ) -> ServerResult<FetchConfigResponse> {
@@ -526,7 +509,7 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
 ///     "TVAL": 90000000
 /// }
 /// ```
-async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
+pub async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
     match req.value {
         20000000 => Err(ServerError::Suspend12D),
         90000000 => Err(ServerError::Suspend12E),
@@ -545,7 +528,7 @@ async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
 ///     "UID": 0
 /// }
 /// ```
-async fn handle_user_settings_save(
+pub async fn handle_user_settings_save(
     session: &mut SessionLink,
     req: SettingsSaveRequest,
 ) -> ServerResult<()> {
@@ -572,7 +555,7 @@ async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<SettingsResponse> {
+pub async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<SettingsResponse> {
     let player = session
         .send(GetPlayerIdMessage)
         .await

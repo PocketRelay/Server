@@ -11,24 +11,8 @@ use crate::{
         SetPlayerMessage,
     },
     state::App,
-    utils::components::{Components as C, UserSessions as U},
 };
-use blaze_pk::router::Router;
 use log::error;
-
-/// Routing function for adding all the routes in this file to the
-/// provided router
-///
-/// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionLink>) {
-    router.route(C::UserSessions(U::ResumeSession), handle_resume_session);
-    router.route(C::UserSessions(U::UpdateNetworkInfo), handle_update_network);
-    router.route(
-        C::UserSessions(U::UpdateHardwareFlags),
-        handle_update_hardware_flag,
-    );
-    router.route(C::UserSessions(U::LookupUser), handle_lookup_user);
-}
 
 /// Attempts to lookup another authenticated session details
 ///
@@ -45,7 +29,7 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 ///     "NAME": "",
 /// }
 /// ```
-async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> {
+pub async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> {
     let services = App::services();
 
     // Lookup the session
@@ -82,7 +66,7 @@ async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> 
 ///     "SKEY": "127_CHARACTER_TOKEN"
 /// }
 /// ```
-async fn handle_resume_session(
+pub async fn handle_resume_session(
     session: &mut SessionLink,
     req: ResumeSessionRequest,
 ) -> ServerResult<AuthResponse> {
@@ -158,7 +142,7 @@ async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequest) {
+pub async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequest) {
     let _ = session
         .send(NetworkInfoMessage {
             groups: req.address,
@@ -176,7 +160,7 @@ async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequ
 ///     "HWFG": 0
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: &mut SessionLink, req: HardwareFlagRequest) {
+pub async fn handle_update_hardware_flag(session: &mut SessionLink, req: HardwareFlagRequest) {
     let _ = session
         .send(HardwareFlagMessage {
             value: req.hardware_flag,

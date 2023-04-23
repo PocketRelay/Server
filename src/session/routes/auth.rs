@@ -11,46 +11,13 @@ use crate::{
         GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage,
     },
     state::App,
-    utils::{
-        components::{Authentication as A, Components as C},
-        hashing::{hash_password, verify_password},
-    },
+    utils::hashing::{hash_password, verify_password},
 };
-use blaze_pk::router::Router;
 use log::{debug, error, warn};
 use std::borrow::Cow;
 use std::path::Path;
 use tokio::fs::read_to_string;
 use validator::validate_email;
-
-/// Routing function for adding all the routes in this file to the
-/// provided router
-///
-/// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionLink>) {
-    router.route(C::Authentication(A::Logout), handle_logout);
-    router.route(C::Authentication(A::SilentLogin), handle_auth_request);
-    router.route(C::Authentication(A::OriginLogin), handle_auth_request);
-    router.route(C::Authentication(A::Login), handle_auth_request);
-    router.route(C::Authentication(A::LoginPersona), handle_login_persona);
-    router.route(
-        C::Authentication(A::ListUserEntitlements2),
-        handle_list_entitlements,
-    );
-    router.route(C::Authentication(A::CreateAccount), handle_create_account);
-    router.route(C::Authentication(A::PasswordForgot), handle_forgot_password);
-    router.route(
-        C::Authentication(A::GetLegalDocsInfo),
-        handle_get_legal_docs_info,
-    );
-    router.route(C::Authentication(A::GetTermsOfServiceConent), || {
-        handle_legal_content(LegalType::TermsOfService)
-    });
-    router.route(C::Authentication(A::GetPrivacyPolicyContent), || {
-        handle_legal_content(LegalType::PrivacyPolicy)
-    });
-    router.route(C::Authentication(A::GetAuthToken), handle_get_auth_token);
-}
 
 /// This route handles all the different authentication types, Silent, Origin,
 /// and Login parsing  the request and handling the authentication with the
@@ -101,7 +68,7 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 ///     "TYPE": 0 // Authentication type
 /// }
 /// ```
-async fn handle_auth_request(
+pub async fn handle_auth_request(
     session: &mut SessionLink,
     req: AuthRequest,
 ) -> ServerResult<AuthResponse> {
@@ -145,7 +112,7 @@ async fn handle_auth_request(
 /// `db`        The database connection
 /// `token`     The authentication token
 /// `player_id` The player ID
-async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
+pub async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
     let services = App::services();
 
     let player_id = match services.tokens.verify(token) {
@@ -168,7 +135,7 @@ async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResul
 /// `db`       The database connection
 /// `email`    The email to find the account for
 /// `password` The password to check the hash against
-async fn handle_login_email(
+pub async fn handle_login_email(
     db: &DatabaseConnection,
     email: &str,
     password: &str,
@@ -203,7 +170,7 @@ async fn handle_login_email(
 ///
 /// `db`    The database connection
 /// `token` The origin authentication token
-async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
+pub async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
     let services = App::services();
 
     // Ensure the retriever is enabled
@@ -274,7 +241,7 @@ async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResu
 /// ID: 8
 /// Content: {}
 /// ```
-async fn handle_logout(session: &mut SessionLink) {
+pub async fn handle_logout(session: &mut SessionLink) {
     let _ = session.send(SetPlayerMessage(None)).await;
 }
 
@@ -300,7 +267,7 @@ async fn handle_logout(session: &mut SessionLink) {
 ///     "TYPE": 0
 /// }
 /// ```
-async fn handle_list_entitlements(
+pub async fn handle_list_entitlements(
     req: ListEntitlementsRequest,
 ) -> Option<ListEntitlementsResponse> {
     let tag: String = req.tag;
@@ -368,7 +335,7 @@ async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<PersonaResponse> {
+pub async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<PersonaResponse> {
     let player: Player = session
         .send(GetPlayerMessage)
         .await
@@ -388,7 +355,7 @@ async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<Persona
 ///     "MAIL": "ACCOUNT_EMAIL"
 /// }
 /// ```
-async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> {
+pub async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> {
     if !validate_email(&req.email) {
         return Err(ServerError::InvalidEmail);
     }
@@ -430,7 +397,7 @@ async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> 
 /// }
 /// ```
 ///
-async fn handle_create_account(
+pub async fn handle_create_account(
     session: &mut SessionLink,
     req: CreateAccountRequest,
 ) -> ServerResult<AuthResponse> {
@@ -506,12 +473,12 @@ async fn handle_create_account(
 ///     "PTFM": "pc" // Platform
 /// }
 /// ```
-async fn handle_get_legal_docs_info() -> LegalDocsInfo {
+pub async fn handle_get_legal_docs_info() -> LegalDocsInfo {
     LegalDocsInfo
 }
 
 /// Type for deciding which legal document to respond with
-enum LegalType {
+pub enum LegalType {
     TermsOfService,
     PrivacyPolicy,
 }
@@ -571,7 +538,7 @@ impl LegalType {
 ///     "TEXT": 1
 /// }
 /// ```
-async fn handle_legal_content(ty: LegalType) -> LegalContent {
+pub async fn handle_legal_content(ty: LegalType) -> LegalContent {
     let (content, path, col) = ty.load().await;
     LegalContent { path, content, col }
 }
@@ -584,7 +551,7 @@ async fn handle_legal_content(ty: LegalType) -> LegalContent {
 /// ID: 35
 /// Content: {}
 /// ```
-async fn handle_get_auth_token(session: &mut SessionLink) -> ServerResult<GetTokenResponse> {
+pub async fn handle_get_auth_token(session: &mut SessionLink) -> ServerResult<GetTokenResponse> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await

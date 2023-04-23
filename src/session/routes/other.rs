@@ -1,20 +1,8 @@
 use crate::{
     session::{models::other::*, PushExt, SessionLink},
-    utils::components::{AssociationLists as A, Components as C, GameReporting as G},
+    utils::components::{Components as C, GameReporting as G},
 };
-use blaze_pk::{packet::Packet, router::Router};
-
-/// Routing function for adding all the routes in this file to the
-/// provided router
-///
-/// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionLink>) {
-    router.route(
-        C::GameReporting(G::SubmitOfflineGameReport),
-        handle_submit_offline,
-    );
-    router.route(C::AssociationLists(A::GetLists), handle_get_lists);
-}
+use blaze_pk::packet::Packet;
 
 /// Handles submission of offline game reports from clients.
 ///
@@ -41,7 +29,7 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 ///     "GTYP": "massEffectReport"
 /// }
 /// ```
-async fn handle_submit_offline(session: &mut SessionLink) {
+pub async fn handle_submit_offline(session: &mut SessionLink) {
     session.push(Packet::notify(
         C::GameReporting(G::GameReportSubmitted),
         GameReportResponse,
@@ -70,6 +58,6 @@ async fn handle_submit_offline(session: &mut SessionLink) {
 ///     "OFRC": 0
 /// }
 /// ```
-async fn handle_get_lists() -> AssocListResponse {
+pub async fn handle_get_lists() -> AssocListResponse {
     AssocListResponse
 }
