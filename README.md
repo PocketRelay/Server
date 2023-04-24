@@ -18,6 +18,8 @@
 > delete the app.db file before launching or else the server will not
 > work
 
+Development is undergone on the [dev](https://github.com/PocketRelay/Server/tree/dev) branch so the master branch can be
+considered semi stable with only non breaking changes being merged in-between releases
 
 **Pocket Relay** Is a custom implementation of the Mass Effect 3 multiplayer servers all bundled into a easy to use server with a Dashboard for managing accounts and inventories.
 
