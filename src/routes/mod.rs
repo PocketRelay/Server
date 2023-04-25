@@ -88,8 +88,6 @@ pub fn router() -> Router {
                         .route("/telemetry", post(server::submit_telemetry)),
                 ),
         )
-        // Dashboard static hosting
-        .route("/*filename", get(public::content))
-        // Dashboard fallback
-        .fallback(public::fallback)
+        // Public content fallback
+        .fallback_service(public::PublicContent)
 }

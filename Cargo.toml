@@ -51,6 +51,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 
 # Hyper for connection upgrades
 hyper = "0.14.25"
+tower = "0.4"
 
 # SeaORM 
 [dependencies.sea-orm]

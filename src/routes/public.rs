@@ -1,65 +1,84 @@
 use axum::{
-    extract::Path,
-    http::{header::CONTENT_TYPE, HeaderValue, StatusCode},
+    body::Full,
+    http::{HeaderValue, Request},
     response::{IntoResponse, Response},
 };
-use rust_embed::{EmbeddedFile, RustEmbed};
+use hyper::{header::CONTENT_TYPE, StatusCode};
+use rust_embed::RustEmbed;
+use std::{
+    borrow::Cow,
+    convert::Infallible,
+    future::{ready, Ready},
+    path::Path,
+    task::{Context, Poll},
+};
+use tower::Service;
 
-#[derive(RustEmbed)]
-#[folder = "src/resources/public"]
-struct PublicContent;
-
-/// Function for serving content from the embedded public
-/// content. Directory structure matches the paths vistied
-/// in this url.
+/// Resources embedded from the public data folder such as the
+/// dashboard static assets and the content for the ingame store.
 ///
-/// `path` The path of the content to serve
-pub async fn content(Path(path): Path<String>) -> Result<Response, StatusCode> {
-    if let Some(file) = PublicContent::get(&path) {
-        use std::path::Path as StdPath;
+/// Also acts a service for publicly sharing the content
+#[derive(Clone, RustEmbed)]
+#[folder = "src/resources/public"]
+pub struct PublicContent;
 
-        let path = StdPath::new(&path);
-        let ext = match path.extension() {
-            Some(ext) => ext.to_str(),
-            None => None,
+impl<T> Service<Request<T>> for PublicContent {
+    type Response = Response;
+    type Error = Infallible;
+    type Future = Ready<Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: Request<T>) -> Self::Future {
+        let mut path = req.uri().path();
+        let std_path = Path::new(path);
+
+        // Determine type using extension
+        let extension: Cow<'_, str> = match std_path.extension() {
+            // Extract the extension lossily
+            Some(value) => value.to_string_lossy(),
+            // Use the index file when responding to paths (For SPA dashboard support)
+            None => {
+                path = "index.html";
+                Cow::Borrowed("html")
+            }
         };
 
-        serve_file(ext, file)
-    } else {
-        // Don't serve fallback page for content directory
-        if path.starts_with("content") {
-            return Err(StatusCode::NOT_FOUND);
-        }
+        // Strip the leading slash in order to match paths correctly
+        let path = match path.strip_prefix("/") {
+            Some(value) => value,
+            None => path,
+        };
 
-        fallback().await
+        // Create the response message
+        let response = match Self::get(path) {
+            // File exists, serve it with its known extension
+            Some(file) => {
+                // Guess mime type from file extension
+                let mime_type: &'static str = match extension.as_ref() {
+                    "html" => "text/html",
+                    "js" | "mjs" => "text/javascript",
+                    "json" => "application/json",
+                    "woff" => "font/woff",
+                    "woff2" => "font/woff2",
+                    "webp" => "image/webp",
+                    "css" => "text/css",
+                    _ => "text/plain",
+                };
+
+                // Create byte reponse from the embedded file
+                let mut response = Full::from(file.data).into_response();
+                response
+                    .headers_mut()
+                    .insert(CONTENT_TYPE, HeaderValue::from_static(mime_type));
+                response
+            }
+            // File not found 404
+            None => StatusCode::NOT_FOUND.into_response(),
+        };
+
+        ready(Ok(response))
     }
-}
-
-/// Handles serving the index file
-pub async fn fallback() -> Result<Response, StatusCode> {
-    let index = PublicContent::get("index.html").ok_or(StatusCode::NOT_FOUND)?;
-    serve_file(Some("html"), index)
-}
-
-fn serve_file(ext: Option<&str>, file: EmbeddedFile) -> Result<Response, StatusCode> {
-    // Required file extension content types
-    let ext = match ext {
-        Some(value) => match value {
-            "html" => "text/html",
-            "js" | "mjs" => "text/javascript",
-            "json" => "application/json",
-            "woff" => "font/woff",
-            "woff2" => "font/woff2",
-            "webp" => "image/webp",
-            "css" => "text/css",
-            _ => "text/plain",
-        },
-        None => "text/plain",
-    };
-
-    let mut response = file.data.into_response();
-    response
-        .headers_mut()
-        .insert(CONTENT_TYPE, HeaderValue::from_static(ext));
-    Ok(response)
 }

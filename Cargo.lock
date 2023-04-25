@@ -1398,6 +1398,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "tower",
  "validator",
 ]
 
@@ -2261,6 +2262,7 @@ dependencies = [
  "tokio",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
