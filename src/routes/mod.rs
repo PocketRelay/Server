@@ -24,10 +24,11 @@ pub fn router() -> Router {
             "/authentication/sharedTokenLogin",
             get(gaw::shared_token_login),
         )
-        .route("/galaxyatwar/getRatings/:id", get(gaw::get_ratings))
-        .route(
-            "/galaxyatwar/increaseRatings/:id",
-            get(gaw::increase_ratings),
+        .nest(
+            "/galaxyatwar",
+            Router::new()
+                .route("/getRatings/:id", get(gaw::get_ratings))
+                .route("/increaseRatings/:id", get(gaw::increase_ratings)),
         )
         // Quality of service
         .route("/qos/qos", get(qos::qos))
