@@ -39,6 +39,8 @@ pub struct AuthQuery {
     auth: String,
 }
 
+/// GET /authentication/sharedTokenLogin
+///
 /// Route for handling shared token login. In the official implementation this
 /// would login the client using the shared token provided by the Main server.
 /// But this implementation just responds with the bare minimum response directly
@@ -84,6 +86,8 @@ pub async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
     Xml(response)
 }
 
+/// GET /galaxyatwar/getRatings/:id
+///
 /// Route for retrieving the galaxy at war ratings for the player
 /// with the provied ID
 ///
@@ -115,6 +119,8 @@ pub struct IncreaseQuery {
     e: u16,
 }
 
+/// GET /galaxyatwar/increaseRatings/:id
+///
 /// Route for increasing the galaxy at war ratings for the player with
 /// the provided ID will respond with the new ratings after increasing
 /// them.
