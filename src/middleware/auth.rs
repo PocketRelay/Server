@@ -3,7 +3,7 @@ use crate::{
         entities::{players::PlayerRole, Player},
         DbErr,
     },
-    services::tokens::VerifyError,
+    services::tokens::{Tokens, VerifyError},
     state::App,
     utils::types::BoxFuture,
 };
@@ -77,8 +77,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
                 .ok_or(TokenError::MissingToken)?;
 
             // Verify the token claim
-            let services = App::services();
-            let player_id = services.tokens.verify(token)?;
+            let player_id = Tokens::service_verify(token)?;
 
             // Load the claimed player
             let db = App::database();

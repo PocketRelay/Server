@@ -1,6 +1,6 @@
 use crate::{
     database::entities::Player,
-    services::sessions::LookupMessage,
+    services::{sessions::LookupMessage, tokens::Tokens},
     session::{
         models::{
             auth::AuthResponse,
@@ -71,11 +71,10 @@ pub async fn handle_resume_session(
     req: ResumeSessionRequest,
 ) -> ServerResult<AuthResponse> {
     let db = App::database();
-    let services = App::services();
 
     let session_token = req.session_token;
 
-    let player_id = match services.tokens.verify(&session_token) {
+    let player_id = match Tokens::service_verify(&session_token) {
         Ok(value) => value,
         Err(err) => {
             error!("Error while attempt to resume invalid session: {err:?}");

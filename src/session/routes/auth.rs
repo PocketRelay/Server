@@ -3,6 +3,7 @@ use crate::{
         entities::{Player, PlayerData},
         DatabaseConnection,
     },
+    services::tokens::Tokens,
     session::{
         models::{
             auth::*,
@@ -93,10 +94,7 @@ pub async fn handle_auth_request(
     // Handle reusing existing tokens from silent login
     let session_token = match req {
         AuthRequest::Silent { token, .. } => token,
-        _ => {
-            let services = App::services();
-            services.tokens.claim(player.id)
-        }
+        _ => Tokens::service_claim(player.id),
     };
 
     Ok(AuthResponse {
@@ -111,11 +109,8 @@ pub async fn handle_auth_request(
 ///
 /// `db`        The database connection
 /// `token`     The authentication token
-/// `player_id` The player ID
 pub async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
-    let services = App::services();
-
-    let player_id = match services.tokens.verify(token) {
+    let player_id = match Tokens::service_verify(token) {
         Ok(value) => value,
         Err(err) => {
             error!("Error while attempt to resume invalid session: {err:?}");
@@ -151,10 +146,10 @@ pub async fn handle_login_email(
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::EmailNotFound)?;
 
-    let player_password = match &player.password {
-        Some(value) => value,
-        None => return Err(ServerError::InvalidAccount),
-    };
+    let player_password: &str = player
+        .password
+        .as_ref()
+        .ok_or(ServerError::InvalidAccount)?;
 
     // Ensure passwords match
     if !verify_password(password, player_password) {
@@ -452,8 +447,7 @@ pub async fn handle_create_account(
         return Err(ServerError::ServerUnavailable);
     }
 
-    let services = App::services();
-    let session_token = services.tokens.claim(player.id);
+    let session_token = Tokens::service_claim(player.id);
 
     Ok(AuthResponse {
         player,
@@ -558,7 +552,6 @@ pub async fn handle_get_auth_token(session: &mut SessionLink) -> ServerResult<Ge
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
     // Create a new token claim for the player to use with the API
-    let services = App::services();
-    let token = services.tokens.claim(player_id);
+    let token = Tokens::service_claim(player_id);
     Ok(GetTokenResponse { token })
 }

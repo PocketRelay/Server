@@ -82,7 +82,7 @@ impl Tokens {
     /// Creates a new claim using the provided claim value
     ///
     /// `id`    The ID of the player to claim for
-    pub fn claim(&self, id: u32) -> String {
+    fn claim(&self, id: u32) -> String {
         // Compute expiry timestamp
         let exp = SystemTime::now()
             .checked_add(Self::EXPIRY_TIME)
@@ -108,10 +108,18 @@ impl Tokens {
         [msg, sig].join(".")
     }
 
+    /// Verify by directly obtaining the services reference. This
+    /// exists because everywhere verify is used its always using
+    /// a call to [`App::services`] before
+    pub fn service_verify(token: &str) -> Result<u32, VerifyError> {
+        let services = App::services();
+        services.tokens.verify(token)
+    }
+
     /// Verifies a token claims returning the claimed ID
     ///
     /// `token` The token to verify
-    pub fn verify(&self, token: &str) -> Result<u32, VerifyError> {
+    fn verify(&self, token: &str) -> Result<u32, VerifyError> {
         // Split the token parts
         let (msg_raw, sig_raw) = match token.split_once('.') {
             Some(value) => value,

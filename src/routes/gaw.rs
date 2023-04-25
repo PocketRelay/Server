@@ -10,6 +10,7 @@ use crate::{
         DatabaseConnection, DbErr, DbResult,
     },
     middleware::xml::Xml,
+    services::tokens::Tokens,
     state::App,
     utils::parsing::PlayerClass,
 };
@@ -148,11 +149,7 @@ async fn get_player_gaw_data(
     db: &DatabaseConnection,
     token: &str,
 ) -> Result<(GalaxyAtWar, u32), GAWError> {
-    let services = App::services();
-    let player_id = services
-        .tokens
-        .verify(token)
-        .map_err(|_| GAWError::InvalidToken)?;
+    let player_id = Tokens::service_verify(token).map_err(|_| GAWError::InvalidToken)?;
     let player = Player::by_id(db, player_id)
         .await?
         .ok_or(GAWError::InvalidToken)?;
