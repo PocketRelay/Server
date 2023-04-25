@@ -4,12 +4,11 @@ use axum::{
 };
 
 mod auth;
-mod content;
-mod dashboard;
 mod games;
 mod gaw;
 mod leaderboard;
 mod players;
+mod public;
 mod qos;
 mod server;
 
@@ -17,8 +16,6 @@ mod server;
 /// application routes.
 pub fn router() -> Router {
     Router::new()
-        // Content handling
-        .route("/content/*filename", get(content::content))
         // Galaxy at war
         .route(
             "/authentication/sharedTokenLogin",
@@ -92,7 +89,7 @@ pub fn router() -> Router {
                 ),
         )
         // Dashboard static hosting
-        .route("/*filename", get(dashboard::content))
+        .route("/*filename", get(public::content))
         // Dashboard fallback
-        .fallback(dashboard::fallback)
+        .fallback(public::fallback)
 }

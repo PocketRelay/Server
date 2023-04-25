@@ -6,8 +6,8 @@ use axum::{
 use rust_embed::{EmbeddedFile, RustEmbed};
 
 #[derive(RustEmbed)]
-#[folder = "src/resources/dashboard"]
-struct DashboardContent;
+#[folder = "src/resources/public"]
+struct PublicContent;
 
 /// Function for serving content from the embedded public
 /// content. Directory structure matches the paths vistied
@@ -15,7 +15,7 @@ struct DashboardContent;
 ///
 /// `path` The path of the content to serve
 pub async fn content(Path(path): Path<String>) -> Result<Response, StatusCode> {
-    if let Some(file) = DashboardContent::get(&path) {
+    if let Some(file) = PublicContent::get(&path) {
         use std::path::Path as StdPath;
 
         let path = StdPath::new(&path);
@@ -26,13 +26,18 @@ pub async fn content(Path(path): Path<String>) -> Result<Response, StatusCode> {
 
         serve_file(ext, file)
     } else {
+        // Don't serve fallback page for content directory
+        if path.starts_with("content") {
+            return Err(StatusCode::NOT_FOUND);
+        }
+
         fallback().await
     }
 }
 
 /// Handles serving the index file
 pub async fn fallback() -> Result<Response, StatusCode> {
-    let index = DashboardContent::get("index.html").ok_or(StatusCode::NOT_FOUND)?;
+    let index = PublicContent::get("index.html").ok_or(StatusCode::NOT_FOUND)?;
     serve_file(Some("html"), index)
 }
 
