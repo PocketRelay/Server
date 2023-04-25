@@ -14,6 +14,8 @@ pub struct QosQuery {
     port: u16,
 }
 
+/// GET /qos/qos
+///
 /// Route accessed by the client for Quality Of Service connection. The IP and
 /// port here are just replaced with that of the Main server.
 ///
