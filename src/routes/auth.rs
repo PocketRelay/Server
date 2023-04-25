@@ -13,7 +13,7 @@ use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Errors that can be encountered while authenticating
+/// Errors that could occur while authenticating
 #[derive(Debug, Error)]
 pub enum AuthError {
     /// Database error
@@ -41,6 +41,9 @@ pub enum AuthError {
     OriginAccess,
 }
 
+/// Response type alias for JSON responses with AuthError
+type AuthRes<T> = Result<Json<T>, AuthError>;
+
 /// Request structure for logging into an account using
 /// an email and password
 #[derive(Deserialize)]
@@ -63,7 +66,7 @@ pub struct TokenResponse {
 /// Handles authenticating a user using a username and
 /// password. Upon success will provide a [`TokenResponse`]
 /// containing the authentication token for the user
-pub async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, AuthError> {
+pub async fn login(Json(req): Json<LoginRequest>) -> AuthRes<TokenResponse> {
     let LoginRequest { email, password } = req;
 
     let db: &DatabaseConnection = App::database();
@@ -101,7 +104,7 @@ pub struct CreateRequest {
 /// Handles creating a new user from the provided credentials.
 /// Upon success will provide a [`TokenResponse`] containing
 /// the authentication token for the created user
-pub async fn create(Json(req): Json<CreateRequest>) -> Result<Json<TokenResponse>, AuthError> {
+pub async fn create(Json(req): Json<CreateRequest>) -> AuthRes<TokenResponse> {
     let CreateRequest {
         username,
         email,

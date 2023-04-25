@@ -14,12 +14,27 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use interlink::prelude::LinkError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Errors that could occur while working with game endpoints
+#[derive(Debug, Error)]
+pub enum GamesError {
+    /// The requested game could not be found (For specific game lookup)
+    #[error("Game not found")]
+    NotFound,
+    /// Something went wrong with the link to the games service
+    #[error("Failed to access games service")]
+    Link(#[from] LinkError),
+}
+
+/// Response type alias for JSON responses with GamesError
+type GamesRes<T> = Result<Json<T>, GamesError>;
+
 /// The query structure for a players query
 #[derive(Deserialize)]
-pub struct GamesQuery {
+pub struct GamesRequest {
     /// The page offset (offset = offset * count)
     #[serde(default)]
     offset: usize,
@@ -27,14 +42,6 @@ pub struct GamesQuery {
     /// of 255 entries to prevent server strain from querying the
     /// entire list of leaderboard entries
     count: Option<u8>,
-}
-
-#[derive(Debug, Error)]
-pub enum GamesError {
-    #[error("GameNotFound")]
-    NotFound,
-    #[error("InternalServerError")]
-    Server,
 }
 
 /// Response from the players endpoint which contains a list of
@@ -47,46 +54,44 @@ pub struct GamesResponse {
     more: bool,
 }
 
-/// Route for retrieving a list of all the games that are currently running.
-/// Will take a snapshot of all the games.
+/// GET /api/games
 ///
-/// `query` The query containing the offset and count
-pub async fn get_games(
-    Query(query): Query<GamesQuery>,
-    auth: Auth,
-) -> Result<Json<GamesResponse>, GamesError> {
+/// Handles requests for a paginated list of games that
+/// are actively running. Query provides the start offset
+/// and the number of games to respond with.
+///
+/// Player networking information is included for requesting
+/// players with admin level or greater access.
+pub async fn get_games(Query(query): Query<GamesRequest>, auth: Auth) -> GamesRes<GamesResponse> {
+    let GamesRequest { offset, count } = query;
     let auth = auth.into_inner();
-    /// The default number of games to return in a leaderboard response
-    const DEFAULT_COUNT: u8 = 20;
 
-    let count: usize = query.count.unwrap_or(DEFAULT_COUNT) as usize;
-
-    // Calculate the start and ending indexes
-    let start_index: usize = query.offset * count;
+    let count: usize = count.unwrap_or(20) as usize;
+    let offset: usize = offset * count;
 
     let services = App::services();
+
     // Retrieve the game snapshots
     let (games, more) = services
         .game_manager
         .send(SnapshotQueryMessage {
-            offset: start_index,
+            offset,
             count,
             include_net: auth.role >= PlayerRole::Admin,
         })
-        .await
-        .map_err(|_| GamesError::Server)?;
+        .await?;
 
     Ok(Json(GamesResponse { games, more }))
 }
 
-/// Route for retrieving the details of a game with a specific game ID
+/// GET /api/games/:id
 ///
-/// `game_id` The ID of the game
-/// `auth`    The currently authenticated player
-pub async fn get_game(
-    Path(game_id): Path<GameID>,
-    auth: Auth,
-) -> Result<Json<GameSnapshot>, GamesError> {
+/// Handles requests for details about a specific game
+/// using the ID of the game.
+///
+/// Player networking information is included for requesting
+/// players with admin level or greater access.
+pub async fn get_game(Path(game_id): Path<GameID>, auth: Auth) -> GamesRes<GameSnapshot> {
     let auth = auth.into_inner();
     let services = App::services();
     let games = services
@@ -95,17 +100,17 @@ pub async fn get_game(
             game_id,
             include_net: auth.role >= PlayerRole::Admin,
         })
-        .await
-        .map_err(|_| GamesError::Server)?
+        .await?
         .ok_or(GamesError::NotFound)?;
     Ok(Json(games))
 }
 
+/// Response implementation for games errors
 impl IntoResponse for GamesError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            GamesError::NotFound => StatusCode::NOT_FOUND,
-            GamesError::Server => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::NotFound => StatusCode::NOT_FOUND,
+            Self::Link(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (status_code, self.to_string()).into_response()
