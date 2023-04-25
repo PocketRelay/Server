@@ -9,29 +9,49 @@ use crate::{
     utils::logging::LOG_FILE_NAME,
 };
 use axum::{
-    body::BoxBody,
-    http::{HeaderValue, StatusCode},
+    body::Empty,
+    http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
 use blaze_pk::packet::PacketCodec;
-use hyper::header;
 use interlink::service::Service;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU32, Ordering};
-use thiserror::Error;
-use tokio::{
-    fs::read_to_string,
-    io::{self, split},
-};
+use tokio::{fs::read_to_string, io::split};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 static SESSION_IDS: AtomicU32 = AtomicU32::new(1);
 
-/// Route handling upgrading Blaze connections into streams that can
-/// be used as blaze sessions
-pub async fn upgrade(upgrade: BlazeUpgrade) -> Result<Response, StatusCode> {
+/// Response detailing the information about this Pocket Relay server
+/// contains the version information as well as the server information
+#[derive(Serialize)]
+pub struct ServerDetails {
+    /// Identifier used to ensure the server is a Pocket Relay server
+    ident: &'static str,
+    /// The server version
+    version: &'static str,
+}
+
+/// GET /api/server
+///
+/// Handles providing the server details. The Pocket Relay client tool
+/// uses this endpoint to validate that the provided host is a valid
+/// Pocket Relay server.
+pub async fn server_details() -> Json<ServerDetails> {
+    Json(ServerDetails {
+        ident: "POCKET_RELAY_SERVER",
+        version: state::VERSION,
+    })
+}
+
+/// GET /api/server/upgrade
+///
+/// Handles upgrading connections from the Pocket Relay Client tool
+/// from HTTP over to the Blaze protocol for proxing the game traffic
+/// as blaze sessions using HTTP Upgrade
+pub async fn upgrade(upgrade: BlazeUpgrade) -> Response {
     tokio::spawn(async move {
         let socket = match upgrade.upgrade().await {
             Ok(value) => value,
@@ -56,77 +76,46 @@ pub async fn upgrade(upgrade: BlazeUpgrade) -> Result<Response, StatusCode> {
         });
     });
 
-    Response::builder()
-        .status(StatusCode::SWITCHING_PROTOCOLS)
-        .header(header::CONNECTION, HeaderValue::from_static("upgrade"))
-        .header(header::UPGRADE, HeaderValue::from_static("blaze"))
-        .body(BoxBody::default())
-        .map_err(|_| {
-            error!("Failed to create upgrade response");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })
+    let mut response = Empty::new().into_response();
+    // Use the switching protocols status code
+    *response.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
+
+    let headers = response.headers_mut();
+    // Add the upgraidng headers
+    headers.insert(header::CONNECTION, HeaderValue::from_static("upgrade"));
+    headers.insert(header::UPGRADE, HeaderValue::from_static("blaze"));
+
+    response
 }
 
-/// Response detailing the information about this Pocket Relay server
-/// contains the version information as well as the server information
-#[derive(Serialize)]
-pub struct ServerDetails {
-    /// Identifier used to ensure the server is a Pocket Relay server
-    ident: &'static str,
-    /// The server version
-    version: &'static str,
-}
-
-/// Route for retrieving the server details responds with
-/// the list of servers and server version.
-pub async fn server_details() -> Json<ServerDetails> {
-    Json(ServerDetails {
-        ident: "POCKET_RELAY_SERVER",
-        version: state::VERSION,
-    })
-}
-
-#[derive(Serialize)]
-pub struct LogsList {
-    files: Vec<String>,
-}
-
-#[derive(Debug, Error)]
-pub enum LogsError {
-    #[error("Failed to read log file")]
-    IO(#[from] io::Error),
-    #[error("Invalid permission")]
-    InvalidPermission,
-}
-
-pub async fn get_log(auth: AdminAuth) -> Result<String, LogsError> {
+/// GET /api/server/log
+///
+/// Handles loading and responding with the server log file
+/// contents for the log section on the super admin portion
+/// of the dashboard
+pub async fn get_log(auth: AdminAuth) -> Result<String, StatusCode> {
     let auth = auth.into_inner();
     if auth.role < PlayerRole::SuperAdmin {
-        return Err(LogsError::InvalidPermission);
+        return Err(StatusCode::UNAUTHORIZED);
     }
     let path = std::path::Path::new(LOG_FILE_NAME);
-    let file = read_to_string(path).await?;
-    Ok(file)
+    read_to_string(path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+/// Structure of a telemetry message coming from a client
 #[derive(Debug, Deserialize)]
 pub struct TelemetryMessage {
+    /// The telemetry message values
     pub values: Vec<(String, String)>,
 }
 
+/// GET /api/server/telemetry
+///
+/// Handles the incoming telemetry messages recieved
+/// from Pocket Relay clients
 pub async fn submit_telemetry(Json(data): Json<TelemetryMessage>) -> StatusCode {
     debug!("[TELEMETRY] {:?}", data);
     StatusCode::OK
-}
-
-/// IntoResponse implementation for PlayersError to allow it to be
-/// used within the result type as a error response
-impl IntoResponse for LogsError {
-    fn into_response(self) -> Response {
-        let status = match &self {
-            Self::InvalidPermission => StatusCode::UNAUTHORIZED,
-            Self::IO(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        (status, self.to_string()).into_response()
-    }
 }
