@@ -123,6 +123,15 @@ impl Model {
         self.id == other.id || self.role > other.role
     }
 
+    /// Determines whether a player can delete another player.
+    /// Ensures that the role is greater and that the IDs are
+    /// not equal
+    ///
+    /// `other` The player to check for permission over
+    pub fn can_delete(&self, other: &Self) -> bool {
+        self.id != other.id && self.role > other.role
+    }
+
     /// Updates the password for the provided player returning
     /// a future resolving to the new player with its updated
     /// password value

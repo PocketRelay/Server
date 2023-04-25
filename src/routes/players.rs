@@ -31,22 +31,31 @@ pub enum PlayersError {
     /// The player with the requested ID was not found
     #[error("Unable to find requested player")]
     PlayerNotFound,
+
     /// The provided email address was already in use
     #[error("Email address already in use")]
     EmailTaken,
+
     /// The provided email was not a valid email
     #[error("Invalid email address")]
     InvalidEmail,
-    /// Server error occurred such as failing to hash a password
-    /// or a database error
+
+    /// Database error occurred
     #[error("Internal server error")]
-    ServerError,
+    Database(#[from] DbErr),
+
+    /// Failed to create a password hash
+    #[error("Internal server error")]
+    PasswordHash(#[from] argon2::password_hash::Error),
+
     /// Requested class could not be found
     #[error("Unable to find data")]
     DataNotFound,
+
     /// The account doesn't have permission to complete the action
     #[error("Invalid permission")]
     InvalidPermission,
+
     /// Invalid current password was provided when attempting
     /// to update the account password
     #[error("Invalid password")]
@@ -56,7 +65,7 @@ pub enum PlayersError {
 /// Type alias for players result responses which wraps the provided type in
 /// a result where the success is wrapped in Json and the error type is
 /// PlayersError
-type PlayersJsonResult<T> = PlayersResult<Json<T>>;
+type PlayersRes<T> = PlayersResult<Json<T>>;
 type PlayersResult<T> = Result<T, PlayersError>;
 
 /// Attempts to find a player with the provided player ID returning
@@ -64,7 +73,7 @@ type PlayersResult<T> = Result<T, PlayersError>;
 ///
 /// `db`        The database connection
 /// `player_id` The ID of the player to find
-async fn find_player(db: &DatabaseConnection, player_id: PlayerID) -> Result<Player, PlayersError> {
+async fn find_player(db: &DatabaseConnection, player_id: PlayerID) -> PlayersResult<Player> {
     Player::by_id(db, player_id)
         .await?
         .ok_or(PlayersError::PlayerNotFound)
@@ -103,7 +112,7 @@ pub struct PlayersResponse {
 pub async fn get_players(
     Query(query): Query<PlayersQuery>,
     _auth: AdminAuth,
-) -> PlayersJsonResult<PlayersResponse> {
+) -> PlayersRes<PlayersResponse> {
     const DEFAULT_COUNT: u8 = 20;
 
     let db = App::database();
@@ -137,10 +146,7 @@ pub async fn get_self(auth: Auth) -> Json<Player> {
 ///
 /// `player_id` The ID of the player to get
 /// `_auth`     The currently authenticated (Admin) player
-pub async fn get_player(
-    Path(player_id): Path<PlayerID>,
-    _auth: AdminAuth,
-) -> PlayersJsonResult<Player> {
+pub async fn get_player(Path(player_id): Path<PlayerID>, _auth: AdminAuth) -> PlayersRes<Player> {
     let db = App::database();
     let player = find_player(db, player_id).await?;
     Ok(Json(player))
@@ -171,7 +177,7 @@ pub async fn set_details(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
     Json(req): Json<UpdateDetailsRequest>,
-) -> PlayersResult<StatusCode> {
+) -> PlayersResult<()> {
     let auth = auth.into_inner();
 
     // Get the target player
@@ -186,7 +192,7 @@ pub async fn set_details(
     attempt_set_details(db, player, req).await?;
 
     // Ok status code indicating updated
-    Ok(StatusCode::OK)
+    Ok(())
 }
 
 /// PUT /api/players/self/details
@@ -200,7 +206,7 @@ pub async fn set_details(
 pub async fn update_details(
     auth: Auth,
     Json(req): Json<UpdateDetailsRequest>,
-) -> PlayersResult<StatusCode> {
+) -> PlayersResult<()> {
     // Obtain the player from auth
     let player = auth.into_inner();
 
@@ -212,7 +218,7 @@ pub async fn update_details(
     attempt_set_details(db, player, req).await?;
 
     // Ok status code indicating updated
-    Ok(StatusCode::OK)
+    Ok(())
 }
 
 /// Attempts to set the details for the provided account using the
@@ -231,16 +237,10 @@ async fn attempt_set_details(
     let email = if player.email == req.email {
         None
     } else {
-        match Player::by_email(db, &req.email).await {
-            Ok(None) => {}
-            // Error if email is taken
-            Ok(Some(_)) => return Err(PlayersError::EmailTaken),
-
-            Err(err) => {
-                error!("Failed to check if email is taken: {:?}", err);
-                return Err(PlayersError::ServerError);
-            }
-        };
+        // Email taken checking
+        if let Some(_) = Player::by_email(db, &req.email).await? {
+            return Err(PlayersError::EmailTaken);
+        }
 
         Some(req.email)
     };
@@ -254,10 +254,7 @@ async fn attempt_set_details(
     };
 
     // Update the details
-    if let Err(err) = player.set_details(db, username, email).await {
-        error!("Failed to update player password: {:?}", err);
-        return Err(PlayersError::ServerError);
-    }
+    player.set_details(db, username, email).await?;
 
     Ok(())
 }
@@ -282,7 +279,7 @@ pub async fn set_password(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
     Json(req): Json<SetPasswordRequest>,
-) -> PlayersResult<StatusCode> {
+) -> PlayersResult<()> {
     let auth = auth.into_inner();
 
     // Get the target player
@@ -294,10 +291,11 @@ pub async fn set_password(
         return Err(PlayersError::InvalidPermission);
     }
 
-    attempt_set_password(db, player, req.password).await?;
+    let password = hash_password(&req.password)?;
+    player.set_password(db, password).await?;
 
     // Ok status code indicating updated
-    Ok(StatusCode::OK)
+    Ok(())
 }
 
 /// Request to set the role of a player only allowed
@@ -313,7 +311,7 @@ pub async fn set_role(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
     Json(req): Json<SetPlayerRoleRequest>,
-) -> PlayersResult<StatusCode> {
+) -> PlayersResult<()> {
     let auth = auth.into_inner();
 
     let role = req.role;
@@ -332,12 +330,9 @@ pub async fn set_role(
     let db = App::database();
     let player = find_player(db, player_id).await?;
 
-    if let Err(err) = player.set_role(db, role).await {
-        error!("Failed to set player role: {:?}", err);
-        return Err(PlayersError::ServerError);
-    }
+    player.set_role(db, role).await?;
 
-    Ok(StatusCode::OK)
+    Ok(())
 }
 
 /// Request to update the password of the current user account
@@ -357,53 +352,28 @@ pub struct UpdatePasswordRequest {
 pub async fn update_password(
     auth: Auth,
     Json(req): Json<UpdatePasswordRequest>,
-) -> PlayersResult<StatusCode> {
+) -> PlayersResult<()> {
+    let UpdatePasswordRequest {
+        current_password,
+        new_password,
+    } = req;
+
     // Obtain the player from auth
     let player = auth.into_inner();
 
-    let player_password = match &player.password {
-        Some(value) => value,
-        None => return Err(PlayersError::InvalidPassword),
-    };
+    let player_password: &str = player
+        .password
+        .as_ref()
+        .ok_or(PlayersError::InvalidPassword)?;
 
     // Compare the existing passwords
-    if !verify_password(&req.current_password, player_password) {
+    if !verify_password(&current_password, player_password) {
         return Err(PlayersError::InvalidPassword);
     }
 
     let db = App::database();
-    attempt_set_password(db, player, req.new_password).await?;
-
-    // Ok status code indicating updated
-    Ok(StatusCode::OK)
-}
-
-/// Attempts to set hash and the password for
-/// the provided account
-///
-/// `db`       The database connection
-/// `player`   The player to set the password for
-/// `password` The password to set
-async fn attempt_set_password(
-    db: &'static DatabaseConnection,
-    player: Player,
-    password: String,
-) -> PlayersResult<()> {
-    // Hash the new password
-    let password = match hash_password(&password) {
-        Ok(value) => value,
-        Err(_) => {
-            // This block shouldn't ever be encounted with the current alg
-            // but is handled anyway
-            return Err(PlayersError::ServerError);
-        }
-    };
-
-    // Update the password
-    if let Err(err) = player.set_password(db, password).await {
-        error!("Failed to update player password: {:?}", err);
-        return Err(PlayersError::ServerError);
-    }
+    let password = hash_password(&new_password)?;
+    player.set_password(db, password).await?;
 
     Ok(())
 }
@@ -414,22 +384,19 @@ async fn attempt_set_password(
 ///
 /// `player_id` The ID of the player to delete
 /// `auth`      The currently authenticated (Admin) player
-pub async fn delete_player(
-    auth: AdminAuth,
-    Path(player_id): Path<PlayerID>,
-) -> Result<Response, PlayersError> {
+pub async fn delete_player(auth: AdminAuth, Path(player_id): Path<PlayerID>) -> PlayersResult<()> {
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
     let db = App::database();
     let player: Player = find_player(db, player_id).await?;
 
-    if auth.id != player.id && auth.role <= player.role {
+    if !auth.can_delete(&player) {
         return Err(PlayersError::InvalidPermission);
     }
 
     player.delete(db).await?;
-    Ok(StatusCode::OK.into_response())
+    Ok(())
 }
 /// Request to update the password of the current user account
 #[derive(Deserialize)]
@@ -441,17 +408,14 @@ pub struct DeleteSelfRequest {
 /// DELETE /api/players/self
 ///
 /// Route for deleting the authenticated player
-pub async fn delete_self(
-    auth: Auth,
-    Json(req): Json<DeleteSelfRequest>,
-) -> Result<Response, PlayersError> {
+pub async fn delete_self(auth: Auth, Json(req): Json<DeleteSelfRequest>) -> PlayersResult<()> {
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
-    let player_password = match &auth.password {
-        Some(value) => value,
-        None => return Err(PlayersError::InvalidPassword),
-    };
+    let player_password: &str = auth
+        .password
+        .as_ref()
+        .ok_or(PlayersError::InvalidPassword)?;
 
     // Compare the existing passwords
     if !verify_password(&req.password, player_password) {
@@ -460,7 +424,7 @@ pub async fn delete_self(
 
     let db = App::database();
     auth.delete(db).await?;
-    Ok(StatusCode::OK.into_response())
+    Ok(())
 }
 
 /// Structure wrapping a vec of player data in order to make
@@ -490,7 +454,7 @@ impl Serialize for PlayerDataMap {
 pub async fn all_data(
     Path(player_id): Path<PlayerID>,
     _admin: AdminAuth,
-) -> PlayersJsonResult<PlayerDataMap> {
+) -> PlayersRes<PlayerDataMap> {
     let db = App::database();
     let data = PlayerData::all(db, player_id).await?;
     Ok(Json(PlayerDataMap(data)))
@@ -508,12 +472,12 @@ pub async fn all_data(
 pub async fn get_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: Auth,
-) -> PlayersJsonResult<PlayerData> {
+) -> PlayersRes<PlayerData> {
     let auth = auth.into_inner();
     let db = App::database();
     let player: Player = find_player(db, player_id).await?;
 
-    if auth.id != player.id && auth.role <= player.role {
+    if !auth.has_permission_over(&player) {
         return Err(PlayersError::InvalidPermission);
     }
 
@@ -543,14 +507,14 @@ pub async fn set_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: AdminAuth,
     Json(req): Json<SetDataRequest>,
-) -> PlayersJsonResult<PlayerData> {
+) -> PlayersRes<PlayerData> {
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
     let db = App::database();
     let player: Player = find_player(db, player_id).await?;
 
-    if auth.id != player.id && auth.role <= player.role {
+    if !auth.has_permission_over(&player) {
         return Err(PlayersError::InvalidPermission);
     }
 
@@ -569,20 +533,20 @@ pub async fn set_data(
 pub async fn delete_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     auth: AdminAuth,
-) -> PlayersJsonResult<()> {
+) -> PlayersResult<()> {
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
     let db = App::database();
     let player: Player = find_player(db, player_id).await?;
 
-    if auth.id != player.id && auth.role <= player.role {
+    if !auth.has_permission_over(&player) {
         return Err(PlayersError::InvalidPermission);
     }
 
     PlayerData::delete(db, player.id, &key).await?;
 
-    Ok(Json(()))
+    Ok(())
 }
 
 /// GET /api/players/:id/galaxy_at_war
@@ -595,19 +559,11 @@ pub async fn delete_data(
 pub async fn get_player_gaw(
     Path(player_id): Path<PlayerID>,
     _admin: AdminAuth,
-) -> PlayersJsonResult<GalaxyAtWar> {
+) -> PlayersRes<GalaxyAtWar> {
     let db = App::database();
     let player = find_player(db, player_id).await?;
     let galax_at_war = GalaxyAtWar::find_or_create(db, player.id, 0.0).await?;
     Ok(Json(galax_at_war))
-}
-
-/// From implementation for converting database errors into
-/// players errors without needing to map the value
-impl From<DbErr> for PlayersError {
-    fn from(_: DbErr) -> Self {
-        PlayersError::ServerError
-    }
 }
 
 /// IntoResponse implementation for PlayersError to allow it to be
@@ -619,7 +575,7 @@ impl IntoResponse for PlayersError {
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
             Self::EmailTaken | Self::InvalidEmail => StatusCode::BAD_REQUEST,
             Self::InvalidPassword | Self::InvalidPermission => StatusCode::UNAUTHORIZED,
-            Self::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Database(_) | Self::PasswordHash(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (status, self.to_string()).into_response()
