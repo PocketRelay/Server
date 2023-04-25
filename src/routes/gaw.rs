@@ -84,46 +84,6 @@ pub async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
     Xml(response)
 }
 
-/// Retrieves the galaxy at war data and promotions count for
-/// the player with the provided ID
-///
-/// `db` The dataabse connection
-/// `id` The hex ID of the player
-async fn get_player_gaw_data(
-    db: &DatabaseConnection,
-    token: &str,
-) -> Result<(GalaxyAtWar, u32), GAWError> {
-    let services = App::services();
-    let player_id = services
-        .tokens
-        .verify(token)
-        .map_err(|_| GAWError::InvalidToken)?;
-    let player = Player::by_id(db, player_id)
-        .await?
-        .ok_or(GAWError::InvalidToken)?;
-    let config = App::config();
-
-    let (gaw_data, promotions) = try_join!(
-        GalaxyAtWar::find_or_create(db, player.id, config.galaxy_at_war.decay),
-        get_promotions(db, &player)
-    )?;
-    Ok((gaw_data, promotions))
-}
-
-async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u32> {
-    let config = App::config();
-    if !config.galaxy_at_war.promotions {
-        return Ok(0);
-    }
-
-    Ok(PlayerData::get_classes(db, player.id)
-        .await?
-        .iter()
-        .filter_map(|value| PlayerClass::parse(&value.value))
-        .map(|value| value.promotions)
-        .sum())
-}
-
 /// Route for retrieving the galaxy at war ratings for the player
 /// with the provied ID
 ///
@@ -171,6 +131,46 @@ pub async fn increase_ratings(
         .increase(db, (query.a, query.b, query.c, query.d, query.e))
         .await?;
     Ok(ratings_response(gaw_data, promotions))
+}
+
+/// Retrieves the galaxy at war data and promotions count for
+/// the player with the provided ID
+///
+/// `db` The dataabse connection
+/// `id` The hex ID of the player
+async fn get_player_gaw_data(
+    db: &DatabaseConnection,
+    token: &str,
+) -> Result<(GalaxyAtWar, u32), GAWError> {
+    let services = App::services();
+    let player_id = services
+        .tokens
+        .verify(token)
+        .map_err(|_| GAWError::InvalidToken)?;
+    let player = Player::by_id(db, player_id)
+        .await?
+        .ok_or(GAWError::InvalidToken)?;
+    let config = App::config();
+
+    let (gaw_data, promotions) = try_join!(
+        GalaxyAtWar::find_or_create(db, player.id, config.galaxy_at_war.decay),
+        get_promotions(db, &player)
+    )?;
+    Ok((gaw_data, promotions))
+}
+
+async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u32> {
+    let config = App::config();
+    if !config.galaxy_at_war.promotions {
+        return Ok(0);
+    }
+
+    Ok(PlayerData::get_classes(db, player.id)
+        .await?
+        .iter()
+        .filter_map(|value| PlayerClass::parse(&value.value))
+        .map(|value| value.promotions)
+        .sum())
 }
 
 /// Generates a ratings XML response from the provided ratings struct and
