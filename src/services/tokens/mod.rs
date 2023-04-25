@@ -17,6 +17,7 @@ use tokio::{
 };
 
 use crate::state::App;
+
 /// Token provider and verification service
 pub struct Tokens {
     /// HMAC key used for computing signatures

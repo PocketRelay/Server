@@ -47,7 +47,7 @@ impl<T> Service<Request<T>> for PublicContent {
         };
 
         // Strip the leading slash in order to match paths correctly
-        let path = match path.strip_prefix("/") {
+        let path = match path.strip_prefix('/') {
             Some(value) => value,
             None => path,
         };

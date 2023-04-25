@@ -238,7 +238,7 @@ async fn attempt_set_details(
         None
     } else {
         // Email taken checking
-        if let Some(_) = Player::by_email(db, &req.email).await? {
+        if Player::by_email(db, &req.email).await?.is_some() {
             return Err(PlayersError::EmailTaken);
         }
 

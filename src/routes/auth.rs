@@ -119,7 +119,7 @@ pub async fn create(Json(req): Json<CreateRequest>) -> AuthRes<TokenResponse> {
     let db: &DatabaseConnection = App::database();
 
     // Validate email taken status
-    if let Some(_) = Player::by_email(db, &email).await? {
+    if Player::by_email(db, &email).await?.is_some() {
         return Err(AuthError::EmailTaken);
     }
 
