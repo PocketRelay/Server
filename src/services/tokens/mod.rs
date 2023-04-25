@@ -15,6 +15,8 @@ use tokio::{
     fs::{write, File},
     io::{self, AsyncReadExt},
 };
+
+use crate::state::App;
 /// Token provider and verification service
 pub struct Tokens {
     /// HMAC key used for computing signatures
@@ -66,6 +68,14 @@ impl Tokens {
         let mut file = File::open(path).await?;
         file.read_exact(out).await?;
         Ok(())
+    }
+
+    /// Claim by directly obtaining the services reference. This
+    /// exists because everywhere claim is used its always using
+    /// a call to [`App::services`] before
+    pub fn service_claim(id: u32) -> String {
+        let services = App::services();
+        services.tokens.claim(id)
     }
 
     /// Creates a new claim using the provided claim value

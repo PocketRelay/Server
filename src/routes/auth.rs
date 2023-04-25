@@ -1,5 +1,6 @@
 use crate::{
     database::entities::Player,
+    services::tokens::Tokens,
     state::App,
     utils::hashing::{hash_password, verify_password},
 };
@@ -8,25 +9,40 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Errors that can be encountered while authenticating
 #[derive(Debug, Error)]
 pub enum AuthError {
+    /// Database error
     #[error("Server error occurred")]
-    ServerError,
-    #[error("The provided credentials are invalid")]
+    Database(#[from] DbErr),
+
+    /// Failed to hash the user password
+    #[error("Server error occurred")]
+    PasswordHash(#[from] argon2::password_hash::Error),
+
+    /// Provided account credentials were invalid
+    #[error("Provided credentials are not valid")]
     InvalidCredentails,
-    #[error("The provided username is invalid")]
+
+    /// Provided username was not valid
+    #[error("Provided username is invalid")]
     InvalidUsername,
-    #[error("The provided email is in use")]
+
+    /// Provided email was taken
+    #[error("Provided email is in use")]
     EmailTaken,
-    #[error(
-        "The provided email is for an origin account without a password ask an Admin to set one"
-    )]
+
+    /// Account was an Origin account without a password
+    #[error("Origin account password is not set")]
     OriginAccess,
 }
 
+/// Request structure for logging into an account using
+/// an email and password
 #[derive(Deserialize)]
 pub struct LoginRequest {
     /// The email address of the account to login with
@@ -35,36 +51,44 @@ pub struct LoginRequest {
     password: String,
 }
 
+/// Response containing a token for authentication
 #[derive(Serialize)]
 pub struct TokenResponse {
+    /// Authentication token
     token: String,
 }
 
-/// Route for logging into a non origin account
+/// POST /api/auth/login
+///
+/// Handles authenticating a user using a username and
+/// password. Upon success will provide a [`TokenResponse`]
+/// containing the authentication token for the user
 pub async fn login(Json(req): Json<LoginRequest>) -> Result<Json<TokenResponse>, AuthError> {
-    let db = App::database();
-    let player = Player::by_email(db, &req.email)
-        .await
-        .map_err(|_| AuthError::ServerError)?
+    let LoginRequest { email, password } = req;
+
+    let db: &DatabaseConnection = App::database();
+
+    // Find a player with the matching email
+    let player: Player = Player::by_email(db, &email)
+        .await?
         .ok_or(AuthError::InvalidCredentails)?;
 
-    let password = match &player.password {
-        Some(value) => value,
-        None => return Err(AuthError::OriginAccess),
-    };
+    // Find the account password or fail if missing one
+    let player_password: &str = player.password.as_ref().ok_or(AuthError::OriginAccess)?;
 
-    if !verify_password(&req.password, password) {
+    // Verify that the password matches
+    if !verify_password(&password, player_password) {
         return Err(AuthError::InvalidCredentails);
     }
 
-    let services = App::services();
-    let token = services.tokens.claim(player.id);
-
-    Ok(Json(TokenResponse { token }))
+    Ok(player.into())
 }
 
+/// Request structure for creating a new account contains
+/// the account credentials
 #[derive(Deserialize)]
 pub struct CreateRequest {
+    /// The username to set for the account
     username: String,
     /// The email address of the account to login with
     email: String,
@@ -72,43 +96,52 @@ pub struct CreateRequest {
     password: String,
 }
 
-/// Route for creating accounts
+/// POST /api/auth/create
+///
+/// Handles creating a new user from the provided credentials.
+/// Upon success will provide a [`TokenResponse`] containing
+/// the authentication token for the created user
 pub async fn create(Json(req): Json<CreateRequest>) -> Result<Json<TokenResponse>, AuthError> {
-    let db = App::database();
+    let CreateRequest {
+        username,
+        email,
+        password,
+    } = req;
 
     // Validate the username is not empty
-    if req.username.is_empty() {
+    if username.is_empty() {
         return Err(AuthError::InvalidUsername);
     }
 
+    let db: &DatabaseConnection = App::database();
+
     // Validate email taken status
-    match Player::by_email(db, &req.email).await {
-        Ok(Some(_)) => return Err(AuthError::EmailTaken),
-        Ok(None) => {}
-        Err(_) => return Err(AuthError::ServerError),
+    if let Some(_) = Player::by_email(db, &email).await? {
+        return Err(AuthError::EmailTaken);
     }
 
-    let password = match hash_password(&req.password) {
-        Ok(value) => value,
-        Err(_) => return Err(AuthError::ServerError),
-    };
+    let password: String = hash_password(&password)?;
+    let player: Player = Player::create(db, email, username, Some(password)).await?;
 
-    let player = Player::create(db, req.email, req.username, Some(password))
-        .await
-        .map_err(|_| AuthError::ServerError)?;
-
-    let services = App::services();
-    let token = services.tokens.claim(player.id);
-
-    Ok(Json(TokenResponse { token }))
+    Ok(player.into())
 }
 
+/// Allow conversion from player into JSON token response for simplicity
+impl From<Player> for Json<TokenResponse> {
+    fn from(value: Player) -> Self {
+        // Claim a token and response with a response
+        let token: String = Tokens::service_claim(value.id);
+        Json(TokenResponse { token })
+    }
+}
+
+/// Response implementation for auth errors
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            AuthError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
-            AuthError::InvalidCredentails | AuthError::OriginAccess => StatusCode::UNAUTHORIZED,
-            AuthError::EmailTaken | AuthError::InvalidUsername => StatusCode::BAD_REQUEST,
+            Self::Database(_) | Self::PasswordHash(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InvalidCredentails | Self::OriginAccess => StatusCode::UNAUTHORIZED,
+            Self::EmailTaken | Self::InvalidUsername => StatusCode::BAD_REQUEST,
         };
 
         (status_code, self.to_string()).into_response()
