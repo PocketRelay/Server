@@ -201,30 +201,18 @@ fn load_entitlements() -> TdfMap<String, String> {
 async fn load_coalesced() -> ServerResult<ChunkMap> {
     let local_path = Path::new("data/coalesced.bin");
     if local_path.is_file() {
-        let bytes = match read(local_path).await {
-            Ok(value) => value,
-            Err(_) => {
-                error!("Unable to load local coalesced from data/coalesced.bin falling back to default.");
-                return default_coalesced();
-            }
-        };
-        match generate_coalesced(&bytes) {
-            Ok(value) => Ok(value),
-            Err(_) => {
-                error!("Unable to compress local coalesced from data/coalesced.bin falling back to default.");
-                default_coalesced()
+        if let Ok(bytes) = read(local_path).await {
+            if let Ok(map) = generate_coalesced(&bytes) {
+                return Ok(map);
             }
         }
-    } else {
-        default_coalesced()
-    }
-}
 
-/// Generates the compressed version of the default coalesced
-/// this default coalesced file is stored at
-///
-/// src/resources/data/coalesced.bin
-fn default_coalesced() -> ServerResult<ChunkMap> {
+        error!(
+            "Unable to compress local coalesced from data/coalesced.bin falling back to default."
+        );
+    }
+
+    // Fallback to embedded default coalesced.bin
     let bytes: &[u8] = include_bytes!("../../resources/data/coalesced.bin");
     generate_coalesced(bytes)
 }
@@ -309,38 +297,26 @@ async fn talk_file(lang: &str) -> ServerResult<ChunkMap> {
     let local_path = Path::new(&file_name);
 
     if local_path.is_file() {
-        let bytes = match read(local_path).await {
-            Ok(value) => value,
-            Err(_) => {
-                error!("Unable to load local coalesced from data/coalesced.bin falling back to default.");
-                return default_coalesced();
-            }
-        };
-        Ok(create_base64_map(&bytes))
-    } else {
-        Ok(default_talk_file(lang))
+        if let Ok(bytes) = read(local_path).await {
+            return Ok(create_base64_map(&bytes));
+        }
+        error!("Unable to load local talk file falling back to default.");
     }
+
+    // Load default talk file
+    let file_name = format!("{}.tlk", lang);
+    Ok(if let Some(file) = DefaultTlkFiles::get(&file_name) {
+        create_base64_map(&file.data)
+    } else {
+        let bytes: &[u8] = include_bytes!("../../resources/data/tlk/default.tlk");
+        create_base64_map(bytes)
+    })
 }
 
 /// Default talk file values
 #[derive(RustEmbed)]
 #[folder = "src/resources/data/tlk"]
 struct DefaultTlkFiles;
-
-/// Generates the base64 map for the default talk file for the
-/// provided langauge. Will default to the default.tlk file if
-/// the language is not found
-///
-/// `lang` The language to get the default for
-fn default_talk_file(lang: &str) -> ChunkMap {
-    let file_name = format!("{}.tlk", lang);
-    if let Some(file) = DefaultTlkFiles::get(&file_name) {
-        create_base64_map(&file.data)
-    } else {
-        let bytes: &[u8] = include_bytes!("../../resources/data/tlk/default.tlk");
-        create_base64_map(bytes)
-    }
-}
 
 /// Loads the messages that should be displayed to the client and
 /// returns them in a list.
