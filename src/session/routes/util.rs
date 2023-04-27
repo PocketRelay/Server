@@ -18,7 +18,6 @@ use rust_embed::RustEmbed;
 use std::{
     io::Write,
     path::Path,
-    str::Chars,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::fs::read;
@@ -258,27 +257,22 @@ fn create_base64_map(bytes: &[u8]) -> ChunkMap {
 
     let encoded: String = Base64::encode_string(bytes);
     let length = encoded.len();
+    let mut output: ChunkMap = TdfMap::with_capacity((length / CHUNK_LENGTH) + 2);
 
-    let mut output: ChunkMap = TdfMap::with_capacity(length / CHUNK_LENGTH);
-
-    let mut chars: Chars = encoded.chars();
     let mut index = 0;
+    let mut offset = 0;
 
-    loop {
-        let mut value = String::with_capacity(CHUNK_LENGTH);
-        let mut i = 0;
-        while i < CHUNK_LENGTH {
-            let next_char = match chars.next() {
-                Some(value) => value,
-                None => break,
-            };
-            value.push(next_char);
-            i += 1;
-        }
-        output.insert(format!("CHUNK_{}", index), value);
-        if i < CHUNK_LENGTH {
-            break;
-        }
+    while offset < length {
+        let o1 = offset;
+        offset += CHUNK_LENGTH;
+
+        let slice = if offset < length {
+            &encoded[o1..offset]
+        } else {
+            &encoded[o1..]
+        };
+
+        output.insert(format!("CHUNK_{}", index), slice);
         index += 1;
     }
 
