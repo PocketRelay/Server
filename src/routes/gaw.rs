@@ -149,10 +149,9 @@ async fn get_player_gaw_data(
     db: &DatabaseConnection,
     token: &str,
 ) -> Result<(GalaxyAtWar, u32), GAWError> {
-    let player_id = Tokens::service_verify(token).map_err(|_| GAWError::InvalidToken)?;
-    let player = Player::by_id(db, player_id)
-        .await?
-        .ok_or(GAWError::InvalidToken)?;
+    let player: Player = Tokens::service_verify(db, token)
+        .await
+        .map_err(|_| GAWError::InvalidToken)?;
     let config = App::config();
 
     let (gaw_data, promotions) = try_join!(

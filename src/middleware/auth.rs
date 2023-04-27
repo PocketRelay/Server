@@ -77,13 +77,8 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
                 .ok_or(TokenError::MissingToken)?;
 
             // Verify the token claim
-            let player_id = Tokens::service_verify(token)?;
-
-            // Load the claimed player
             let db = App::database();
-            let player = Player::by_id(db, player_id)
-                .await?
-                .ok_or(TokenError::InvalidToken)?;
+            let player: Player = Tokens::service_verify(db, token).await?;
 
             Ok(Self(player, PhantomData))
         })

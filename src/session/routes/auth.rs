@@ -1,9 +1,10 @@
 use crate::{
-    database::{
-        entities::{Player, PlayerData},
-        DatabaseConnection,
+    database::{entities::Player, DatabaseConnection},
+    services::{
+        retriever::{origin::OriginFlowService, Retriever},
+        tokens::Tokens,
+        Services,
     },
-    services::tokens::Tokens,
     session::{
         models::{
             auth::*,
@@ -14,127 +15,19 @@ use crate::{
     state::App,
     utils::hashing::{hash_password, verify_password},
 };
-use log::{debug, error, warn};
-use std::borrow::Cow;
-use std::path::Path;
+use log::{debug, error};
+use std::{borrow::Cow, path::Path};
 use tokio::fs::read_to_string;
 use validator::validate_email;
 
-/// This route handles all the different authentication types, Silent, Origin,
-/// and Login parsing  the request and handling the authentication with the
-/// correct function.
-///
-/// # Silent Login
-///
-/// This is the silent token authentication packet which is when the client
-/// authenticates with an already known session token and player ID
-///
-/// ```
-/// Route: Authentication(SilentLogin)
-/// ID: 6
-/// Content: {
-///     "AUTH": "128_CHARACTER_TOKEN", // Authentication token
-///     "PID": 1, // Player ID
-///     "TYPE": 2 // Authentication type
-/// }
-/// ```
-///
-/// # Origin Login
-///
-/// This is the authentication packet used when the game is launched through
-/// origin. This token must be authenticated through the official servers
-///
-/// ```
-/// Route: Authentication(OriginLogin)
-/// ID: 0
-/// Content: {
-///     "AUTH": "ORIGIN_TOKEN", // Origin authentication token
-///     "TYPE": 1 // Authentication type
-/// }
-/// ```
-///
-/// # Login
-///
-/// This is login through the in game login menu using a username and
-/// password.
-///
-/// ```
-/// Route: Authentication(Login)
-/// ID: 14
-/// Content: {
-///     "DVID": 0,
-///     "MAIL": "ACCOUNT_EMAIL", // Email
-///     "PASS": "ACCOUNT_PASSWORD", // Password
-///     "TOKN": "",
-///     "TYPE": 0 // Authentication type
-/// }
-/// ```
-pub async fn handle_auth_request(
+pub async fn handle_login(
     session: &mut SessionLink,
-    req: AuthRequest,
+    req: LoginRequest,
 ) -> ServerResult<AuthResponse> {
-    let silent = req.is_silent();
-    let db = App::database();
-    let player: Player = match &req {
-        AuthRequest::Silent { token, .. } => handle_login_token(db, token).await,
-        AuthRequest::Login { email, password } => handle_login_email(db, email, password).await,
-        AuthRequest::Origin { token } => handle_login_origin(db, token).await,
-    }?;
+    let db: &DatabaseConnection = App::database();
 
-    // Failing to set the player likely the player disconnected or
-    // the server is shutting down
-    if session
-        .send(SetPlayerMessage(Some(player.clone())))
-        .await
-        .is_err()
-    {
-        return Err(ServerError::ServerUnavailable);
-    }
+    let LoginRequest { email, password } = &req;
 
-    // Handle reusing existing tokens from silent login
-    let session_token = match req {
-        AuthRequest::Silent { token, .. } => token,
-        _ => Tokens::service_claim(player.id),
-    };
-
-    Ok(AuthResponse {
-        player,
-        session_token,
-        silent,
-    })
-}
-
-/// Handles finding a player through an authentication token and a player ID
-/// returning the player if found
-///
-/// `db`        The database connection
-/// `token`     The authentication token
-pub async fn handle_login_token(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
-    let player_id = match Tokens::service_verify(token) {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Error while attempt to resume invalid session: {err:?}");
-            return Err(ServerError::InvalidSession);
-        }
-    };
-
-    Player::by_id(db, player_id)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::InvalidSession)
-}
-
-/// Handles finding a player through the provided email then ensuring the
-/// account password hash matches the provided plain text password
-///
-/// `db`       The database connection
-/// `email`    The email to find the account for
-/// `password` The password to check the hash against
-pub async fn handle_login_email(
-    db: &DatabaseConnection,
-    email: &str,
-    password: &str,
-) -> ServerResult<Player> {
     // Ensure the email is actually valid
     if !validate_email(email) {
         return Err(ServerError::InvalidEmail);
@@ -146,6 +39,7 @@ pub async fn handle_login_email(
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::EmailNotFound)?;
 
+    // Get the attached password (Passwordless accounts fail as invalid)
     let player_password: &str = player
         .password
         .as_ref()
@@ -156,76 +50,101 @@ pub async fn handle_login_email(
         return Err(ServerError::WrongPassword);
     }
 
-    Ok(player)
+    // Update the session stored player
+    session
+        .send(SetPlayerMessage(Some(player.clone())))
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?;
+
+    let session_token: String = Tokens::service_claim(player.id);
+
+    Ok(AuthResponse {
+        player,
+        session_token,
+        silent: false,
+    })
 }
 
-/// Handles finding a player using the origin retriever logic. Connects to the
-/// official servers  and uses the provided origin token to login then takes the
-/// credentails from the official servers.
-///
-/// `db`    The database connection
-/// `token` The origin authentication token
-pub async fn handle_login_origin(db: &DatabaseConnection, token: &str) -> ServerResult<Player> {
-    let services = App::services();
+pub async fn handle_silent_login(
+    session: &mut SessionLink,
+    req: SilentLoginRequest,
+) -> ServerResult<AuthResponse> {
+    let db: &DatabaseConnection = App::database();
+
+    // Verify the authentication token
+    let player: Player = Tokens::service_verify(db, &req.token)
+        .await
+        .map_err(|_| ServerError::InvalidSession)?;
+
+    // Update the session stored player
+    session
+        .send(SetPlayerMessage(Some(player.clone())))
+        .await
+        .map_err(|_| ServerError::ServerUnavailable)?;
+
+    Ok(AuthResponse {
+        player,
+        session_token: req.token,
+        silent: true,
+    })
+}
+
+pub async fn handle_origin_login(
+    session: &mut SessionLink,
+    req: OriginLoginRequest,
+) -> ServerResult<AuthResponse> {
+    let db: &DatabaseConnection = App::database();
+
+    let services: &Services = App::services();
 
     // Ensure the retriever is enabled
-    let Some(retriever) = &services.retriever else {
-        error!("Unable to authenticate Origin: Retriever is disabled or unavailable");
-        return Err(ServerError::ServerUnavailable);
+    let retriever: &Retriever = match &services.retriever {
+        Some(value) => value,
+        None => {
+            error!("Unable to authenticate Origin: Retriever is disabled or unavailable");
+            return Err(ServerError::ServerUnavailable);
+        }
     };
 
-    let Some(service) = &retriever.origin_flow else {
-        error!("Origin authentication is disabled cannot authenticate origin client");
-        return Err(ServerError::ServerUnavailable);
+    // Ensure origin authentication is enabled
+    let service: &OriginFlowService = match &retriever.origin_flow {
+        Some(value) => value,
+        None => {
+            error!("Origin authentication is disabled cannot authenticate origin client");
+            return Err(ServerError::ServerUnavailable);
+        }
     };
 
     // Create an origin authentication flow
-    let Some(mut flow) = service.create(retriever).await else {
-        error!("Unable to authenticate Origin: Unable to connect to official servers");
-        return Err(ServerError::ServerUnavailable);
+    let mut flow = match service.create(retriever).await {
+        Some(value) => value,
+        None => {
+            error!("Unable to authenticate Origin: Unable to connect to official servers");
+            return Err(ServerError::ServerUnavailable);
+        }
     };
 
-    // Authenticate with the official servers
-    let Ok(details) = flow.authenticate(token).await else {
-        error!("Unable to authenticate Origin: Failed to retrieve details from official server");
-        return Err(ServerError::ServerUnavailable);
+    let player: Player = match flow.login(db, req.token).await {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to login with origin: {}", err);
+            return Err(ServerError::ServerUnavailable);
+        }
     };
 
-    // Lookup the player details to see if the player exists
-    let player: Option<Player> = Player::by_email(db, &details.email)
+    // Update the session stored player
+    session
+        .send(SetPlayerMessage(Some(player.clone())))
         .await
         .map_err(|_| ServerError::ServerUnavailable)?;
 
-    if let Some(player) = player {
-        return Ok(player);
-    }
+    let session_token: String = Tokens::service_claim(player.id);
 
-    let player: Player = Player::create(db, details.email, details.display_name, None)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?;
-
-    // Early return created player if origin fetching is disabled
-    if !flow.data {
-        return Ok(player);
-    }
-
-    // Load the player settings from origin
-    let Ok(settings) = flow.get_settings().await else {
-        warn!(
-            "Unable to load origin player settings from official servers (Name: {}, Email: {})",
-            &player.display_name, &player.email
-        );
-        return Ok(player);
-    };
-
-    debug!("Loaded origin data from official server");
-
-    if let Err(err) = PlayerData::set_bulk(db, player.id, settings.into_iter()).await {
-        error!("Failed to set origin data: {err:?}");
-        return Err(ServerError::ServerUnavailable);
-    }
-
-    Ok(player)
+    Ok(AuthResponse {
+        player,
+        session_token,
+        silent: true,
+    })
 }
 
 /// Handles logging out by the client this removes any current player data from the

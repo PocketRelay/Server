@@ -74,24 +74,11 @@ pub async fn handle_resume_session(
 
     let session_token = req.session_token;
 
-    let player_id = match Tokens::service_verify(&session_token) {
+    let player: Player = match Tokens::service_verify(db, &session_token).await {
         Ok(value) => value,
         Err(err) => {
-            error!("Error while attempt to resume invalid session: {err:?}");
-            return Err(ServerError::InvalidSession);
-        }
-    };
-
-    // Find the player that the token is for
-    let player: Player = match Player::by_id(db, player_id).await {
-        // Valid session token
-        Ok(Some(player)) => player,
-        // Session that was attempted to resume is expired
-        Ok(None) => return Err(ServerError::InvalidSession),
-        // Error occurred while looking up token
-        Err(err) => {
             error!("Error while attempt to resume session: {err:?}");
-            return Err(ServerError::ServerUnavailable);
+            return Err(ServerError::InvalidSession);
         }
     };
 

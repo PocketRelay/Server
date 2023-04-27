@@ -26,9 +26,9 @@ pub fn router() -> Router<C, SessionLink> {
         use components::Authentication as A;
 
         router.route(C::Authentication(A::Logout), handle_logout);
-        router.route(C::Authentication(A::SilentLogin), handle_auth_request);
-        router.route(C::Authentication(A::OriginLogin), handle_auth_request);
-        router.route(C::Authentication(A::Login), handle_auth_request);
+        router.route(C::Authentication(A::SilentLogin), handle_silent_login);
+        router.route(C::Authentication(A::OriginLogin), handle_origin_login);
+        router.route(C::Authentication(A::Login), handle_login);
         router.route(C::Authentication(A::LoginPersona), handle_login_persona);
         router.route(C::Authentication(A::ListUserEntitlements2), handle_list_entitlements);
         router.route(C::Authentication(A::CreateAccount),handle_create_account);

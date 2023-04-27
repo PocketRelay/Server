@@ -282,3 +282,10 @@ impl Encodable for SettingsResponse {
         writer.tag_value(b"SMAP", &self.settings);
     }
 }
+
+impl Decodable for SettingsResponse {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        let settings: TdfMap<String, String> = reader.tag("SMAP")?;
+        Ok(Self { settings })
+    }
+}

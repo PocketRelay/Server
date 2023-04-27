@@ -6,6 +6,7 @@ use argon2::password_hash::rand_core::{OsRng, RngCore};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use log::error;
 use ring::hmac::{self, Key, HMAC_SHA256};
+use sea_orm::DatabaseConnection;
 use std::{
     path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -16,7 +17,9 @@ use tokio::{
     io::{self, AsyncReadExt},
 };
 
-use crate::state::App;
+use crate::{database::entities::Player, state::App, utils::types::PlayerID};
+
+use super::Services;
 
 /// Token provider and verification service
 pub struct Tokens {
@@ -111,9 +114,20 @@ impl Tokens {
     /// Verify by directly obtaining the services reference. This
     /// exists because everywhere verify is used its always using
     /// a call to [`App::services`] before
-    pub fn service_verify(token: &str) -> Result<u32, VerifyError> {
-        let services = App::services();
-        services.tokens.verify(token)
+    ///
+    /// Looks up the player that token verifies and treats missing
+    /// players as invalid tokens.
+    pub async fn service_verify(
+        db: &DatabaseConnection,
+        token: &str,
+    ) -> Result<Player, VerifyError> {
+        let services: &'static Services = App::services();
+        let player_id: PlayerID = services.tokens.verify(token)?;
+
+        Player::by_id(db, player_id)
+            .await
+            .map_err(|_| VerifyError::Server)?
+            .ok_or(VerifyError::Invalid)
     }
 
     /// Verifies a token claims returning the claimed ID
@@ -171,6 +185,9 @@ pub enum VerifyError {
     /// The token is invalid
     #[error("Invalid token")]
     Invalid,
+    /// Internal server error
+    #[error("Server error")]
+    Server,
 }
 
 impl From<base64ct::Error> for VerifyError {
