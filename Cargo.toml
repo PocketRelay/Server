@@ -41,7 +41,7 @@ local-ip-address = "0.5"
 thiserror = "1"
 
 # Email validation
-validator = { version = "0.16", features = ["derive"] }
+email_address = "0.2.4"
 
 # Async services framework
 interlink = "0.1"

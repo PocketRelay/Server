@@ -22,7 +22,7 @@ use log::error;
 use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;
-use validator::validate_email;
+use email_address::EmailAddress;
 
 /// Enum for errors that could occur when accessing any of
 /// the players routes
@@ -210,7 +210,7 @@ pub async fn update_details(
     // Obtain the player from auth
     let player = auth.into_inner();
 
-    if !validate_email(&req.email) {
+    if !EmailAddress::is_valid(&req.email) {
         return Err(PlayersError::InvalidEmail);
     }
 

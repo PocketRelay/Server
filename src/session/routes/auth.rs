@@ -15,10 +15,10 @@ use crate::{
     state::App,
     utils::hashing::{hash_password, verify_password},
 };
+use email_address::EmailAddress;
 use log::{debug, error};
 use std::borrow::Cow;
 use tokio::fs::read_to_string;
-use validator::validate_email;
 
 pub async fn handle_login(
     session: &mut SessionLink,
@@ -29,7 +29,7 @@ pub async fn handle_login(
     let LoginRequest { email, password } = &req;
 
     // Ensure the email is actually valid
-    if !validate_email(email) {
+    if !EmailAddress::is_valid(email) {
         return Err(ServerError::InvalidEmail);
     }
 
@@ -270,11 +270,7 @@ pub async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<Per
 /// }
 /// ```
 pub async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> {
-    if !validate_email(&req.email) {
-        return Err(ServerError::InvalidEmail);
-    }
-
-    debug!("Got request for password rest for email: {}", &req.email);
+    debug!("Password reset request (Email: {})", req.email);
     Ok(())
 }
 
@@ -316,7 +312,7 @@ pub async fn handle_create_account(
     req: CreateAccountRequest,
 ) -> ServerResult<AuthResponse> {
     let email = req.email;
-    if !validate_email(&email) {
+    if !EmailAddress::is_valid(&email) {
         return Err(ServerError::InvalidEmail);
     }
 
