@@ -34,9 +34,9 @@ pub fn router() -> Router<C, SessionLink> {
         router.route(C::Authentication(A::CreateAccount),handle_create_account);
         router.route(C::Authentication(A::PasswordForgot), handle_forgot_password);
         router.route(C::Authentication(A::GetLegalDocsInfo), handle_get_legal_docs_info);
-        router.route(C::Authentication(A::GetTermsOfServiceConent), || handle_legal_content(LegalType::TermsOfService));
-        router.route(C::Authentication(A::GetPrivacyPolicyContent), || handle_legal_content(LegalType::PrivacyPolicy));
-        router.route(C::Authentication(A::GetAuthToken),auth::handle_get_auth_token);
+        router.route(C::Authentication(A::GetTermsOfServiceConent), handle_tos);
+        router.route(C::Authentication(A::GetPrivacyPolicyContent), handle_privacy_policy);
+        router.route(C::Authentication(A::GetAuthToken), handle_get_auth_token);
     }
 
     // Game Manager 

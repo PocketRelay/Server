@@ -390,47 +390,6 @@ pub async fn handle_get_legal_docs_info() -> LegalDocsInfo {
     LegalDocsInfo
 }
 
-/// Type for deciding which legal document to respond with
-pub enum LegalType {
-    TermsOfService,
-    PrivacyPolicy,
-}
-
-impl LegalType {
-    async fn load(&self) -> (Cow<'static, str>, &'static str, u16) {
-        let (local_path, web_path, col) = match self {
-            Self::TermsOfService => (
-                "data/terms_of_service.html",
-                "webterms/au/en/pc/default/09082020/02042022",
-                0xdaed,
-            ),
-            Self::PrivacyPolicy => (
-                "data/privacy_policy.html",
-                "webprivacy/au/en/pc/default/08202020/02042022",
-                0xc99c,
-            ),
-        };
-        let path = Path::new(local_path);
-        if path.exists() && path.is_file() {
-            if let Ok(value) = read_to_string(path).await {
-                return (Cow::Owned(value), web_path, col);
-            }
-        }
-        let fallback = match self {
-            Self::TermsOfService => {
-                include_str!("../../resources/defaults/terms_of_service.html")
-            }
-            Self::PrivacyPolicy => include_str!("../../resources/defaults/privacy_policy.html"),
-        };
-
-        (Cow::Borrowed(fallback), web_path, col)
-    }
-}
-
-/// Handles serving the contents of the terms of service and privacy policy.
-/// These are HTML documents which is rendered inside the game when you click
-/// the button for viewing terms of service or the privacy policy.
-///
 /// ```
 /// Route: Authentication(GetTermsOfServiceContent)
 /// ID: 23
@@ -441,6 +400,19 @@ impl LegalType {
 ///     "TEXT": 1
 /// }
 /// ```
+pub async fn handle_tos() -> LegalContent {
+    let content = match read_to_string("data/terms_of_service.html").await {
+        Ok(value) => Cow::Owned(value),
+        Err(_) => Cow::Borrowed("<h1>This is a terms of service placeholder</h1>"),
+    };
+
+    LegalContent {
+        col: 0xdaed,
+        content,
+        path: "webterms/au/en/pc/default/09082020/02042022",
+    }
+}
+
 /// ```
 /// Route: Authentication(GetPrivacyPolicyContent)
 /// ID: 24
@@ -451,9 +423,17 @@ impl LegalType {
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_legal_content(ty: LegalType) -> LegalContent {
-    let (content, path, col) = ty.load().await;
-    LegalContent { path, content, col }
+pub async fn handle_privacy_policy() -> LegalContent {
+    let content = match read_to_string("data/privacy_policy.html").await {
+        Ok(value) => Cow::Owned(value),
+        Err(_) => Cow::Borrowed("<h1>This is a privacy policy placeholder</h1>"),
+    };
+
+    LegalContent {
+        col: 0xc99c,
+        content,
+        path: "webprivacy/au/en/pc/default/08202020/02042022",
+    }
 }
 
 /// Handles retrieving an authentication token for use with the Galaxy At War HTTP service.
