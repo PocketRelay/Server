@@ -24,8 +24,8 @@ log = { version = "0.4", features = ["serde"] }
 blaze-pk = "1.1"
 blaze-ssl-async = "^0.3"
 
-# Resource embedding using debug-embed to always resolve relative to the Cargo.toml file
-rust-embed = { version = "6.4.2", features = ["debug-embed"] }
+# Resource embedding
+embeddy = "0.1"
 
 # Password hashing
 argon2 = { version = "0.5", features = ["std"] }
@@ -106,6 +106,7 @@ features = ["console_appender", "file_appender"]
 version = "0.4"
 default-features = false
 features = ["std", "serde"]
+
 
 # Patch which updates the windows-sys dep
 [patch.crates-io]

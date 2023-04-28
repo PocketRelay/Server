@@ -3,8 +3,8 @@ use axum::{
     http::{HeaderValue, Request},
     response::{IntoResponse, Response},
 };
+use embeddy::Embedded;
 use hyper::{header::CONTENT_TYPE, StatusCode};
-use rust_embed::RustEmbed;
 use std::{
     borrow::Cow,
     convert::Infallible,
@@ -18,7 +18,10 @@ use tower::Service;
 /// dashboard static assets and the content for the ingame store.
 ///
 /// Also acts a service for publicly sharing the content
-#[derive(Clone, RustEmbed)]
+///
+/// TODO: This may not be particularly performant with a match statement
+/// over all the public assets
+#[derive(Clone, Embedded)]
 #[folder = "src/resources/public"]
 pub struct PublicContent;
 
@@ -69,7 +72,7 @@ impl<T> Service<Request<T>> for PublicContent {
                 };
 
                 // Create byte reponse from the embedded file
-                let mut response = Full::from(file.data).into_response();
+                let mut response = Full::from(file).into_response();
                 response
                     .headers_mut()
                     .insert(CONTENT_TYPE, HeaderValue::from_static(mime_type));

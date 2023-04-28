@@ -11,10 +11,10 @@ use crate::{
 };
 use base64ct::{Base64, Encoding};
 use blaze_pk::types::TdfMap;
+use embeddy::Embedded;
 use flate2::{write::ZlibEncoder, Compression};
 use interlink::prelude::Link;
 use log::{error, warn};
-use rust_embed::RustEmbed;
 use std::{
     io::Write,
     path::Path,
@@ -300,7 +300,7 @@ async fn talk_file(lang: &str) -> ServerResult<ChunkMap> {
     // Load default talk file
     let file_name = format!("{}.tlk", lang);
     Ok(if let Some(file) = DefaultTlkFiles::get(&file_name) {
-        create_base64_map(&file.data)
+        create_base64_map(file)
     } else {
         let bytes: &[u8] = include_bytes!("../../resources/data/tlk/default.tlk");
         create_base64_map(bytes)
@@ -308,7 +308,7 @@ async fn talk_file(lang: &str) -> ServerResult<ChunkMap> {
 }
 
 /// Default talk file values
-#[derive(RustEmbed)]
+#[derive(Embedded)]
 #[folder = "src/resources/data/tlk"]
 struct DefaultTlkFiles;
 

@@ -16,7 +16,7 @@ use crate::{
     utils::hashing::{hash_password, verify_password},
 };
 use log::{debug, error};
-use std::{borrow::Cow, path::Path};
+use std::borrow::Cow;
 use tokio::fs::read_to_string;
 use validator::validate_email;
 
