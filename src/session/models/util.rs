@@ -36,24 +36,24 @@ pub struct TelemetryServer;
 
 impl Encodable for TelemetryServer {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_group(b"TELE");
-        // Last known telemetry addresses: 159.153.235.32, gostelemetry.blaze3.ea.com
-        writer.tag_str(b"ADRS", "127.0.0.1");
-        writer.tag_zero(b"ANON");
-        writer.tag_str(b"DISA", TELEMTRY_DISA);
-        writer.tag_str(b"FILT", "-UION/****");
-        writer.tag_u32(b"LOC", 1701727834);
-        writer.tag_str(b"NOOK", "US,CA,MX");
-        // Last known telemetry port: 9988
-        writer.tag_u16(b"PORT", TELEMETRY_PORT);
-        writer.tag_u16(b"SDLY", 15000);
-        writer.tag_str(b"SESS", "pcwdjtOCVpD");
-        let key: Cow<str> = String::from_utf8_lossy(TELEMETRY_KEY);
+        writer.group(b"TELE", |writer| {
+            // Last known telemetry addresses: 159.153.235.32, gostelemetry.blaze3.ea.com
+            writer.tag_str(b"ADRS", "127.0.0.1");
+            writer.tag_zero(b"ANON");
+            writer.tag_str(b"DISA", TELEMTRY_DISA);
+            writer.tag_str(b"FILT", "-UION/****");
+            writer.tag_u32(b"LOC", 1701727834);
+            writer.tag_str(b"NOOK", "US,CA,MX");
+            // Last known telemetry port: 9988
+            writer.tag_u16(b"PORT", TELEMETRY_PORT);
+            writer.tag_u16(b"SDLY", 15000);
+            writer.tag_str(b"SESS", "pcwdjtOCVpD");
+            let key: Cow<str> = String::from_utf8_lossy(TELEMETRY_KEY);
 
-        writer.tag_str(b"SKEY", &key);
-        writer.tag_u8(b"SPCT", 75);
-        writer.tag_str_empty(b"STIM");
-        writer.tag_group_end();
+            writer.tag_str(b"SKEY", &key);
+            writer.tag_u8(b"SPCT", 75);
+            writer.tag_str_empty(b"STIM");
+        });
     }
 }
 
@@ -66,13 +66,13 @@ pub struct TickerServer;
 
 impl Encodable for TickerServer {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_group(b"TICK");
-        // Last known ticker addresses: 10.23.15.2, 10.10.78.150
-        writer.tag_str(b"ADRS", "127.0.0.1");
-        // Last known ticker port: 8999
-        writer.tag_u16(b"PORT", TICKER_PORT);
-        writer.tag_str(b"SKEY", TICKER_KEY);
-        writer.tag_group_end();
+        writer.group(b"TICK", |writer| {
+            // Last known ticker addresses: 10.23.15.2, 10.10.78.150
+            writer.tag_str(b"ADRS", "127.0.0.1");
+            // Last known ticker port: 8999
+            writer.tag_u16(b"PORT", TICKER_PORT);
+            writer.tag_str(b"SKEY", TICKER_KEY);
+        });
     }
 }
 
@@ -100,25 +100,23 @@ impl Encodable for PreAuthResponse {
             ],
         );
         writer.tag_str_empty(b"CNGN");
+
         // Double nested map containing configuration options for
         // ping intervals and VOIP headset update rates
-        {
-            writer.tag_group(b"CONF");
-            {
-                writer.tag_map_start(b"CONF", TdfType::String, TdfType::String, 3);
+        writer.group(b"CONF", |writer| {
+            writer.tag_map_start(b"CONF", TdfType::String, TdfType::String, 3);
 
-                writer.write_str("pingPeriod");
-                writer.write_str(PING_PERIOD);
+            writer.write_str("pingPeriod");
+            writer.write_str(PING_PERIOD);
 
-                writer.write_str("voipHeadsetUpdateRate");
-                writer.write_str("1000");
+            writer.write_str("voipHeadsetUpdateRate");
+            writer.write_str("1000");
 
-                // XLSP (Xbox Live Server Platform)
-                writer.write_str("xlspConnectionIdleTimeout");
-                writer.write_str("300");
-            }
-            writer.tag_group_end();
-        }
+            // XLSP (Xbox Live Server Platform)
+            writer.write_str("xlspConnectionIdleTimeout");
+            writer.write_str("300");
+        });
+
         writer.tag_str(b"INST", "masseffect-3-pc");
         writer.tag_zero(b"MINR");
         writer.tag_str(b"NASP", "cem_ea_id");
@@ -126,24 +124,14 @@ impl Encodable for PreAuthResponse {
         writer.tag_str(b"PLAT", "pc");
         writer.tag_str_empty(b"PTAG");
 
-        // Quality of service group pre encoded due to it being appended
-        // in two locations
-        let mut qoss_group: TdfWriter = TdfWriter::default();
-        {
-            qoss_group.tag_str(b"PSA", &self.host_target.host);
-            qoss_group.tag_u16(b"PSP", self.host_target.port);
-            qoss_group.tag_str(b"SNA", "prod-sjc");
-            qoss_group.tag_group_end();
-        }
-
-        {
-            // Quality Of Service Server details
-            writer.tag_group(b"QOSS");
-            {
-                // Bioware Primary Server
-                writer.tag_group(b"BWPS");
-                writer.write_slice(&qoss_group.buffer);
-            }
+        // Quality Of Service Server details
+        writer.group(b"QOSS", |writer| {
+            // Bioware Primary Server
+            writer.group(b"BWPS", |writer| {
+                writer.tag_str(b"PSA", &self.host_target.host);
+                writer.tag_u16(b"PSP", self.host_target.port);
+                writer.tag_str(b"SNA", "prod-sjc");
+            });
 
             writer.tag_u8(b"LNP", 10);
 
@@ -151,14 +139,20 @@ impl Encodable for PreAuthResponse {
             // list are later included in a ping list
             {
                 writer.tag_map_start(b"LTPS", TdfType::String, TdfType::Group, 1);
+
+                // Key for the server
                 writer.write_str("ea-sjc");
-                writer.write_slice(&qoss_group.buffer);
+
+                // Same as the Bioware primary server
+                writer.tag_str(b"PSA", &self.host_target.host);
+                writer.tag_u16(b"PSP", self.host_target.port);
+                writer.tag_str(b"SNA", "prod-sjc");
+                writer.tag_group_end();
             }
 
             // Possibly server version ID (1161889797)
             writer.tag_u32(b"SVID", 0x45410805);
-            writer.tag_group_end()
-        }
+        });
 
         // Server src version
         writer.tag_str(b"RSRC", SRC_VERSION);
@@ -180,28 +174,24 @@ pub struct PostAuthResponse {
 impl Encodable for PostAuthResponse {
     fn encode(&self, writer: &mut TdfWriter) {
         // Player Sync Service server details
-        {
-            writer.tag_group(b"PSS");
+        writer.group(b"PSS", |writer| {
             writer.tag_str(b"ADRS", "playersyncservice.ea.com");
             writer.tag_empty_blob(b"CSIG");
             writer.tag_str(b"PJID", SRC_VERSION);
             writer.tag_u16(b"PORT", 443);
             writer.tag_u8(b"RPRT", 0xF);
             writer.tag_u8(b"TIID", 0);
-            writer.tag_group_end();
-        }
+        });
 
         // Ticker & Telemtry server options
         self.telemetry.encode(writer);
         self.ticker.encode(writer);
 
         // User options
-        {
-            writer.tag_group(b"UROP");
+        writer.group(b"UROP", |writer| {
             writer.tag_u8(b"TMOP", 1);
             writer.tag_u32(b"UID", self.player_id);
-            writer.tag_group_end();
-        }
+        });
     }
 }
 

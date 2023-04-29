@@ -33,20 +33,21 @@ impl Encodable for MessageNotify {
         writer.tag_u8(b"FLAG", 0x1);
         writer.tag_u8(b"MGID", 0x1);
         writer.tag_str(b"NAME", &self.message);
-        {
-            writer.tag_group(b"PYLD");
+
+        writer.group(b"PYLD", |writer| {
             {
                 writer.tag_map_start(b"ATTR", TdfType::String, TdfType::String, 1);
                 writer.write_str("B0000");
                 writer.write_str("160");
             }
+
             writer.tag_u8(b"FLAG", 0x1);
             writer.tag_u8(b"STAT", 0x0);
             writer.tag_u8(b"TAG", 0x0);
             writer.tag_value(b"TARG", &player_ref);
             writer.tag_u8(b"TYPE", 0x0);
-            writer.tag_group_end();
-        }
+        });
+
         writer.tag_value(b"SRCE", &player_ref);
         writer.tag_zero(b"TIME");
     }

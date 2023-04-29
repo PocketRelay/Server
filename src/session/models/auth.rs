@@ -118,19 +118,19 @@ impl Encodable for AuthResponse {
         if self.silent {
             writer.tag_str_empty(b"PRIV");
             {
-                writer.tag_group(b"SESS");
-                writer.tag_u32(b"BUID", self.player.id);
-                writer.tag_zero(b"FRST");
-                writer.tag_str(b"KEY", &format!("{:X}", self.player.id)); // Session Token
-                writer.tag_zero(b"LLOG");
-                writer.tag_str(b"MAIL", &self.player.email); // Player Email
-                {
-                    writer.tag_group(b"PDTL");
-                    encode_persona(writer, self.player.id, &self.player.display_name);
-                    // Persona Details
-                }
-                writer.tag_u32(b"UID", self.player.id);
-                writer.tag_group_end();
+                writer.group(b"SESS", |writer| {
+                    writer.tag_u32(b"BUID", self.player.id);
+                    writer.tag_zero(b"FRST");
+                    writer.tag_str(b"KEY", &format!("{:X}", self.player.id)); // Session Token
+                    writer.tag_zero(b"LLOG");
+                    writer.tag_str(b"MAIL", &self.player.email); // Player Email
+                    {
+                        writer.tag_group(b"PDTL");
+                        encode_persona(writer, self.player.id, &self.player.display_name);
+                        // Persona Details
+                    }
+                    writer.tag_u32(b"UID", self.player.id);
+                });
             }
         } else {
             writer.tag_list_start(b"PLST", TdfType::Group, 1);

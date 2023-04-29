@@ -624,14 +624,14 @@ impl Encodable for SessionUpdate<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_value(b"DATA", &self.session.data);
 
-        writer.tag_group(b"USER");
-        writer.tag_u32(b"AID", self.player_id);
-        writer.tag_u32(b"ALOC", 0x64654445);
-        writer.tag_empty_blob(b"EXBB");
-        writer.tag_u8(b"EXID", 0);
-        writer.tag_u32(b"ID", self.player_id);
-        writer.tag_str(b"NAME", self.display_name);
-        writer.tag_group_end();
+        writer.group(b"USER", |writer| {
+            writer.tag_u32(b"AID", self.player_id);
+            writer.tag_u32(b"ALOC", 0x64654445);
+            writer.tag_empty_blob(b"EXBB");
+            writer.tag_u8(b"EXID", 0);
+            writer.tag_u32(b"ID", self.player_id);
+            writer.tag_str(b"NAME", self.display_name);
+        });
     }
 }
 
@@ -647,14 +647,14 @@ impl Encodable for LookupResponse {
 
         writer.tag_u8(b"FLGS", 2);
 
-        writer.tag_group(b"USER");
-        writer.tag_u32(b"AID", self.player_id);
-        writer.tag_u32(b"ALOC", 0x64654445);
-        writer.tag_empty_blob(b"EXBB");
-        writer.tag_u8(b"EXID", 0);
-        writer.tag_u32(b"ID", self.player_id);
-        writer.tag_str(b"NAME", &self.display_name);
-        writer.tag_group_end();
+        writer.group(b"USER", |writer| {
+            writer.tag_u32(b"AID", self.player_id);
+            writer.tag_u32(b"ALOC", 0x64654445);
+            writer.tag_empty_blob(b"EXBB");
+            writer.tag_u8(b"EXID", 0);
+            writer.tag_u32(b"ID", self.player_id);
+            writer.tag_str(b"NAME", &self.display_name);
+        });
     }
 }
 
