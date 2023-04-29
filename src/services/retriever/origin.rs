@@ -43,7 +43,7 @@ pub struct OriginFlow {
     /// The session to the official server
     session: RetSession,
     /// Whether to load the origin account data
-    pub data: bool,
+    data: bool,
 }
 
 #[derive(Debug, Error)]

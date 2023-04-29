@@ -225,7 +225,7 @@ pub struct FetchConfigRequest {
 
 impl Decodable for FetchConfigRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let id: String = reader.tag("CFID")?;
+        let id: String = reader.tag(b"CFID")?;
         Ok(Self { id })
     }
 }
@@ -250,7 +250,7 @@ pub struct SuspendPingRequest {
 
 impl Decodable for SuspendPingRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let value: u32 = reader.tag("TVAL")?;
+        let value: u32 = reader.tag(b"TVAL")?;
         Ok(Self { value })
     }
 }
@@ -265,8 +265,8 @@ pub struct SettingsSaveRequest {
 }
 impl Decodable for SettingsSaveRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let value: String = reader.tag("DATA")?;
-        let key: String = reader.tag("KEY")?;
+        let value: String = reader.tag(b"DATA")?;
+        let key: String = reader.tag(b"KEY")?;
         Ok(Self { key, value })
     }
 }
@@ -285,7 +285,7 @@ impl Encodable for SettingsResponse {
 
 impl Decodable for SettingsResponse {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let settings: TdfMap<String, String> = reader.tag("SMAP")?;
+        let settings: TdfMap<String, String> = reader.tag(b"SMAP")?;
         Ok(Self { settings })
     }
 }

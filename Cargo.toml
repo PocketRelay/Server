@@ -21,7 +21,7 @@ serde_json = "1"
 log = { version = "0.4", features = ["serde"] }
 
 # Blaze packet system & SSLv3 async impl
-blaze-pk = "1.1"
+blaze-pk = "1.2"
 blaze-ssl-async = "^0.3"
 
 # Resource embedding

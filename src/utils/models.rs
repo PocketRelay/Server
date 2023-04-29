@@ -39,7 +39,7 @@ impl Encodable for InstanceNet {
 impl Decodable for InstanceNet {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
         let host: InstanceHost = InstanceHost::decode(reader)?;
-        let port: u16 = reader.tag("PORT")?;
+        let port: u16 = reader.tag(b"PORT")?;
         reader.read_byte()?;
         Ok(Self { host, port })
     }
@@ -89,11 +89,11 @@ impl Encodable for InstanceHost {
 
 impl Decodable for InstanceHost {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let host: Option<String> = reader.try_tag("HOST")?;
+        let host: Option<String> = reader.try_tag(b"HOST")?;
         if let Some(host) = host {
             return Ok(Self::Host(host));
         }
-        let ip: NetAddress = reader.tag("IP")?;
+        let ip: NetAddress = reader.tag(b"IP")?;
         Ok(Self::Address(ip))
     }
 }
@@ -119,16 +119,16 @@ impl Encodable for InstanceDetails {
 
 impl Decodable for InstanceDetails {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let net: InstanceNet = match reader.tag::<Union<InstanceNet>>("ADDR")? {
+        let net: InstanceNet = match reader.tag::<Union<InstanceNet>>(b"ADDR")? {
             Union::Set { value, .. } => value,
             Union::Unset => {
                 return Err(blaze_pk::error::DecodeError::MissingTag {
-                    tag: "ADDR".to_string(),
+                    tag: b"ADDR".into(),
                     ty: TdfType::Union,
                 })
             }
         };
-        let secure: bool = reader.tag("SECU")?;
+        let secure: bool = reader.tag(b"SECU")?;
         Ok(InstanceDetails { net, secure })
     }
 }
@@ -261,9 +261,9 @@ impl Encodable for QosNetworkData {
 
 impl Decodable for QosNetworkData {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let dbps: u16 = reader.tag("DBPS")?;
-        let natt: NatType = reader.tag("NATT")?;
-        let ubps: u16 = reader.tag("UBPS")?;
+        let dbps: u16 = reader.tag(b"DBPS")?;
+        let natt: NatType = reader.tag(b"NATT")?;
+        let ubps: u16 = reader.tag(b"UBPS")?;
         reader.read_byte()?;
         Ok(Self { dbps, natt, ubps })
     }
@@ -301,8 +301,8 @@ impl Encodable for NetGroups {
 
 impl Decodable for NetGroups {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let external: NetGroup = reader.tag("EXIP")?;
-        let internal: NetGroup = reader.tag("INIP")?;
+        let external: NetGroup = reader.tag(b"EXIP")?;
+        let internal: NetGroup = reader.tag(b"INIP")?;
         reader.read_byte()?;
         Ok(Self { external, internal })
     }
@@ -335,8 +335,8 @@ impl Encodable for NetGroup {
 
 impl Decodable for NetGroup {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let ip: NetAddress = reader.tag("IP")?;
-        let port: u16 = reader.tag("PORT")?;
+        let ip: NetAddress = reader.tag(b"IP")?;
+        let port: u16 = reader.tag(b"PORT")?;
         reader.read_byte()?;
         Ok(Self(ip, port))
     }

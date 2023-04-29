@@ -28,8 +28,8 @@ pub struct LoginRequest {
 
 impl Decodable for LoginRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let email: String = reader.tag("MAIL")?;
-        let password: String = reader.tag("PASS")?;
+        let email: String = reader.tag(b"MAIL")?;
+        let password: String = reader.tag(b"PASS")?;
         Ok(Self { email, password })
     }
 }
@@ -50,7 +50,7 @@ pub struct SilentLoginRequest {
 
 impl Decodable for SilentLoginRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let token: String = reader.tag("AUTH")?;
+        let token: String = reader.tag(b"AUTH")?;
         Ok(Self { token })
     }
 }
@@ -69,7 +69,7 @@ pub struct OriginLoginRequest {
 
 impl Decodable for OriginLoginRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let token: String = reader.tag("AUTH")?;
+        let token: String = reader.tag(b"AUTH")?;
         Ok(Self { token })
     }
 }
@@ -159,8 +159,8 @@ pub struct CreateAccountRequest {
 
 impl Decodable for CreateAccountRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let email: String = reader.tag("MAIL")?;
-        let password: String = reader.tag("PASS")?;
+        let email: String = reader.tag(b"MAIL")?;
+        let password: String = reader.tag(b"PASS")?;
         Ok(Self { email, password })
     }
 }
@@ -195,19 +195,19 @@ pub struct ListEntitlementsRequest {
 
 impl Decodable for ListEntitlementsRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let tag: String = reader.tag("ETAG")?;
+        let tag: String = reader.tag(b"ETAG")?;
         Ok(Self { tag })
     }
 }
 
 /// Response of an entitlements list
 pub struct ListEntitlementsResponse {
-    pub list: Vec<Entitlement>,
+    pub list: &'static [Entitlement],
 }
 
 impl Encodable for ListEntitlementsResponse {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_value(b"NLST", &self.list);
+        writer.tag_slice_list(b"NLST", self.list);
     }
 }
 
@@ -226,7 +226,7 @@ impl Entitlement {
     pub const PC_TAG: &'static str = "ME3PCOffers";
     pub const GEN_TAG: &'static str = "ME3GenOffers";
 
-    pub fn new_pc(
+    pub const fn new_pc(
         id: u64,
         pjid: &'static str,
         prca: u8,
@@ -245,7 +245,7 @@ impl Entitlement {
         }
     }
 
-    pub fn new_gen(
+    pub const fn new_gen(
         id: u64,
         pjid: &'static str,
         prca: u8,
@@ -299,7 +299,7 @@ pub struct ForgotPasswordRequest {
 
 impl Decodable for ForgotPasswordRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let email: String = reader.tag("MAIL")?;
+        let email: String = reader.tag(b"MAIL")?;
         Ok(Self { email })
     }
 }

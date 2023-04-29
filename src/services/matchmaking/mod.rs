@@ -38,6 +38,7 @@ struct QueueEntry {
     /// to the matchmaking queue
     time: SystemTime,
 }
+
 /// Message for handling when a game is created and attempting
 /// to add players from the queue into the game
 #[derive(Message)]
