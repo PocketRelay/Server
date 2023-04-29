@@ -55,44 +55,51 @@ impl Handler<SnapshotQueryMessage> for GameManager {
         msg: SnapshotQueryMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
+        let SnapshotQueryMessage {
+            offset,
+            count,
+            include_net,
+        } = msg;
+
         // Create the futures using the handle action before passing
         // them to a future to be awaited
         let mut join_set = JoinSet::new();
-        let (count, more) = {
-            // Obtained an order set of the keys from the games map
-            let mut keys: Vec<GameID> = self.games.keys().copied().collect();
-            keys.sort();
 
-            // Whether there is more keys that what was requested
-            let more = keys.len() > msg.offset + msg.count;
+        // Obtained an order set of the keys from the games map
+        let mut keys: Vec<&GameID> = self.games.keys().collect();
+        keys.sort();
 
-            // Collect the keys we will be using
-            let keys: Vec<GameID> = keys.into_iter().skip(msg.offset).take(msg.count).collect();
-            let keys_count = keys.len();
+        // Whether there is more keys that what was requested
+        let more = keys.len() > offset + count;
 
-            for key in keys {
-                let game = self.games.get(&key).cloned();
-                if let Some(link) = game {
-                    join_set.spawn(async move {
-                        link.send(super::SnapshotMessage {
-                            include_net: msg.include_net,
-                        })
-                        .await
-                        .ok()
-                    });
-                }
-            }
+        // Collect links to the games
+        let games = keys
+            .into_iter()
+            // Skip to the desired offset
+            .skip(offset)
+            // Take the desired number of keys
+            .take(count)
+            // Take the game links for the keys
+            .filter_map(|key| self.games.get(key))
+            // Clone the obtained game links
+            .cloned();
 
-            (keys_count, more)
-        };
+        // Spawn the snapshot tasks
+        for game in games {
+            join_set.spawn(async move { game.send(super::SnapshotMessage { include_net }).await });
+        }
 
         Fr::new(Box::pin(async move {
-            let mut snapshots = Vec::with_capacity(count);
+            // Allocate a list for the snapshots
+            let mut snapshots = Vec::with_capacity(join_set.len());
+
+            // Recieve all the snapshots from their tasks
             while let Some(result) = join_set.join_next().await {
-                if let Ok(Some(snapshot)) = result {
+                if let Ok(Ok(snapshot)) = result {
                     snapshots.push(snapshot);
                 }
             }
+
             (snapshots, more)
         }))
     }
@@ -119,10 +126,7 @@ impl Handler<SnapshotMessage> for GameManager {
         let link = self.games.get(&msg.game_id).cloned();
 
         Fr::new(Box::pin(async move {
-            let link = match link {
-                Some(value) => value,
-                None => return None,
-            };
+            let link = link?;
 
             link.send(super::SnapshotMessage {
                 include_net: msg.include_net,
