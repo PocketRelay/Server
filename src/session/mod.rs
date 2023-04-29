@@ -6,10 +6,7 @@ use crate::{
     database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
     services::{
-        game::{
-            manager::RemovePlayerMessage, models::RemoveReason, player::GamePlayer,
-            RemovePlayerType,
-        },
+        game::{manager::RemovePlayerMessage, models::RemoveReason, GamePlayer, RemovePlayerType},
         matchmaking::RemoveQueueMessage,
         sessions::{AddMessage, RemoveMessage},
         Services,

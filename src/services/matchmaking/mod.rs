@@ -1,7 +1,5 @@
 use crate::{
-    services::game::{
-        player::GamePlayer, AddPlayerMessage, CheckJoinableMessage, Game, GameJoinableState,
-    },
+    services::game::{AddPlayerMessage, CheckJoinableMessage, Game, GameJoinableState, GamePlayer},
     utils::types::{GameID, SessionID},
 };
 use interlink::prelude::*;

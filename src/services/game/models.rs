@@ -1,4 +1,4 @@
-use super::{player::GamePlayer, AttrMap, Game};
+use super::{AttrMap, Game, GamePlayer};
 use crate::utils::{
     components::{Components, GameManager},
     types::{GameID, GameSlot, PlayerID, SessionID},

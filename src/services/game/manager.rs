@@ -1,8 +1,7 @@
 use super::{
     models::{MeshState, RemoveReason},
-    player::GamePlayer,
-    AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GameSnapshot,
-    RemovePlayerType,
+    AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
+    GameSnapshot, RemovePlayerType,
 };
 use crate::{services::matchmaking::rules::RuleSet, utils::types::GameID};
 use blaze_pk::packet::PacketBody;
