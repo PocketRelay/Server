@@ -8,11 +8,10 @@ use crate::{
     state::App,
     utils::parsing::{KitNameDeployed, PlayerClass},
 };
-use futures_util::Future;
 use interlink::prelude::*;
 use log::{debug, error};
 use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Instant};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 use tokio::task::JoinSet;
 
 pub mod models;
@@ -156,14 +155,6 @@ impl Leaderboard {
                 }
             };
 
-            if players.is_empty() {
-                break;
-            }
-
-            // 1.45s
-            // 1.30s
-            // 1.18s
-
             // Add the futures for all the players
             for player in players {
                 join_set.spawn(fun(db, player));
@@ -193,7 +184,7 @@ impl Leaderboard {
     }
 }
 
-type Lf = Pin<Box<dyn Future<Output = DbResult<LeaderboardEntry>> + Send>>;
+type Lf = BoxFuture<'static, DbResult<LeaderboardEntry>>;
 
 /// Computes a ranking for the provided player based on the N7 ranking
 /// of that player.
@@ -202,13 +193,13 @@ type Lf = Pin<Box<dyn Future<Output = DbResult<LeaderboardEntry>> + Send>>;
 /// `player` The player to rank
 fn compute_n7_player(db: &'static DatabaseConnection, player: Player) -> Lf {
     Box::pin(async move {
-        let mut total_promotions = 0;
+        let mut total_promotions: u32 = 0;
         let mut total_level: u32 = 0;
 
-        let data = PlayerData::all(db, player.id).await?;
+        let data: Vec<PlayerData> = PlayerData::all(db, player.id).await?;
 
-        let mut classes = Vec::new();
-        let mut characters = Vec::new();
+        let mut classes: Vec<PlayerClass> = Vec::new();
+        let mut characters: Vec<KitNameDeployed> = Vec::new();
 
         for datum in &data {
             if datum.key.starts_with("class") {
@@ -234,7 +225,7 @@ fn compute_n7_player(db: &'static DatabaseConnection, player: Player) -> Lf {
         }
 
         // 30 -> 20 from leveling class + 10 bonus for promoting
-        let rating = total_promotions * 30 + total_level;
+        let rating: u32 = total_promotions * 30 + total_level;
         Ok(LeaderboardEntry {
             player_id: player.id,
             player_name: player.display_name,
