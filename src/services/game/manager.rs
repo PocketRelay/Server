@@ -72,9 +72,8 @@ impl Handler<SnapshotQueryMessage> for GameManager {
         // Whether there is more keys that what was requested
         let more = keys.len() > offset + count;
 
-        // Collect links to the games
-        let games = keys
-            .into_iter()
+        // Spawn tasks for obtaining snapshots to each game
+        keys.into_iter()
             // Skip to the desired offset
             .skip(offset)
             // Take the desired number of keys
@@ -82,12 +81,12 @@ impl Handler<SnapshotQueryMessage> for GameManager {
             // Take the game links for the keys
             .filter_map(|key| self.games.get(key))
             // Clone the obtained game links
-            .cloned();
-
-        // Spawn the snapshot tasks
-        for game in games {
-            join_set.spawn(async move { game.send(super::SnapshotMessage { include_net }).await });
-        }
+            .cloned()
+            // Spawn the snapshot tasks
+            .for_each(|game| {
+                join_set
+                    .spawn(async move { game.send(super::SnapshotMessage { include_net }).await });
+            });
 
         Fr::new(Box::pin(async move {
             // Allocate a list for the snapshots
