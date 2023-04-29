@@ -92,9 +92,9 @@ impl Encodable for PreAuthResponse {
         writer.tag_str(b"ASRC", SRC_VERSION);
         // This list appears to contain the IDs of the components that the game
         // uses throughout its lifecycle
-        writer.tag_value(
+        writer.tag_slice_list(
             b"CIDS",
-            &vec![
+            &[
                 0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803,
                 0x7805, 0x7806, 0x7d0,
             ],

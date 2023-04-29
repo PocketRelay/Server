@@ -328,11 +328,9 @@ fn messages() -> TdfMap<String, String> {
         ty: MessageType::MenuTerminal,
     };
 
-    let messages = vec![intro];
-
     let mut config = TdfMap::new();
     let mut index = 1;
-    for message in messages {
+    for message in [intro] {
         message.append(index, &mut config);
         index += 1;
     }
