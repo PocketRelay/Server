@@ -18,7 +18,7 @@ pub struct GameManager {
     /// The map of games to the actual game address
     games: HashMap<GameID, Link<Game>>,
     /// Stored value for the ID to give the next game
-    next_id: u32,
+    next_id: GameID,
 }
 
 impl GameManager {
@@ -212,33 +212,32 @@ pub enum TryAddResult {
 
 /// Handler for attempting to add a player
 impl Handler<TryAddMessage> for GameManager {
-    type Response = Sfr<Self, TryAddMessage>;
+    type Response = Fr<TryAddMessage>;
 
     fn handle(&mut self, msg: TryAddMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        Sfr::new(move |service: &mut GameManager, _ctx| {
-            Box::pin(async move {
-                for (id, link) in &service.games {
-                    let join_state = match link
-                        .send(CheckJoinableMessage {
-                            rule_set: Some(msg.rule_set.clone()),
-                        })
-                        .await
-                    {
-                        Ok(value) => value,
-                        // Game is no longer available
-                        Err(_) => continue,
-                    };
+        // Take a copy of the current games list
+        let games = self.games.clone();
 
-                    if let GameJoinableState::Joinable = join_state {
-                        debug!("Found matching game (GID: {})", id);
-                        let _ = link.do_send(AddPlayerMessage { player: msg.player });
+        Fr::new(Box::pin(async move {
+            let player = msg.player;
 
-                        return TryAddResult::Success;
-                    }
+            // Message asking for the game joinable state
+            let msg = CheckJoinableMessage {
+                rule_set: Some(msg.rule_set),
+            };
+
+            // Attempt to find a game thats joinable
+            for (id, link) in games {
+                // Check if the game is joinable
+                if let Ok(GameJoinableState::Joinable) = link.send(msg.clone()).await {
+                    debug!("Found matching game (GID: {})", id);
+                    let _ = link.do_send(AddPlayerMessage { player });
+                    return TryAddResult::Success;
                 }
-                TryAddResult::Failure(msg.player)
-            })
-        })
+            }
+
+            TryAddResult::Failure(player)
+        }))
     }
 }
 
@@ -264,11 +263,19 @@ impl Handler<RemovePlayerMessage> for GameManager {
         msg: RemovePlayerMessage,
         ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
+        // Extract the message parts
+        let RemovePlayerMessage {
+            game_id,
+            id,
+            reason,
+            ty,
+        } = msg;
+
         // Link back to the game manager
         let return_link = ctx.link();
 
         // Link to the target game
-        let link = self.games.get(&msg.game_id).cloned();
+        let link = self.games.get(&game_id).cloned();
 
         Fr::new(Box::pin(async move {
             let link = match link {
@@ -276,25 +283,13 @@ impl Handler<RemovePlayerMessage> for GameManager {
                 None => return,
             };
 
-            let is_empty = match link
-                .send(super::RemovePlayerMessage {
-                    id: msg.id,
-                    reason: msg.reason,
-                    ty: msg.ty,
-                })
+            // If the player is removed and the game is now empty
+            if let Ok(true) = link
+                .send(super::RemovePlayerMessage { id, reason, ty })
                 .await
             {
-                Ok(value) => value,
-                Err(_) => return,
-            };
-
-            if is_empty {
                 // Remove the empty game
-                let _ = return_link
-                    .send(RemoveGameMessage {
-                        game_id: msg.game_id,
-                    })
-                    .await;
+                let _ = return_link.send(RemoveGameMessage { game_id }).await;
             }
         }))
     }
@@ -338,15 +333,9 @@ impl Handler<GetGameDataMessage> for GameManager {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         let link = self.games.get(&msg.game_id).cloned();
-
-        let link = match link {
-            Some(value) => value,
-            None => return Fr::ready(None),
-        };
-
         Fr::new(Box::pin(async move {
-            let data = link.send(super::GetGameDataMessage {}).await.ok()?;
-            Some(data)
+            let link = link?;
+            link.send(super::GetGameDataMessage {}).await.ok()
         }))
     }
 }

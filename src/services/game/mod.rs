@@ -438,7 +438,7 @@ impl Handler<RemovePlayerMessage> for Game {
 }
 
 /// Handler for checking if a game is joinable
-#[derive(Message)]
+#[derive(Message, Clone)]
 #[msg(rtype = "GameJoinableState")]
 pub struct CheckJoinableMessage {
     /// The player rule set if one is provided
