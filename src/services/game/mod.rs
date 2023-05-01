@@ -188,10 +188,10 @@ impl Handler<AddPlayerMessage> for Game {
         self.players.push(msg.player);
 
         // Obtain the player that was just added
-        let player = match self.players.last() {
-            Some(value) => value,
-            None => return,
-        };
+        let player = self
+            .players
+            .last()
+            .expect("Player was added but is missing from players");
 
         // Whether the player was not the host player
         let is_other = slot != 0;
