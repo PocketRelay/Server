@@ -6,7 +6,10 @@ use crate::{
     database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
     services::{
-        game::{manager::RemovePlayerMessage, models::RemoveReason, GamePlayer, RemovePlayerType},
+        game::{
+            manager::GetGameMessage, models::RemoveReason, GamePlayer, RemovePlayerMessage,
+            RemovePlayerType,
+        },
         matchmaking::RemoveQueueMessage,
         sessions::{AddMessage, RemoveMessage},
         Services,
@@ -503,19 +506,31 @@ impl Session {
 
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    pub fn remove_games(&mut self, services: &Services) {
+    pub fn remove_games(&mut self, services: &'static Services) {
         let game = self.data.game.take();
         let _ = if let Some(game_id) = game {
-            services.game_manager.do_send(RemovePlayerMessage {
-                game_id,
-                id: self.id,
-                reason: RemoveReason::Generic,
-                ty: RemovePlayerType::Session,
-            })
+            let id = self.id;
+
+            tokio::spawn(async move {
+                // Obtain the current game
+                let game = match services.game_manager.send(GetGameMessage { game_id }).await {
+                    Ok(Some(value)) => value,
+                    _ => return,
+                };
+
+                // Send the remove message
+                let _ = game
+                    .send(RemovePlayerMessage {
+                        id,
+                        reason: RemoveReason::Generic,
+                        ty: RemovePlayerType::Session,
+                    })
+                    .await;
+            });
         } else {
-            services.matchmaking.do_send(RemoveQueueMessage {
+            let _ = services.matchmaking.do_send(RemoveQueueMessage {
                 session_id: self.id,
-            })
+            });
         };
     }
 

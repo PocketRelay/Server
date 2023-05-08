@@ -1,13 +1,10 @@
 use crate::{
     services::{
         game::{
-            manager::{
-                CreateMessage, GetGameDataMessage, GetGameMessage, RemovePlayerMessage,
-                TryAddMessage, TryAddResult,
-            },
+            manager::{CreateMessage, GetGameMessage, TryAddMessage, TryAddResult},
             AddPlayerMessage, CheckJoinableMessage, GameJoinableState, GamePlayer,
-            RemovePlayerType, SetAttributesMessage, SetSettingMessage, SetStateMessage,
-            UpdateMeshMessage,
+            GetGameDataMessage, RemovePlayerMessage, RemovePlayerType, SetAttributesMessage,
+            SetSettingMessage, SetStateMessage, UpdateMeshMessage,
         },
         matchmaking::{GameCreatedMessage, QueuePlayerMessage},
         sessions::LookupMessage,
@@ -96,18 +93,19 @@ pub async fn handle_get_game_data(mut req: GetGameDataRequest) -> ServerResult<P
 
     let game_id = req.game_list.remove(0);
 
-    let link = services
+    let game = services
         .game_manager
-        .send(GetGameDataMessage { game_id })
+        .send(GetGameMessage { game_id })
+        .await
+        .map_err(|_| ServerError::ServerUnavailableFinal)?
+        .ok_or(ServerError::InvalidInformation)?;
+
+    let body = game
+        .send(GetGameDataMessage)
         .await
         .map_err(|_| ServerError::ServerUnavailableFinal)?;
 
-    let link = match link {
-        Some(value) => value,
-        None => return Err(ServerError::InvalidInformation),
-    };
-
-    Ok(link)
+    Ok(body)
 }
 
 /// Handles creating a game for the provided session.
@@ -309,15 +307,23 @@ pub async fn handle_set_setting(req: SetSettingRequest) -> ServerResult<()> {
 /// ```
 pub async fn handle_remove_player(req: RemovePlayerRequest) {
     let services = App::services();
-    let _ = services
+    let game = match services
         .game_manager
-        .send(RemovePlayerMessage {
+        .send(GetGameMessage {
             game_id: req.game_id,
-            reason: req.reason,
-            id: req.player_id,
-            ty: RemovePlayerType::Player,
         })
-        .await;
+        .await
+    {
+        Ok(Some(value)) => value,
+        _ => return,
+    };
+
+    game.send(RemovePlayerMessage {
+        reason: req.reason,
+        id: req.player_id,
+        ty: RemovePlayerType::Player,
+    })
+    .await;
 }
 
 /// Handles updating mesh connections

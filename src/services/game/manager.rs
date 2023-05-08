@@ -1,10 +1,8 @@
 use super::{
-    models::{MeshState, RemoveReason},
-    AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
-    GameSnapshot, RemovePlayerType,
+    models::MeshState, AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState,
+    GamePlayer, GameSnapshot,
 };
 use crate::{services::matchmaking::rules::RuleSet, utils::types::GameID};
-use blaze_pk::packet::PacketBody;
 use interlink::prelude::*;
 use log::debug;
 use std::{collections::HashMap, sync::Arc};
@@ -99,38 +97,6 @@ impl Handler<SnapshotQueryMessage> for GameManager {
             }
 
             (snapshots, more)
-        }))
-    }
-}
-
-/// Message for taking a snapshot of a specific game
-/// which will return a snapshot of the game if it
-/// exists
-#[derive(Message)]
-#[msg(rtype = "Option<GameSnapshot>")]
-pub struct SnapshotMessage {
-    /// The ID of the game to take the snapshot of
-    pub game_id: GameID,
-    /// Whether to include sensitively player net info
-    pub include_net: bool,
-}
-
-/// Handler for snapshot messages for a specific game
-impl Handler<SnapshotMessage> for GameManager {
-    type Response = Fr<SnapshotMessage>;
-
-    fn handle(&mut self, msg: SnapshotMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        // Link to the game
-        let link = self.games.get(&msg.game_id).cloned();
-
-        Fr::new(Box::pin(async move {
-            let link = link?;
-
-            link.send(super::SnapshotMessage {
-                include_net: msg.include_net,
-            })
-            .await
-            .ok()
         }))
     }
 }
@@ -241,60 +207,6 @@ impl Handler<TryAddMessage> for GameManager {
     }
 }
 
-/// Message for removing a player from a game
-#[derive(Message)]
-pub struct RemovePlayerMessage {
-    /// The ID of the game to remove from
-    pub game_id: GameID,
-    /// The ID of the player (Session or PID depending on RemovePlayerType)
-    pub id: u32,
-    /// The reason for removing the player
-    pub reason: RemoveReason,
-    /// The type of player removal
-    pub ty: RemovePlayerType,
-}
-
-/// Handler for removing a player from a game
-impl Handler<RemovePlayerMessage> for GameManager {
-    type Response = Fr<RemovePlayerMessage>;
-
-    fn handle(
-        &mut self,
-        msg: RemovePlayerMessage,
-        ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        // Extract the message parts
-        let RemovePlayerMessage {
-            game_id,
-            id,
-            reason,
-            ty,
-        } = msg;
-
-        // Link back to the game manager
-        let return_link = ctx.link();
-
-        // Link to the target game
-        let link = self.games.get(&game_id).cloned();
-
-        Fr::new(Box::pin(async move {
-            let link = match link {
-                Some(value) => value,
-                None => return,
-            };
-
-            // If the player is removed and the game is now empty
-            if let Ok(true) = link
-                .send(super::RemovePlayerMessage { id, reason, ty })
-                .await
-            {
-                // Remove the empty game
-                let _ = return_link.send(RemoveGameMessage { game_id }).await;
-            }
-        }))
-    }
-}
-
 /// Message for removing a game from the manager
 #[derive(Message)]
 pub struct RemoveGameMessage {
@@ -311,31 +223,5 @@ impl Handler<RemoveGameMessage> for GameManager {
         if let Some(value) = self.games.remove(&msg.game_id) {
             value.stop();
         }
-    }
-}
-
-/// Message for getting the encoded packet data for a game. Used
-/// by the game lookup messages from Origin invites
-#[derive(Message)]
-#[msg(rtype = "Option<PacketBody>")]
-pub struct GetGameDataMessage {
-    /// The ID of the game to get the data for
-    pub game_id: GameID,
-}
-
-/// Handler for getting game data
-impl Handler<GetGameDataMessage> for GameManager {
-    type Response = Fr<GetGameDataMessage>;
-
-    fn handle(
-        &mut self,
-        msg: GetGameDataMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        let link = self.games.get(&msg.game_id).cloned();
-        Fr::new(Box::pin(async move {
-            let link = link?;
-            link.send(super::GetGameDataMessage {}).await.ok()
-        }))
     }
 }

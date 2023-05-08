@@ -2,8 +2,8 @@ use crate::{
     database::entities::players::PlayerRole,
     middleware::auth::Auth,
     services::game::{
-        manager::{SnapshotMessage, SnapshotQueryMessage},
-        GameSnapshot,
+        manager::{GetGameMessage, SnapshotQueryMessage},
+        GameSnapshot, SnapshotMessage,
     },
     state::App,
     utils::types::GameID,
@@ -94,15 +94,20 @@ pub async fn get_games(Query(query): Query<GamesRequest>, auth: Auth) -> GamesRe
 pub async fn get_game(Path(game_id): Path<GameID>, auth: Auth) -> GamesRes<GameSnapshot> {
     let auth = auth.into_inner();
     let services = App::services();
-    let games = services
+
+    let game = services
         .game_manager
-        .send(SnapshotMessage {
-            game_id,
-            include_net: auth.role >= PlayerRole::Admin,
-        })
+        .send(GetGameMessage { game_id })
         .await?
         .ok_or(GamesError::NotFound)?;
-    Ok(Json(games))
+
+    let snapshot = game
+        .send(SnapshotMessage {
+            include_net: auth.role >= PlayerRole::Admin,
+        })
+        .await?;
+
+    Ok(Json(snapshot))
 }
 
 /// Response implementation for games errors

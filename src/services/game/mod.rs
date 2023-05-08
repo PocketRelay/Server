@@ -1,7 +1,8 @@
 use crate::{
     database::entities::Player,
-    services::matchmaking::rules::RuleSet,
+    services::{game::manager::RemoveGameMessage, matchmaking::rules::RuleSet},
     session::{DetailsMessage, InformSessions, PushExt, Session, SetGameMessage},
+    state::App,
     utils::{
         components::{Components, GameManager, UserSessions},
         models::NetData,
@@ -39,7 +40,12 @@ pub struct Game {
 
 impl Service for Game {
     fn stopping(&mut self) {
-        debug!("Game is stopping (GID: {})", self.id)
+        debug!("Game is stopping (GID: {})", self.id);
+        // Remove the stopping game
+        let services = App::services();
+        let _ = services
+            .game_manager
+            .do_send(RemoveGameMessage { game_id: self.id });
     }
 }
 
@@ -369,7 +375,7 @@ impl Handler<UpdateMeshMessage> for Game {
 
 /// Message for removing a player from the game
 #[derive(Message)]
-#[msg(rtype = "bool")]
+#[msg(rtype = "()")]
 pub struct RemovePlayerMessage {
     /// The ID of the player/session to remove
     pub id: u32,
@@ -390,15 +396,16 @@ pub enum RemovePlayerType {
 
 /// Handler for removing a player from the game
 impl Handler<RemovePlayerMessage> for Game {
-    type Response = Mr<RemovePlayerMessage>;
+    type Response = ();
     fn handle(
         &mut self,
         msg: RemovePlayerMessage,
-        _ctx: &mut ServiceContext<Self>,
+        ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         // Already empty game handling
         if self.players.is_empty() {
-            return Mr(true);
+            ctx.stop();
+            return;
         }
 
         // Find the player index
@@ -409,7 +416,7 @@ impl Handler<RemovePlayerMessage> for Game {
 
         let index = match index {
             Some(value) => value,
-            None => return Mr(false),
+            None => return,
         };
 
         // Remove the player
@@ -433,7 +440,10 @@ impl Handler<RemovePlayerMessage> for Game {
             self.try_migrate_host();
         }
 
-        Mr(self.players.is_empty())
+        if self.players.is_empty() {
+            // Game is empty stop it
+            ctx.stop();
+        }
     }
 }
 
