@@ -6,7 +6,7 @@ use crate::{
     utils::{
         components::{Components, GameManager, UserSessions},
         models::NetData,
-        types::{GameID, GameSlot, PlayerID, SessionID},
+        types::{GameID, GameSlot, PlayerID},
     },
 };
 use blaze_pk::{
@@ -89,8 +89,6 @@ pub type AttrMap = TdfMap<String, String>;
 /// Player structure containing details and state for a player
 /// within a game
 pub struct GamePlayer {
-    /// ID of the session associated to this player
-    pub session_id: SessionID,
     /// Session player
     pub player: Player,
     /// Session address
@@ -105,8 +103,6 @@ pub struct GamePlayer {
 /// state.
 #[derive(Serialize)]
 pub struct GamePlayerSnapshot {
-    /// The session ID of the snapshot
-    pub session_id: SessionID,
     /// The player ID of the snapshot
     pub player_id: PlayerID,
     /// The player name of the snapshot
@@ -122,9 +118,8 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(session_id: SessionID, player: Player, net: NetData, link: Link<Session>) -> Self {
+    pub fn new(player: Player, net: NetData, link: Link<Session>) -> Self {
         Self {
-            session_id,
             player,
             link,
             net,
@@ -140,7 +135,6 @@ impl GamePlayer {
     /// for serialization
     pub fn snapshot(&self, include_net: bool) -> GamePlayerSnapshot {
         GamePlayerSnapshot {
-            session_id: self.session_id,
             player_id: self.player.id,
             display_name: self.player.display_name.clone(),
             net: if include_net {
@@ -165,7 +159,7 @@ impl GamePlayer {
         writer.tag_u16(b"TIDX", 0xffff);
         writer.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
         writer.tag_triple(b"UGID", (0, 0, 0));
-        writer.tag_u32(b"UID", self.session_id);
+        writer.tag_u32(b"UID", self.player.id);
         writer.tag_group_end();
     }
 }
@@ -308,7 +302,7 @@ impl Handler<SetAttributesMessage> for Game {
 #[derive(Message)]
 pub struct UpdateMeshMessage {
     /// The ID of the session updating its connection
-    pub session: SessionID,
+    pub id: PlayerID,
     /// The target player that its updating with
     pub target: PlayerID,
     /// The player mesh state
@@ -335,7 +329,7 @@ impl Handler<UpdateMeshMessage> for Game {
             let session = self
                 .players
                 .iter_mut()
-                .find(|value| value.session_id == msg.session);
+                .find(|value| value.player.id == msg.id);
 
             let session = match session {
                 Some(value) => value,
@@ -381,17 +375,6 @@ pub struct RemovePlayerMessage {
     pub id: u32,
     /// The reason for removing the player
     pub reason: RemoveReason,
-    /// The type of removal
-    pub ty: RemovePlayerType,
-}
-
-/// The type of player to remove
-#[derive(Debug)]
-pub enum RemovePlayerType {
-    /// Remove by a player session ID
-    Session,
-    /// Remove by a player ID
-    Player,
 }
 
 /// Handler for removing a player from the game
@@ -409,10 +392,7 @@ impl Handler<RemovePlayerMessage> for Game {
         }
 
         // Find the player index
-        let index = match msg.ty {
-            RemovePlayerType::Player => self.players.iter().position(|v| v.player.id == msg.id),
-            RemovePlayerType::Session => self.players.iter().position(|v| v.session_id == msg.id),
-        };
+        let index = self.players.iter().position(|v| v.player.id == msg.id);
 
         let index = match index {
             Some(value) => value,
@@ -584,7 +564,7 @@ impl Game {
     fn update_clients(&self, player: &GamePlayer) {
         debug!("Updating clients with new session details");
         self.players.iter().for_each(|value| {
-            if value.session_id != player.session_id {
+            if value.player.id != player.player.id {
                 let addr1 = player.link.clone();
                 let addr2 = value.link.clone();
 
@@ -604,7 +584,7 @@ impl Game {
         let msid = if slot == 0 {
             None
         } else {
-            Some(player.session_id)
+            Some(player.player.id)
         };
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameSetup),

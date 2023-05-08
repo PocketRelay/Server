@@ -3,8 +3,8 @@ use crate::{
         game::{
             manager::{CreateMessage, GetGameMessage, TryAddMessage, TryAddResult},
             AddPlayerMessage, CheckJoinableMessage, GameJoinableState, GamePlayer,
-            GetGameDataMessage, RemovePlayerMessage, RemovePlayerType, SetAttributesMessage,
-            SetSettingMessage, SetStateMessage, UpdateMeshMessage,
+            GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage, SetSettingMessage,
+            SetStateMessage, UpdateMeshMessage,
         },
         matchmaking::{GameCreatedMessage, QueuePlayerMessage},
         sessions::LookupMessage,
@@ -14,7 +14,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             game_manager::*,
         },
-        GetGamePlayerMessage, GetIdMessage, GetPlayerGameMessage, SessionLink,
+        GetGamePlayerMessage, GetPlayerGameMessage, GetPlayerIdMessage, SessionLink,
     },
     state::App,
 };
@@ -322,7 +322,6 @@ pub async fn handle_remove_player(req: RemovePlayerRequest) {
         .send(RemovePlayerMessage {
             reason: req.reason,
             id: req.player_id,
-            ty: RemovePlayerType::Player,
         })
         .await;
 }
@@ -347,8 +346,9 @@ pub async fn handle_update_mesh_connection(
     session: &mut SessionLink,
     req: UpdateMeshRequest,
 ) -> ServerResult<()> {
-    let id = match session.send(GetIdMessage).await {
-        Ok(value) => value,
+    let id = match session.send(GetPlayerIdMessage).await {
+        Ok(Some(value)) => value,
+        Ok(None) => return Err(ServerError::FailedNoLoginAction),
         Err(_) => return Err(ServerError::ServerUnavailable),
     };
 
@@ -374,7 +374,7 @@ pub async fn handle_update_mesh_connection(
 
     let _ = link
         .send(UpdateMeshMessage {
-            session: id,
+            id,
             target: target.player_id,
             state: target.state,
         })
@@ -514,7 +514,7 @@ pub async fn handle_start_matchmaking(
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    let session_id = player.session_id;
+    let session_id = player.player.id;
 
     info!("Player {} started matchmaking", player.player.display_name);
 

@@ -1,6 +1,6 @@
 use crate::{
     services::game::{AddPlayerMessage, CheckJoinableMessage, Game, GameJoinableState, GamePlayer},
-    utils::types::{GameID, SessionID},
+    utils::types::{GameID, PlayerID},
 };
 use interlink::prelude::*;
 use log::debug;
@@ -150,8 +150,8 @@ impl Handler<QueuePlayerMessage> for Matchmaking {
 /// Message to remove a player from the matchmaking queue
 #[derive(Message)]
 pub struct RemoveQueueMessage {
-    /// The session ID of the player to remove
-    pub session_id: SessionID,
+    /// The player ID of the player to remove
+    pub player_id: PlayerID,
 }
 
 impl Handler<RemoveQueueMessage> for Matchmaking {
@@ -160,6 +160,6 @@ impl Handler<RemoveQueueMessage> for Matchmaking {
 
     fn handle(&mut self, msg: RemoveQueueMessage, _ctx: &mut ServiceContext<Self>) {
         self.queue
-            .retain(|value| value.player.session_id != msg.session_id);
+            .retain(|value| value.player.player.id != msg.player_id);
     }
 }

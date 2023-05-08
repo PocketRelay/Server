@@ -238,7 +238,7 @@ impl Encodable for GameDetails<'_> {
                 }
             }
 
-            writer.tag_u32(b"HSES", host_player.session_id);
+            writer.tag_u32(b"HSES", host_player.player.id);
             writer.tag_zero(b"IGNO");
             writer.tag_u8(b"MCAP", 4);
             writer.tag_value(b"NQOS", &host_player.net.qos);

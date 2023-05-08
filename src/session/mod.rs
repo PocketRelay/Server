@@ -6,10 +6,7 @@ use crate::{
     database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
     services::{
-        game::{
-            manager::GetGameMessage, models::RemoveReason, GamePlayer, RemovePlayerMessage,
-            RemovePlayerType,
-        },
+        game::{manager::GetGameMessage, models::RemoveReason, GamePlayer, RemovePlayerMessage},
         matchmaking::RemoveQueueMessage,
         sessions::{AddMessage, RemoveMessage},
         Services,
@@ -67,7 +64,6 @@ pub struct SessionData {
 impl Service for Session {
     fn stopping(&mut self) {
         let services = App::services();
-        self.remove_games(services);
         self.clear_auth(services);
         debug!("Session stopped (SID: {})", self.id);
     }
@@ -142,7 +138,6 @@ impl Handler<GetGamePlayerMessage> for Session {
             None => return Mr(None),
         };
         Mr(Some(GamePlayer::new(
-            self.id,
             player,
             self.data.net.clone(),
             ctx.link(),
@@ -158,12 +153,8 @@ impl Handler<SetPlayerMessage> for Session {
     fn handle(&mut self, msg: SetPlayerMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
         let services = App::services();
 
-        // Take the old player and remove it if possible
-        if let Some(old_player) = self.data.player.take() {
-            let _ = services.sessions.do_send(RemoveMessage {
-                player_id: old_player.id,
-            });
-        }
+        // Clear the current authentication
+        self.clear_auth(services);
 
         // If we are setting a new player
         if let Some(player) = msg.0 {
@@ -185,18 +176,6 @@ pub trait PushExt {
 impl PushExt for Link<Session> {
     fn push(&self, packet: Packet) {
         let _ = self.do_send(WriteMessage(packet));
-    }
-}
-
-#[derive(Message)]
-#[msg(rtype = "SessionID")]
-pub struct GetIdMessage;
-
-impl Handler<GetIdMessage> for Session {
-    type Response = Mr<GetIdMessage>;
-
-    fn handle(&mut self, _msg: GetIdMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        Mr(self.id)
     }
 }
 
@@ -507,10 +486,14 @@ impl Session {
     /// Removes the session from any connected games and the
     /// matchmaking queue
     pub fn remove_games(&mut self, services: &'static Services) {
-        let game = self.data.game.take();
-        let _ = if let Some(game_id) = game {
-            let id = self.id;
+        // Don't attempt to remove if theres no active player
+        let player_id = match &self.data.player {
+            Some(value) => value.id,
+            None => return,
+        };
 
+        if let Some(game_id) = self.data.game.take() {
+            // Remove the player from the game
             tokio::spawn(async move {
                 // Obtain the current game
                 let game = match services.game_manager.send(GetGameMessage { game_id }).await {
@@ -521,24 +504,26 @@ impl Session {
                 // Send the remove message
                 let _ = game
                     .send(RemovePlayerMessage {
-                        id,
+                        id: player_id,
                         reason: RemoveReason::Generic,
-                        ty: RemovePlayerType::Session,
                     })
                     .await;
             });
         } else {
-            let _ = services.matchmaking.do_send(RemoveQueueMessage {
-                session_id: self.id,
-            });
-        };
+            // Remove the player from matchmaking if present
+            let _ = services
+                .matchmaking
+                .do_send(RemoveQueueMessage { player_id });
+        }
     }
 
     /// Removes the player from the authenticated sessions list
     /// if the player is authenticated
-    pub fn clear_auth(&mut self, services: &Services) {
+    pub fn clear_auth(&mut self, services: &'static Services) {
+        self.remove_games(services);
+
         // Check that theres authentication
-        let player = match &self.data.player {
+        let player = match self.data.player.take() {
             Some(value) => value,
             None => return,
         };
