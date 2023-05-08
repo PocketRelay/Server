@@ -124,7 +124,9 @@ impl Handler<CreateMessage> for GameManager {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         let id = self.next_id;
-        self.next_id += 1;
+
+        self.next_id = self.next_id.wrapping_add(1);
+
         msg.host.state = MeshState::Connected;
 
         let link = Game::start(id, msg.attributes, msg.setting);

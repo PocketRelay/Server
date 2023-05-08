@@ -318,12 +318,13 @@ pub async fn handle_remove_player(req: RemovePlayerRequest) {
         _ => return,
     };
 
-    game.send(RemovePlayerMessage {
-        reason: req.reason,
-        id: req.player_id,
-        ty: RemovePlayerType::Player,
-    })
-    .await;
+    let _ = game
+        .send(RemovePlayerMessage {
+            reason: req.reason,
+            id: req.player_id,
+            ty: RemovePlayerType::Player,
+        })
+        .await;
 }
 
 /// Handles updating mesh connections
