@@ -3,7 +3,6 @@ use blaze_pk::{
     error::DecodeResult,
     reader::TdfReader,
     tag::TdfType,
-    types::TdfMap,
     writer::TdfWriter,
 };
 
@@ -43,42 +42,14 @@ pub struct OriginLoginResponse {
 
 impl Decodable for OriginLoginResponse {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.until_tag("SESS", TdfType::Group)?;
-        let email: String = reader.tag("MAIL")?;
+        reader.until_tag(b"SESS", TdfType::Group)?;
+        let email: String = reader.tag(b"MAIL")?;
 
-        reader.until_tag("PDTL", TdfType::Group)?;
-        let display_name: String = reader.tag("DSNM")?;
+        reader.until_tag(b"PDTL", TdfType::Group)?;
+        let display_name: String = reader.tag(b"DSNM")?;
         Ok(Self {
             email,
             display_name,
         })
-    }
-}
-
-/// Structure for a request to login with Origin using
-/// the Origin token that was provided by the client
-pub struct OriginLoginRequest<'a> {
-    /// The origin token provided by the client
-    pub token: &'a str,
-}
-
-impl Encodable for OriginLoginRequest<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_str(b"AUTH", self.token);
-        writer.tag_u8(b"TYPE", 0x1);
-    }
-}
-
-/// Structure for the response from retrieving the user
-/// settings from the official servers
-pub struct SettingsResponse {
-    /// The settings from the server
-    pub settings: TdfMap<String, String>,
-}
-
-impl Decodable for SettingsResponse {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let settings: TdfMap<String, String> = reader.tag("SMAP")?;
-        Ok(Self { settings })
     }
 }

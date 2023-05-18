@@ -3,8 +3,8 @@ use crate::{
         entities::{players::PlayerRole, Player},
         DbErr,
     },
-    services::tokens::VerifyError,
-    state::GlobalState,
+    services::tokens::{Tokens, VerifyError},
+    state::App,
     utils::types::BoxFuture,
 };
 use axum::{
@@ -77,14 +77,8 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
                 .ok_or(TokenError::MissingToken)?;
 
             // Verify the token claim
-            let services = GlobalState::services();
-            let player_id = services.tokens.verify(token)?;
-
-            // Load the claimed player
-            let db = GlobalState::database();
-            let player = Player::by_id(&db, player_id)
-                .await?
-                .ok_or(TokenError::InvalidToken)?;
+            let db = App::database();
+            let player: Player = Tokens::service_verify(db, token).await?;
 
             Ok(Self(player, PhantomData))
         })

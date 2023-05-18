@@ -10,35 +10,23 @@ use crate::{
         DatabaseConnection, DbErr, DbResult,
     },
     middleware::xml::Xml,
-    state::GlobalState,
+    services::tokens::Tokens,
+    state::App,
     utils::parsing::PlayerClass,
 };
 use axum::{
     extract::{Path, Query},
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
-    Router,
 };
 use serde::Deserialize;
 use std::fmt::Display;
 use tokio::try_join;
 
-/// Router function creates a new router with all the underlying
-/// routes for this file.
-///
-/// Prefix: /gaw
-pub fn router() -> Router {
-    Router::new()
-        .route("/authentication/sharedTokenLogin", get(shared_token_login))
-        .route("/galaxyatwar/getRatings/:id", get(get_ratings))
-        .route("/galaxyatwar/increaseRatings/:id", get(increase_ratings))
-}
-
 /// Error type used in gaw routes to handle errors such
 /// as being unable to parse player IDs, find players
 /// or Database errors
-enum GAWError {
+pub enum GAWError {
     /// The player could not be found
     InvalidToken,
     /// There was a server error
@@ -47,11 +35,13 @@ enum GAWError {
 
 /// Query for authenticating with a shared login token.
 #[derive(Deserialize)]
-struct AuthQuery {
+pub struct AuthQuery {
     /// The authentication token (This is just a hex encoded player ID)
     auth: String,
 }
 
+/// GET /authentication/sharedTokenLogin
+///
 /// Route for handling shared token login. In the official implementation this
 /// would login the client using the shared token provided by the Main server.
 /// But this implementation just responds with the bare minimum response directly
@@ -62,7 +52,7 @@ struct AuthQuery {
 /// so not nessicary to implement the fetching
 ///
 /// `query` The query containing the auth token (In this case the hex player ID)
-async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
+pub async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
     let response = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <fulllogin>
@@ -97,60 +87,22 @@ async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
     Xml(response)
 }
 
-/// Retrieves the galaxy at war data and promotions count for
-/// the player with the provided ID
+/// GET /galaxyatwar/getRatings/:id
 ///
-/// `db` The dataabse connection
-/// `id` The hex ID of the player
-async fn get_player_gaw_data(
-    db: &DatabaseConnection,
-    token: &str,
-) -> Result<(GalaxyAtWar, u32), GAWError> {
-    let services = GlobalState::services();
-    let player_id = services
-        .tokens
-        .verify(token)
-        .map_err(|_| GAWError::InvalidToken)?;
-    let player = Player::by_id(db, player_id)
-        .await?
-        .ok_or(GAWError::InvalidToken)?;
-    let config = GlobalState::config();
-
-    let (gaw_data, promotions) = try_join!(
-        GalaxyAtWar::find_or_create(db, player.id, config.galaxy_at_war.decay),
-        get_promotions(db, &player)
-    )?;
-    Ok((gaw_data, promotions))
-}
-
-async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u32> {
-    let config = GlobalState::config();
-    if !config.galaxy_at_war.promotions {
-        return Ok(0);
-    }
-
-    Ok(PlayerData::get_classes(db, player.id)
-        .await?
-        .iter()
-        .filter_map(|value| PlayerClass::parse(&value.value))
-        .map(|value| value.promotions)
-        .sum())
-}
-
 /// Route for retrieving the galaxy at war ratings for the player
 /// with the provied ID
 ///
 /// `id` The hex encoded ID of the player
-async fn get_ratings(Path(id): Path<String>) -> Result<Xml, GAWError> {
-    let db = GlobalState::database();
-    let (gaw_data, promotions) = get_player_gaw_data(&db, &id).await?;
+pub async fn get_ratings(Path(id): Path<String>) -> Result<Xml, GAWError> {
+    let db = App::database();
+    let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
     Ok(ratings_response(gaw_data, promotions))
 }
 
 /// The query structure for increasing the galaxy at war values
 /// for a player
 #[derive(Deserialize)]
-struct IncreaseQuery {
+pub struct IncreaseQuery {
     /// The increase amount for the first region
     #[serde(rename = "rinc|0", default)]
     a: u16,
@@ -168,22 +120,59 @@ struct IncreaseQuery {
     e: u16,
 }
 
+/// GET /galaxyatwar/increaseRatings/:id
+///
 /// Route for increasing the galaxy at war ratings for the player with
 /// the provided ID will respond with the new ratings after increasing
 /// them.
 ///
 /// `id`    The hex encoded ID of the player
 /// `query` The query data containing the increase values
-async fn increase_ratings(
+pub async fn increase_ratings(
     Path(id): Path<String>,
     Query(query): Query<IncreaseQuery>,
 ) -> Result<Xml, GAWError> {
-    let db = GlobalState::database();
-    let (gaw_data, promotions) = get_player_gaw_data(&db, &id).await?;
+    let db = App::database();
+    let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
     let gaw_data = gaw_data
-        .increase(&db, (query.a, query.b, query.c, query.d, query.e))
+        .increase(db, (query.a, query.b, query.c, query.d, query.e))
         .await?;
     Ok(ratings_response(gaw_data, promotions))
+}
+
+/// Retrieves the galaxy at war data and promotions count for
+/// the player with the provided ID
+///
+/// `db` The dataabse connection
+/// `id` The hex ID of the player
+async fn get_player_gaw_data(
+    db: &DatabaseConnection,
+    token: &str,
+) -> Result<(GalaxyAtWar, u32), GAWError> {
+    let player: Player = Tokens::service_verify(db, token)
+        .await
+        .map_err(|_| GAWError::InvalidToken)?;
+    let config = App::config();
+
+    let (gaw_data, promotions) = try_join!(
+        GalaxyAtWar::find_or_create(db, player.id, config.galaxy_at_war.decay),
+        get_promotions(db, &player)
+    )?;
+    Ok((gaw_data, promotions))
+}
+
+async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u32> {
+    let config = App::config();
+    if !config.galaxy_at_war.promotions {
+        return Ok(0);
+    }
+
+    Ok(PlayerData::get_classes(db, player.id)
+        .await?
+        .iter()
+        .filter_map(|value| PlayerClass::parse(&value.value))
+        .map(|value| value.promotions)
+        .sum())
 }
 
 /// Generates a ratings XML response from the provided ratings struct and

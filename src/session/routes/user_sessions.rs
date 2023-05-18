@@ -1,6 +1,6 @@
 use crate::{
     database::entities::Player,
-    services::sessions::LookupMessage,
+    services::{sessions::LookupMessage, tokens::Tokens},
     session::{
         models::{
             auth::AuthResponse,
@@ -10,25 +10,9 @@ use crate::{
         GetLookupMessage, HardwareFlagMessage, LookupResponse, NetworkInfoMessage, SessionLink,
         SetPlayerMessage,
     },
-    state::GlobalState,
-    utils::components::{Components as C, UserSessions as U},
+    state::App,
 };
-use blaze_pk::router::Router;
 use log::error;
-
-/// Routing function for adding all the routes in this file to the
-/// provided router
-///
-/// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionLink>) {
-    router.route(C::UserSessions(U::ResumeSession), handle_resume_session);
-    router.route(C::UserSessions(U::UpdateNetworkInfo), handle_update_network);
-    router.route(
-        C::UserSessions(U::UpdateHardwareFlags),
-        handle_update_hardware_flag,
-    );
-    router.route(C::UserSessions(U::LookupUser), handle_lookup_user);
-}
 
 /// Attempts to lookup another authenticated session details
 ///
@@ -45,8 +29,8 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 ///     "NAME": "",
 /// }
 /// ```
-async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> {
-    let services = GlobalState::services();
+pub async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> {
+    let services = App::services();
 
     // Lookup the session
     let session = services
@@ -82,33 +66,19 @@ async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> 
 ///     "SKEY": "127_CHARACTER_TOKEN"
 /// }
 /// ```
-async fn handle_resume_session(
+pub async fn handle_resume_session(
     session: &mut SessionLink,
     req: ResumeSessionRequest,
 ) -> ServerResult<AuthResponse> {
-    let db = GlobalState::database();
-    let services = GlobalState::services();
+    let db = App::database();
 
     let session_token = req.session_token;
 
-    let player_id = match services.tokens.verify(&session_token) {
+    let player: Player = match Tokens::service_verify(db, &session_token).await {
         Ok(value) => value,
         Err(err) => {
-            error!("Error while attempt to resume invalid session: {err:?}");
-            return Err(ServerError::InvalidSession);
-        }
-    };
-
-    // Find the player that the token is for
-    let player: Player = match Player::by_id(&db, player_id).await {
-        // Valid session token
-        Ok(Some(player)) => player,
-        // Session that was attempted to resume is expired
-        Ok(None) => return Err(ServerError::InvalidSession),
-        // Error occurred while looking up token
-        Err(err) => {
             error!("Error while attempt to resume session: {err:?}");
-            return Err(ServerError::ServerUnavailable);
+            return Err(ServerError::InvalidSession);
         }
     };
 
@@ -158,7 +128,7 @@ async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequest) {
+pub async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequest) {
     let _ = session
         .send(NetworkInfoMessage {
             groups: req.address,
@@ -176,7 +146,7 @@ async fn handle_update_network(session: &mut SessionLink, req: UpdateNetworkRequ
 ///     "HWFG": 0
 /// }
 /// ```
-async fn handle_update_hardware_flag(session: &mut SessionLink, req: HardwareFlagRequest) {
+pub async fn handle_update_hardware_flag(session: &mut SessionLink, req: HardwareFlagRequest) {
     let _ = session
         .send(HardwareFlagMessage {
             value: req.hardware_flag,

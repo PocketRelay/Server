@@ -17,7 +17,7 @@ pub struct ResumeSessionRequest {
 
 impl Decodable for ResumeSessionRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let session_token: String = reader.tag("SKEY")?;
+        let session_token: String = reader.tag(b"SKEY")?;
         Ok(Self { session_token })
     }
 }
@@ -33,11 +33,11 @@ pub struct UpdateNetworkRequest {
 
 impl Decodable for UpdateNetworkRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let address: NetGroups = match reader.tag::<Union<NetGroups>>("ADDR")? {
+        let address: NetGroups = match reader.tag::<Union<NetGroups>>(b"ADDR")? {
             Union::Set { value, .. } => value,
             Union::Unset => return Err(DecodeError::Other("Client address was unset")),
         };
-        let qos: QosNetworkData = reader.tag("NQOS")?;
+        let qos: QosNetworkData = reader.tag(b"NQOS")?;
         Ok(Self { address, qos })
     }
 }
@@ -51,7 +51,7 @@ pub struct HardwareFlagRequest {
 
 impl Decodable for HardwareFlagRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let hardware_flag: u16 = reader.tag("HWFG")?;
+        let hardware_flag: u16 = reader.tag(b"HWFG")?;
         Ok(Self { hardware_flag })
     }
 }
@@ -62,7 +62,7 @@ pub struct LookupRequest {
 
 impl Decodable for LookupRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let player_id: PlayerID = reader.tag("ID")?;
+        let player_id: PlayerID = reader.tag(b"ID")?;
         Ok(Self { player_id })
     }
 }

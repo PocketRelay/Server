@@ -16,7 +16,7 @@ pub struct EntityCountRequest {
 
 impl Decodable for EntityCountRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let name: String = reader.tag("NAME")?;
+        let name: String = reader.tag(b"NAME")?;
         Ok(Self { name })
     }
 }
@@ -66,9 +66,9 @@ pub struct CenteredLeaderboardRequest {
 
 impl Decodable for CenteredLeaderboardRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let center: PlayerID = reader.tag("CENT")?;
-        let count: usize = reader.tag("COUN")?;
-        let name: String = reader.tag("NAME")?;
+        let center: PlayerID = reader.tag(b"CENT")?;
+        let count: usize = reader.tag(b"COUN")?;
+        let name: String = reader.tag(b"NAME")?;
         Ok(Self {
             center,
             count,
@@ -155,9 +155,9 @@ pub struct LeaderboardRequest {
 
 impl Decodable for LeaderboardRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let count: usize = reader.tag("COUN")?;
-        let name: String = reader.tag("NAME")?;
-        let start: usize = reader.tag("STRT")?;
+        let count: usize = reader.tag(b"COUN")?;
+        let name: String = reader.tag(b"NAME")?;
+        let start: usize = reader.tag(b"STRT")?;
         Ok(Self { count, name, start })
     }
 }
@@ -191,7 +191,7 @@ pub struct FilteredLeaderboardRequest {
 
 impl Decodable for FilteredLeaderboardRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let count: usize = reader.until_list("IDLS", TdfType::VarInt)?;
+        let count: usize = reader.until_list(b"IDLS", TdfType::VarInt)?;
         if count < 1 {
             return Err(DecodeError::Other("Missing player ID for filter"));
         }
@@ -199,7 +199,7 @@ impl Decodable for FilteredLeaderboardRequest {
         for _ in 1..count {
             reader.skip_var_int();
         }
-        let name: String = reader.tag("NAME")?;
+        let name: String = reader.tag(b"NAME")?;
         Ok(Self { id, name })
     }
 }
@@ -212,7 +212,7 @@ pub struct LeaderboardGroupRequest {
 
 impl Decodable for LeaderboardGroupRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let name: String = reader.tag("NAME")?;
+        let name: String = reader.tag(b"NAME")?;
         Ok(Self { name })
     }
 }

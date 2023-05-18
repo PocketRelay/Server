@@ -1,26 +1,28 @@
 use crate::{
-    services::matchmaking::rules::RuleSet,
-    session::{DetailsMessage, InformSessions, PushExt, Session},
+    database::entities::Player,
+    services::{game::manager::RemoveGameMessage, matchmaking::rules::RuleSet},
+    session::{DetailsMessage, InformSessions, PushExt, Session, SetGameMessage},
+    state::App,
     utils::{
         components::{Components, GameManager, UserSessions},
-        types::{GameID, GameSlot, PlayerID, SessionID},
+        models::NetData,
+        types::{GameID, GameSlot, PlayerID},
     },
 };
 use blaze_pk::{
     codec::Encodable,
     packet::{Packet, PacketBody},
     types::TdfMap,
+    writer::TdfWriter,
 };
 use interlink::prelude::*;
 use log::debug;
 use models::*;
-use player::{GamePlayer, GamePlayerSnapshot};
 use serde::Serialize;
 use std::sync::Arc;
 
 pub mod manager;
 pub mod models;
-pub mod player;
 
 /// Game service running within the server
 pub struct Game {
@@ -38,7 +40,12 @@ pub struct Game {
 
 impl Service for Game {
     fn stopping(&mut self) {
-        debug!("Game is stopping (GID: {})", self.id)
+        debug!("Game is stopping (GID: {})", self.id);
+        // Remove the stopping game
+        let services = App::services();
+        let _ = services
+            .game_manager
+            .do_send(RemoveGameMessage { game_id: self.id });
     }
 }
 
@@ -79,6 +86,91 @@ pub struct GameSnapshot {
 /// Attributes map type
 pub type AttrMap = TdfMap<String, String>;
 
+/// Player structure containing details and state for a player
+/// within a game
+pub struct GamePlayer {
+    /// Session player
+    pub player: Player,
+    /// Session address
+    pub link: Link<Session>,
+    /// Networking information for the player
+    pub net: NetData,
+    /// The mesh state of the player
+    pub state: MeshState,
+}
+
+/// Structure for taking a snapshot of the players current
+/// state.
+#[derive(Serialize)]
+pub struct GamePlayerSnapshot {
+    /// The player ID of the snapshot
+    pub player_id: PlayerID,
+    /// The player name of the snapshot
+    pub display_name: String,
+    /// The player net data of the snapshot if collected
+    pub net: Option<NetData>,
+}
+
+impl GamePlayer {
+    /// Creates a new game player structure with the provided player
+    /// details
+    ///
+    /// `player` The session player
+    /// `net`    The player networking details
+    /// `addr`   The session address
+    pub fn new(player: Player, net: NetData, link: Link<Session>) -> Self {
+        Self {
+            player,
+            link,
+            net,
+            state: MeshState::Connecting,
+        }
+    }
+
+    pub fn set_game(&self, game: Option<GameID>) {
+        let _ = self.link.do_send(SetGameMessage { game });
+    }
+
+    /// Takes a snapshot of the current player state
+    /// for serialization
+    pub fn snapshot(&self, include_net: bool) -> GamePlayerSnapshot {
+        GamePlayerSnapshot {
+            player_id: self.player.id,
+            display_name: self.player.display_name.clone(),
+            net: if include_net {
+                Some(self.net.clone())
+            } else {
+                None
+            },
+        }
+    }
+
+    pub fn encode(&self, game_id: GameID, slot: usize, writer: &mut TdfWriter) {
+        writer.tag_empty_blob(b"BLOB");
+        writer.tag_u8(b"EXID", 0);
+        writer.tag_u32(b"GID", game_id);
+        writer.tag_u32(b"LOC", 0x64654445);
+        writer.tag_str(b"NAME", &self.player.display_name);
+        writer.tag_u32(b"PID", self.player.id);
+        self.net.tag_groups(b"PNET", writer);
+        writer.tag_usize(b"SID", slot);
+        writer.tag_u8(b"SLOT", 0);
+        writer.tag_value(b"STAT", &self.state);
+        writer.tag_u16(b"TIDX", 0xffff);
+        writer.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
+        writer.tag_triple(b"UGID", (0, 0, 0));
+        writer.tag_u32(b"UID", self.player.id);
+        writer.tag_group_end();
+    }
+}
+
+impl Drop for GamePlayer {
+    fn drop(&mut self) {
+        // Clear player game when game player is dropped
+        self.set_game(None);
+    }
+}
+
 /// Message to add a new player to this game
 #[derive(Message)]
 pub struct AddPlayerMessage {
@@ -96,10 +188,10 @@ impl Handler<AddPlayerMessage> for Game {
         self.players.push(msg.player);
 
         // Obtain the player that was just added
-        let player = match self.players.last() {
-            Some(value) => value,
-            None => return,
-        };
+        let player = self
+            .players
+            .last()
+            .expect("Player was added but is missing from players");
 
         // Whether the player was not the host player
         let is_other = slot != 0;
@@ -210,7 +302,7 @@ impl Handler<SetAttributesMessage> for Game {
 #[derive(Message)]
 pub struct UpdateMeshMessage {
     /// The ID of the session updating its connection
-    pub session: SessionID,
+    pub id: PlayerID,
     /// The target player that its updating with
     pub target: PlayerID,
     /// The player mesh state
@@ -237,7 +329,7 @@ impl Handler<UpdateMeshMessage> for Game {
             let session = self
                 .players
                 .iter_mut()
-                .find(|value| value.session_id == msg.session);
+                .find(|value| value.player.id == msg.id);
 
             let session = match session {
                 Some(value) => value,
@@ -277,47 +369,34 @@ impl Handler<UpdateMeshMessage> for Game {
 
 /// Message for removing a player from the game
 #[derive(Message)]
-#[msg(rtype = "bool")]
+#[msg(rtype = "()")]
 pub struct RemovePlayerMessage {
     /// The ID of the player/session to remove
     pub id: u32,
     /// The reason for removing the player
     pub reason: RemoveReason,
-    /// The type of removal
-    pub ty: RemovePlayerType,
-}
-
-/// The type of player to remove
-#[derive(Debug)]
-pub enum RemovePlayerType {
-    /// Remove by a player session ID
-    Session,
-    /// Remove by a player ID
-    Player,
 }
 
 /// Handler for removing a player from the game
 impl Handler<RemovePlayerMessage> for Game {
-    type Response = Mr<RemovePlayerMessage>;
+    type Response = ();
     fn handle(
         &mut self,
         msg: RemovePlayerMessage,
-        _ctx: &mut ServiceContext<Self>,
+        ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         // Already empty game handling
         if self.players.is_empty() {
-            return Mr(true);
+            ctx.stop();
+            return;
         }
 
         // Find the player index
-        let index = match msg.ty {
-            RemovePlayerType::Player => self.players.iter().position(|v| v.player.id == msg.id),
-            RemovePlayerType::Session => self.players.iter().position(|v| v.session_id == msg.id),
-        };
+        let index = self.players.iter().position(|v| v.player.id == msg.id);
 
         let index = match index {
             Some(value) => value,
-            None => return Mr(false),
+            None => return,
         };
 
         // Remove the player
@@ -341,12 +420,15 @@ impl Handler<RemovePlayerMessage> for Game {
             self.try_migrate_host();
         }
 
-        Mr(self.players.is_empty())
+        if self.players.is_empty() {
+            // Game is empty stop it
+            ctx.stop();
+        }
     }
 }
 
 /// Handler for checking if a game is joinable
-#[derive(Message)]
+#[derive(Message, Clone)]
 #[msg(rtype = "GameJoinableState")]
 pub struct CheckJoinableMessage {
     /// The player rule set if one is provided
@@ -482,7 +564,7 @@ impl Game {
     fn update_clients(&self, player: &GamePlayer) {
         debug!("Updating clients with new session details");
         self.players.iter().for_each(|value| {
-            if value.session_id != player.session_id {
+            if value.player.id != player.player.id {
                 let addr1 = player.link.clone();
                 let addr2 = value.link.clone();
 
@@ -502,7 +584,7 @@ impl Game {
         let msid = if slot == 0 {
             None
         } else {
-            Some(player.session_id)
+            Some(player.player.id)
         };
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameSetup),

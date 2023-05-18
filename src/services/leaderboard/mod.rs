@@ -5,16 +5,13 @@ use crate::{
         entities::{Player, PlayerData},
         DatabaseConnection, DbResult,
     },
-    state::GlobalState,
-    utils::{
-        parsing::{KitNameDeployed, PlayerClass},
-        types::BoxFuture,
-    },
+    state::App,
+    utils::parsing::{KitNameDeployed, PlayerClass},
 };
 use interlink::prelude::*;
 use log::{debug, error};
 use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
-use std::{collections::HashMap, future::Future, sync::Arc, time::SystemTime};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 use tokio::task::JoinSet;
 
 pub mod models;
@@ -127,23 +124,26 @@ impl Leaderboard {
     ///
     /// `ty` The leaderboard type
     async fn compute(ty: &LeaderboardType) -> Vec<LeaderboardEntry> {
-        let start_time = SystemTime::now();
+        let start_time = Instant::now();
 
         // The amount of players to process in each database request
         const BATCH_COUNT: u64 = 20;
 
-        let db = GlobalState::database();
+        let db = App::database();
 
         let mut values: Vec<LeaderboardEntry> = Vec::new();
-
-        // Decide the ranking function to use based on the type
-        let ranking: Box<dyn Ranker> = ty.into();
 
         let mut join_set = JoinSet::new();
 
         let mut paginator = players::Entity::find()
             .order_by_asc(players::Column::Id)
-            .paginate(&db, BATCH_COUNT);
+            .paginate(db, BATCH_COUNT);
+
+        // Function pointer to the computing function for the desired type
+        let fun: fn(&'static DatabaseConnection, Player) -> Lf = match ty {
+            LeaderboardType::N7Rating => compute_n7_player,
+            LeaderboardType::ChallengePoints => compute_cp_player,
+        };
 
         loop {
             let players = match paginator.fetch_and_next().await {
@@ -155,13 +155,9 @@ impl Leaderboard {
                 }
             };
 
-            if players.is_empty() {
-                break;
-            }
-
             // Add the futures for all the players
             for player in players {
-                join_set.spawn(ranking.compute_ranking(db.clone(), player));
+                join_set.spawn(fun(db, player));
             }
 
             // Await computed results
@@ -182,95 +178,61 @@ impl Leaderboard {
             rank += 1;
         }
 
-        let end_time = SystemTime::now();
-        if let Ok(duration) = end_time.duration_since(start_time) {
-            debug!("Computed leaderboard took: {:.2?}", duration)
-        }
+        debug!("Computed leaderboard took: {:.2?}", start_time.elapsed());
 
         values
     }
 }
 
-impl From<&LeaderboardType> for Box<dyn Ranker> {
-    fn from(value: &LeaderboardType) -> Self {
-        match value {
-            LeaderboardType::N7Rating => Box::new(compute_n7_player),
-            LeaderboardType::ChallengePoints => Box::new(compute_cp_player),
-        }
-    }
-}
-
-/// Type alias for pinned boxed futures that return a leaderboard entry inside DbResult
-type RankerFut = BoxFuture<'static, DbResult<LeaderboardEntry>>;
-
-/// Trait implemented by things that can be used to return futures
-trait Ranker: Send {
-    /// Function for producing the future that on completion will result
-    /// in the leaderboard entry value
-    fn compute_ranking(&self, db: DatabaseConnection, player: Player) -> RankerFut;
-}
-
-/// Ranker implementaion for function types
-///
-/// ```
-/// async fn test(db: &DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
-///     /* Compute the ranking */
-/// }
-/// ```
-impl<F, Fut> Ranker for F
-where
-    F: Fn(DatabaseConnection, Player) -> Fut + Send,
-    Fut: Future<Output = DbResult<LeaderboardEntry>> + Send + 'static,
-{
-    fn compute_ranking(&self, db: DatabaseConnection, player: Player) -> RankerFut {
-        Box::pin(self(db, player))
-    }
-}
+type Lf = BoxFuture<'static, DbResult<LeaderboardEntry>>;
 
 /// Computes a ranking for the provided player based on the N7 ranking
 /// of that player.
 ///
 /// `db`     The database connection
 /// `player` The player to rank
-async fn compute_n7_player(db: DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
-    let mut total_promotions = 0;
-    let mut total_level: u32 = 0;
+fn compute_n7_player(db: &'static DatabaseConnection, player: Player) -> Lf {
+    Box::pin(async move {
+        let mut total_promotions: u32 = 0;
+        let mut total_level: u32 = 0;
 
-    let data = PlayerData::all(&db, player.id).await?;
+        let data: Vec<PlayerData> = PlayerData::all(db, player.id).await?;
 
-    let mut classes = Vec::new();
-    let mut characters = Vec::new();
+        let mut classes: Vec<PlayerClass> = Vec::new();
+        let mut characters: Vec<KitNameDeployed> = Vec::new();
 
-    for datum in &data {
-        if datum.key.starts_with("class") {
-            if let Some(value) = PlayerClass::parse(&datum.value) {
-                classes.push(value);
-            }
-        } else if datum.key.starts_with("char") {
-            if let Some(value) = KitNameDeployed::parse(&datum.value) {
-                characters.push(value);
+        for datum in &data {
+            if datum.key.starts_with("class") {
+                if let Some(value) = PlayerClass::parse(&datum.value) {
+                    classes.push(value);
+                }
+            } else if datum.key.starts_with("char") {
+                if let Some(value) = KitNameDeployed::parse(&datum.value) {
+                    characters.push(value);
+                }
             }
         }
-    }
 
-    for class in classes {
-        // Classes are active if atleast one character from the class is deployed
-        let is_active = characters
-            .iter()
-            .any(|char| char.kit_name.contains(class.name) && char.deployed);
-        if is_active {
-            total_level += class.level as u32;
+        for class in classes {
+            // Classes are active if atleast one character from the class is deployed
+            let is_active = characters
+                .iter()
+                .any(|char| char.kit_name.contains(class.name) && char.deployed);
+            if is_active {
+                total_level += class.level as u32;
+            }
+            total_promotions += class.promotions;
         }
-        total_promotions += class.promotions;
-    }
-    // 30 -> 20 from leveling class + 10 bonus for promoting
-    let rating = total_promotions * 30 + total_level;
-    Ok(LeaderboardEntry {
-        player_id: player.id,
-        player_name: player.display_name,
-        // Rank is not computed yet at this stage
-        rank: 0,
-        value: rating,
+
+        // 30 -> 20 from leveling class + 10 bonus for promoting
+        let rating: u32 = total_promotions * 30 + total_level;
+        Ok(LeaderboardEntry {
+            player_id: player.id,
+            player_name: player.display_name,
+            // Rank is not computed yet at this stage
+            rank: 0,
+            value: rating,
+        })
     })
 }
 
@@ -279,15 +241,17 @@ async fn compute_n7_player(db: DatabaseConnection, player: Player) -> DbResult<L
 ///
 /// `db`     The database connection
 /// `player` The player to rank
-async fn compute_cp_player(db: DatabaseConnection, player: Player) -> DbResult<LeaderboardEntry> {
-    let value = PlayerData::get_challenge_points(&db, player.id)
-        .await
-        .unwrap_or(0);
-    Ok(LeaderboardEntry {
-        player_id: player.id,
-        player_name: player.display_name,
-        // Rank is not computed yet at this stage
-        rank: 0,
-        value,
+fn compute_cp_player(db: &'static DatabaseConnection, player: Player) -> Lf {
+    Box::pin(async move {
+        let value = PlayerData::get_challenge_points(db, player.id)
+            .await
+            .unwrap_or(0);
+        Ok(LeaderboardEntry {
+            player_id: player.id,
+            player_name: player.display_name,
+            // Rank is not computed yet at this stage
+            rank: 0,
+            value,
+        })
     })
 }

@@ -1,11 +1,8 @@
 use super::{
-    models::{MeshState, RemoveReason},
-    player::GamePlayer,
-    AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GameSnapshot,
-    RemovePlayerType,
+    models::MeshState, AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState,
+    GamePlayer, GameSnapshot,
 };
 use crate::{services::matchmaking::rules::RuleSet, utils::types::GameID};
-use blaze_pk::packet::PacketBody;
 use interlink::prelude::*;
 use log::debug;
 use std::{collections::HashMap, sync::Arc};
@@ -19,7 +16,7 @@ pub struct GameManager {
     /// The map of games to the actual game address
     games: HashMap<GameID, Link<Game>>,
     /// Stored value for the ID to give the next game
-    next_id: u32,
+    next_id: GameID,
 }
 
 impl GameManager {
@@ -55,80 +52,51 @@ impl Handler<SnapshotQueryMessage> for GameManager {
         msg: SnapshotQueryMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
+        let SnapshotQueryMessage {
+            offset,
+            count,
+            include_net,
+        } = msg;
+
         // Create the futures using the handle action before passing
         // them to a future to be awaited
         let mut join_set = JoinSet::new();
-        let (count, more) = {
-            // Obtained an order set of the keys from the games map
-            let mut keys: Vec<GameID> = self.games.keys().copied().collect();
-            keys.sort();
 
-            // Whether there is more keys that what was requested
-            let more = keys.len() > msg.offset + msg.count;
+        // Obtained an order set of the keys from the games map
+        let mut keys: Vec<&GameID> = self.games.keys().collect();
+        keys.sort();
 
-            // Collect the keys we will be using
-            let keys: Vec<GameID> = keys.into_iter().skip(msg.offset).take(msg.count).collect();
-            let keys_count = keys.len();
+        // Whether there is more keys that what was requested
+        let more = keys.len() > offset + count;
 
-            for key in keys {
-                let game = self.games.get(&key).cloned();
-                if let Some(link) = game {
-                    join_set.spawn(async move {
-                        link.send(super::SnapshotMessage {
-                            include_net: msg.include_net,
-                        })
-                        .await
-                        .ok()
-                    });
-                }
-            }
-
-            (keys_count, more)
-        };
+        // Spawn tasks for obtaining snapshots to each game
+        keys.into_iter()
+            // Skip to the desired offset
+            .skip(offset)
+            // Take the desired number of keys
+            .take(count)
+            // Take the game links for the keys
+            .filter_map(|key| self.games.get(key))
+            // Clone the obtained game links
+            .cloned()
+            // Spawn the snapshot tasks
+            .for_each(|game| {
+                join_set
+                    .spawn(async move { game.send(super::SnapshotMessage { include_net }).await });
+            });
 
         Fr::new(Box::pin(async move {
-            let mut snapshots = Vec::with_capacity(count);
+            // Allocate a list for the snapshots
+            let mut snapshots = Vec::with_capacity(join_set.len());
+
+            // Recieve all the snapshots from their tasks
             while let Some(result) = join_set.join_next().await {
-                if let Ok(Some(snapshot)) = result {
+                if let Ok(Ok(snapshot)) = result {
                     snapshots.push(snapshot);
                 }
             }
+
             (snapshots, more)
-        }))
-    }
-}
-
-/// Message for taking a snapshot of a specific game
-/// which will return a snapshot of the game if it
-/// exists
-#[derive(Message)]
-#[msg(rtype = "Option<GameSnapshot>")]
-pub struct SnapshotMessage {
-    /// The ID of the game to take the snapshot of
-    pub game_id: GameID,
-    /// Whether to include sensitively player net info
-    pub include_net: bool,
-}
-
-/// Handler for snapshot messages for a specific game
-impl Handler<SnapshotMessage> for GameManager {
-    type Response = Fr<SnapshotMessage>;
-
-    fn handle(&mut self, msg: SnapshotMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        // Link to the game
-        let link = self.games.get(&msg.game_id).cloned();
-
-        Fr::new(Box::pin(async move {
-            let link = match link {
-                Some(value) => value,
-                None => return None,
-            };
-
-            link.send(super::SnapshotMessage {
-                include_net: msg.include_net,
-            })
-            .await
-            .ok()
         }))
     }
 }
@@ -156,7 +124,9 @@ impl Handler<CreateMessage> for GameManager {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         let id = self.next_id;
-        self.next_id += 1;
+
+        self.next_id = self.next_id.wrapping_add(1);
+
         msg.host.state = MeshState::Connected;
 
         let link = Game::start(id, msg.attributes, msg.setting);
@@ -210,90 +180,31 @@ pub enum TryAddResult {
 
 /// Handler for attempting to add a player
 impl Handler<TryAddMessage> for GameManager {
-    type Response = Sfr<Self, TryAddMessage>;
+    type Response = Fr<TryAddMessage>;
 
     fn handle(&mut self, msg: TryAddMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        Sfr::new(move |service: &mut GameManager, _ctx| {
-            Box::pin(async move {
-                for (id, link) in &service.games {
-                    let join_state = match link
-                        .send(CheckJoinableMessage {
-                            rule_set: Some(msg.rule_set.clone()),
-                        })
-                        .await
-                    {
-                        Ok(value) => value,
-                        // Game is no longer available
-                        Err(_) => continue,
-                    };
-
-                    if let GameJoinableState::Joinable = join_state {
-                        debug!("Found matching game (GID: {})", id);
-                        let _ = link.do_send(AddPlayerMessage { player: msg.player });
-
-                        return TryAddResult::Success;
-                    }
-                }
-                TryAddResult::Failure(msg.player)
-            })
-        })
-    }
-}
-
-/// Message for removing a player from a game
-#[derive(Message)]
-pub struct RemovePlayerMessage {
-    /// The ID of the game to remove from
-    pub game_id: GameID,
-    /// The ID of the player (Session or PID depending on RemovePlayerType)
-    pub id: u32,
-    /// The reason for removing the player
-    pub reason: RemoveReason,
-    /// The type of player removal
-    pub ty: RemovePlayerType,
-}
-
-/// Handler for removing a player from a game
-impl Handler<RemovePlayerMessage> for GameManager {
-    type Response = Fr<RemovePlayerMessage>;
-
-    fn handle(
-        &mut self,
-        msg: RemovePlayerMessage,
-        ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        // Link back to the game manager
-        let return_link = ctx.link();
-
-        // Link to the target game
-        let link = self.games.get(&msg.game_id).cloned();
+        // Take a copy of the current games list
+        let games = self.games.clone();
 
         Fr::new(Box::pin(async move {
-            let link = match link {
-                Some(value) => value,
-                None => return,
+            let player = msg.player;
+
+            // Message asking for the game joinable state
+            let msg = CheckJoinableMessage {
+                rule_set: Some(msg.rule_set),
             };
 
-            let is_empty = match link
-                .send(super::RemovePlayerMessage {
-                    id: msg.id,
-                    reason: msg.reason,
-                    ty: msg.ty,
-                })
-                .await
-            {
-                Ok(value) => value,
-                Err(_) => return,
-            };
-
-            if is_empty {
-                // Remove the empty game
-                let _ = return_link
-                    .send(RemoveGameMessage {
-                        game_id: msg.game_id,
-                    })
-                    .await;
+            // Attempt to find a game thats joinable
+            for (id, link) in games {
+                // Check if the game is joinable
+                if let Ok(GameJoinableState::Joinable) = link.send(msg.clone()).await {
+                    debug!("Found matching game (GID: {})", id);
+                    let _ = link.do_send(AddPlayerMessage { player });
+                    return TryAddResult::Success;
+                }
             }
+
+            TryAddResult::Failure(player)
         }))
     }
 }
@@ -314,37 +225,5 @@ impl Handler<RemoveGameMessage> for GameManager {
         if let Some(value) = self.games.remove(&msg.game_id) {
             value.stop();
         }
-    }
-}
-
-/// Message for getting the encoded packet data for a game. Used
-/// by the game lookup messages from Origin invites
-#[derive(Message)]
-#[msg(rtype = "Option<PacketBody>")]
-pub struct GetGameDataMessage {
-    /// The ID of the game to get the data for
-    pub game_id: GameID,
-}
-
-/// Handler for getting game data
-impl Handler<GetGameDataMessage> for GameManager {
-    type Response = Fr<GetGameDataMessage>;
-
-    fn handle(
-        &mut self,
-        msg: GetGameDataMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        let link = self.games.get(&msg.game_id).cloned();
-
-        let link = match link {
-            Some(value) => value,
-            None => return Fr::ready(None),
-        };
-
-        Fr::new(Box::pin(async move {
-            let data = link.send(super::GetGameDataMessage {}).await.ok()?;
-            Some(data)
-        }))
     }
 }

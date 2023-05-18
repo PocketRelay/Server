@@ -6,15 +6,12 @@ use crate::{
     database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
     services::{
-        game::{
-            manager::RemovePlayerMessage, models::RemoveReason, player::GamePlayer,
-            RemovePlayerType,
-        },
+        game::{manager::GetGameMessage, models::RemoveReason, GamePlayer, RemovePlayerMessage},
         matchmaking::RemoveQueueMessage,
         sessions::{AddMessage, RemoveMessage},
         Services,
     },
-    state::GlobalState,
+    state::App,
     utils::{
         components::{self, Components, UserSessions},
         models::{NetData, NetGroups, Port, QosNetworkData, UpdateExtDataAttr},
@@ -24,7 +21,7 @@ use crate::{
 use blaze_pk::{
     codec::Encodable,
     packet::{Packet, PacketComponents, PacketDebug},
-    router::{HandleError, Router},
+    router::HandleError,
     tag::TdfType,
     value_type,
     writer::TdfWriter,
@@ -35,23 +32,6 @@ use std::{fmt::Debug, io};
 
 pub mod models;
 pub mod routes;
-
-static mut ROUTER: Option<Router<Components, SessionLink>> = None;
-
-pub fn router() -> &'static Router<Components, SessionLink> {
-    unsafe {
-        match &ROUTER {
-            Some(value) => value,
-            None => panic!("Main server router not yet initialized"),
-        }
-    }
-}
-
-pub fn init_router() {
-    unsafe {
-        ROUTER = Some(routes::router());
-    }
-}
 
 /// Structure for storing a client session. This includes the
 /// network stream for the client along with global state and
@@ -83,8 +63,7 @@ pub struct SessionData {
 
 impl Service for Session {
     fn stopping(&mut self) {
-        let services = GlobalState::services();
-        self.remove_games(services);
+        let services = App::services();
         self.clear_auth(services);
         debug!("Session stopped (SID: {})", self.id);
     }
@@ -159,7 +138,6 @@ impl Handler<GetGamePlayerMessage> for Session {
             None => return Mr(None),
         };
         Mr(Some(GamePlayer::new(
-            self.id,
             player,
             self.data.net.clone(),
             ctx.link(),
@@ -173,14 +151,10 @@ pub struct SetPlayerMessage(pub Option<Player>);
 impl Handler<SetPlayerMessage> for Session {
     type Response = ();
     fn handle(&mut self, msg: SetPlayerMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
-        let services = GlobalState::services();
+        let services = App::services();
 
-        // Take the old player and remove it if possible
-        if let Some(old_player) = self.data.player.take() {
-            let _ = services.sessions.do_send(RemoveMessage {
-                player_id: old_player.id,
-            });
-        }
+        // Clear the current authentication
+        self.clear_auth(services);
 
         // If we are setting a new player
         if let Some(player) = msg.0 {
@@ -202,18 +176,6 @@ pub trait PushExt {
 impl PushExt for Link<Session> {
     fn push(&self, packet: Packet) {
         let _ = self.do_send(WriteMessage(packet));
-    }
-}
-
-#[derive(Message)]
-#[msg(rtype = "SessionID")]
-pub struct GetIdMessage;
-
-impl Handler<GetIdMessage> for Session {
-    type Response = Mr<GetIdMessage>;
-
-    fn handle(&mut self, _msg: GetIdMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        Mr(self.id)
     }
 }
 
@@ -278,7 +240,7 @@ impl StreamHandler<io::Result<Packet>> for Session {
             self.debug_log_packet("Read", &packet);
             let mut addr = ctx.link();
             tokio::spawn(async move {
-                let router = router();
+                let router = App::router();
                 let response = match router.handle(&mut addr, packet) {
                     // Await the handler response future
                     Ok(fut) => fut.await,
@@ -523,27 +485,45 @@ impl Session {
 
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    pub fn remove_games(&mut self, services: &Services) {
-        let game = self.data.game.take();
-        let _ = if let Some(game_id) = game {
-            services.game_manager.do_send(RemovePlayerMessage {
-                game_id,
-                id: self.id,
-                reason: RemoveReason::Generic,
-                ty: RemovePlayerType::Session,
-            })
-        } else {
-            services.matchmaking.do_send(RemoveQueueMessage {
-                session_id: self.id,
-            })
+    pub fn remove_games(&mut self, services: &'static Services) {
+        // Don't attempt to remove if theres no active player
+        let player_id = match &self.data.player {
+            Some(value) => value.id,
+            None => return,
         };
+
+        if let Some(game_id) = self.data.game.take() {
+            // Remove the player from the game
+            tokio::spawn(async move {
+                // Obtain the current game
+                let game = match services.game_manager.send(GetGameMessage { game_id }).await {
+                    Ok(Some(value)) => value,
+                    _ => return,
+                };
+
+                // Send the remove message
+                let _ = game
+                    .send(RemovePlayerMessage {
+                        id: player_id,
+                        reason: RemoveReason::Generic,
+                    })
+                    .await;
+            });
+        } else {
+            // Remove the player from matchmaking if present
+            let _ = services
+                .matchmaking
+                .do_send(RemoveQueueMessage { player_id });
+        }
     }
 
     /// Removes the player from the authenticated sessions list
     /// if the player is authenticated
-    pub fn clear_auth(&mut self, services: &Services) {
+    pub fn clear_auth(&mut self, services: &'static Services) {
+        self.remove_games(services);
+
         // Check that theres authentication
-        let player = match &self.data.player {
+        let player = match self.data.player.take() {
             Some(value) => value,
             None => return,
         };
@@ -644,14 +624,14 @@ impl Encodable for SessionUpdate<'_> {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_value(b"DATA", &self.session.data);
 
-        writer.tag_group(b"USER");
-        writer.tag_u32(b"AID", self.player_id);
-        writer.tag_u32(b"ALOC", 0x64654445);
-        writer.tag_empty_blob(b"EXBB");
-        writer.tag_u8(b"EXID", 0);
-        writer.tag_u32(b"ID", self.player_id);
-        writer.tag_str(b"NAME", self.display_name);
-        writer.tag_group_end();
+        writer.group(b"USER", |writer| {
+            writer.tag_u32(b"AID", self.player_id);
+            writer.tag_u32(b"ALOC", 0x64654445);
+            writer.tag_empty_blob(b"EXBB");
+            writer.tag_u8(b"EXID", 0);
+            writer.tag_u32(b"ID", self.player_id);
+            writer.tag_str(b"NAME", self.display_name);
+        });
     }
 }
 
@@ -667,14 +647,14 @@ impl Encodable for LookupResponse {
 
         writer.tag_u8(b"FLGS", 2);
 
-        writer.tag_group(b"USER");
-        writer.tag_u32(b"AID", self.player_id);
-        writer.tag_u32(b"ALOC", 0x64654445);
-        writer.tag_empty_blob(b"EXBB");
-        writer.tag_u8(b"EXID", 0);
-        writer.tag_u32(b"ID", self.player_id);
-        writer.tag_str(b"NAME", &self.display_name);
-        writer.tag_group_end();
+        writer.group(b"USER", |writer| {
+            writer.tag_u32(b"AID", self.player_id);
+            writer.tag_u32(b"ALOC", 0x64654445);
+            writer.tag_empty_blob(b"EXBB");
+            writer.tag_u8(b"EXID", 0);
+            writer.tag_u32(b"ID", self.player_id);
+            writer.tag_str(b"NAME", &self.display_name);
+        });
     }
 }
 

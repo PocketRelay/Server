@@ -5,18 +5,26 @@
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use log::error;
-use ring::hmac::{self, HMAC_SHA256};
+use ring::hmac::{self, Key, HMAC_SHA256};
+use sea_orm::DatabaseConnection;
 use std::{
     path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
-use tokio::fs::{read, write};
+use tokio::{
+    fs::{write, File},
+    io::{self, AsyncReadExt},
+};
+
+use crate::{database::entities::Player, state::App, utils::types::PlayerID};
+
+use super::Services;
 
 /// Token provider and verification service
 pub struct Tokens {
     /// HMAC key used for computing signatures
-    key: hmac::Key,
+    key: Key,
 }
 
 impl Tokens {
@@ -29,45 +37,55 @@ impl Tokens {
         // Path to the file containing the server secret value
         let secret_path = Path::new("data/secret.bin");
 
+        // The bytes of the secret
+        let mut secret = [0u8; 64];
+
         // Attempt to load existing secret
-        let secret: Option<Vec<u8>> = if secret_path.exists() {
-            match read(secret_path).await {
-                Ok(value) => Some(value),
-                Err(err) => {
-                    error!("Failed to read secrets file: {:?}", err);
-                    None
-                }
+        if secret_path.exists() {
+            if let Err(err) = Self::read_secret(&mut secret, secret_path).await {
+                error!("Failed to read secrets file: {:?}", err);
+            } else {
+                let key = Key::new(HMAC_SHA256, &secret);
+
+                // Return the loaded secret key
+                return Self { key };
             }
-        } else {
-            None
-        };
+        }
 
-        let key = match secret {
-            // Handle valid key cases
-            Some(ref value) if !value.is_empty() => hmac::Key::new(HMAC_SHA256, value),
-            // Invalid or missing key cases, compute a new secret to use as a key
-            _ => {
-                // Generate random secret bytes
-                let mut secret = [0u8; 64];
-                OsRng.fill_bytes(&mut secret);
+        // Generate random secret bytes
+        OsRng.fill_bytes(&mut secret);
 
-                // Save the created secret
-                if let Err(err) = write(secret_path, &secret).await {
-                    error!("Failed to write secrets file: {:?}", err);
-                }
+        // Save the created secret
+        if let Err(err) = write(secret_path, &secret).await {
+            error!("Failed to write secrets file: {:?}", err);
+        }
 
-                hmac::Key::new(HMAC_SHA256, &secret)
-            }
-        };
-
+        let key = Key::new(HMAC_SHA256, &secret);
         Self { key }
+    }
+
+    /// Reads the secret from the secrets file into the provided buffer
+    /// returning whether the entire secret could be read
+    ///
+    /// `out` The buffer to read the secret to
+    async fn read_secret(out: &mut [u8], path: &Path) -> io::Result<()> {
+        let mut file = File::open(path).await?;
+        file.read_exact(out).await?;
+        Ok(())
+    }
+
+    /// Claim by directly obtaining the services reference. This
+    /// exists because everywhere claim is used its always using
+    /// a call to [`App::services`] before
+    pub fn service_claim(id: u32) -> String {
+        let services = App::services();
+        services.tokens.claim(id)
     }
 
     /// Creates a new claim using the provided claim value
     ///
-    /// `claim` The token claim value
     /// `id`    The ID of the player to claim for
-    pub fn claim(&self, id: u32) -> String {
+    fn claim(&self, id: u32) -> String {
         // Compute expiry timestamp
         let exp = SystemTime::now()
             .checked_add(Self::EXPIRY_TIME)
@@ -93,12 +111,31 @@ impl Tokens {
         [msg, sig].join(".")
     }
 
+    /// Verify by directly obtaining the services reference. This
+    /// exists because everywhere verify is used its always using
+    /// a call to [`App::services`] before
+    ///
+    /// Looks up the player that token verifies and treats missing
+    /// players as invalid tokens.
+    pub async fn service_verify(
+        db: &DatabaseConnection,
+        token: &str,
+    ) -> Result<Player, VerifyError> {
+        let services: &'static Services = App::services();
+        let player_id: PlayerID = services.tokens.verify(token)?;
+
+        Player::by_id(db, player_id)
+            .await
+            .map_err(|_| VerifyError::Server)?
+            .ok_or(VerifyError::Invalid)
+    }
+
     /// Verifies a token claims returning the claimed ID
     ///
     /// `token` The token to verify
-    pub fn verify(&self, token: &str) -> Result<u32, VerifyError> {
+    fn verify(&self, token: &str) -> Result<u32, VerifyError> {
         // Split the token parts
-        let (msg_raw, sig) = match token.split_once('.') {
+        let (msg_raw, sig_raw) = match token.split_once('.') {
             Some(value) => value,
             None => return Err(VerifyError::Invalid),
         };
@@ -107,8 +144,9 @@ impl Tokens {
         let mut msg = [0u8; 12];
         Base64UrlUnpadded::decode(msg_raw, &mut msg)?;
 
-        // Decode the message signature
-        let sig: Vec<u8> = Base64UrlUnpadded::decode_vec(sig)?;
+        // Decode 32byte signature (SHA256)
+        let mut sig = [0u8; 32];
+        Base64UrlUnpadded::decode(sig_raw, &mut sig)?;
 
         // Verify the signature
         if hmac::verify(&self.key, &msg, &sig).is_err() {
@@ -147,6 +185,9 @@ pub enum VerifyError {
     /// The token is invalid
     #[error("Invalid token")]
     Invalid,
+    /// Internal server error
+    #[error("Server error")]
+    Server,
 }
 
 impl From<base64ct::Error> for VerifyError {

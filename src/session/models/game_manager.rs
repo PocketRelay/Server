@@ -27,8 +27,8 @@ pub struct CreateGameRequest {
 
 impl Decodable for CreateGameRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let attributes: AttrMap = reader.tag("ATTR")?;
-        let setting: u16 = reader.tag("GSET")?;
+        let attributes: AttrMap = reader.tag(b"ATTR")?;
+        let setting: u16 = reader.tag(b"GSET")?;
         Ok(Self {
             attributes,
             setting,
@@ -61,9 +61,9 @@ pub struct RemovePlayerRequest {
 
 impl Decodable for RemovePlayerRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let game_id: GameID = reader.tag("GID")?;
-        let player_id: PlayerID = reader.tag("PID")?;
-        let reason: RemoveReason = reader.tag("REAS")?;
+        let game_id: GameID = reader.tag(b"GID")?;
+        let player_id: PlayerID = reader.tag(b"PID")?;
+        let reason: RemoveReason = reader.tag(b"REAS")?;
         Ok(Self {
             game_id,
             player_id,
@@ -81,8 +81,8 @@ pub struct SetAttributesRequest {
 
 impl Decodable for SetAttributesRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let attributes = reader.tag("ATTR")?;
-        let game_id: GameID = reader.tag("GID")?;
+        let attributes = reader.tag(b"ATTR")?;
+        let game_id: GameID = reader.tag(b"GID")?;
 
         Ok(Self {
             attributes,
@@ -98,8 +98,8 @@ pub struct SetStateRequest {
 
 impl Decodable for SetStateRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let game_id: GameID = reader.tag("GID")?;
-        let state: GameState = reader.tag("GSTA")?;
+        let game_id: GameID = reader.tag(b"GID")?;
+        let state: GameState = reader.tag(b"GSTA")?;
         Ok(Self { game_id, state })
     }
 }
@@ -110,8 +110,8 @@ pub struct SetSettingRequest {
 
 impl Decodable for SetSettingRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let game_id: GameID = reader.tag("GID")?;
-        let setting: u16 = reader.tag("GSET")?;
+        let game_id: GameID = reader.tag(b"GID")?;
+        let setting: u16 = reader.tag(b"GSET")?;
         Ok(Self { game_id, setting })
     }
 }
@@ -130,12 +130,12 @@ pub struct MeshTarget {
 
 impl Decodable for UpdateMeshRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let game_id: GameID = reader.tag("GID")?;
-        let count: usize = reader.until_list("TARG", TdfType::Group)?;
+        let game_id: GameID = reader.tag(b"GID")?;
+        let count: usize = reader.until_list(b"TARG", TdfType::Group)?;
 
         let target = if count > 0 {
-            let player_id: PlayerID = reader.tag("PID")?;
-            let state: MeshState = reader.tag("STAT")?;
+            let player_id: PlayerID = reader.tag(b"PID")?;
+            let state: MeshState = reader.tag(b"STAT")?;
             let target = MeshTarget { player_id, state };
             Some(target)
         } else {
@@ -155,13 +155,13 @@ pub struct MatchmakingRequest {
 
 impl Decodable for MatchmakingRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.until_tag("CRIT", TdfType::Group)?;
-        let rule_count: usize = reader.until_list("RLST", TdfType::Group)?;
+        reader.until_tag(b"CRIT", TdfType::Group)?;
+        let rule_count: usize = reader.until_list(b"RLST", TdfType::Group)?;
 
         let mut rules: Vec<(String, String)> = Vec::with_capacity(rule_count);
         for _ in 0..rule_count {
-            let name: String = reader.tag("NAME")?;
-            let values_count: usize = reader.until_list("VALU", TdfType::String)?;
+            let name: String = reader.tag(b"NAME")?;
+            let values_count: usize = reader.until_list(b"VALU", TdfType::String)?;
             if values_count < 1 {
                 continue;
             }
@@ -200,7 +200,7 @@ pub struct GetGameDataRequest {
 
 impl Decodable for GetGameDataRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let game_list: Vec<GameID> = reader.tag("GLST")?;
+        let game_list: Vec<GameID> = reader.tag(b"GLST")?;
         Ok(Self { game_list })
     }
 }
@@ -212,8 +212,8 @@ pub struct JoinGameRequest {
 
 impl Decodable for JoinGameRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.until_tag("USER", TdfType::Group)?;
-        let target_id: PlayerID = reader.tag("ID")?;
+        reader.until_tag(b"USER", TdfType::Group)?;
+        let target_id: PlayerID = reader.tag(b"ID")?;
         Ok(Self { target_id })
     }
 }

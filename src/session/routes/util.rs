@@ -7,38 +7,20 @@ use crate::{
         },
         DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
-    state::{self, GlobalState},
-    utils::components::{Components as C, Util as U},
+    state::{self, App},
 };
 use base64ct::{Base64, Encoding};
-use blaze_pk::{router::Router, types::TdfMap};
+use blaze_pk::types::TdfMap;
+use embeddy::Embedded;
 use flate2::{write::ZlibEncoder, Compression};
 use interlink::prelude::Link;
 use log::{error, warn};
-use rust_embed::RustEmbed;
 use std::{
     io::Write,
     path::Path,
-    str::Chars,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::fs::read;
-
-/// Routing function for adding all the routes in this file to the
-/// provided router
-///
-/// `router` The router to add to
-pub fn route(router: &mut Router<C, SessionLink>) {
-    router.route(C::Util(U::PreAuth), handle_pre_auth);
-    router.route(C::Util(U::PostAuth), handle_post_auth);
-    router.route(C::Util(U::Ping), handle_ping);
-    router.route(C::Util(U::FetchClientConfig), handle_fetch_client_config);
-    router.route(C::Util(U::SuspendUserPing), handle_suspend_user_ping);
-    router.route(C::Util(U::UserSettingsSave), handle_user_settings_save);
-    router.route(C::Util(U::GetTelemetryServer), handle_get_telemetry_server);
-    router.route(C::Util(U::GetTickerServer), handle_get_ticker_server);
-    router.route(C::Util(U::UserSettingsLoadAll), handle_load_settings);
-}
 
 /// Handles retrieving the details about the telemetry server
 ///
@@ -48,7 +30,7 @@ pub fn route(router: &mut Router<C, SessionLink>) {
 /// Content: {}
 /// ```
 ///
-async fn handle_get_telemetry_server() -> TelemetryServer {
+pub async fn handle_get_telemetry_server() -> TelemetryServer {
     TelemetryServer
 }
 
@@ -60,7 +42,7 @@ async fn handle_get_telemetry_server() -> TelemetryServer {
 /// Content: {}
 /// ```
 ///
-async fn handle_get_ticker_server() -> TickerServer {
+pub async fn handle_get_ticker_server() -> TickerServer {
     TickerServer
 }
 
@@ -95,7 +77,7 @@ async fn handle_get_ticker_server() -> TickerServer {
 ///     }
 /// }
 /// ```
-async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthResponse> {
+pub async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthResponse> {
     let host_target = match session.send(GetHostTarget {}).await {
         Ok(value) => value,
         Err(_) => return Err(ServerError::InvalidInformation),
@@ -112,7 +94,7 @@ async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthRespo
 /// ID: 27
 /// Content: {}
 /// ```
-async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthResponse> {
+pub async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthResponse> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await
@@ -141,7 +123,7 @@ async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthRes
 /// Content: {}
 /// ```
 ///
-async fn handle_ping() -> PingResponse {
+pub async fn handle_ping() -> PingResponse {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
@@ -171,7 +153,7 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 ///     "CFID": "ME3_DATA"
 /// }
 /// ```
-async fn handle_fetch_client_config(
+pub async fn handle_fetch_client_config(
     session: &mut SessionLink,
     req: FetchConfigRequest,
 ) -> ServerResult<FetchConfigResponse> {
@@ -218,30 +200,18 @@ fn load_entitlements() -> TdfMap<String, String> {
 async fn load_coalesced() -> ServerResult<ChunkMap> {
     let local_path = Path::new("data/coalesced.bin");
     if local_path.is_file() {
-        let bytes = match read(local_path).await {
-            Ok(value) => value,
-            Err(_) => {
-                error!("Unable to load local coalesced from data/coalesced.bin falling back to default.");
-                return default_coalesced();
-            }
-        };
-        match generate_coalesced(&bytes) {
-            Ok(value) => Ok(value),
-            Err(_) => {
-                error!("Unable to compress local coalesced from data/coalesced.bin falling back to default.");
-                default_coalesced()
+        if let Ok(bytes) = read(local_path).await {
+            if let Ok(map) = generate_coalesced(&bytes) {
+                return Ok(map);
             }
         }
-    } else {
-        default_coalesced()
-    }
-}
 
-/// Generates the compressed version of the default coalesced
-/// this default coalesced file is stored at
-///
-/// src/resources/data/coalesced.bin
-fn default_coalesced() -> ServerResult<ChunkMap> {
+        error!(
+            "Unable to compress local coalesced from data/coalesced.bin falling back to default."
+        );
+    }
+
+    // Fallback to embedded default coalesced.bin
     let bytes: &[u8] = include_bytes!("../../resources/data/coalesced.bin");
     generate_coalesced(bytes)
 }
@@ -287,27 +257,22 @@ fn create_base64_map(bytes: &[u8]) -> ChunkMap {
 
     let encoded: String = Base64::encode_string(bytes);
     let length = encoded.len();
+    let mut output: ChunkMap = TdfMap::with_capacity((length / CHUNK_LENGTH) + 2);
 
-    let mut output: ChunkMap = TdfMap::with_capacity(length / CHUNK_LENGTH);
-
-    let mut chars: Chars = encoded.chars();
     let mut index = 0;
+    let mut offset = 0;
 
-    loop {
-        let mut value = String::with_capacity(CHUNK_LENGTH);
-        let mut i = 0;
-        while i < CHUNK_LENGTH {
-            let next_char = match chars.next() {
-                Some(value) => value,
-                None => break,
-            };
-            value.push(next_char);
-            i += 1;
-        }
-        output.insert(format!("CHUNK_{}", index), value);
-        if i < CHUNK_LENGTH {
-            break;
-        }
+    while offset < length {
+        let o1 = offset;
+        offset += CHUNK_LENGTH;
+
+        let slice = if offset < length {
+            &encoded[o1..offset]
+        } else {
+            &encoded[o1..]
+        };
+
+        output.insert(format!("CHUNK_{}", index), slice);
         index += 1;
     }
 
@@ -326,38 +291,26 @@ async fn talk_file(lang: &str) -> ServerResult<ChunkMap> {
     let local_path = Path::new(&file_name);
 
     if local_path.is_file() {
-        let bytes = match read(local_path).await {
-            Ok(value) => value,
-            Err(_) => {
-                error!("Unable to load local coalesced from data/coalesced.bin falling back to default.");
-                return default_coalesced();
-            }
-        };
-        Ok(create_base64_map(&bytes))
-    } else {
-        Ok(default_talk_file(lang))
+        if let Ok(bytes) = read(local_path).await {
+            return Ok(create_base64_map(&bytes));
+        }
+        error!("Unable to load local talk file falling back to default.");
     }
-}
 
-/// Default talk file values
-#[derive(RustEmbed)]
-#[folder = "src/resources/data/tlk"]
-struct DefaultTlkFiles;
-
-/// Generates the base64 map for the default talk file for the
-/// provided langauge. Will default to the default.tlk file if
-/// the language is not found
-///
-/// `lang` The language to get the default for
-fn default_talk_file(lang: &str) -> ChunkMap {
+    // Load default talk file
     let file_name = format!("{}.tlk", lang);
-    if let Some(file) = DefaultTlkFiles::get(&file_name) {
-        create_base64_map(&file.data)
+    Ok(if let Some(file) = DefaultTlkFiles::get(&file_name) {
+        create_base64_map(file)
     } else {
         let bytes: &[u8] = include_bytes!("../../resources/data/tlk/default.tlk");
         create_base64_map(bytes)
-    }
+    })
 }
+
+/// Default talk file values
+#[derive(Embedded)]
+#[folder = "src/resources/data/tlk"]
+struct DefaultTlkFiles;
 
 /// Loads the messages that should be displayed to the client and
 /// returns them in a list.
@@ -375,11 +328,9 @@ fn messages() -> TdfMap<String, String> {
         ty: MessageType::MenuTerminal,
     };
 
-    let messages = vec![intro];
-
     let mut config = TdfMap::new();
     let mut index = 1;
-    for message in messages {
+    for message in [intro] {
         message.append(index, &mut config);
         index += 1;
     }
@@ -497,7 +448,7 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
     );
 
     let mut config = TdfMap::with_capacity(15);
-    config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/gaw"));
+    config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/"));
     config.insert("IMG_MNGR_BASE_URL", format!("{prefix}/content/"));
     config.insert("IMG_MNGR_MAX_BYTES", "1048576");
     config.insert("IMG_MNGR_MAX_IMAGES", "5");
@@ -526,7 +477,7 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
 ///     "TVAL": 90000000
 /// }
 /// ```
-async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
+pub async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
     match req.value {
         20000000 => Err(ServerError::Suspend12D),
         90000000 => Err(ServerError::Suspend12E),
@@ -545,7 +496,7 @@ async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
 ///     "UID": 0
 /// }
 /// ```
-async fn handle_user_settings_save(
+pub async fn handle_user_settings_save(
     session: &mut SessionLink,
     req: SettingsSaveRequest,
 ) -> ServerResult<()> {
@@ -555,8 +506,8 @@ async fn handle_user_settings_save(
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    let db = GlobalState::database();
-    if let Err(err) = PlayerData::set(&db, player, req.key, req.value).await {
+    let db = App::database();
+    if let Err(err) = PlayerData::set(db, player, req.key, req.value).await {
         warn!("Failed to update player data: {err:?}");
         Err(ServerError::ServerUnavailable)
     } else {
@@ -572,17 +523,17 @@ async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<SettingsResponse> {
+pub async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<SettingsResponse> {
     let player = session
         .send(GetPlayerIdMessage)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
 
-    let db = GlobalState::database();
+    let db = App::database();
 
     // Load the player data from the database
-    let data: Vec<PlayerData> = match PlayerData::all(&db, player).await {
+    let data: Vec<PlayerData> = match PlayerData::all(db, player).await {
         Ok(value) => value,
         Err(err) => {
             error!("Failed to load player data: {err:?}");
