@@ -1,5 +1,5 @@
 use super::{
-    models::{GameSettings, MeshState},
+    models::{DatalessContext, GameSettings, GameSetupContext, MeshState},
     AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
     GameSnapshot,
 };
@@ -133,7 +133,10 @@ impl Handler<CreateMessage> for GameManager {
         let link = Game::start(id, msg.attributes, msg.setting);
         self.games.insert(id, link.clone());
 
-        let _ = link.do_send(AddPlayerMessage { player: msg.host });
+        let _ = link.do_send(AddPlayerMessage {
+            player: msg.host,
+            context: GameSetupContext::Dataless(DatalessContext::CreateGameSetup),
+        });
 
         Mr((link, id))
     }
@@ -200,7 +203,11 @@ impl Handler<TryAddMessage> for GameManager {
                 // Check if the game is joinable
                 if let Ok(GameJoinableState::Joinable) = link.send(msg.clone()).await {
                     debug!("Found matching game (GID: {})", id);
-                    let _ = link.do_send(AddPlayerMessage { player });
+                    let msid = player.player.id;
+                    let _ = link.do_send(AddPlayerMessage {
+                        player,
+                        context: GameSetupContext::Matchmaking(msid),
+                    });
                     return TryAddResult::Success;
                 }
             }

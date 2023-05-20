@@ -1,7 +1,7 @@
 use super::{AttrMap, Game, GamePlayer};
 use crate::utils::{
     components::{Components, GameManager},
-    types::{GameID, GameSlot, PlayerID, SessionID},
+    types::{GameID, GameSlot, PlayerID},
 };
 use bitflags::bitflags;
 use blaze_pk::{
@@ -229,9 +229,28 @@ fn write_admin_list(writer: &mut TdfWriter, game: &Game) {
 
 const VSTR: &str = "ME3-295976325-179181965240128";
 
+pub enum GameSetupContext {
+    /// Context without additional data
+    Dataless(DatalessContext),
+    /// Context added from matchmaking
+    Matchmaking(u32),
+}
+
+#[derive(Debug, Copy, Clone)]
+#[repr(u8)]
+pub enum DatalessContext {
+    /// Session created the game
+    CreateGameSetup = 0x0,
+    /// Session joined by ID
+    JoinGameSetup = 0x1,
+    // IndirectJoinGameFromQueueSetup = 0x2,
+    // IndirectJoinGameFromReservationContext = 0x3,
+    // HostInjectionSetupContext = 0x4,
+}
+
 pub struct GameDetails<'a> {
     pub game: &'a Game,
-    pub msid: Option<SessionID>,
+    pub context: GameSetupContext,
 }
 
 impl Encodable for GameDetails<'_> {
@@ -307,20 +326,32 @@ impl Encodable for GameDetails<'_> {
             player.encode(game.id, slot, writer);
         }
 
-        // Join details
-        let union_value = if self.msid.is_some() { 0x3 } else { 0x0 };
-        writer.tag_union_start(b"REAS", union_value);
-        writer.group(b"VALU", |writer| {
-            if let Some(msid) = self.msid {
-                writer.tag_u16(b"FIT", 0x3f7a);
-                writer.tag_u16(b"MAXF", 0x5460);
-                writer.tag_u32(b"MSID", msid);
-                writer.tag_u8(b"RSLT", 0x2);
-                writer.tag_u32(b"USID", msid);
-            } else {
-                writer.tag_u8(b"DCTX", 0x0);
+        match &self.context {
+            GameSetupContext::Dataless(context) => {
+                writer.tag_union_start(b"REAS", 0x0);
+                writer.group(b"VALU", |writer| {
+                    writer.tag_u8(b"DCTX", (*context) as u8);
+                });
             }
-        });
+            GameSetupContext::Matchmaking(id) => {
+                writer.tag_union_start(b"REAS", 0x3);
+                writer.group(b"VALU", |writer| {
+                    writer.tag_u16(b"FIT", 0x3f7a);
+                    writer.tag_u16(b"MAXF", 0x5460);
+                    writer.tag_u32(b"MSID", *id);
+                    // TODO: Matchmaking result
+                    // SUCCESS_CREATED_GAME = 0
+                    // SUCCESS_JOINED_NEW_GAME = 1
+                    // SUCCESS_JOINED_EXISTING_GAME = 2
+                    // SESSION_TIMED_OUT = 3
+                    // SESSION_CANCELED = 4
+                    // SESSION_TERMINATED = 5
+                    // SESSION_ERROR_GAME_SETUP_FAILED = 6
+                    writer.tag_u8(b"RSLT", 0x2);
+                    writer.tag_u32(b"USID", *id);
+                });
+            }
+        }
     }
 }
 

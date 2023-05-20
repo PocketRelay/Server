@@ -176,6 +176,8 @@ impl Drop for GamePlayer {
 pub struct AddPlayerMessage {
     /// The player to add to the game
     pub player: GamePlayer,
+    /// Context to which the player should be added
+    pub context: GameSetupContext,
 }
 
 /// Handler for adding a player to the game
@@ -212,7 +214,7 @@ impl Handler<AddPlayerMessage> for Game {
         }
 
         // Notify the joiner of the game details
-        self.notify_game_setup(player, slot);
+        self.notify_game_setup(player, slot, msg.context);
 
         // Set current game of this player
         player.set_game(Some(self.id));
@@ -580,15 +582,13 @@ impl Game {
     ///
     /// `session` The session to notify
     /// `slot`    The slot the player is joining into
-    fn notify_game_setup(&self, player: &GamePlayer, slot: GameSlot) {
-        let msid = if slot == 0 {
-            None
-        } else {
-            Some(player.player.id)
-        };
+    fn notify_game_setup(&self, player: &GamePlayer, slot: GameSlot, context: GameSetupContext) {
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameSetup),
-            GameDetails { game: self, msid },
+            GameDetails {
+                game: self,
+                context,
+            },
         );
         player.link.push(packet);
     }

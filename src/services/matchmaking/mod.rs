@@ -1,5 +1,8 @@
 use crate::{
-    services::game::{AddPlayerMessage, CheckJoinableMessage, Game, GameJoinableState, GamePlayer},
+    services::game::{
+        models::GameSetupContext, AddPlayerMessage, CheckJoinableMessage, Game, GameJoinableState,
+        GamePlayer,
+    },
     utils::types::{GameID, PlayerID},
 };
 use interlink::prelude::*;
@@ -94,10 +97,13 @@ impl Handler<GameCreatedMessage> for Matchmaking {
                                 debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
                             }
 
+                            let msid = entry.player.player.id;
+
                             // Add the player to the game
                             if link
                                 .do_send(AddPlayerMessage {
                                     player: entry.player,
+                                    context: GameSetupContext::Matchmaking(msid),
                                 })
                                 .is_err()
                             {

@@ -225,6 +225,8 @@ pub struct JoinGameResponse {
 impl Encodable for JoinGameResponse {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_u32(b"GID", self.game_id);
+
+        // TODO: Join states: JOINED_GAME = 0, IN_QUEUE = 1, GROUP_PARTIALLY_JOINED = 2
         writer.tag_zero(b"JGS");
     }
 }
