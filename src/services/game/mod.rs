@@ -31,7 +31,7 @@ pub struct Game {
     /// The current game state
     pub state: GameState,
     /// The current game setting
-    pub setting: u16,
+    pub setting: GameSettings,
     /// The game attributes
     pub attributes: AttrMap,
     /// The list of players in this game
@@ -55,10 +55,10 @@ impl Game {
     /// `id`         The unique ID for the game
     /// `attributes` The initial game attributes
     /// `setting`    The initial game setting value
-    pub fn start(id: GameID, attributes: AttrMap, setting: u16) -> Link<Game> {
+    pub fn start(id: GameID, attributes: AttrMap, setting: GameSettings) -> Link<Game> {
         let this = Game {
             id,
-            state: GameState::Init,
+            state: GameState::Initializing,
             setting,
             attributes,
             players: Vec::with_capacity(4),
@@ -250,7 +250,7 @@ impl Handler<SetStateMessage> for Game {
 #[derive(Message)]
 pub struct SetSettingMessage {
     /// The new setting value
-    pub setting: u16,
+    pub setting: GameSettings,
 }
 
 /// Handler for setting the game setting
@@ -259,7 +259,7 @@ impl Handler<SetSettingMessage> for Game {
 
     fn handle(&mut self, msg: SetSettingMessage, _ctx: &mut ServiceContext<Self>) {
         let setting = msg.setting;
-        debug!("Updating game setting (Value: {})", &setting);
+        debug!("Updating game setting (Value: {:?})", &setting);
         self.setting = setting;
         self.notify_all(
             Components::GameManager(GameManager::GameSettingsChange),
@@ -492,7 +492,7 @@ impl Handler<SnapshotMessage> for Game {
         Mr(GameSnapshot {
             id: self.id,
             state: self.state,
-            setting: self.setting,
+            setting: self.setting.bits(),
             attributes: self.attributes.clone(),
             players,
         })
@@ -672,7 +672,7 @@ impl Game {
         debug!("Starting host migration (GID: {})", self.id);
 
         // Start host migration
-        self.state = GameState::HostMigration;
+        self.state = GameState::Migrating;
         self.notify_state();
         self.notify_all(
             Components::GameManager(GameManager::HostMigrationStart),

@@ -53,6 +53,9 @@ tokio-util = { version = "0.7", features = ["codec"] }
 hyper = "0.14.25"
 tower = "0.4"
 
+bitflags = "2.3.1"
+
+
 # SeaORM 
 [dependencies.sea-orm]
 version = "^0"

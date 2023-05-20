@@ -1,6 +1,7 @@
 use super::{
-    models::MeshState, AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState,
-    GamePlayer, GameSnapshot,
+    models::{GameSettings, MeshState},
+    AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
+    GameSnapshot,
 };
 use crate::{services::matchmaking::rules::RuleSet, utils::types::GameID};
 use interlink::prelude::*;
@@ -109,7 +110,7 @@ pub struct CreateMessage {
     /// The initial game attributes
     pub attributes: AttrMap,
     /// The initial game setting
-    pub setting: u16,
+    pub setting: GameSettings,
     /// The host player for the game
     pub host: GamePlayer,
 }
