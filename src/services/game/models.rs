@@ -336,8 +336,10 @@ impl Encodable for GameDetails<'_> {
             GameSetupContext::Matchmaking(id) => {
                 writer.tag_union_start(b"REAS", 0x3);
                 writer.group(b"VALU", |writer| {
-                    writer.tag_u16(b"FIT", 0x3f7a);
-                    writer.tag_u16(b"MAXF", 0x5460);
+                    const FIT: u16 = 21600;
+
+                    writer.tag_u16(b"FIT", FIT);
+                    writer.tag_u16(b"MAXF", FIT);
                     writer.tag_u32(b"MSID", *id);
                     // TODO: Matchmaking result
                     // SUCCESS_CREATED_GAME = 0

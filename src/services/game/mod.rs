@@ -214,7 +214,7 @@ impl Handler<AddPlayerMessage> for Game {
         }
 
         // Notify the joiner of the game details
-        self.notify_game_setup(player, slot, msg.context);
+        self.notify_game_setup(player, msg.context);
 
         // Set current game of this player
         player.set_game(Some(self.id));
@@ -582,7 +582,7 @@ impl Game {
     ///
     /// `session` The session to notify
     /// `slot`    The slot the player is joining into
-    fn notify_game_setup(&self, player: &GamePlayer, slot: GameSlot, context: GameSetupContext) {
+    fn notify_game_setup(&self, player: &GamePlayer, context: GameSetupContext) {
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameSetup),
             GameDetails {
