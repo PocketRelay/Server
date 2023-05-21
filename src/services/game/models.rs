@@ -688,5 +688,107 @@ impl From<HostMigrateFinished> for Packet {
 ///  "USID": 0x1,
 ///}
 /// ```
-#[allow(unused)]
-pub struct AsyncMatchmakingStatus;
+pub struct AsyncMatchmakingStatus {
+    pub player_id: PlayerID,
+}
+
+impl Encodable for AsyncMatchmakingStatus {
+    fn encode(&self, writer: &mut TdfWriter) {
+        {
+            writer.tag_list_start(b"ASIL", TdfType::Group, 1);
+            // Create game status
+            writer.group(b"CGS", |writer| {
+                // Evaluate status
+                // PlayerCountSufficient = 1,
+                // AcceptableHostFound = 2,
+                // TeamSizesSufficient = 4
+                writer.tag_u8(b"EVST", 2 | 4);
+                // Number of matchmaking sessions
+                writer.tag_u8(b"MMSN", 1);
+                // Number of matched players
+                writer.tag_u8(b"NOMP", 0);
+            });
+
+            // Custom async status
+            writer.group(b"CUST", |_| {});
+
+            // DNF rule status
+            writer.group(b"DNFS", |writer| {
+                // My DNF value
+                writer.tag_zero(b"MDNF");
+                // Max DNF value
+                writer.tag_zero(b"XDNF");
+            });
+
+            // Find game status
+            writer.group(b"FGS", |writer| {
+                // Number of games
+                writer.tag_zero(b"GNUM");
+            });
+
+            // Geo location rule status
+            writer.group(b"GEOS", |writer| {
+                // Max distance
+                writer.tag_zero(b"DIST");
+            });
+
+            // Generic rule status dictionary (TODO: RULES HERE)
+            writer.tag_map_start(b"GRDA", TdfType::String, TdfType::Group, 0);
+
+            // Game size rule status
+            writer.group(b"GSRD", |writer| {
+                // Max player count accepted
+                writer.tag_u8(b"PMAX", 4);
+                // Min player count accepted
+                writer.tag_u8(b"PMIN", 2);
+            });
+
+            // Host balance rule status
+            writer.group(b"HBRD", |writer| {
+                // Host balance values
+                // HOSTS_STRICTLY_BALANCED = 0,
+                // HOSTS_BALANCED = 1,
+                // HOSTS_UNBALANCED = 2,
+
+                writer.tag_u8(b"BVAL", 1);
+            });
+
+            // Host viability rule status
+            writer.group(b"HVRD", |writer| {
+                // Host viability values
+                // CONNECTION_ASSURED = 0,
+                // CONNECTION_LIKELY = 1,
+                // CONNECTION_FEASIBLE = 2,
+                // CONNECTION_UNLIKELY = 3,
+
+                writer.tag_zero(b"VVAL");
+            });
+
+            // Ping site rule status
+            writer.group(b"PSRS", |_| {});
+
+            // Rank rule status
+            writer.group(b"RRDA", |writer| {
+                // Matched rank flags
+                writer.tag_zero(b"RVAL");
+            });
+
+            // Team size rule status
+            writer.group(b"TSRS", |writer| {
+                // Max team size accepted
+                writer.tag_zero(b"TMAX");
+                // Min team size accepted
+                writer.tag_zero(b"TMIN");
+            });
+
+            // UED rule status
+            writer.tag_map_start(b"GRDA", TdfType::String, TdfType::Group, 0);
+            // Virtual game rule status
+            writer.group(b"VGRS", |writer| writer.tag_zero(b"VVAL"));
+            writer.tag_group_end();
+        }
+
+        writer.tag_u32(b"MSID", self.player_id);
+        writer.tag_u32(b"USID", self.player_id);
+    }
+}

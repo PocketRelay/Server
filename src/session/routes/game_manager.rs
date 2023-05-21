@@ -7,7 +7,7 @@ use crate::{
             GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage, SetSettingMessage,
             SetStateMessage, UpdateMeshMessage,
         },
-        matchmaking::{GameCreatedMessage, QueuePlayerMessage},
+        matchmaking::{CheckGameMessage, QueuePlayerMessage},
         sessions::LookupMessage,
     },
     session::{
@@ -190,7 +190,7 @@ pub async fn handle_create_game(
     // Notify matchmaking of the new game
     let _ = services
         .matchmaking
-        .do_send(GameCreatedMessage { link, game_id });
+        .do_send(CheckGameMessage { link, game_id });
 
     Ok(CreateGameResponse { game_id })
 }

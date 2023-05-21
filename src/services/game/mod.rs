@@ -1,12 +1,15 @@
 use crate::{
     database::entities::Player,
-    services::{game::manager::RemoveGameMessage, matchmaking::rules::RuleSet},
+    services::{
+        game::manager::RemoveGameMessage,
+        matchmaking::{rules::RuleSet, CheckGameMessage},
+    },
     session::{DetailsMessage, InformSessions, PushExt, Session, SetGameMessage},
     state::App,
     utils::{
         components::{Components, GameManager, UserSessions},
         models::NetData,
-        types::{GameID, GameSlot, PlayerID},
+        types::{GameID, PlayerID},
     },
 };
 use blaze_pk::{
@@ -284,8 +287,9 @@ pub struct SetAttributesMessage {
 impl Handler<SetAttributesMessage> for Game {
     type Response = ();
 
-    fn handle(&mut self, msg: SetAttributesMessage, _ctx: &mut ServiceContext<Self>) {
+    fn handle(&mut self, msg: SetAttributesMessage, ctx: &mut ServiceContext<Self>) {
         let attributes = msg.attributes;
+
         debug!("Updating game attributes");
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameAttribChange),
@@ -296,6 +300,15 @@ impl Handler<SetAttributesMessage> for Game {
         );
         self.attributes.extend(attributes);
         self.push_all(&packet);
+
+        // Don't update matchmaking for full games
+        if self.players.len() < Self::MAX_PLAYERS {
+            let services = App::services();
+            let _ = services.matchmaking.do_send(CheckGameMessage {
+                link: ctx.link(),
+                game_id: self.id,
+            });
+        }
     }
 }
 
