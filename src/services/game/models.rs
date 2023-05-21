@@ -1,8 +1,9 @@
 use super::{AttrMap, Game, GamePlayer};
 use crate::utils::{
     components::{Components, GameManager},
-    types::{GameID, GameSlot, PlayerID, SessionID},
+    types::{GameID, GameSlot, PlayerID},
 };
+use bitflags::bitflags;
 use blaze_pk::{
     codec::{Decodable, Encodable},
     error::DecodeResult,
@@ -16,52 +17,45 @@ use serde::Serialize;
 
 /// Different states the game can be in
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum GameState {
-    /// Initial game state
-    Init,
-    /// In Lobby
-    InGame,
-    /// Game starting / Active
-    InGameStarting,
-    /// Game is finished
-    GameFinished,
-    /// Host is migrating
-    HostMigration,
-    /// Unknown state
-    Unknown(u8),
+    NewState = 0x0,
+    Initializing = 0x1,
+    Virtual = 0x2,
+    PreGame = 0x82,
+    InGame = 0x83,
+    PostGame = 0x4,
+    Migrating = 0x5,
+    Destructing = 0x6,
+    Resetable = 0x7,
+    ReplaySetup = 0x8,
 }
 
 impl GameState {
-    /// Gets the int value of the state
-    pub fn value(&self) -> u8 {
-        match self {
-            Self::Init => 0x1,
-            Self::InGame => 0x82,
-            Self::InGameStarting => 0x83,
-            Self::GameFinished => 0x4,
-            Self::HostMigration => 0x5,
-            Self::Unknown(value) => *value,
-        }
-    }
-
     /// Gets the state from the provided value
     ///
     /// `value` The value to get the state of
     pub fn from_value(value: u8) -> Self {
         match value {
-            0x1 => Self::Init,
-            0x82 => Self::InGame,
-            0x83 => Self::InGameStarting,
-            0x4 => Self::GameFinished,
-            0x5 => Self::HostMigration,
-            value => Self::Unknown(value),
+            0x0 => Self::NewState,
+            0x1 => Self::Initializing,
+            0x2 => Self::Virtual,
+            0x82 => Self::PreGame,
+            0x83 => Self::InGame,
+            0x4 => Self::PostGame,
+            0x5 => Self::Migrating,
+            0x6 => Self::Destructing,
+            0x7 => Self::Resetable,
+            0x8 => Self::ReplaySetup,
+            // Default to initializing state
+            _ => Self::Initializing,
         }
     }
 }
 
 impl Encodable for GameState {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.write_u8(self.value());
+        writer.write_u8((*self) as u8);
     }
 }
 
@@ -73,6 +67,43 @@ impl Decodable for GameState {
 }
 
 value_type!(GameState, TdfType::VarInt);
+
+bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct GameSettings: u16 {
+        const NONE = 0;
+        const OPEN_TO_BROWSING = 1;
+        const OPEN_TO_MATCHMAKING = 2;
+        const OPEN_TO_INVITES = 4;
+        const OPEN_TO_JOIN_BY_PLAYER = 8;
+        const HOST_MIGRATABLE = 0x10;
+        const RANKED = 0x20;
+        const ADMIN_ONLY_INVITES = 0x40;
+        const ENFORCE_SINGLE_GROUP_JOIN = 0x80;
+        const JOIN_IN_PROGRESS_SUPPORTED = 0x100;
+        const ADMIN_INVITE_ONLY_IGNORE_ENTRY_CHECKS = 0x200;
+        const IGNORE_ENTRY_CRITERIA_WITH_INVITE = 0x400;
+        const ENABLE_PERSISTED_GAME_ID = 0x800;
+        const ALLOW_SAME_TEAM_ID = 0x1000;
+        const VIRTUALIZED = 0x2000;
+        const SEND_ORPHANDED_GAME_REPORT_EVENT = 0x4000;
+        const ALLOW_ANY_REPUTATION = 0x8000;
+    }
+}
+
+impl Encodable for GameSettings {
+    fn encode(&self, output: &mut TdfWriter) {
+        output.write_u16(self.bits())
+    }
+}
+
+impl Decodable for GameSettings {
+    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
+        Ok(GameSettings::from_bits_retain(reader.read_u16()?))
+    }
+}
+
+value_type!(GameSettings, TdfType::VarInt);
 
 /// Mesh connection state type
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
@@ -143,14 +174,14 @@ impl Encodable for StateChange {
 /// Message for a game setting changing
 pub struct SettingChange {
     /// The game setting
-    pub setting: u16,
+    pub setting: GameSettings,
     /// The ID of the game
     pub id: GameID,
 }
 
 impl Encodable for SettingChange {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u16(b"ATTR", self.setting);
+        writer.tag_u16(b"ATTR", self.setting.bits());
         writer.tag_u32(b"GID", self.id);
     }
 }
@@ -198,9 +229,28 @@ fn write_admin_list(writer: &mut TdfWriter, game: &Game) {
 
 const VSTR: &str = "ME3-295976325-179181965240128";
 
+pub enum GameSetupContext {
+    /// Context without additional data
+    Dataless(DatalessContext),
+    /// Context added from matchmaking
+    Matchmaking(u32),
+}
+
+#[derive(Debug, Copy, Clone)]
+#[repr(u8)]
+pub enum DatalessContext {
+    /// Session created the game
+    CreateGameSetup = 0x0,
+    /// Session joined by ID
+    JoinGameSetup = 0x1,
+    // IndirectJoinGameFromQueueSetup = 0x2,
+    // IndirectJoinGameFromReservationContext = 0x3,
+    // HostInjectionSetupContext = 0x4,
+}
+
 pub struct GameDetails<'a> {
     pub game: &'a Game,
-    pub msid: Option<SessionID>,
+    pub context: GameSetupContext,
 }
 
 impl Encodable for GameDetails<'_> {
@@ -225,7 +275,7 @@ impl Encodable for GameDetails<'_> {
             writer.tag_str(b"GNAM", &host_player.player.display_name);
 
             writer.tag_u64(b"GPVH", 0x5a4f2b378b715c6);
-            writer.tag_u16(b"GSET", game.setting);
+            writer.tag_u16(b"GSET", game.setting.bits());
             writer.tag_u64(b"GSID", 0x4000000a76b645);
             writer.tag_value(b"GSTA", &game.state);
 
@@ -276,20 +326,34 @@ impl Encodable for GameDetails<'_> {
             player.encode(game.id, slot, writer);
         }
 
-        // Join details
-        let union_value = if self.msid.is_some() { 0x3 } else { 0x0 };
-        writer.tag_union_start(b"REAS", union_value);
-        writer.group(b"VALU", |writer| {
-            if let Some(msid) = self.msid {
-                writer.tag_u16(b"FIT", 0x3f7a);
-                writer.tag_u16(b"MAXF", 0x5460);
-                writer.tag_u32(b"MSID", msid);
-                writer.tag_u8(b"RSLT", 0x2);
-                writer.tag_u32(b"USID", msid);
-            } else {
-                writer.tag_u8(b"DCTX", 0x0);
+        match &self.context {
+            GameSetupContext::Dataless(context) => {
+                writer.tag_union_start(b"REAS", 0x0);
+                writer.group(b"VALU", |writer| {
+                    writer.tag_u8(b"DCTX", (*context) as u8);
+                });
             }
-        });
+            GameSetupContext::Matchmaking(id) => {
+                writer.tag_union_start(b"REAS", 0x3);
+                writer.group(b"VALU", |writer| {
+                    const FIT: u16 = 21600;
+
+                    writer.tag_u16(b"FIT", FIT);
+                    writer.tag_u16(b"MAXF", FIT);
+                    writer.tag_u32(b"MSID", *id);
+                    // TODO: Matchmaking result
+                    // SUCCESS_CREATED_GAME = 0
+                    // SUCCESS_JOINED_NEW_GAME = 1
+                    // SUCCESS_JOINED_EXISTING_GAME = 2
+                    // SESSION_TIMED_OUT = 3
+                    // SESSION_CANCELED = 4
+                    // SESSION_TERMINATED = 5
+                    // SESSION_ERROR_GAME_SETUP_FAILED = 6
+                    writer.tag_u8(b"RSLT", 0x2);
+                    writer.tag_u32(b"USID", *id);
+                });
+            }
+        }
     }
 }
 
@@ -315,7 +379,7 @@ impl Encodable for GetGameDetails<'_> {
         }
         writer.tag_u32(b"GID", game.id);
         writer.tag_str(b"GNAM", &host_player.player.display_name);
-        writer.tag_u16(b"GSET", game.setting);
+        writer.tag_u16(b"GSET", game.setting.bits());
         writer.tag_value(b"GSTA", &game.state);
         {
             writer.tag_list_start(b"HNET", TdfType::Group, 1);
@@ -403,46 +467,57 @@ pub struct PlayerRemoved {
     pub reason: RemoveReason,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum RemoveReason {
-    // 0x0
-    JoinTimeout,
-    /// 0x1
-    ConnectionLost,
-    // 0x6
-    Generic,
-    // 0x8
-    Kick,
-    // Unknown value
-    Unknown(u8),
+    /// Hit timeout while joining
+    JoinTimeout = 0x0,
+    /// Player lost PTP conneciton
+    PlayerConnectionLost = 0x1,
+    /// Player lost connection with the Pocket Relay server
+    ServerConnectionLost = 0x2,
+    /// Game migration failed
+    MigrationFailed = 0x3,
+    GameDestroyed = 0x4,
+    GameEnded = 0x5,
+    /// Generic player left the game reason
+    PlayerLeft = 0x6,
+    GroupLeft = 0x7,
+    /// Player kicked
+    PlayerKicked = 0x8,
+    /// Player kicked and banned
+    PlayerKickedWithBan = 0x9,
+    /// Failed to join from the queue
+    PlayerJoinFromQueueFailed = 0xA,
+    PlayerReservationTimeout = 0xB,
+    HostEjected = 0xC,
 }
 
 impl RemoveReason {
     pub fn from_value(value: u8) -> Self {
         match value {
-            0 => Self::JoinTimeout,
-            1 => Self::ConnectionLost,
-            6 => Self::Generic,
-            8 => Self::Kick,
-            value => Self::Unknown(value),
-        }
-    }
-
-    pub fn to_value(&self) -> u8 {
-        match self {
-            Self::JoinTimeout => 0,
-            Self::ConnectionLost => 1,
-            Self::Generic => 6,
-            Self::Kick => 8,
-            Self::Unknown(value) => *value,
+            0x0 => Self::JoinTimeout,
+            0x1 => Self::PlayerConnectionLost,
+            0x2 => Self::ServerConnectionLost,
+            0x3 => Self::MigrationFailed,
+            0x4 => Self::GameDestroyed,
+            0x5 => Self::GameEnded,
+            0x6 => Self::PlayerLeft,
+            0x7 => Self::GroupLeft,
+            0x8 => Self::PlayerKicked,
+            0x9 => Self::PlayerKickedWithBan,
+            0xA => Self::PlayerJoinFromQueueFailed,
+            0xB => Self::PlayerReservationTimeout,
+            0xC => Self::HostEjected,
+            // Default to generic reason for unknown
+            _ => Self::PlayerLeft,
         }
     }
 }
 
 impl Encodable for RemoveReason {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.write_u8(self.to_value());
+        writer.write_u8((*self) as u8);
     }
 }
 
@@ -613,5 +688,107 @@ impl From<HostMigrateFinished> for Packet {
 ///  "USID": 0x1,
 ///}
 /// ```
-#[allow(unused)]
-pub struct AsyncMatchmakingStatus;
+pub struct AsyncMatchmakingStatus {
+    pub player_id: PlayerID,
+}
+
+impl Encodable for AsyncMatchmakingStatus {
+    fn encode(&self, writer: &mut TdfWriter) {
+        {
+            writer.tag_list_start(b"ASIL", TdfType::Group, 1);
+            // Create game status
+            writer.group(b"CGS", |writer| {
+                // Evaluate status
+                // PlayerCountSufficient = 1,
+                // AcceptableHostFound = 2,
+                // TeamSizesSufficient = 4
+                writer.tag_u8(b"EVST", 2 | 4);
+                // Number of matchmaking sessions
+                writer.tag_u8(b"MMSN", 1);
+                // Number of matched players
+                writer.tag_u8(b"NOMP", 0);
+            });
+
+            // Custom async status
+            writer.group(b"CUST", |_| {});
+
+            // DNF rule status
+            writer.group(b"DNFS", |writer| {
+                // My DNF value
+                writer.tag_zero(b"MDNF");
+                // Max DNF value
+                writer.tag_zero(b"XDNF");
+            });
+
+            // Find game status
+            writer.group(b"FGS", |writer| {
+                // Number of games
+                writer.tag_zero(b"GNUM");
+            });
+
+            // Geo location rule status
+            writer.group(b"GEOS", |writer| {
+                // Max distance
+                writer.tag_zero(b"DIST");
+            });
+
+            // Generic rule status dictionary (TODO: RULES HERE)
+            writer.tag_map_start(b"GRDA", TdfType::String, TdfType::Group, 0);
+
+            // Game size rule status
+            writer.group(b"GSRD", |writer| {
+                // Max player count accepted
+                writer.tag_u8(b"PMAX", 4);
+                // Min player count accepted
+                writer.tag_u8(b"PMIN", 2);
+            });
+
+            // Host balance rule status
+            writer.group(b"HBRD", |writer| {
+                // Host balance values
+                // HOSTS_STRICTLY_BALANCED = 0,
+                // HOSTS_BALANCED = 1,
+                // HOSTS_UNBALANCED = 2,
+
+                writer.tag_u8(b"BVAL", 1);
+            });
+
+            // Host viability rule status
+            writer.group(b"HVRD", |writer| {
+                // Host viability values
+                // CONNECTION_ASSURED = 0,
+                // CONNECTION_LIKELY = 1,
+                // CONNECTION_FEASIBLE = 2,
+                // CONNECTION_UNLIKELY = 3,
+
+                writer.tag_zero(b"VVAL");
+            });
+
+            // Ping site rule status
+            writer.group(b"PSRS", |_| {});
+
+            // Rank rule status
+            writer.group(b"RRDA", |writer| {
+                // Matched rank flags
+                writer.tag_zero(b"RVAL");
+            });
+
+            // Team size rule status
+            writer.group(b"TSRS", |writer| {
+                // Max team size accepted
+                writer.tag_zero(b"TMAX");
+                // Min team size accepted
+                writer.tag_zero(b"TMIN");
+            });
+
+            // UED rule status
+            writer.tag_map_start(b"GRDA", TdfType::String, TdfType::Group, 0);
+            // Virtual game rule status
+            writer.group(b"VGRS", |writer| writer.tag_zero(b"VVAL"));
+            writer.tag_group_end();
+        }
+
+        writer.tag_u32(b"MSID", self.player_id);
+        writer.tag_u32(b"USID", self.player_id);
+    }
+}

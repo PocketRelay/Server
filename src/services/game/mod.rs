@@ -1,12 +1,15 @@
 use crate::{
     database::entities::Player,
-    services::{game::manager::RemoveGameMessage, matchmaking::rules::RuleSet},
+    services::{
+        game::manager::RemoveGameMessage,
+        matchmaking::{rules::RuleSet, CheckGameMessage},
+    },
     session::{DetailsMessage, InformSessions, PushExt, Session, SetGameMessage},
     state::App,
     utils::{
         components::{Components, GameManager, UserSessions},
         models::NetData,
-        types::{GameID, GameSlot, PlayerID},
+        types::{GameID, PlayerID},
     },
 };
 use blaze_pk::{
@@ -31,7 +34,7 @@ pub struct Game {
     /// The current game state
     pub state: GameState,
     /// The current game setting
-    pub setting: u16,
+    pub setting: GameSettings,
     /// The game attributes
     pub attributes: AttrMap,
     /// The list of players in this game
@@ -55,10 +58,10 @@ impl Game {
     /// `id`         The unique ID for the game
     /// `attributes` The initial game attributes
     /// `setting`    The initial game setting value
-    pub fn start(id: GameID, attributes: AttrMap, setting: u16) -> Link<Game> {
+    pub fn start(id: GameID, attributes: AttrMap, setting: GameSettings) -> Link<Game> {
         let this = Game {
             id,
-            state: GameState::Init,
+            state: GameState::Initializing,
             setting,
             attributes,
             players: Vec::with_capacity(4),
@@ -176,6 +179,8 @@ impl Drop for GamePlayer {
 pub struct AddPlayerMessage {
     /// The player to add to the game
     pub player: GamePlayer,
+    /// Context to which the player should be added
+    pub context: GameSetupContext,
 }
 
 /// Handler for adding a player to the game
@@ -212,7 +217,7 @@ impl Handler<AddPlayerMessage> for Game {
         }
 
         // Notify the joiner of the game details
-        self.notify_game_setup(player, slot);
+        self.notify_game_setup(player, msg.context);
 
         // Set current game of this player
         player.set_game(Some(self.id));
@@ -250,7 +255,7 @@ impl Handler<SetStateMessage> for Game {
 #[derive(Message)]
 pub struct SetSettingMessage {
     /// The new setting value
-    pub setting: u16,
+    pub setting: GameSettings,
 }
 
 /// Handler for setting the game setting
@@ -259,7 +264,7 @@ impl Handler<SetSettingMessage> for Game {
 
     fn handle(&mut self, msg: SetSettingMessage, _ctx: &mut ServiceContext<Self>) {
         let setting = msg.setting;
-        debug!("Updating game setting (Value: {})", &setting);
+        debug!("Updating game setting (Value: {:?})", &setting);
         self.setting = setting;
         self.notify_all(
             Components::GameManager(GameManager::GameSettingsChange),
@@ -282,8 +287,9 @@ pub struct SetAttributesMessage {
 impl Handler<SetAttributesMessage> for Game {
     type Response = ();
 
-    fn handle(&mut self, msg: SetAttributesMessage, _ctx: &mut ServiceContext<Self>) {
+    fn handle(&mut self, msg: SetAttributesMessage, ctx: &mut ServiceContext<Self>) {
         let attributes = msg.attributes;
+
         debug!("Updating game attributes");
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameAttribChange),
@@ -294,6 +300,15 @@ impl Handler<SetAttributesMessage> for Game {
         );
         self.attributes.extend(attributes);
         self.push_all(&packet);
+
+        // Don't update matchmaking for full games
+        if self.players.len() < Self::MAX_PLAYERS {
+            let services = App::services();
+            let _ = services.matchmaking.do_send(CheckGameMessage {
+                link: ctx.link(),
+                game_id: self.id,
+            });
+        }
     }
 }
 
@@ -492,7 +507,7 @@ impl Handler<SnapshotMessage> for Game {
         Mr(GameSnapshot {
             id: self.id,
             state: self.state,
-            setting: self.setting,
+            setting: self.setting.bits(),
             attributes: self.attributes.clone(),
             players,
         })
@@ -580,15 +595,13 @@ impl Game {
     ///
     /// `session` The session to notify
     /// `slot`    The slot the player is joining into
-    fn notify_game_setup(&self, player: &GamePlayer, slot: GameSlot) {
-        let msid = if slot == 0 {
-            None
-        } else {
-            Some(player.player.id)
-        };
+    fn notify_game_setup(&self, player: &GamePlayer, context: GameSetupContext) {
         let packet = Packet::notify(
             Components::GameManager(GameManager::GameSetup),
-            GameDetails { game: self, msid },
+            GameDetails {
+                game: self,
+                context,
+            },
         );
         player.link.push(packet);
     }
@@ -672,7 +685,7 @@ impl Game {
         debug!("Starting host migration (GID: {})", self.id);
 
         // Start host migration
-        self.state = GameState::HostMigration;
+        self.state = GameState::Migrating;
         self.notify_state();
         self.notify_all(
             Components::GameManager(GameManager::HostMigrationStart),

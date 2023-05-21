@@ -2,11 +2,12 @@ use crate::{
     services::{
         game::{
             manager::{CreateMessage, GetGameMessage, TryAddMessage, TryAddResult},
+            models::{DatalessContext, GameSetupContext},
             AddPlayerMessage, CheckJoinableMessage, GameJoinableState, GamePlayer,
             GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage, SetSettingMessage,
             SetStateMessage, UpdateMeshMessage,
         },
-        matchmaking::{GameCreatedMessage, QueuePlayerMessage},
+        matchmaking::{CheckGameMessage, QueuePlayerMessage},
         sessions::LookupMessage,
     },
     session::{
@@ -77,7 +78,10 @@ pub async fn handle_join_game(
     // Join the game
     if let GameJoinableState::Joinable = join_state {
         debug!("Joining game from invite (GID: {})", game_id);
-        let _ = game.do_send(AddPlayerMessage { player });
+        let _ = game.do_send(AddPlayerMessage {
+            player,
+            context: GameSetupContext::Dataless(DatalessContext::JoinGameSetup),
+        });
         Ok(JoinGameResponse { game_id })
     } else {
         Err(ServerError::InvalidInformation)
@@ -186,7 +190,7 @@ pub async fn handle_create_game(
     // Notify matchmaking of the new game
     let _ = services
         .matchmaking
-        .do_send(GameCreatedMessage { link, game_id });
+        .do_send(CheckGameMessage { link, game_id });
 
     Ok(CreateGameResponse { game_id })
 }

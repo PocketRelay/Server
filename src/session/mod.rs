@@ -505,7 +505,7 @@ impl Session {
                 let _ = game
                     .send(RemovePlayerMessage {
                         id: player_id,
-                        reason: RemoveReason::Generic,
+                        reason: RemoveReason::PlayerLeft,
                     })
                     .await;
             });

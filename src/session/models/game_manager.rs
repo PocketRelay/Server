@@ -1,7 +1,7 @@
 use crate::{
     services::{
         game::{
-            models::{GameState, MeshState, RemoveReason},
+            models::{GameSettings, GameState, MeshState, RemoveReason},
             AttrMap,
         },
         matchmaking::rules::RuleSet,
@@ -22,13 +22,13 @@ pub struct CreateGameRequest {
     /// The games initial attributes
     pub attributes: AttrMap,
     /// The games initial setting
-    pub setting: u16,
+    pub setting: GameSettings,
 }
 
 impl Decodable for CreateGameRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
         let attributes: AttrMap = reader.tag(b"ATTR")?;
-        let setting: u16 = reader.tag(b"GSET")?;
+        let setting: GameSettings = reader.tag(b"GSET")?;
         Ok(Self {
             attributes,
             setting,
@@ -105,13 +105,13 @@ impl Decodable for SetStateRequest {
 }
 pub struct SetSettingRequest {
     pub game_id: GameID,
-    pub setting: u16,
+    pub setting: GameSettings,
 }
 
 impl Decodable for SetSettingRequest {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
         let game_id: GameID = reader.tag(b"GID")?;
-        let setting: u16 = reader.tag(b"GSET")?;
+        let setting: GameSettings = reader.tag(b"GSET")?;
         Ok(Self { game_id, setting })
     }
 }
@@ -225,6 +225,8 @@ pub struct JoinGameResponse {
 impl Encodable for JoinGameResponse {
     fn encode(&self, writer: &mut TdfWriter) {
         writer.tag_u32(b"GID", self.game_id);
+
+        // TODO: Join states: JOINED_GAME = 0, IN_QUEUE = 1, GROUP_PARTIALLY_JOINED = 2
         writer.tag_zero(b"JGS");
     }
 }

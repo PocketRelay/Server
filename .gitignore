@@ -9,6 +9,7 @@ app.db
 
 .release
 build-release.nu
+build-docker.nu
 
 tools/target
 

@@ -1,6 +1,6 @@
 [package]
 name = "pocket-relay"
-version = "0.5.1"
+version = "0.5.2"
 description = "Pocket Relay Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
@@ -52,6 +52,9 @@ tokio-util = { version = "0.7", features = ["codec"] }
 # Hyper for connection upgrades
 hyper = "0.14.25"
 tower = "0.4"
+
+bitflags = "2.3.1"
+
 
 # SeaORM 
 [dependencies.sea-orm]

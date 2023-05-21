@@ -1,7 +1,15 @@
 use crate::{
-    services::game::{AddPlayerMessage, CheckJoinableMessage, Game, GameJoinableState, GamePlayer},
-    utils::types::{GameID, PlayerID},
+    services::game::{
+        models::{AsyncMatchmakingStatus, GameSetupContext},
+        AddPlayerMessage, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
+    },
+    session::PushExt,
+    utils::{
+        components::{Components, GameManager},
+        types::{GameID, PlayerID},
+    },
 };
+use blaze_pk::packet::Packet;
 use interlink::prelude::*;
 use log::debug;
 use rules::RuleSet;
@@ -39,24 +47,21 @@ struct QueueEntry {
     time: SystemTime,
 }
 
-/// Message for handling when a game is created and attempting
-/// to add players from the queue into the game
+/// Message for handling checking the queue for those
+/// who can join the game. This is sent when a game is
+/// created or when its attributes are updated
 #[derive(Message)]
-pub struct GameCreatedMessage {
+pub struct CheckGameMessage {
     /// The link to the game
     pub link: Link<Game>,
     /// The ID of the created game
     pub game_id: GameID,
 }
 
-impl Handler<GameCreatedMessage> for Matchmaking {
-    type Response = Sfr<Self, GameCreatedMessage>;
+impl Handler<CheckGameMessage> for Matchmaking {
+    type Response = Sfr<Self, CheckGameMessage>;
 
-    fn handle(
-        &mut self,
-        msg: GameCreatedMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    fn handle(&mut self, msg: CheckGameMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         Sfr::new(move |service: &mut Matchmaking, _ctx| {
             Box::pin(async move {
                 let link = msg.link;
@@ -82,6 +87,9 @@ impl Handler<GameCreatedMessage> for Matchmaking {
                         }
                     };
 
+                    // TODO: If player has been in queue long enough create
+                    // a game matching their specifics
+
                     match join_state {
                         GameJoinableState::Joinable => {
                             debug!(
@@ -94,10 +102,19 @@ impl Handler<GameCreatedMessage> for Matchmaking {
                                 debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
                             }
 
+                            let msid = entry.player.player.id;
+
+                            // Send the async update (TODO: Do this at intervals)
+                            let _ = entry.player.link.push(Packet::notify(
+                                Components::GameManager(GameManager::MatchmakingAsyncStatus),
+                                AsyncMatchmakingStatus { player_id: msid },
+                            ));
+
                             // Add the player to the game
                             if link
                                 .do_send(AddPlayerMessage {
                                     player: entry.player,
+                                    context: GameSetupContext::Matchmaking(msid),
                                 })
                                 .is_err()
                             {

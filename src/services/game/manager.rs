@@ -1,6 +1,7 @@
 use super::{
-    models::MeshState, AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState,
-    GamePlayer, GameSnapshot,
+    models::{DatalessContext, GameSettings, GameSetupContext, MeshState},
+    AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
+    GameSnapshot,
 };
 use crate::{services::matchmaking::rules::RuleSet, utils::types::GameID};
 use interlink::prelude::*;
@@ -109,7 +110,7 @@ pub struct CreateMessage {
     /// The initial game attributes
     pub attributes: AttrMap,
     /// The initial game setting
-    pub setting: u16,
+    pub setting: GameSettings,
     /// The host player for the game
     pub host: GamePlayer,
 }
@@ -132,7 +133,10 @@ impl Handler<CreateMessage> for GameManager {
         let link = Game::start(id, msg.attributes, msg.setting);
         self.games.insert(id, link.clone());
 
-        let _ = link.do_send(AddPlayerMessage { player: msg.host });
+        let _ = link.do_send(AddPlayerMessage {
+            player: msg.host,
+            context: GameSetupContext::Dataless(DatalessContext::CreateGameSetup),
+        });
 
         Mr((link, id))
     }
@@ -199,7 +203,11 @@ impl Handler<TryAddMessage> for GameManager {
                 // Check if the game is joinable
                 if let Ok(GameJoinableState::Joinable) = link.send(msg.clone()).await {
                     debug!("Found matching game (GID: {})", id);
-                    let _ = link.do_send(AddPlayerMessage { player });
+                    let msid = player.player.id;
+                    let _ = link.do_send(AddPlayerMessage {
+                        player,
+                        context: GameSetupContext::Matchmaking(msid),
+                    });
                     return TryAddResult::Success;
                 }
             }
