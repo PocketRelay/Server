@@ -1,5 +1,5 @@
 use super::{
-    models::{DatalessContext, GameSettings, GameSetupContext, MeshState},
+    models::{DatalessContext, GameSettings, GameSetupContext, PlayerState},
     AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
     GameSnapshot,
 };
@@ -128,7 +128,7 @@ impl Handler<CreateMessage> for GameManager {
 
         self.next_id = self.next_id.wrapping_add(1);
 
-        msg.host.state = MeshState::Connected;
+        msg.host.state = PlayerState::ActiveConnected;
 
         let link = Game::start(id, msg.attributes, msg.setting);
         self.games.insert(id, link.clone());

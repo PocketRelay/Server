@@ -105,56 +105,50 @@ impl Decodable for GameSettings {
 
 value_type!(GameSettings, TdfType::VarInt);
 
-/// Mesh connection state type
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
-pub enum MeshState {
+#[repr(u8)]
+pub enum PlayerState {
     /// Link between the mesh points is not connected
-    Disconnected,
+    Reserved = 0x0,
+    Queued = 0x1,
     /// Link is being formed between two mesh points
-    Connecting,
+    ActiveConnecting = 0x2,
+    ActiveMigrating = 0x3,
     /// Link is connected between two mesh points
-    Connected,
-    /// Unknown mesh link state
-    Unknown(u8),
+    ActiveConnected = 0x4,
+    ActiveKickPending = 0x5,
 }
 
-impl MeshState {
-    /// Converts the mesh state into its byte value
-    pub fn value(&self) -> u8 {
-        match self {
-            Self::Disconnected => 0x0,
-            Self::Connecting => 0x2,
-            Self::Connected => 0x4,
-            Self::Unknown(value) => *value,
-        }
-    }
-
+impl PlayerState {
     /// Gets the mesh state from the provided value
     ///
     /// `value` The value of the mesh state
     pub fn from_value(value: u8) -> Self {
         match value {
-            0x0 => Self::Disconnected,
-            0x2 => Self::Connecting,
-            0x4 => Self::Connected,
-            value => Self::Unknown(value),
+            0x0 => Self::Reserved,
+            0x1 => Self::Queued,
+            0x2 => Self::ActiveConnecting,
+            0x3 => Self::ActiveMigrating,
+            0x4 => Self::ActiveConnected,
+            0x5 => Self::ActiveKickPending,
+            _ => Self::Reserved,
         }
     }
 }
 
-impl Encodable for MeshState {
+impl Encodable for PlayerState {
     fn encode(&self, output: &mut TdfWriter) {
-        output.write_u8(self.value())
+        output.write_u8((*self) as u8)
     }
 }
 
-impl Decodable for MeshState {
+impl Decodable for PlayerState {
     fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        Ok(MeshState::from_value(reader.read_u8()?))
+        Ok(PlayerState::from_value(reader.read_u8()?))
     }
 }
 
-value_type!(MeshState, TdfType::VarInt);
+value_type!(PlayerState, TdfType::VarInt);
 
 /// Message for a game state changing
 pub struct StateChange {
@@ -413,7 +407,7 @@ impl Encodable for GetGameDetails<'_> {
 pub struct PlayerStateChange {
     pub gid: GameID,
     pub pid: PlayerID,
-    pub state: MeshState,
+    pub state: PlayerState,
 }
 
 impl Encodable for PlayerStateChange {
