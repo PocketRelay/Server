@@ -676,6 +676,8 @@ impl Game {
     /// Attempts to migrate the host of this game if there are still players
     /// left in the game.
     fn try_migrate_host(&mut self) {
+        // TODO: With more than one player this fails
+
         // Obtain the new player at the first index
         let new_host = match self.players.first() {
             Some(value) => value,
