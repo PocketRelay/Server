@@ -109,7 +109,7 @@ pub struct InstanceDetails {
 
 impl Encodable for InstanceDetails {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_union_start(b"ADDR", NetworkAddressType::Server as u8);
+        writer.tag_union_start(b"ADDR", ServerAddressType::IpAddress as u8);
         writer.tag_value(b"VALU", &self.net);
 
         writer.tag_bool(b"SECU", self.secure);
@@ -145,15 +145,21 @@ impl Encodable for UpdateExtDataAttr {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize)]
+#[derive(Debug, Copy, Clone)]
 #[repr(u8)]
-#[allow(unused)]
 pub enum NetworkAddressType {
-    Server = 0x0,
-    Client = 0x1,
+    // XboxClient = 0x0,
+    // XboxServer = 0x1,
     Pair = 0x2,
-    IpAddress = 0x3,
-    HostnameAddress = 0x4,
+    // IpAddress = 0x3,
+    // HostnameAddress = 0x4,
+}
+
+#[derive(Debug, Copy, Clone)]
+#[repr(u8)]
+pub enum ServerAddressType {
+    IpAddress = 0x0,
+    // XboxServer = 0x1,
 }
 
 /// Structure for storing extended network data
