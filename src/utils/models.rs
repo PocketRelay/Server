@@ -109,7 +109,7 @@ pub struct InstanceDetails {
 
 impl Encodable for InstanceDetails {
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_union_start(b"ADDR", NetworkAddressType::Server.into());
+        writer.tag_union_start(b"ADDR", NetworkAddressType::Server as u8);
         writer.tag_value(b"VALU", &self.net);
 
         writer.tag_bool(b"SECU", self.secure);
@@ -146,43 +146,14 @@ impl Encodable for UpdateExtDataAttr {
 }
 
 #[derive(Debug, Copy, Clone, Serialize)]
+#[repr(u8)]
+#[allow(unused)]
 pub enum NetworkAddressType {
-    Server,
-    Client,
-    Pair,
-    IpAddress,
-    HostnameAddress,
-    Unknown(u8),
-}
-
-impl NetworkAddressType {
-    pub fn value(&self) -> u8 {
-        match self {
-            Self::Server => 0x0,
-            Self::Client => 0x1,
-            Self::Pair => 0x2,
-            Self::IpAddress => 0x3,
-            Self::HostnameAddress => 0x4,
-            Self::Unknown(value) => *value,
-        }
-    }
-
-    pub fn from_value(value: u8) -> Self {
-        match value {
-            0x0 => Self::Server,
-            0x1 => Self::Client,
-            0x2 => Self::Pair,
-            0x3 => Self::IpAddress,
-            0x4 => Self::HostnameAddress,
-            value => Self::Unknown(value),
-        }
-    }
-}
-
-impl From<NetworkAddressType> for u8 {
-    fn from(value: NetworkAddressType) -> Self {
-        value.value()
-    }
+    Server = 0x0,
+    Client = 0x1,
+    Pair = 0x2,
+    IpAddress = 0x3,
+    HostnameAddress = 0x4,
 }
 
 /// Structure for storing extended network data
@@ -198,32 +169,24 @@ pub struct QosNetworkData {
 
 //
 #[derive(Debug, Copy, Clone, Serialize)]
+#[repr(u8)]
 pub enum NatType {
-    Open,
-    Moderate,
-    Sequential,
-    Strict,
-    Unknown(u8),
+    Open = 0x0,
+    Moderate = 0x1,
+    Sequential = 0x2,
+    Strict = 0x3,
+    Unknown = 0x4,
 }
 
 impl NatType {
-    pub fn value(&self) -> u8 {
-        match self {
-            Self::Open => 0x1,
-            Self::Moderate => 0x2,
-            Self::Sequential => 0x3,
-            Self::Strict => 0x4,
-            Self::Unknown(value) => *value,
-        }
-    }
-
     pub fn from_value(value: u8) -> Self {
         match value {
             0x1 => Self::Open,
             0x2 => Self::Moderate,
             0x3 => Self::Sequential,
             0x4 => Self::Strict,
-            value => Self::Unknown(value),
+            // TODO: Possibly debug log this
+            _ => Self::Unknown,
         }
     }
 }
@@ -237,7 +200,7 @@ impl Default for NatType {
 impl Encodable for NatType {
     #[inline]
     fn encode(&self, writer: &mut TdfWriter) {
-        writer.write_u8(self.value());
+        writer.write_u8((*self) as u8);
     }
 }
 
@@ -313,7 +276,7 @@ value_type!(NetGroups, TdfType::Group);
 impl NetData {
     pub fn tag_groups(&self, tag: &[u8], writer: &mut TdfWriter) {
         if let Some(groups) = &self.groups {
-            writer.tag_union_value(tag, NetworkAddressType::Pair.into(), b"VALU", groups);
+            writer.tag_union_value(tag, NetworkAddressType::Pair as u8, b"VALU", groups);
         } else {
             writer.tag_union_unset(tag);
         }
