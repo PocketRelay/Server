@@ -110,9 +110,17 @@ impl OfficialInstance {
             }
         }
 
-        // Attempt to lookup using google HTTP DNS
-        let url = format!("https://dns.google/resolve?name={host}&type=A");
-        let mut response: LookupResponse = reqwest::get(url).await?.json().await?;
+        // Attempt to lookup using cloudflares DNS over HTTP
+
+        let client = reqwest::Client::new();
+        let url = format!("https://cloudflare-dns.com/dns-query?name={host}&type=A");
+        let mut response: LookupResponse = client
+            .get(url)
+            .header("Accept", "application/dns-json")
+            .send()
+            .await?
+            .json()
+            .await?;
 
         response
             .answer
