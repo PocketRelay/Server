@@ -329,11 +329,8 @@ fn messages() -> TdfMap<String, String> {
     };
 
     let mut config = TdfMap::new();
-    let mut index = 1;
-    for message in [intro] {
-        message.append(index, &mut config);
-        index += 1;
-    }
+
+    intro.append(1, &mut config);
 
     config.order();
     config

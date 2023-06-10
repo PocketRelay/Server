@@ -1,7 +1,7 @@
 //! Retriever service for completing the Origin account authentication
 //! and data loading flow
 
-use super::{models::OriginLoginResponse, RetSession, Retriever, RetrieverResult};
+use super::{models::OriginLoginResponse, OfficialSession, Retriever, RetrieverResult};
 use crate::{
     database::entities::{Player, PlayerData},
     session::models::{auth::OriginLoginRequest, util::SettingsResponse},
@@ -41,7 +41,7 @@ impl OriginFlowService {
 /// origin and optionally loading the player data
 pub struct OriginFlow {
     /// The session to the official server
-    session: RetSession,
+    session: OfficialSession,
     /// Whether to load the origin account data
     data: bool,
 }

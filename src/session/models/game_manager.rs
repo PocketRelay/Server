@@ -1,7 +1,7 @@
 use crate::{
     services::{
         game::{
-            models::{GameSettings, GameState, MeshState, RemoveReason},
+            models::{GameSettings, GameState, PlayerState, RemoveReason},
             AttrMap,
         },
         matchmaking::rules::RuleSet,
@@ -125,7 +125,7 @@ pub struct UpdateMeshRequest {
 
 pub struct MeshTarget {
     pub player_id: PlayerID,
-    pub state: MeshState,
+    pub state: PlayerState,
 }
 
 impl Decodable for UpdateMeshRequest {
@@ -135,7 +135,7 @@ impl Decodable for UpdateMeshRequest {
 
         let target = if count > 0 {
             let player_id: PlayerID = reader.tag(b"PID")?;
-            let state: MeshState = reader.tag(b"STAT")?;
+            let state: PlayerState = reader.tag(b"STAT")?;
             let target = MeshTarget { player_id, state };
             Some(target)
         } else {

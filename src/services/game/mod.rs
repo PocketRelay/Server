@@ -99,7 +99,7 @@ pub struct GamePlayer {
     /// Networking information for the player
     pub net: NetData,
     /// The mesh state of the player
-    pub state: MeshState,
+    pub state: PlayerState,
 }
 
 /// Structure for taking a snapshot of the players current
@@ -126,7 +126,7 @@ impl GamePlayer {
             player,
             link,
             net,
-            state: MeshState::Connecting,
+            state: PlayerState::ActiveConnecting,
         }
     }
 
@@ -321,7 +321,7 @@ pub struct UpdateMeshMessage {
     /// The target player that its updating with
     pub target: PlayerID,
     /// The player mesh state
-    pub state: MeshState,
+    pub state: PlayerState,
 }
 
 /// Handler for updating mesh connections
@@ -330,7 +330,7 @@ impl Handler<UpdateMeshMessage> for Game {
 
     fn handle(&mut self, msg: UpdateMeshMessage, _ctx: &mut ServiceContext<Self>) {
         let state = msg.state;
-        if let MeshState::Connecting = state {
+        if let PlayerState::ActiveConnecting = state {
             // Ensure the target player is in the game
             if !self
                 .players
@@ -352,7 +352,7 @@ impl Handler<UpdateMeshMessage> for Game {
             };
 
             // Update the session state
-            session.state = MeshState::Connected;
+            session.state = PlayerState::ActiveConnected;
 
             let player_id = session.player.id;
             let state_change = PlayerStateChange {
@@ -676,6 +676,8 @@ impl Game {
     /// Attempts to migrate the host of this game if there are still players
     /// left in the game.
     fn try_migrate_host(&mut self) {
+        // TODO: With more than one player this fails
+
         // Obtain the new player at the first index
         let new_host = match self.players.first() {
             Some(value) => value,

@@ -8,11 +8,11 @@ app.db
 /data/
 
 .release
-build-release.nu
-build-docker.nu
 
 tools/target
 
 /config.json
 
 /private
+
+/scripts

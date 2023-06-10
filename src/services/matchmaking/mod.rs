@@ -105,7 +105,7 @@ impl Handler<CheckGameMessage> for Matchmaking {
                             let msid = entry.player.player.id;
 
                             // Send the async update (TODO: Do this at intervals)
-                            let _ = entry.player.link.push(Packet::notify(
+                            entry.player.link.push(Packet::notify(
                                 Components::GameManager(GameManager::MatchmakingAsyncStatus),
                                 AsyncMatchmakingStatus { player_id: msid },
                             ));
