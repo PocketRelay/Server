@@ -46,7 +46,7 @@ struct OfficialInstance {
 
 #[derive(Debug, Error)]
 pub enum InstanceError {
-    #[error("Failed to request lookup from google: {0}")]
+    #[error("Failed to request lookup from cloudflare: {0}")]
     LookupRequest(#[from] reqwest::Error),
     #[error("Failed to lookup server response empty")]
     MissingValue,
