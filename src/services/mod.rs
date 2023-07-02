@@ -17,7 +17,7 @@ pub struct Services {
     pub game_manager: Link<GameManager>,
     pub matchmaking: Link<Matchmaking>,
     pub leaderboard: Link<Leaderboard>,
-    pub retriever: Option<Retriever>,
+    pub retriever: Link<Retriever>,
     pub sessions: Link<AuthedSessions>,
     pub tokens: Tokens,
 }

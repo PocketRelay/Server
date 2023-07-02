@@ -1,7 +1,7 @@
 //! Retriever service for completing the Origin account authentication
 //! and data loading flow
 
-use super::{models::OriginLoginResponse, OfficialSession, Retriever, RetrieverResult};
+use super::{models::OriginLoginResponse, OfficialSession, RetrieverResult};
 use crate::{
     database::entities::{Player, PlayerData},
     session::models::{auth::OriginLoginRequest, util::SettingsResponse},
@@ -27,13 +27,12 @@ pub struct OriginFlowService {
 impl OriginFlowService {
     /// Creates a new origin flow from the provided retriever
     ///
-    /// `retriever` The retriever to use to create the session for the flow
-    pub async fn create(&self, retriever: &Retriever) -> Option<OriginFlow> {
-        let session = retriever.session().await?;
-        Some(OriginFlow {
+    /// `session` The session to use for the flow
+    pub fn create(&self, session: OfficialSession) -> OriginFlow {
+        OriginFlow {
             session,
             data: self.data,
-        })
+        }
     }
 }
 
