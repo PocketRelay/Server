@@ -58,6 +58,28 @@ pub enum InstanceError {
 
 impl OfficialInstance {
     /// The hostname for the redirector server
+    ///
+    /// If this service goes down the same logic is available
+    /// from https://winter15.gosredirector.ea.com:42230/redirector/getServerInstance
+    /// using an XML structure:
+    ///
+    /// <?xml version="1.0" encoding="UTF-8"?>
+    ///    <serverinstancerequest>
+    ///    <blazesdkversion>3.15.6.0</blazesdkversion>
+    ///    <blazesdkbuilddate>Dec 21 2012 12:47:10</blazesdkbuilddate>
+    ///    <clientname>MassEffect3-pc</clientname>
+    ///    <clienttype>CLIENT_TYPE_GAMEPLAY_USER</clienttype>
+    ///    <clientplatform>pc</clientplatform>
+    ///    <clientskuid>pc</clientskuid>
+    ///    <clientversion>05427.124</clientversion>
+    ///    <dirtysdkversion>8.14.7.1</dirtysdkversion>
+    ///    <environment>prod</environment>
+    ///    <clientlocale>1701729619</clientlocale>
+    ///    <name>masseffect-3-pc</name>
+    ///    <platform>Windows</platform>
+    ///    <connectionprofile>standardSecure_v3</connectionprofile>
+    ///    <istrial>0</istrial>
+    /// </serverinstancerequest>
     const REDIRECTOR_HOST: &str = "gosredirector.ea.com";
     /// The port for the redirector server.
     const REDIRECT_PORT: Port = 42127;
