@@ -11,7 +11,7 @@ pub struct LeaderboardEntry {
     /// The ID of the player this entry is for
     pub player_id: PlayerID,
     /// The name of the player this entry is for
-    pub player_name: String,
+    pub player_name: Box<str>,
     /// The ranking of this entry (Position in the leaderboard)
     pub rank: usize,
     /// The value this ranking is based on
@@ -23,7 +23,7 @@ pub struct LeaderboardEntry {
 /// no longer be considered valid
 pub struct LeaderboardGroup {
     /// The values stored in this entity group
-    pub values: Vec<LeaderboardEntry>,
+    pub values: Box<[LeaderboardEntry]>,
     /// The time at which this entity group will become expired
     pub expires: SystemTime,
 }
@@ -34,7 +34,7 @@ impl LeaderboardGroup {
 
     /// Creates a new leaderboard group which has an expiry time set
     /// to the LIFETIME and uses the provided values
-    pub fn new(values: Vec<LeaderboardEntry>) -> Self {
+    pub fn new(values: Box<[LeaderboardEntry]>) -> Self {
         let expires = SystemTime::now() + Self::LIFETIME;
         Self { expires, values }
     }
@@ -43,10 +43,9 @@ impl LeaderboardGroup {
     /// is already considered to be expired. Used to hand out
     /// a value while computed to prevent mulitple computes happening
     pub fn dummy() -> Self {
-        let values = Vec::with_capacity(0);
         Self {
             expires: SystemTime::UNIX_EPOCH,
-            values,
+            values: Box::new([]),
         }
     }
 

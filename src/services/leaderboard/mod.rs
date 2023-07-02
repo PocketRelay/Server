@@ -123,7 +123,7 @@ impl Leaderboard {
     /// on their value.
     ///
     /// `ty` The leaderboard type
-    async fn compute(ty: &LeaderboardType) -> Vec<LeaderboardEntry> {
+    async fn compute(ty: &LeaderboardType) -> Box<[LeaderboardEntry]> {
         let start_time = Instant::now();
 
         // The amount of players to process in each database request
@@ -180,7 +180,7 @@ impl Leaderboard {
 
         debug!("Computed leaderboard took: {:.2?}", start_time.elapsed());
 
-        values
+        values.into_boxed_slice()
     }
 }
 
@@ -228,7 +228,7 @@ fn compute_n7_player(db: &'static DatabaseConnection, player: Player) -> Lf {
         let rating: u32 = total_promotions * 30 + total_level;
         Ok(LeaderboardEntry {
             player_id: player.id,
-            player_name: player.display_name,
+            player_name: player.display_name.into_boxed_str(),
             // Rank is not computed yet at this stage
             rank: 0,
             value: rating,
@@ -248,7 +248,7 @@ fn compute_cp_player(db: &'static DatabaseConnection, player: Player) -> Lf {
             .unwrap_or(0);
         Ok(LeaderboardEntry {
             player_id: player.id,
-            player_name: player.display_name,
+            player_name: player.display_name.into_boxed_str(),
             // Rank is not computed yet at this stage
             rank: 0,
             value,

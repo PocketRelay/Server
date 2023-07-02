@@ -83,7 +83,7 @@ pub struct GameSnapshot {
     /// The game attributes
     pub attributes: AttrMap,
     /// Snapshots of the game players
-    pub players: Vec<GamePlayerSnapshot>,
+    pub players: Box<[GamePlayerSnapshot]>,
 }
 
 /// Attributes map type
@@ -109,7 +109,7 @@ pub struct GamePlayerSnapshot {
     /// The player ID of the snapshot
     pub player_id: PlayerID,
     /// The player name of the snapshot
-    pub display_name: String,
+    pub display_name: Box<str>,
     /// The player net data of the snapshot if collected
     pub net: Option<NetData>,
 }
@@ -139,7 +139,7 @@ impl GamePlayer {
     pub fn snapshot(&self, include_net: bool) -> GamePlayerSnapshot {
         GamePlayerSnapshot {
             player_id: self.player.id,
-            display_name: self.player.display_name.clone(),
+            display_name: Box::from(self.player.display_name.as_ref()),
             net: if include_net {
                 Some(self.net.clone())
             } else {

@@ -1,10 +1,6 @@
 use crate::{
     database::{entities::Player, DatabaseConnection},
-    services::{
-        retriever::{origin::OriginFlowService, Retriever},
-        tokens::Tokens,
-        Services,
-    },
+    services::{retriever::GetOriginFlow, tokens::Tokens, Services},
     session::{
         models::{
             auth::*,
@@ -97,29 +93,15 @@ pub async fn handle_origin_login(
 
     let services: &Services = App::services();
 
-    // Ensure the retriever is enabled
-    let retriever: &Retriever = match &services.retriever {
-        Some(value) => value,
-        None => {
-            error!("Unable to authenticate Origin: Retriever is disabled or unavailable");
+    // Obtain an origin flow
+    let mut flow = match services.retriever.send(GetOriginFlow).await {
+        Ok(Ok(value)) => value,
+        Ok(Err(err)) => {
+            error!("Failed to obtain origin flow: {}", err);
             return Err(ServerError::ServerUnavailable);
         }
-    };
-
-    // Ensure origin authentication is enabled
-    let service: &OriginFlowService = match &retriever.origin_flow {
-        Some(value) => value,
-        None => {
-            error!("Origin authentication is disabled cannot authenticate origin client");
-            return Err(ServerError::ServerUnavailable);
-        }
-    };
-
-    // Create an origin authentication flow
-    let mut flow = match service.create(retriever).await {
-        Some(value) => value,
-        None => {
-            error!("Unable to authenticate Origin: Unable to connect to official servers");
+        Err(err) => {
+            error!("Unable to access retriever service: {}", err);
             return Err(ServerError::ServerUnavailable);
         }
     };

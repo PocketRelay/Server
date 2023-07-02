@@ -116,12 +116,12 @@ impl BlazeUpgrade {
     }
 
     /// Extracts the host address from the provided headers map
-    fn extract_host(headers: &HeaderMap) -> Option<String> {
+    fn extract_host(headers: &HeaderMap) -> Option<Box<str>> {
         // Get the port header
         let header = headers.get(HEADER_HOST)?;
         // Convert the header to a string
         let header = header.to_str().ok()?;
-        Some(header.to_string())
+        Some(Box::from(header))
     }
 }
 
@@ -170,7 +170,7 @@ where
         };
 
         // Get the client host
-        let host: String = match BlazeUpgrade::extract_host(headers) {
+        let host: Box<str> = match BlazeUpgrade::extract_host(headers) {
             Some(value) => value,
             None => return Box::pin(ready(Err(BlazeUpgradeError::CannotUpgrade))),
         };

@@ -102,7 +102,7 @@ impl Handler<GetHostTarget> for Session {
 #[derive(Clone)]
 pub struct SessionHostTarget {
     pub scheme: BlazeScheme,
-    pub host: String,
+    pub host: Box<str>,
     pub port: Port,
 }
 
