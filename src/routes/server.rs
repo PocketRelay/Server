@@ -59,6 +59,8 @@ pub async fn upgrade(
     ConnectInfo(socket_addr): ConnectInfo<SocketAddr>,
     upgrade: BlazeUpgrade,
 ) -> Response {
+    // TODO: Socket address extraction for forwarded reverse proxy
+
     tokio::spawn(async move {
         let socket = match upgrade.upgrade().await {
             Ok(value) => value,
