@@ -34,20 +34,22 @@ pub struct QosQuery {
 ///
 /// `query` The query string from the client
 pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
-    /// Port for the local Quality of Service server
-    const QOS_PORT: Port = 42130;
-
     debug!("Recieved QOS query: (Port: {})", query.port);
 
+    /// Port for the local Quality of Service server
+    const QOS_PORT: Port = 42130;
+    const IP: u32 = u32::from_be_bytes([127, 0, 0, 1]);
+
     let response = format!(
-        r"<qos> <numprobes>0</numprobes>
+        r#"<?xml version="1.0" encoding="UTF-8"?><qos> <numprobes>0</numprobes>
     <qosport>{}</qosport>
     <probesize>0</probesize>
     <qoshost>127.0.0.1</qoshost>
+    <qosip>{}</qosip>
     <requestid>1</requestid>
     <reqsecret>0</reqsecret>
-</qos>",
-        QOS_PORT
+</qos>"#,
+        QOS_PORT, IP
     );
     Xml(response)
 }

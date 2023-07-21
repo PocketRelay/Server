@@ -28,7 +28,7 @@ use blaze_pk::{
 };
 use interlink::prelude::*;
 use log::{debug, error, log_enabled};
-use std::{fmt::Debug, io};
+use std::{fmt::Debug, io, net::SocketAddr};
 
 pub mod models;
 pub mod routes;
@@ -39,6 +39,9 @@ pub mod routes;
 pub struct Session {
     /// Unique identifier for this session.
     id: SessionID,
+
+    /// Connection socket addr
+    addr: SocketAddr,
 
     /// Packet writer sink for the session
     writer: SinkLink<Packet>,
@@ -294,6 +297,22 @@ impl Handler<UpdateClientMessage> for Session {
     }
 }
 
+#[derive(Message)]
+#[msg(rtype = "SocketAddr")]
+pub struct GetSocketAddrMessage;
+
+impl Handler<GetSocketAddrMessage> for Session {
+    type Response = Mr<GetSocketAddrMessage>;
+
+    fn handle(
+        &mut self,
+        _msg: GetSocketAddrMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        Mr(self.addr)
+    }
+}
+
 /// Creates a set session packet and sends it to all the
 /// provided session links
 #[derive(Message)]
@@ -424,12 +443,18 @@ impl Session {
     /// `id`             The unique session ID
     /// `values`         The networking TcpStream and address
     /// `message_sender` The message sender for session messages
-    pub fn new(id: SessionID, host_target: SessionHostTarget, writer: SinkLink<Packet>) -> Self {
+    pub fn new(
+        id: SessionID,
+        host_target: SessionHostTarget,
+        writer: SinkLink<Packet>,
+        addr: SocketAddr,
+    ) -> Self {
         Self {
             id,
             writer,
             data: SessionData::default(),
             host_target,
+            addr,
         }
     }
 

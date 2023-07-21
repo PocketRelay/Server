@@ -30,7 +30,7 @@ async fn main() {
     App::init(config).await;
 
     // Create the HTTP router
-    let router = routes::router().into_make_service();
+    let router = routes::router().into_make_service_with_connect_info::<SocketAddr>();
 
     // Create futures for server and shutdown signal
     let server_future = Server::bind(&addr).serve(router);
