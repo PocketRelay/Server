@@ -1,7 +1,10 @@
 use axum::{
+    middleware,
     routing::{get, post, put},
     Router,
 };
+
+use crate::middleware::cors::cors_layer;
 
 mod auth;
 mod games;
@@ -86,7 +89,8 @@ pub fn router() -> Router {
                         .route("/log", get(server::get_log))
                         .route("/upgrade", get(server::upgrade))
                         .route("/telemetry", post(server::submit_telemetry)),
-                ),
+                )
+                .layer(middleware::from_fn(cors_layer)),
         )
         // Public content fallback
         .fallback_service(public::PublicContent)

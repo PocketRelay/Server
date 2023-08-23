@@ -1,12 +1,18 @@
 //! Retriever system for connecting and retrieving data from the official
 //! Mass Effect 3 servers.
 
+use std::{
+    fmt::{Debug, Display},
+    ops::Add,
+    time::{Duration, SystemTime},
+};
+
 use self::origin::OriginFlowService;
 use crate::{
     config::RetrieverConfig,
     utils::{
         components::{Components, Redirector},
-        models::{InstanceDetails, Port},
+        models::{InstanceDetails, InstanceNet, Port},
     },
 };
 use blaze_pk::{
@@ -14,62 +20,170 @@ use blaze_pk::{
     error::DecodeError,
     packet::{Packet, PacketCodec, PacketComponents, PacketDebug, PacketHeader, PacketType},
 };
-use blaze_ssl_async::stream::BlazeStream;
+use blaze_ssl_async::{stream::BlazeStream, BlazeError};
 use futures_util::{SinkExt, StreamExt};
+use interlink::prelude::*;
 use log::{debug, error, log_enabled};
 use models::InstanceRequest;
+use origin::OriginFlow;
 use reqwest;
 use serde::Deserialize;
+use thiserror::Error;
 use tokio::io;
 use tokio_util::codec::Framed;
 
 mod models;
+
 pub mod origin;
 
 /// Structure for the retrievier system which contains the host address
 /// for the official game server in order to make further connections
+#[derive(Service)]
 pub struct Retriever {
+    // Optional official instance if fetching is possible
+    instance: Option<OfficialInstance>,
+
+    /// Optional service for creating origin flows if enabled
+    origin_flow: Option<OriginFlowService>,
+}
+
+#[derive(Message)]
+#[msg(rtype = "Result<OriginFlow, GetFlowError>")]
+pub struct GetOriginFlow;
+
+#[derive(Debug, Error)]
+pub enum GetFlowError {
+    #[error("Retriever is disabled or unavailable")]
+    Unavailable,
+    #[error("Unable to obtain retriever instance")]
+    Instance,
+    #[error("Failed to obtain session")]
+    Session,
+    #[error("Origin authentication is not enabled")]
+    OriginDisabled,
+}
+
+impl Handler<GetOriginFlow> for Retriever {
+    type Response = Sfr<Retriever, GetOriginFlow>;
+
+    fn handle(
+        &mut self,
+        _msg: GetOriginFlow,
+        _ctx: &mut interlink::service::ServiceContext<Self>,
+    ) -> Self::Response {
+        Sfr::new(move |act: &mut Retriever, _ctx| {
+            Box::pin(async move {
+                let mut instance = act.instance.as_ref().ok_or(GetFlowError::Unavailable)?;
+
+                // Obtain a new instance if the current one is expired
+                if instance.expiry < SystemTime::now() {
+                    debug!("Current official instance is outdated.. retrieving a new instance");
+
+                    instance = match OfficialInstance::obtain().await {
+                        Ok(value) => act.instance.insert(value),
+                        Err(err) => {
+                            act.instance = None;
+                            error!("Official server instance expired but failed to obtain new instance: {}", err);
+                            return Err(GetFlowError::Instance);
+                        }
+                    };
+                }
+
+                let session = instance.session().await.ok_or(GetFlowError::Session)?;
+                let flow = act
+                    .origin_flow
+                    .as_ref()
+                    .ok_or(GetFlowError::OriginDisabled)?
+                    .create(session);
+
+                Ok(flow)
+            })
+        })
+    }
+}
+
+/// Connection details for an official server instance
+struct OfficialInstance {
     /// The host address of the official server
     host: String,
     /// The port of the official server.
     port: u16,
-    /// Optional service for creating origin flows if enabled
-    pub origin_flow: Option<OriginFlowService>,
+    /// The time the instance should expire at
+    expiry: SystemTime,
 }
 
-impl Retriever {
+/// Errors that could occur while attempting to obtain
+/// an official server instance details
+#[derive(Debug, Error)]
+pub enum InstanceError {
+    #[error("Failed to request lookup from cloudflare: {0}")]
+    LookupRequest(#[from] reqwest::Error),
+    #[error("Failed to lookup server response empty")]
+    MissingValue,
+    #[error("Failed to connect to server: {0}")]
+    Blaze(#[from] BlazeError),
+    #[error("Failed to retrieve instance: {0}")]
+    InstanceRequest(#[from] RetrieverError),
+}
+
+impl OfficialInstance {
+    /// Time an official instance should be considered valid for (2 hours)
+    const LIFETIME: Duration = Duration::from_secs(60 * 60 * 2);
+
     /// The hostname for the redirector server
+    ///
+    /// If this service goes down the same logic is available
+    /// from https://winter15.gosredirector.ea.com:42230/redirector/getServerInstance
+    /// using an XML structure:
+    ///
+    /// <?xml version="1.0" encoding="UTF-8"?>
+    ///    <serverinstancerequest>
+    ///    <blazesdkversion>3.15.6.0</blazesdkversion>
+    ///    <blazesdkbuilddate>Dec 21 2012 12:47:10</blazesdkbuilddate>
+    ///    <clientname>MassEffect3-pc</clientname>
+    ///    <clienttype>CLIENT_TYPE_GAMEPLAY_USER</clienttype>
+    ///    <clientplatform>pc</clientplatform>
+    ///    <clientskuid>pc</clientskuid>
+    ///    <clientversion>05427.124</clientversion>
+    ///    <dirtysdkversion>8.14.7.1</dirtysdkversion>
+    ///    <environment>prod</environment>
+    ///    <clientlocale>1701729619</clientlocale>
+    ///    <name>masseffect-3-pc</name>
+    ///    <platform>Windows</platform>
+    ///    <connectionprofile>standardSecure_v3</connectionprofile>
+    ///    <istrial>0</istrial>
+    /// </serverinstancerequest>
     const REDIRECTOR_HOST: &str = "gosredirector.ea.com";
     /// The port for the redirector server.
     const REDIRECT_PORT: Port = 42127;
 
-    /// Attempts to create a new retriever by first retrieving the coorect
-    /// ip address of the gosredirector.ea.com host and then creates a
-    /// connection to the redirector server and obtains the IP and Port
-    /// of the Official server.
-    pub async fn new(config: RetrieverConfig) -> Option<Retriever> {
-        if !config.enabled {
-            return None;
-        }
+    async fn obtain() -> Result<OfficialInstance, InstanceError> {
+        let host = Self::lookup_host().await?;
+        debug!("Completed host lookup: {}", &host);
 
-        let redirector_host = Self::lookup_host().await?;
-        debug!("Completed host lookup: {}", &redirector_host);
-        let (host, port) = Self::get_main_host(redirector_host).await?;
-        debug!("Retriever setup complete. (Host: {} Port: {})", &host, port);
+        // Create a session to the redirector server
+        let mut session = OfficialSession::connect(&host, Self::REDIRECT_PORT).await?;
 
-        let origin_flow = if config.origin_fetch {
-            Some(OriginFlowService {
-                data: config.origin_fetch_data,
-            })
-        } else {
-            None
-        };
+        // Request the server instance
+        let instance: InstanceDetails = session
+            .request(
+                Components::Redirector(Redirector::GetServerInstance),
+                InstanceRequest,
+            )
+            .await?;
 
-        Some(Retriever {
-            host,
-            port,
-            origin_flow,
-        })
+        // Extract the host and port turning the host into a string
+        let InstanceNet { host, port } = instance.net;
+        let host: String = host.into();
+
+        debug!(
+            "Retriever instance obtained. (Host: {} Port: {})",
+            &host, port
+        );
+
+        let expiry = SystemTime::now().add(Self::LIFETIME);
+
+        Ok(OfficialInstance { host, port, expiry })
     }
 
     /// Attempts to resolve the address of the official gosredirector. First attempts
@@ -77,7 +191,7 @@ impl Retriever {
     /// is ignored and the google HTTP DNS will be attempted instead
     ///
     /// `host` The host to lookup
-    async fn lookup_host() -> Option<String> {
+    async fn lookup_host() -> Result<String, InstanceError> {
         let host = Self::REDIRECTOR_HOST;
 
         // Attempt to lookup using the system DNS
@@ -92,73 +206,75 @@ impl Retriever {
                 // Loopback value means it was probbably redirected in the hosts file
                 // so those are ignored
                 if !ip.is_loopback() {
-                    return Some(format!("{}", ip));
+                    return Ok(format!("{}", ip));
                 }
             }
         }
 
-        // Attempt to lookup using google HTTP DNS
-        let url = format!("https://dns.google/resolve?name={host}&type=A");
-        let mut request = reqwest::get(url)
-            .await
-            .ok()?
-            .json::<LookupResponse>()
-            .await
-            .ok()?;
+        // Attempt to lookup using cloudflares DNS over HTTP
 
-        let answer = request.answer.pop()?;
-        Some(answer.data)
-    }
+        let client = reqwest::Client::new();
+        let url = format!("https://cloudflare-dns.com/dns-query?name={host}&type=A");
+        let mut response: LookupResponse = client
+            .get(url)
+            .header("Accept", "application/dns-json")
+            .send()
+            .await?
+            .json()
+            .await?;
 
-    /// Creates a connection to the redirector server and sends
-    /// the Redirector->GetInstance packet to obtain the details
-    /// of the main official server.
-    ///
-    /// Will respond with the host string and port of the official
-    /// server if the process succeeded or else None
-    ///
-    /// Makes a instance request to the redirect server at the provided
-    /// host and returns the instance response.
-    async fn get_main_host(host: String) -> Option<(String, Port)> {
-        debug!("Connecting to official redirector");
-        let stream = Self::stream(&host, Self::REDIRECT_PORT).await?;
-        let mut session = RetSession::new(stream)?;
-        debug!("Connected to official redirector");
-        debug!("Requesting details from official server");
-        let instance = session.get_main_instance().await.ok()?;
-        let net = instance.net;
-        Some((net.host.into(), net.port))
+        response
+            .answer
+            .pop()
+            .map(|value| value.data)
+            .ok_or(InstanceError::MissingValue)
     }
 
     /// Creates a stream to the main server and wraps it with a
     /// session returning that session. Will return None if the
     /// stream failed.
-    pub async fn session(&self) -> Option<RetSession> {
-        let stream = Self::stream(&self.host, self.port).await?;
-        RetSession::new(stream)
+    pub async fn session(&self) -> Option<OfficialSession> {
+        OfficialSession::connect(&self.host, self.port).await.ok()
     }
+}
 
-    /// Creates a BlazeStream to the provided host and port
-    /// returning None if the connection failed
-    ///
-    /// `host` The host of the server
-    /// `port` The port of the server
-    pub async fn stream(host: &str, port: Port) -> Option<BlazeStream> {
-        match BlazeStream::connect((host, port)).await {
-            Ok(value) => Some(value),
-            Err(err) => {
-                error!(
-                    "Failed to connect to server at {}:{}; Cause: {err:?}",
-                    host, port
-                );
-                None
+impl Retriever {
+    /// Attempts to create a new retriever by first retrieving the coorect
+    /// ip address of the gosredirector.ea.com host and then creates a
+    /// connection to the redirector server and obtains the IP and Port
+    /// of the Official server.
+    pub async fn new(config: RetrieverConfig) -> Link<Retriever> {
+        let instance = if config.enabled {
+            match OfficialInstance::obtain().await {
+                Ok(value) => Some(value),
+                Err(error) => {
+                    error!("Failed to setup redirector: {}", error);
+                    None
+                }
             }
-        }
+        } else {
+            None
+        };
+
+        let origin_flow = if config.origin_fetch {
+            Some(OriginFlowService {
+                data: config.origin_fetch_data,
+            })
+        } else {
+            None
+        };
+
+        let this = Retriever {
+            instance,
+            origin_flow,
+        };
+
+        this.start()
     }
 }
 
 /// Session implementation for a retriever client
-pub struct RetSession {
+pub struct OfficialSession {
     /// The ID for the next request packet
     id: u16,
     /// The underlying SSL / TCP stream connection
@@ -166,25 +282,30 @@ pub struct RetSession {
 }
 
 /// Error type for retriever errors
+#[derive(Debug, Error)]
 pub enum RetrieverError {
     /// Packet decode errror
-    Decode(DecodeError),
+    #[error(transparent)]
+    Decode(#[from] DecodeError),
     /// IO Error
-    IO(io::Error),
+    #[error(transparent)]
+    IO(#[from] io::Error),
     /// Error response packet
-    Packet(Packet),
+    #[error(transparent)]
+    Packet(#[from] ErrorPacket),
     /// Stream ended early
+    #[error("Reached end of stream")]
     EarlyEof,
 }
 
 pub type RetrieverResult<T> = Result<T, RetrieverError>;
 
-impl RetSession {
-    /// Creates a new retriever session for the provided host and
-    /// port. This will create the underlying connection aswell.
-    /// If creating the connection fails then None is returned instead.
-    pub fn new(stream: BlazeStream) -> Option<Self> {
-        Some(Self {
+impl OfficialSession {
+    /// Creates a session with an official server at the provided
+    /// `host` and `port`
+    async fn connect(host: &str, port: Port) -> Result<OfficialSession, BlazeError> {
+        let stream = BlazeStream::connect((host, port)).await?;
+        Ok(Self {
             id: 0,
             stream: Framed::new(stream, PacketCodec),
         })
@@ -259,19 +380,9 @@ impl RetSession {
                     return Ok(response);
                 }
             } else if let PacketType::Error = header.ty {
-                return Err(RetrieverError::Packet(response));
+                return Err(RetrieverError::Packet(ErrorPacket(response)));
             }
         }
-    }
-
-    /// Function for making the request for the official server instance
-    /// from the redirector server.
-    async fn get_main_instance(&mut self) -> RetrieverResult<InstanceDetails> {
-        self.request::<InstanceRequest, InstanceDetails>(
-            Components::Redirector(Redirector::GetServerInstance),
-            InstanceRequest,
-        )
-        .await
     }
 }
 
@@ -295,15 +406,16 @@ fn debug_log_packet(packet: &Packet, action: &str) {
     debug!("\n{}\n{:?}", action, debug);
 }
 
-impl From<DecodeError> for RetrieverError {
-    fn from(err: DecodeError) -> Self {
-        RetrieverError::Decode(err)
-    }
-}
+/// Wrapping structure for packets to allow them to be
+/// used as errors
+#[derive(Debug)]
+pub struct ErrorPacket(Packet);
 
-impl From<io::Error> for RetrieverError {
-    fn from(err: io::Error) -> Self {
-        RetrieverError::IO(err)
+impl std::error::Error for ErrorPacket {}
+
+impl Display for ErrorPacket {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#X}", self.0.header.error)
     }
 }
 

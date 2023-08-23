@@ -10,6 +10,7 @@ use crate::{
 };
 use axum::{
     body::Empty,
+    extract::ConnectInfo,
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Json,
@@ -18,7 +19,10 @@ use blaze_pk::packet::PacketCodec;
 use interlink::service::Service;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::{
+    net::SocketAddr,
+    sync::atomic::{AtomicU32, Ordering},
+};
 use tokio::{fs::read_to_string, io::split};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
@@ -51,7 +55,12 @@ pub async fn server_details() -> Json<ServerDetails> {
 /// Handles upgrading connections from the Pocket Relay Client tool
 /// from HTTP over to the Blaze protocol for proxing the game traffic
 /// as blaze sessions using HTTP Upgrade
-pub async fn upgrade(upgrade: BlazeUpgrade) -> Response {
+pub async fn upgrade(
+    ConnectInfo(socket_addr): ConnectInfo<SocketAddr>,
+    upgrade: BlazeUpgrade,
+) -> Response {
+    // TODO: Socket address extraction for forwarded reverse proxy
+
     tokio::spawn(async move {
         let socket = match upgrade.upgrade().await {
             Ok(value) => value,
@@ -72,7 +81,7 @@ pub async fn upgrade(upgrade: BlazeUpgrade) -> Response {
             ctx.attach_stream(read, true);
             let writer = ctx.attach_sink(write);
 
-            Session::new(session_id, socket.host_target, writer)
+            Session::new(session_id, socket.host_target, writer, socket_addr)
         });
     });
 

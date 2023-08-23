@@ -83,7 +83,7 @@ pub struct GameSnapshot {
     /// The game attributes
     pub attributes: AttrMap,
     /// Snapshots of the game players
-    pub players: Vec<GamePlayerSnapshot>,
+    pub players: Box<[GamePlayerSnapshot]>,
 }
 
 /// Attributes map type
@@ -99,7 +99,7 @@ pub struct GamePlayer {
     /// Networking information for the player
     pub net: NetData,
     /// The mesh state of the player
-    pub state: MeshState,
+    pub state: PlayerState,
 }
 
 /// Structure for taking a snapshot of the players current
@@ -109,7 +109,7 @@ pub struct GamePlayerSnapshot {
     /// The player ID of the snapshot
     pub player_id: PlayerID,
     /// The player name of the snapshot
-    pub display_name: String,
+    pub display_name: Box<str>,
     /// The player net data of the snapshot if collected
     pub net: Option<NetData>,
 }
@@ -126,7 +126,7 @@ impl GamePlayer {
             player,
             link,
             net,
-            state: MeshState::Connecting,
+            state: PlayerState::ActiveConnecting,
         }
     }
 
@@ -139,7 +139,7 @@ impl GamePlayer {
     pub fn snapshot(&self, include_net: bool) -> GamePlayerSnapshot {
         GamePlayerSnapshot {
             player_id: self.player.id,
-            display_name: self.player.display_name.clone(),
+            display_name: Box::from(self.player.display_name.as_ref()),
             net: if include_net {
                 Some(self.net.clone())
             } else {
@@ -321,7 +321,7 @@ pub struct UpdateMeshMessage {
     /// The target player that its updating with
     pub target: PlayerID,
     /// The player mesh state
-    pub state: MeshState,
+    pub state: PlayerState,
 }
 
 /// Handler for updating mesh connections
@@ -330,7 +330,7 @@ impl Handler<UpdateMeshMessage> for Game {
 
     fn handle(&mut self, msg: UpdateMeshMessage, _ctx: &mut ServiceContext<Self>) {
         let state = msg.state;
-        if let MeshState::Connecting = state {
+        if let PlayerState::ActiveConnecting = state {
             // Ensure the target player is in the game
             if !self
                 .players
@@ -352,7 +352,7 @@ impl Handler<UpdateMeshMessage> for Game {
             };
 
             // Update the session state
-            session.state = MeshState::Connected;
+            session.state = PlayerState::ActiveConnected;
 
             let player_id = session.player.id;
             let state_change = PlayerStateChange {
@@ -676,6 +676,8 @@ impl Game {
     /// Attempts to migrate the host of this game if there are still players
     /// left in the game.
     fn try_migrate_host(&mut self) {
+        // TODO: With more than one player this fails
+
         // Obtain the new player at the first index
         let new_host = match self.players.first() {
             Some(value) => value,
