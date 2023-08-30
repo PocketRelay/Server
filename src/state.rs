@@ -34,8 +34,6 @@ impl App {
     /// called before this state is accessed or else the app will
     /// panic and must not be called more than once.
     pub async fn init(config: Config) {
-        let dashboard_config = config.dashboard;
-
         // Config data passed onto the services
         let services_config = ServicesConfig {
             retriever: config.retriever,
@@ -55,11 +53,12 @@ impl App {
         let runtime_config = RuntimeConfig {
             galaxy_at_war: config.galaxy_at_war,
             menu_message,
+            dashboard: config.dashboard,
         };
 
         let (db, services, _) = join!(
             // Initialize the database
-            database::init(dashboard_config),
+            database::init(&runtime_config),
             // Initialize the services
             Services::init(services_config),
             // Display the connection urls message
