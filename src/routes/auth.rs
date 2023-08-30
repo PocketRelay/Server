@@ -39,6 +39,10 @@ pub enum AuthError {
     /// Account was an Origin account without a password
     #[error("Origin account password is not set")]
     OriginAccess,
+
+    /// Server has disabled account creation on dashboard
+    #[error("This server has disabled dashboard account registration")]
+    RegistrationDisabled,
 }
 
 /// Response type alias for JSON responses with AuthError
@@ -105,6 +109,11 @@ pub struct CreateRequest {
 /// Upon success will provide a [`TokenResponse`] containing
 /// the authentication token for the created user
 pub async fn create(Json(req): Json<CreateRequest>) -> AuthRes<TokenResponse> {
+    let config = App::config();
+    if config.dashboard.disable_registration {
+        return Err(AuthError::RegistrationDisabled);
+    }
+
     let CreateRequest {
         username,
         email,
@@ -145,6 +154,7 @@ impl IntoResponse for AuthError {
             Self::Database(_) | Self::PasswordHash(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::InvalidCredentails | Self::OriginAccess => StatusCode::UNAUTHORIZED,
             Self::EmailTaken | Self::InvalidUsername => StatusCode::BAD_REQUEST,
+            Self::RegistrationDisabled => StatusCode::FORBIDDEN,
         };
 
         (status_code, self.to_string()).into_response()
