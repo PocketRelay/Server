@@ -5,7 +5,7 @@ use crate::{
     database::entities::players::PlayerRole,
     middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade},
     session::Session,
-    state,
+    state::{self, App},
     utils::logging::LOG_FILE_NAME,
 };
 use axum::{
@@ -47,6 +47,26 @@ pub async fn server_details() -> Json<ServerDetails> {
     Json(ServerDetails {
         ident: "POCKET_RELAY_SERVER",
         version: state::VERSION,
+    })
+}
+
+/// Response sent to dashboard clients containing configuration
+/// information about the dashboard
+#[derive(Serialize)]
+pub struct DashboardDetails {
+    pub disable_registration: bool,
+}
+
+/// GET /api/server/dashboard
+///
+/// Handles providing the server details. The Pocket Relay client tool
+/// uses this endpoint to validate that the provided host is a valid
+/// Pocket Relay server.
+pub async fn dashboard_details() -> Json<DashboardDetails> {
+    let config = App::config();
+
+    Json(DashboardDetails {
+        disable_registration: config.dashboard.disable_registration,
     })
 }
 
