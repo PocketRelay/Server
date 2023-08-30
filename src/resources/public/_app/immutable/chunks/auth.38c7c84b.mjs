@@ -1,1 +1,0 @@
-import{r as e,H as r}from"./api.15f7bc3a.mjs";function d(t,o){return e({method:r.POST,route:"auth/login",body:{email:t,password:o}})}function n(t,o,a){return e({method:r.POST,route:"auth/create",body:{username:t,email:o,password:a}})}export{d as a,n as d};
