@@ -88,7 +88,8 @@ pub fn router() -> Router {
                         .route("/", get(server::server_details))
                         .route("/log", get(server::get_log))
                         .route("/upgrade", get(server::upgrade))
-                        .route("/telemetry", post(server::submit_telemetry)),
+                        .route("/telemetry", post(server::submit_telemetry))
+                        .route("/dashboard", get(server::dashboard_details)),
                 )
                 .layer(middleware::from_fn(cors_layer)),
         )

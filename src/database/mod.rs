@@ -13,12 +13,11 @@ mod migration;
 pub use sea_orm::DatabaseConnection;
 pub use sea_orm::DbErr;
 
+use self::entities::{Player, PlayerRole};
 use crate::{
-    config::DashboardConfig,
+    config::RuntimeConfig,
     utils::hashing::{hash_password, verify_password},
 };
-
-use self::entities::{Player, PlayerRole};
 
 /// Database error result type
 pub type DbResult<T> = Result<T, DbErr>;
@@ -28,7 +27,7 @@ const DATABASE_PATH_URL: &str = "sqlite:data/app.db";
 
 /// Connects to the database returning a Database connection
 /// which allows accessing the database without accessing sea_orm
-pub async fn init(config: DashboardConfig) -> DatabaseConnection {
+pub async fn init(config: &RuntimeConfig) -> DatabaseConnection {
     info!("Connected to database..");
 
     let path = Path::new(&DATABASE_PATH);
@@ -67,13 +66,13 @@ pub async fn init(config: DashboardConfig) -> DatabaseConnection {
 ///
 /// `db`     The database connection
 /// `config` The config to use for the admin details
-async fn init_database_admin(db: &DatabaseConnection, config: DashboardConfig) {
-    let admin_email = match config.super_email {
+async fn init_database_admin(db: &DatabaseConnection, config: &RuntimeConfig) {
+    let admin_email = match &config.dashboard.super_email {
         Some(value) => value,
         None => return,
     };
 
-    let player = match Player::by_email(db, &admin_email).await {
+    let player = match Player::by_email(db, admin_email).await {
         // Player exists
         Ok(Some(value)) => value,
         // Player doesn't exist yet
@@ -93,11 +92,11 @@ async fn init_database_admin(db: &DatabaseConnection, config: DashboardConfig) {
         }
     };
 
-    if let Some(password) = config.super_password {
-        let password_hash = hash_password(&password).expect("Failed to hash super user password");
+    if let Some(password) = &config.dashboard.super_password {
+        let password_hash = hash_password(password).expect("Failed to hash super user password");
 
         let matches = match &player.password {
-            Some(value) => verify_password(&password, value),
+            Some(value) => verify_password(password, value),
             None => false,
         };
 

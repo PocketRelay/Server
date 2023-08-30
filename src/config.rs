@@ -6,6 +6,7 @@ use std::{env, fs::read_to_string, path::Path};
 pub struct RuntimeConfig {
     pub galaxy_at_war: GalaxyAtWarConfig,
     pub menu_message: String,
+    pub dashboard: DashboardConfig,
 }
 
 /// Environment variable key to load the config from
@@ -97,6 +98,7 @@ impl Default for GalaxyAtWarConfig {
 pub struct DashboardConfig {
     pub super_email: Option<String>,
     pub super_password: Option<String>,
+    pub disable_registration: bool,
 }
 
 #[derive(Deserialize)]
