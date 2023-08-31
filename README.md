@@ -6,8 +6,6 @@
 
 
 ![License](https://img.shields.io/github/license/PocketRelay/Server?style=for-the-badge)
-![Cargo Version](https://img.shields.io/crates/v/pocket-relay?style=for-the-badge)
-![Cargo Downloads](https://img.shields.io/crates/d/pocket-relay?style=for-the-badge)
 ![Build](https://img.shields.io/github/actions/workflow/status/PocketRelay/Server/rust.yml?style=for-the-badge)
 
 [Discord Server (discord.gg/yvycWW8RgR)](https://discord.gg/yvycWW8RgR)
