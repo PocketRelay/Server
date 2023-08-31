@@ -16,3 +16,6 @@ tools/target
 /private
 
 /scripts
+
+/src/resources/public/*
+!/src/resources/public/content

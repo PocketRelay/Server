@@ -1,1 +1,0 @@
-import{r,H as e,m as t}from"./api.ab561f20.mjs";function s(){return r({method:e.GET,route:"server"})}function a(){return t({method:e.GET,route:"server/log"})}function u(){return r({method:e.GET,route:"server/dashboard"})}export{a,u as b,s as g};
