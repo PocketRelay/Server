@@ -436,13 +436,19 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
         Ok(value) => value,
         Err(_) => return TdfMap::with_capacity(0),
     };
+
+    let prefix = if host_target.local_http {
+        format!("http://127.0.0.1:{}", LOCAL_HTTP_PORT)
+    } else {
+        format!(
+            "{}{}:{}",
+            host_target.scheme.value(),
+            host_target.host,
+            host_target.port
+        )
+    };
+
     let tele_port = TELEMETRY_PORT;
-    let prefix = format!(
-        "{}{}:{}",
-        host_target.scheme.value(),
-        host_target.host,
-        host_target.port
-    );
 
     let mut config = TdfMap::with_capacity(15);
     config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/"));

@@ -30,6 +30,8 @@ const TELEMETRY_KEY: &[u8] = &[
 pub const TICKER_PORT: Port = 8999;
 /// The constant port for the telemetry server
 pub const TELEMETRY_PORT: Port = 42129;
+// The constant port for the local http server
+pub const LOCAL_HTTP_PORT: Port = 42131;
 
 /// Structure for encoding the telemetry server details
 pub struct TelemetryServer;
@@ -126,10 +128,16 @@ impl Encodable for PreAuthResponse {
 
         // Quality Of Service Server details
         writer.group(b"QOSS", |writer| {
+            let (http_host, http_port) = if self.host_target.local_http {
+                ("127.0.0.1", LOCAL_HTTP_PORT)
+            } else {
+                (&self.host_target.host as &str, self.host_target.port)
+            };
+
             // Bioware Primary Server
             writer.group(b"BWPS", |writer| {
-                writer.tag_str(b"PSA", &self.host_target.host);
-                writer.tag_u16(b"PSP", self.host_target.port);
+                writer.tag_str(b"PSA", http_host);
+                writer.tag_u16(b"PSP", http_port);
                 writer.tag_str(b"SNA", "prod-sjc");
             });
 
@@ -144,8 +152,8 @@ impl Encodable for PreAuthResponse {
                 writer.write_str("ea-sjc");
 
                 // Same as the Bioware primary server
-                writer.tag_str(b"PSA", &self.host_target.host);
-                writer.tag_u16(b"PSP", self.host_target.port);
+                writer.tag_str(b"PSA", http_host);
+                writer.tag_u16(b"PSP", http_port);
                 writer.tag_str(b"SNA", "prod-sjc");
                 writer.tag_group_end();
             }
