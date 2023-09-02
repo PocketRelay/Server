@@ -107,6 +107,7 @@ pub struct SessionHostTarget {
     pub scheme: BlazeScheme,
     pub host: Box<str>,
     pub port: Port,
+    pub local_http: bool,
 }
 
 #[derive(Message)]
