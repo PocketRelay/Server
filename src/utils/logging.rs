@@ -51,6 +51,9 @@ pub fn setup(logging_level: LevelFilter) {
         .expect("Failed to create logging config");
 
     init_config(config).expect("Unable to initialize logger");
+
+    // Include panics in logging
+    log_panics::init();
 }
 
 /// Prints a list of possible urls that can be used to connect to
