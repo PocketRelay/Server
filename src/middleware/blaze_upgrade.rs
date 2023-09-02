@@ -123,6 +123,18 @@ impl BlazeUpgrade {
         let header = header.to_str().ok()?;
         Some(Box::from(header))
     }
+
+    /// Extracts the client local http setting from the provided headers map.
+    ///
+    /// `headers` The header map
+    fn extract_local_http(headers: &HeaderMap) -> Option<bool> {
+        // Get the port header
+        let header = headers.get(HEADER_LOCAL_HTTP)?;
+        // Convert the header to a string
+        let header = header.to_str().ok()?;
+        // Parse the header value
+        header.parse().ok()
+    }
 }
 
 /// Header for the Pocket Relay connection scheme used by the client
@@ -131,6 +143,8 @@ const HEADER_SCHEME: &str = "X-Pocket-Relay-Scheme";
 const HEADER_PORT: &str = "X-Pocket-Relay-Port";
 /// Header for the Pocket Relay connection host used by the client
 const HEADER_HOST: &str = "X-Pocket-Relay-Host";
+/// Header to tell the server to use local HTTP
+const HEADER_LOCAL_HTTP: &str = "X-Pocket-Relay-Local-Http";
 
 impl<S> FromRequestParts<S> for BlazeUpgrade
 where
@@ -175,9 +189,16 @@ where
             None => return Box::pin(ready(Err(BlazeUpgradeError::CannotUpgrade))),
         };
 
+        let local_http: bool = BlazeUpgrade::extract_local_http(headers).unwrap_or_default();
+
         Box::pin(ready(Ok(Self {
             on_upgrade,
-            host_target: SessionHostTarget { scheme, host, port },
+            host_target: SessionHostTarget {
+                scheme,
+                host,
+                port,
+                local_http,
+            },
         })))
     }
 }
