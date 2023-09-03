@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::{env, fs::read_to_string, path::Path};
 
 pub struct RuntimeConfig {
+    pub reverse_proxy: bool,
     pub galaxy_at_war: GalaxyAtWarConfig,
     pub menu_message: String,
     pub dashboard: DashboardConfig,
@@ -58,6 +59,7 @@ pub struct ServicesConfig {
 #[serde(default)]
 pub struct Config {
     pub port: Port,
+    pub reverse_proxy: bool,
     pub dashboard: DashboardConfig,
     pub menu_message: String,
     pub galaxy_at_war: GalaxyAtWarConfig,
@@ -69,6 +71,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             port: 80,
+            reverse_proxy: false,
             dashboard: Default::default(),
             menu_message: "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>".to_string(),
             galaxy_at_war: Default::default(),

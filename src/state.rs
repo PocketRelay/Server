@@ -51,6 +51,7 @@ impl App {
 
         // Config data persisted to runtime
         let runtime_config = RuntimeConfig {
+            reverse_proxy: config.reverse_proxy,
             galaxy_at_war: config.galaxy_at_war,
             menu_message,
             dashboard: config.dashboard,
