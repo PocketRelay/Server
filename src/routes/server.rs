@@ -3,14 +3,13 @@
 
 use crate::{
     database::entities::players::PlayerRole,
-    middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade},
+    middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade, ip_address::IpAddress},
     session::Session,
     state::{self, App},
     utils::logging::LOG_FILE_NAME,
 };
 use axum::{
     body::Empty,
-    extract::ConnectInfo,
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Json,
@@ -19,10 +18,7 @@ use blaze_pk::packet::PacketCodec;
 use interlink::service::Service;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
-use std::{
-    net::SocketAddr,
-    sync::atomic::{AtomicU32, Ordering},
-};
+use std::sync::atomic::{AtomicU32, Ordering};
 use tokio::{fs::read_to_string, io::split};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
@@ -75,10 +71,7 @@ pub async fn dashboard_details() -> Json<DashboardDetails> {
 /// Handles upgrading connections from the Pocket Relay Client tool
 /// from HTTP over to the Blaze protocol for proxing the game traffic
 /// as blaze sessions using HTTP Upgrade
-pub async fn upgrade(
-    ConnectInfo(socket_addr): ConnectInfo<SocketAddr>,
-    upgrade: BlazeUpgrade,
-) -> Response {
+pub async fn upgrade(IpAddress(socket_addr): IpAddress, upgrade: BlazeUpgrade) -> Response {
     // TODO: Socket address extraction for forwarded reverse proxy
 
     tokio::spawn(async move {

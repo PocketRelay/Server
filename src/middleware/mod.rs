@@ -4,5 +4,7 @@ pub mod auth;
 pub mod blaze_upgrade;
 /// Middleware functions related to CORS implementation
 pub mod cors;
+/// IP address extraction middleware
+pub mod ip_address;
 /// XML response types
 pub mod xml;
