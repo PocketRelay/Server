@@ -1,3 +1,5 @@
+use tdf::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType};
+
 use crate::{
     services::{
         game::{
@@ -8,142 +10,85 @@ use crate::{
     },
     utils::types::{GameID, PlayerID, SessionID},
 };
-use blaze_pk::{
-    codec::{Decodable, Encodable},
-    error::DecodeResult,
-    reader::TdfReader,
-    tag::TdfType,
-    writer::TdfWriter,
-};
 
 /// Structure of the request for creating new games contains the
 /// initial game attributes and game setting
+#[derive(TdfDeserialize)]
 pub struct CreateGameRequest {
     /// The games initial attributes
+    #[tdf(tag = "ATTR")]
     pub attributes: AttrMap,
     /// The games initial setting
+    #[tdf(tag = "GSET")]
     pub setting: GameSettings,
-}
-
-impl Decodable for CreateGameRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let attributes: AttrMap = reader.tag(b"ATTR")?;
-        let setting: GameSettings = reader.tag(b"GSET")?;
-        Ok(Self {
-            attributes,
-            setting,
-        })
-    }
 }
 
 /// Structure for the response to game creation which contains
 /// the ID of the created game
+#[derive(TdfSerialize)]
 pub struct CreateGameResponse {
     /// The game ID
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
-}
-
-impl Encodable for CreateGameResponse {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"GID", self.game_id);
-    }
 }
 
 /// Structure of request to remove player from a game
+#[derive(TdfDeserialize)]
 pub struct RemovePlayerRequest {
     /// The ID of the game to remove from
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
     /// The ID of the player to remove
+    #[tdf(tag = "PID")]
     pub player_id: PlayerID,
     // The reason the player was removed
+    #[tdf(tag = "REAS")]
     pub reason: RemoveReason,
 }
 
-impl Decodable for RemovePlayerRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let game_id: GameID = reader.tag(b"GID")?;
-        let player_id: PlayerID = reader.tag(b"PID")?;
-        let reason: RemoveReason = reader.tag(b"REAS")?;
-        Ok(Self {
-            game_id,
-            player_id,
-            reason,
-        })
-    }
-}
-
+#[derive(TdfDeserialize)]
 pub struct SetAttributesRequest {
     /// The new game attributes
+    #[tdf(tag = "ATTR")]
     pub attributes: AttrMap,
     /// The ID of the game to set the attributes for
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
 }
 
-impl Decodable for SetAttributesRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let attributes = reader.tag(b"ATTR")?;
-        let game_id: GameID = reader.tag(b"GID")?;
-
-        Ok(Self {
-            attributes,
-            game_id,
-        })
-    }
-}
-
+#[derive(TdfDeserialize)]
 pub struct SetStateRequest {
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
+    #[tdf(tag = "GSTA")]
     pub state: GameState,
 }
 
-impl Decodable for SetStateRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let game_id: GameID = reader.tag(b"GID")?;
-        let state: GameState = reader.tag(b"GSTA")?;
-        Ok(Self { game_id, state })
-    }
-}
+#[derive(TdfDeserialize)]
 pub struct SetSettingRequest {
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
+    #[tdf(tag = "GSET")]
     pub setting: GameSettings,
-}
-
-impl Decodable for SetSettingRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let game_id: GameID = reader.tag(b"GID")?;
-        let setting: GameSettings = reader.tag(b"GSET")?;
-        Ok(Self { game_id, setting })
-    }
 }
 
 /// Request to update the state of a mesh connection between
 /// payers.
+#[derive(TdfDeserialize)]
 pub struct UpdateMeshRequest {
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
-    pub target: Option<MeshTarget>,
+    #[tdf(tag = "TARG")]
+    pub targets: Vec<MeshTarget>,
 }
 
+#[derive(TdfDeserialize)]
+#[tdf(group)]
 pub struct MeshTarget {
+    #[tdf(tag = "PID")]
     pub player_id: PlayerID,
+    #[tdf(tag = "STAT")]
     pub state: PlayerState,
-}
-
-impl Decodable for UpdateMeshRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let game_id: GameID = reader.tag(b"GID")?;
-        let count: usize = reader.until_list(b"TARG", TdfType::Group)?;
-
-        let target = if count > 0 {
-            let player_id: PlayerID = reader.tag(b"PID")?;
-            let state: PlayerState = reader.tag(b"STAT")?;
-            let target = MeshTarget { player_id, state };
-            Some(target)
-        } else {
-            None
-        };
-
-        Ok(Self { game_id, target })
-    }
 }
 
 /// Structure of the request for starting matchmaking. Contains
@@ -153,25 +98,25 @@ pub struct MatchmakingRequest {
     pub rules: RuleSet,
 }
 
-impl Decodable for MatchmakingRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.until_tag(b"CRIT", TdfType::Group)?;
-        let rule_count: usize = reader.until_list(b"RLST", TdfType::Group)?;
+impl TdfDeserializeOwned for MatchmakingRequest {
+    fn deserialize_owned(r: &mut tdf::TdfDeserializer<'_>) -> tdf::DecodeResult<Self> {
+        r.until_tag(b"CRIT", TdfType::Group)?;
+        let rule_count: usize = r.until_list_typed(b"RLST", TdfType::Group)?;
 
         let mut rules: Vec<(String, String)> = Vec::with_capacity(rule_count);
         for _ in 0..rule_count {
-            let name: String = reader.tag(b"NAME")?;
-            let values_count: usize = reader.until_list(b"VALU", TdfType::String)?;
+            let name: String = r.tag(b"NAME")?;
+            let values_count: usize = r.until_list_typed(b"VALU", TdfType::String)?;
             if values_count < 1 {
                 continue;
             }
-            let value: String = reader.read_string()?;
+            let value: String = r.read_string()?;
             if values_count > 1 {
                 for _ in 1..rule_count {
-                    reader.skip_blob()?;
+                    r.skip_blob()?;
                 }
             }
-            reader.skip_group()?;
+            r.skip_group()?;
             rules.push((name, value));
         }
         Ok(Self {
@@ -183,50 +128,43 @@ impl Decodable for MatchmakingRequest {
 /// Structure of the matchmaking response. This just contains
 /// what normally would be a unique matchmaking ID but in this case
 /// its just the session ID.
+#[derive(TdfSerialize)]
 pub struct MatchmakingResponse {
     /// The current session ID
+    #[tdf(tag = "MSID")]
     pub id: SessionID,
 }
 
-impl Encodable for MatchmakingResponse {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"MSID", self.id);
-    }
-}
-
+#[derive(TdfDeserialize)]
 pub struct GetGameDataRequest {
+    #[tdf(tag = "GLST")]
     pub game_list: Vec<GameID>,
 }
 
-impl Decodable for GetGameDataRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let game_list: Vec<GameID> = reader.tag(b"GLST")?;
-        Ok(Self { game_list })
-    }
-}
-
+#[derive(TdfDeserialize)]
 pub struct JoinGameRequest {
-    /// The join target
-    pub target_id: PlayerID,
+    #[tdf(tag = "USER")]
+    pub user: JoinGameRequestUser,
 }
 
-impl Decodable for JoinGameRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        reader.until_tag(b"USER", TdfType::Group)?;
-        let target_id: PlayerID = reader.tag(b"ID")?;
-        Ok(Self { target_id })
-    }
+#[derive(TdfDeserialize)]
+pub struct JoinGameRequestUser {
+    #[tdf(tag = "ID")]
+    pub id: PlayerID,
 }
 
+#[derive(TdfSerialize)]
 pub struct JoinGameResponse {
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
+    #[tdf(tag = "JGS")]
+    pub state: JoinGameState,
 }
 
-impl Encodable for JoinGameResponse {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"GID", self.game_id);
-
-        // TODO: Join states: JOINED_GAME = 0, IN_QUEUE = 1, GROUP_PARTIALLY_JOINED = 2
-        writer.tag_zero(b"JGS");
-    }
+#[derive(TdfSerialize)]
+#[repr(u8)]
+pub enum JoinGameState {
+    JoinedGame = 0,
+    InQueue = 1,
+    GroupPartiallyJoined = 2,
 }

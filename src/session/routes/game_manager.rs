@@ -40,7 +40,7 @@ pub async fn handle_join_game(
     let session = services
         .sessions
         .send(LookupMessage {
-            player_id: req.target_id,
+            player_id: req.user.id,
         })
         .await;
 
@@ -82,7 +82,10 @@ pub async fn handle_join_game(
             player,
             context: GameSetupContext::Dataless(DatalessContext::JoinGameSetup),
         });
-        Ok(JoinGameResponse { game_id })
+        Ok(JoinGameResponse {
+            game_id,
+            state: JoinGameState::JoinedGame,
+        })
     } else {
         Err(ServerError::InvalidInformation)
     }
@@ -356,7 +359,7 @@ pub async fn handle_update_mesh_connection(
         Err(_) => return Err(ServerError::ServerUnavailable),
     };
 
-    let target = match req.target {
+    let target = match req.targets.pop() {
         Some(value) => value,
         None => return Ok(()),
     };
