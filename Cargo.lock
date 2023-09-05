@@ -1400,6 +1400,7 @@ dependencies = [
  "bitflags 2.3.3",
  "blaze-pk",
  "blaze-ssl-async",
+ "bytes",
  "chrono",
  "email_address",
  "embeddy",
@@ -1417,6 +1418,7 @@ dependencies = [
  "sea-orm-migration",
  "serde",
  "serde_json",
+ "tdf",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -2112,6 +2114,25 @@ name = "sync_wrapper"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2047c6ded9c721764247e62cd3b03c09ffc529b2ba5b10ec482ae507a4a70160"
+
+[[package]]
+name = "tdf"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "serde",
+ "tdf-derive",
+]
+
+[[package]]
+name = "tdf-derive"
+version = "0.0.0"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.23",
+]
 
 [[package]]
 name = "thiserror"

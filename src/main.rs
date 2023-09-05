@@ -1,6 +1,6 @@
 use axum::Server;
 use config::load_config;
-use log::{error, info};
+use log::{error, info, LevelFilter};
 use state::App;
 use std::net::{Ipv4Addr, SocketAddr};
 use tokio::{select, signal};
@@ -19,6 +19,10 @@ mod utils;
 async fn main() {
     // Load configuration
     let config = load_config().unwrap_or_default();
+
+    if config.logging == LevelFilter::Debug {
+        utils::components::initialize();
+    }
 
     // Initialize logging
     logging::setup(config.logging);
