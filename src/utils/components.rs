@@ -37,6 +37,7 @@ pub enum Authentication {
     GetAccount,
     #[command(target = 0x1F)]
     GrantEntitlement,
+
     #[command(target = 0x20)]
     ListEntitlements,
     #[command(target = 0x21)]
@@ -91,16 +92,20 @@ pub enum Authentication {
     GetPersona,
     #[command(target = 0x64)]
     ListPersonas,
+    //
+    //
     #[command(target = 0x6E)]
     LoginPersona,
     #[command(target = 0x78)]
     LogoutPersona,
+    //
     #[command(target = 0x8C)]
     DeletePersona,
     #[command(target = 0x8D)]
     DisablePersona,
     #[command(target = 0x8F)]
     ListDeviceAccounts,
+    //
     #[command(target = 0x96)]
     XboxCreateAccount,
     #[command(target = 0x98)]
@@ -113,12 +118,14 @@ pub enum Authentication {
     PS3CreateAccount,
     #[command(target = 0xBE)]
     PS3AssociateAccount,
+    //
     #[command(target = 0xC8)]
     PS3Login,
     #[command(target = 0xD2)]
     ValidateSessionKey,
     #[command(target = 0xE6)]
     CreateWalUserSession,
+    //
     #[command(target = 0xF1)]
     AcceptLegalDocs,
     #[command(target = 0xF2)]
@@ -145,6 +152,7 @@ pub enum GameManager {
     SetPlayerCapacity,
     #[command(target = 0x6)]
     SetPresenceMode,
+    //
     #[command(target = 0x7)]
     SetGameAttributes,
     #[command(target = 0x8)]
@@ -153,6 +161,7 @@ pub enum GameManager {
     JoinGame,
     #[command(target = 0xB)]
     RemovePlayer,
+    //
     #[command(target = 0xD)]
     StartMatchmaking,
     #[command(target = 0xE)]
@@ -165,6 +174,7 @@ pub enum GameManager {
     SetPlayerCustomData,
     #[command(target = 0x13)]
     ReplayGame,
+    //
     #[command(target = 0x14)]
     ReturnDedicatedServerToPool,
     #[command(target = 0x15)]
@@ -195,18 +205,21 @@ pub enum GameManager {
     UpdateGameName,
     #[command(target = 0x28)]
     EjectHost,
+    //
     #[command(target = 0x64)]
     GetGameListSnapshot,
     #[command(target = 0x65)]
     GetGameListSubscription,
     #[command(target = 0x66)]
     DestroyGameList,
+    //
     #[command(target = 0x67)]
     GetFullGameData,
     #[command(target = 0x68)]
     GetMatchmakingConfig,
     #[command(target = 0x69)]
     GetGameDataFromID,
+    //
     #[command(target = 0x6A)]
     AddAdminPlayer,
     #[command(target = 0x6B)]
@@ -215,12 +228,14 @@ pub enum GameManager {
     SetPlayerTeam,
     #[command(target = 0x6D)]
     ChangeGameTeamID,
+    //
     #[command(target = 0x6E)]
     MigrateAdminPlayer,
     #[command(target = 0x6F)]
     GetUserSetGameListSubscription,
     #[command(target = 0x70)]
     SwapPlayersTeam,
+    //
     #[command(target = 0x96)]
     RegisterDynamicDedicatedServerCreator,
     #[command(target = 0x97)]
@@ -232,6 +247,7 @@ pub enum GameManager {
     MatchmakingAsyncStatus,
     #[command(target = 0xF, notify)]
     GameCreated,
+    //
     #[command(target = 0x10, notify)]
     GameRemoved,
     #[command(target = 0x14, notify)]
@@ -240,10 +256,12 @@ pub enum GameManager {
     PlayerJoining,
     #[command(target = 0x16, notify)]
     JoiningPlayerInitiateConnections,
+    //
     #[command(target = 0x17, notify)]
     PlayerJoiningQueue,
     #[command(target = 0x18, notify)]
     PlayerPromotedFromQueue,
+    //
     #[command(target = 0x19, notify)]
     PlayerClaimingReservation,
     #[command(target = 0x1E, notify)]
@@ -256,6 +274,7 @@ pub enum GameManager {
     HostMigrationStart,
     #[command(target = 0x47, notify)]
     PlatformHostInitialized,
+    //
     #[command(target = 0x50, notify)]
     GameAttribChange,
     #[command(target = 0x5A, notify)]
@@ -270,10 +289,12 @@ pub enum GameManager {
     GameCapacityChange,
     #[command(target = 0x70, notify)]
     GameReset,
+    //
     #[command(target = 0x71, notify)]
     GameReportingIDChange,
     #[command(target = 0x73, notify)]
     GameSessionUpdated,
+    //
     #[command(target = 0x74, notify)]
     GamePlayerStateChange,
     #[command(target = 0x75, notify)]
@@ -313,6 +334,7 @@ pub enum Stats {
     GetStatGroupList,
     #[command(target = 0x4)]
     GetStatGroup,
+    //
     #[command(target = 0x5)]
     GetStatsByGroup,
     #[command(target = 0x6)]
@@ -331,8 +353,10 @@ pub enum Stats {
     GetFilteredLeaderboard,
     #[command(target = 0xF)]
     GetKeyScopesMap,
+    //
     #[command(target = 0x10)]
     GetStatsByGroupASync,
+    //
     #[command(target = 0x11)]
     GetLeaderboardTreeAsync,
     #[command(target = 0x12)]
