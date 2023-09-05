@@ -1,16 +1,13 @@
 //! Router implementation for routing packet components to different functions
 //! and automatically decoding the packet contents to the function type
 
-use std::{collections::HashMap, future::Future, marker::PhantomData};
-
-use tdf::DecodeError;
-
-use crate::utils::types::BoxFuture;
-
 use super::{
     packet::{FromRequest, IntoResponse, Packet},
     SessionLink,
 };
+use crate::utils::types::BoxFuture;
+use std::{collections::HashMap, future::Future, marker::PhantomData};
+use tdf::DecodeError;
 
 pub struct FormatA;
 pub struct FormatB;
@@ -53,13 +50,13 @@ where
     }
 }
 
-trait Route: Send + Sync {
-    fn handle<'s>(&self, state: &'s mut SessionLink, packet: &'s Packet) -> HandleResult<'s>;
-}
-
 struct HandlerRoute<H, Req, Res, Format> {
     handler: H,
     _marker: PhantomData<fn(Req, Format) -> Res>,
+}
+
+trait Route: Send + Sync {
+    fn handle<'s>(&self, state: &'s mut SessionLink, packet: &'s Packet) -> HandleResult<'s>;
 }
 
 impl<H, Req, Res, Format> Route for HandlerRoute<H, Req, Res, Format>
@@ -74,14 +71,15 @@ where
     }
 }
 
-#[derive(Default)]
 pub struct Router {
     routes: HashMap<(u16, u16), Box<dyn Route>>,
 }
 
 impl Router {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            routes: HashMap::new(),
+        }
     }
 
     pub fn route<Req, Res, Format>(
@@ -104,11 +102,10 @@ impl Router {
     }
 
     pub fn handle<'a>(&self, state: &'a mut SessionLink, packet: &'a Packet) -> HandleResult<'a> {
-        let route = self
-            .routes
+        self.routes
             .get(&(packet.header.component, packet.header.command))
-            .ok_or(HandleError::MissingHandler)?;
-        route.handle(state, packet)
+            .ok_or(HandleError::MissingHandler)?
+            .handle(state, packet)
     }
 }
 
