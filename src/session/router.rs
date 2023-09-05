@@ -106,7 +106,7 @@ impl Router {
     pub fn handle<'a>(&self, state: &'a mut SessionLink, packet: &'a Packet) -> HandleResult<'a> {
         let route = self
             .routes
-            .get(&(packet.header.command, packet.header.command))
+            .get(&(packet.header.component, packet.header.command))
             .ok_or(HandleError::MissingHandler)?;
         route.handle(state, packet)
     }

@@ -208,7 +208,7 @@ pub struct PingResponse {
 #[derive(TdfDeserialize)]
 pub struct FetchConfigRequest {
     /// The ID for the config
-    #[tdf(tag = "CFIG")]
+    #[tdf(tag = "CFID")]
     pub id: String,
 }
 

@@ -254,7 +254,10 @@ impl StreamHandler<io::Result<Packet>> for Session {
                     Err(err) => {
                         match err {
                             // No handler set-up just respond with a default empty response
-                            HandleError::MissingHandler => packet.respond_empty(),
+                            HandleError::MissingHandler => {
+                                debug!("Missing packet handler");
+                                packet.respond_empty()
+                            }
                             HandleError::Decoding(err) => {
                                 error!("Error while decoding packet: {:?}", err);
                                 return;
