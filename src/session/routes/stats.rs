@@ -1,12 +1,14 @@
 use crate::{
     services::leaderboard::{models::*, QueryMessage},
-    session::models::{
-        errors::{ServerError, ServerResult},
-        stats::*,
+    session::{
+        models::{
+            errors::{ServerError, ServerResult},
+            stats::*,
+        },
+        packet::{Request, Response},
     },
     state::App,
 };
-use blaze_pk::packet::{Request, Response};
 use std::sync::Arc;
 
 pub async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> ServerResult<Response> {

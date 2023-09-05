@@ -2,10 +2,9 @@ use crate::{
     config::{Config, RuntimeConfig, ServicesConfig},
     database::{self, DatabaseConnection},
     services::Services,
-    session::{self, SessionLink},
-    utils::{components::Components, logging},
+    session::{self, router::Router},
+    utils::logging,
 };
-use blaze_pk::router::Router;
 use tokio::join;
 
 /// The server version extracted from the Cargo.toml
@@ -22,7 +21,7 @@ pub struct App {
     /// Runtime global configuration
     pub config: RuntimeConfig,
     /// Global session router
-    pub router: Router<Components, SessionLink>,
+    pub router: Router,
 }
 
 /// Static global state value
@@ -80,7 +79,7 @@ impl App {
     }
 
     /// Obtains a static reference to the session router
-    pub fn router() -> &'static Router<Components, SessionLink> {
+    pub fn router() -> &'static Router {
         match unsafe { &GLOBAL_STATE } {
             Some(value) => &value.router,
             None => panic!("Global state not initialized"),

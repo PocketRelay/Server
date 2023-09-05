@@ -13,25 +13,25 @@ use crate::{
     },
     state::App,
     utils::{
-        components::{self, game_manager::GAME_TYPE, Components, UserSessions},
-        models::{NetData, NetGroups, Port, QosNetworkData, UpdateExtDataAttr},
+        components::{self, game_manager::GAME_TYPE, user_sessions},
+        models::{NetData, NetworkAddress, Port, QosNetworkData, UpdateExtDataAttr},
         types::{GameID, PlayerID, SessionID},
     },
 };
-use blaze_pk::{
-    codec::Encodable,
-    packet::{Packet, PacketComponents, PacketDebug},
-    router::HandleError,
-    tag::TdfType,
-    value_type,
-    writer::TdfWriter,
-};
+
 use interlink::prelude::*;
 use log::{debug, error, log_enabled};
 use std::{fmt::Debug, io, net::SocketAddr};
-use tdf::{ObjectId, TdfSerialize, TdfTyped};
+use tdf::{ObjectId, TdfSerialize, TdfType, TdfTyped};
+
+use self::{
+    packet::{Packet, PacketDebug},
+    router::HandleError,
+};
 
 pub mod models;
+pub mod packet;
+pub mod router;
 pub mod routes;
 
 /// Structure for storing a client session. This includes the
@@ -288,7 +288,8 @@ impl Handler<UpdateClientMessage> for Session {
     fn handle(&mut self, _msg: UpdateClientMessage, _ctx: &mut ServiceContext<Self>) {
         if let Some(player) = &self.data.player {
             let packet = Packet::notify(
-                Components::UserSessions(UserSessions::SetSession),
+                user_sessions::COMPONENT,
+                user_sessions::SET_SESSION,
                 SetSession {
                     player_id: player.id,
                     session: &self.data,
@@ -329,7 +330,8 @@ impl Handler<InformSessions> for Session {
     fn handle(&mut self, msg: InformSessions, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         if let Some(player) = &self.data.player {
             let packet = Packet::notify(
-                Components::UserSessions(UserSessions::SetSession),
+                user_sessions::COMPONENT,
+                user_sessions::SET_SESSION,
                 SetSession {
                     player_id: player.id,
                     session: &self.data,
@@ -364,7 +366,7 @@ impl Handler<HardwareFlagMessage> for Session {
 
 #[derive(Message)]
 pub struct NetworkInfoMessage {
-    pub groups: NetGroups,
+    pub address: NetworkAddress,
     pub qos: QosNetworkData,
 }
 
@@ -374,7 +376,7 @@ impl Handler<NetworkInfoMessage> for Session {
     fn handle(&mut self, msg: NetworkInfoMessage, ctx: &mut ServiceContext<Self>) {
         let net = &mut &mut self.data.net;
         net.qos = msg.qos;
-        net.addr = Some(msg.groups);
+        net.addr = msg.address;
 
         // Notify the client of the change via a message rather than
         // directly so its sent after the response
@@ -417,7 +419,8 @@ impl Handler<DetailsMessage> for Session {
 
         // Create the details packets
         let a = Packet::notify(
-            Components::UserSessions(UserSessions::SessionDetails),
+            user_sessions::COMPONENT,
+            user_sessions::SESSION_DETAILS,
             SessionUpdate {
                 session: self,
                 player_id: player.id,
@@ -426,7 +429,8 @@ impl Handler<DetailsMessage> for Session {
         );
 
         let b = Packet::notify(
-            Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
+            user_sessions::COMPONENT,
+            user_sessions::UPDATE_EXTENDED_DATA_ATTRIBUTE,
             UpdateExtDataAttr {
                 flags: 0x3,
                 player_id: player.id,
@@ -483,18 +487,10 @@ impl Session {
             return;
         }
 
-        let component = Components::from_header(&packet.header);
-
         // Ping messages are ignored from debug logging as they are very frequent
-        let ignored = if let Some(component) = &component {
-            matches!(
-                component,
-                Components::Util(components::Util::Ping)
-                    | Components::Util(components::Util::SuspendUserPing)
-            )
-        } else {
-            false
-        };
+        let ignored = packet.header.component == components::util::COMPONENT
+            && (packet.header.command == components::util::PING
+                || packet.header.command == components::util::SUSPEND_USER_PING);
 
         if ignored {
             return;
@@ -503,7 +499,6 @@ impl Session {
         let debug = SessionPacketDebug {
             action,
             packet,
-            component,
             session: self,
         };
 
@@ -567,15 +562,12 @@ impl Session {
 struct SessionPacketDebug<'a> {
     action: &'static str,
     packet: &'a Packet,
-    component: Option<Components>,
     session: &'a Session,
 }
 
 impl Debug for SessionPacketDebug<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Session {} Packet", self.action)?;
-
-        let component = &self.component;
 
         if let Some(player) = &self.session.data.player {
             writeln!(
@@ -587,20 +579,16 @@ impl Debug for SessionPacketDebug<'_> {
             writeln!(f, "Info: ( SID: {})", &self.session.id)?;
         }
 
-        let minified = if let Some(component) = &self.component {
-            matches!(
-                component,
-                Components::Authentication(components::Authentication::ListUserEntitlements2)
-                    | Components::Util(components::Util::FetchClientConfig)
-                    | Components::Util(components::Util::UserSettingsLoadAll)
-            )
-        } else {
-            false
-        };
+        let header = &self.packet.header;
+
+        let minified = (header.component == components::authentication::COMPONENT
+            && header.command == components::authentication::LIST_USER_ENTITLEMENTS_2)
+            || (header.component == components::util::COMPONENT
+                && (header.command == components::util::FETCH_CLIENT_CONFIG
+                    || header.command == components::util::USER_SETTINGS_LOAD_ALL));
 
         PacketDebug {
             packet: self.packet,
-            component: component.as_ref(),
             minified,
         }
         .fmt(f)

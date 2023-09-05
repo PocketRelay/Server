@@ -4,9 +4,13 @@ use crate::{
         game::manager::RemoveGameMessage,
         matchmaking::{rules::RuleSet, CheckGameMessage},
     },
-    session::{DetailsMessage, InformSessions, PushExt, Session, SetGameMessage},
+    session::{
+        packet::{Packet, PacketBody},
+        DetailsMessage, InformSessions, PushExt, Session, SetGameMessage,
+    },
     state::App,
     utils::{
+        components::{game_manager, user_sessions},
         models::NetData,
         types::{GameID, PlayerID},
     },
@@ -17,7 +21,7 @@ use log::debug;
 use models::*;
 use serde::Serialize;
 use std::sync::Arc;
-use tdf::{ObjectId, TdfSerializer};
+use tdf::{ObjectId, TdfMap, TdfSerialize, TdfSerializer};
 
 pub mod manager;
 pub mod models;
@@ -199,7 +203,8 @@ impl Handler<AddPlayerMessage> for Game {
         if is_other {
             // Notify other players of the joined player
             self.notify_all(
-                Components::GameManager(GameManager::PlayerJoining),
+                game_manager::COMPONENT,
+                game_manager::PLAYER_JOINING,
                 PlayerJoining {
                     slot,
                     player,
@@ -262,7 +267,8 @@ impl Handler<SetSettingMessage> for Game {
         debug!("Updating game setting (Value: {:?})", &setting);
         self.setting = setting;
         self.notify_all(
-            Components::GameManager(GameManager::GameSettingsChange),
+            game_manager::COMPONENT,
+            game_manager::GAME_SETTINGS_CHANGE,
             SettingChange {
                 id: self.id,
                 setting,
@@ -287,7 +293,8 @@ impl Handler<SetAttributesMessage> for Game {
 
         debug!("Updating game attributes");
         let packet = Packet::notify(
-            Components::GameManager(GameManager::GameAttribChange),
+            game_manager::COMPONENT,
+            game_manager::GAME_ATTRIB_CHANGE,
             AttributesChange {
                 id: self.id,
                 attributes: &attributes,
@@ -358,13 +365,15 @@ impl Handler<UpdateMeshMessage> for Game {
 
             // Notify players of the player state change
             self.notify_all(
-                Components::GameManager(GameManager::GamePlayerStateChange),
+                game_manager::COMPONENT,
+                game_manager::GAME_PLAYER_STATE_CHANGE,
                 state_change,
             );
 
             // Notify players of the completed connection
             self.notify_all(
-                Components::GameManager(GameManager::PlayerJoinCompleted),
+                game_manager::COMPONENT,
+                game_manager::PLAYER_JOIN_COMPLETED,
                 JoinComplete {
                     game_id: self.id,
                     player_id,
@@ -550,15 +559,16 @@ impl Game {
     ///
     /// `component` The packet component
     /// `contents`  The packet contents
-    fn notify_all<C: Encodable>(&self, component: Components, contents: C) {
-        let packet = Packet::notify(component, contents);
+    fn notify_all<C: TdfSerialize>(&self, component: u16, command: u16, contents: C) {
+        let packet = Packet::notify(component, command, contents);
         self.push_all(&packet);
     }
 
     /// Notifies all players of the current game state
     fn notify_state(&self) {
         self.notify_all(
-            Components::GameManager(GameManager::GameStateChange),
+            game_manager::COMPONENT,
+            game_manager::GAME_STATE_CHANGE,
             StateChange {
                 id: self.id,
                 state: self.state,
@@ -592,7 +602,8 @@ impl Game {
     /// `slot`    The slot the player is joining into
     fn notify_game_setup(&self, player: &GamePlayer, context: GameSetupContext) {
         let packet = Packet::notify(
-            Components::GameManager(GameManager::GameSetup),
+            game_manager::COMPONENT,
+            game_manager::GAME_SETUP,
             GameDetails {
                 game: self,
                 context,
@@ -614,7 +625,8 @@ impl Game {
         };
 
         self.notify_all(
-            Components::GameManager(GameManager::AdminListChange),
+            game_manager::COMPONENT,
+            game_manager::ADMIN_LIST_CHANGE,
             AdminListChange {
                 game_id: self.id,
                 player_id: target,
@@ -631,7 +643,8 @@ impl Game {
     /// `player_id` The player ID of the removed player
     fn notify_player_removed(&self, player: &GamePlayer, reason: RemoveReason) {
         let packet = Packet::notify(
-            Components::GameManager(GameManager::PlayerRemoved),
+            game_manager::COMPONENT,
+            game_manager::PLAYER_REMOVED,
             PlayerRemoved {
                 cntx: 0,
                 game_id: self.id,
@@ -652,7 +665,8 @@ impl Game {
     /// `player_id` The player id of the session to update
     fn notify_fetch_data(&self, player: &GamePlayer) {
         self.notify_all(
-            Components::UserSessions(UserSessions::FetchExtendedData),
+            user_sessions::COMPONENT,
+            user_sessions::FETCH_EXTENDED_DATA,
             FetchExtendedData {
                 player_id: player.player.id,
             },
@@ -660,7 +674,8 @@ impl Game {
 
         for other_player in &self.players {
             let packet = Packet::notify(
-                Components::UserSessions(UserSessions::FetchExtendedData),
+                user_sessions::COMPONENT,
+                user_sessions::FETCH_EXTENDED_DATA,
                 FetchExtendedData {
                     player_id: other_player.player.id,
                 },
@@ -686,7 +701,8 @@ impl Game {
         self.state = GameState::Migrating;
         self.notify_state();
         self.notify_all(
-            Components::GameManager(GameManager::HostMigrationStart),
+            game_manager::COMPONENT,
+            game_manager::HOST_MIGRATION_START,
             HostMigrateStart {
                 game_id: self.id,
                 host_id: new_host.player.id,
@@ -699,7 +715,8 @@ impl Game {
         self.state = GameState::InGame;
         self.notify_state();
         self.notify_all(
-            Components::GameManager(GameManager::HostMigrationFinished),
+            game_manager::COMPONENT,
+            game_manager::HOST_MIGRATION_FINISHED,
             HostMigrateFinished { game_id: self.id },
         );
 

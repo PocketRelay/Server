@@ -10,7 +10,6 @@ use crate::{
     state::{self, App},
 };
 use base64ct::{Base64, Encoding};
-use blaze_pk::types::TdfMap;
 use embeddy::Embedded;
 use flate2::{write::ZlibEncoder, Compression};
 use interlink::prelude::Link;
@@ -20,6 +19,7 @@ use std::{
     path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tdf::TdfMap;
 use tokio::fs::read;
 
 /// Handles retrieving the details about the telemetry server
@@ -190,7 +190,7 @@ pub async fn handle_fetch_client_config(
 fn load_entitlements() -> TdfMap<String, String> {
     let mut map = TdfMap::<String, String>::new();
     for (key, value) in ME3_ENT.lines().filter_map(|line| line.split_once('=')) {
-        map.insert(key, value)
+        map.insert(key.to_string(), value.to_string())
     }
     map
 }
@@ -272,12 +272,12 @@ fn create_base64_map(bytes: &[u8]) -> ChunkMap {
             &encoded[o1..]
         };
 
-        output.insert(format!("CHUNK_{}", index), slice);
+        output.insert(format!("CHUNK_{}", index), slice.to_string());
         index += 1;
     }
 
-    output.insert("CHUNK_SIZE", CHUNK_LENGTH.to_string());
-    output.insert("DATA_SIZE", length.to_string());
+    output.insert("CHUNK_SIZE".to_string(), CHUNK_LENGTH.to_string());
+    output.insert("DATA_SIZE".to_string(), length.to_string());
     output.order();
     output
 }
@@ -453,20 +453,20 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
     let mut config = TdfMap::with_capacity(15);
     config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/"));
     config.insert("IMG_MNGR_BASE_URL", format!("{prefix}/content/"));
-    config.insert("IMG_MNGR_MAX_BYTES", "1048576");
-    config.insert("IMG_MNGR_MAX_IMAGES", "5");
-    config.insert("JOB_THROTTLE_0", "10000");
-    config.insert("JOB_THROTTLE_1", "5000");
-    config.insert("JOB_THROTTLE_2", "1000");
-    config.insert("MATCH_MAKING_RULES_VERSION", "5");
-    config.insert("MULTIPLAYER_PROTOCOL_VERSION", "3");
-    config.insert("TEL_DISABLE", TELEMTRY_DISA);
-    config.insert("TEL_DOMAIN", "pc/masseffect-3-pc-anon");
-    config.insert("TEL_FILTER", "-UION/****");
+    config.insert("IMG_MNGR_MAX_BYTES", "1048576".to_string());
+    config.insert("IMG_MNGR_MAX_IMAGES", "5".to_string());
+    config.insert("JOB_THROTTLE_0", "10000".to_string());
+    config.insert("JOB_THROTTLE_1", "5000".to_string());
+    config.insert("JOB_THROTTLE_2", "1000".to_string());
+    config.insert("MATCH_MAKING_RULES_VERSION", "5".to_string());
+    config.insert("MULTIPLAYER_PROTOCOL_VERSION", "3".to_string());
+    config.insert("TEL_DISABLE", TELEMTRY_DISA.to_string());
+    config.insert("TEL_DOMAIN", "pc/masseffect-3-pc-anon".to_string());
+    config.insert("TEL_FILTER", "-UION/****".to_string());
     config.insert("TEL_PORT", tele_port.to_string());
-    config.insert("TEL_SEND_DELAY", "15000");
-    config.insert("TEL_SEND_PCT", "75");
-    config.insert("TEL_SERVER", "127.0.0.1");
+    config.insert("TEL_SEND_DELAY", "15000".to_string());
+    config.insert("TEL_SEND_PCT", "75".to_string());
+    config.insert("TEL_SERVER", "127.0.0.1".to_string());
     config
 }
 

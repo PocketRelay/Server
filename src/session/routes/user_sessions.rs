@@ -11,7 +11,7 @@ use crate::{
         NetworkInfoMessage, SessionLink, SetPlayerMessage,
     },
     state::App,
-    utils::models::NetAddress,
+    utils::models::NetworkAddress,
 };
 use log::error;
 use std::net::SocketAddr;
@@ -131,22 +131,24 @@ pub async fn handle_resume_session(
 /// }
 /// ```
 pub async fn handle_update_network(session: &mut SessionLink, mut req: UpdateNetworkRequest) {
-    let ext = &mut req.address.external;
+    if let NetworkAddress::AddressPair(pair) = &mut req.address {
+        let ext = &mut pair.external;
 
-    // If address is missing
-    if ext.0 .0.is_unspecified() {
-        // Obtain socket address from session
-        if let Ok(SocketAddr::V4(addr)) = session.send(GetSocketAddrMessage).await {
-            let ip = addr.ip();
-            // Replace address with new address and port with same as local port
-            ext.0 = NetAddress(*ip);
-            ext.1 = req.address.internal.1;
+        // If address is missing
+        if ext.0 .0.is_unspecified() {
+            // Obtain socket address from session
+            if let Ok(SocketAddr::V4(addr)) = session.send(GetSocketAddrMessage).await {
+                let ip = addr.ip();
+                // Replace address with new address and port with same as local port
+                ext.0 = *ip;
+                ext.1 = req.address.internal.1;
+            }
         }
     }
 
     let _ = session
         .send(NetworkInfoMessage {
-            groups: req.address,
+            address: req.address,
             qos: req.qos,
         })
         .await;
