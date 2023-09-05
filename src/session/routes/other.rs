@@ -1,5 +1,9 @@
 use crate::{
-    session::{models::other::*, packet::Packet, PushExt, SessionLink},
+    session::{
+        models::other::*,
+        packet::{Packet, Response},
+        PushExt, SessionLink,
+    },
     utils::components::game_reporting,
 };
 
@@ -58,6 +62,6 @@ pub async fn handle_submit_offline(session: &mut SessionLink) {
 ///     "OFRC": 0
 /// }
 /// ```
-pub async fn handle_get_lists(_: &mut SessionLink) -> AssocListResponse {
-    AssocListResponse
+pub async fn handle_get_lists(_: &mut SessionLink) -> Response<AssocListResponse> {
+    Response(AssocListResponse)
 }

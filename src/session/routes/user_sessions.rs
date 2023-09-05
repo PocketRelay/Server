@@ -7,6 +7,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
+        packet::Response,
         GetLookupMessage, GetSocketAddrMessage, HardwareFlagMessage, LookupResponse,
         NetworkInfoMessage, SessionLink, SetPlayerMessage,
     },
@@ -34,7 +35,7 @@ use std::net::SocketAddr;
 pub async fn handle_lookup_user(
     _: &mut SessionLink,
     req: LookupRequest,
-) -> ServerResult<LookupResponse> {
+) -> ServerResult<Response<LookupResponse>> {
     let services = App::services();
 
     // Lookup the session
@@ -58,7 +59,7 @@ pub async fn handle_lookup_user(
         _ => return Err(ServerError::InvalidInformation),
     };
 
-    Ok(response)
+    Ok(Response(response))
 }
 
 /// Attempts to resume an existing session for a player that has the
@@ -74,7 +75,7 @@ pub async fn handle_lookup_user(
 pub async fn handle_resume_session(
     session: &mut SessionLink,
     req: ResumeSessionRequest,
-) -> ServerResult<AuthResponse> {
+) -> ServerResult<Response<AuthResponse>> {
     let db = App::database();
 
     let session_token = req.session_token;
@@ -97,11 +98,11 @@ pub async fn handle_resume_session(
         return Err(ServerError::ServerUnavailable);
     }
 
-    Ok(AuthResponse {
+    Ok(Response(AuthResponse {
         player,
         session_token,
         silent: true,
-    })
+    }))
 }
 
 /// Handles updating the stored networking information for the current session

@@ -1,5 +1,9 @@
 use crate::{
-    session::{models::messaging::*, packet::Packet, GetPlayerMessage, PushExt, SessionLink},
+    session::{
+        models::messaging::*,
+        packet::{Packet, Response},
+        GetPlayerMessage, PushExt, SessionLink,
+    },
     state::App,
     utils::components::messaging,
 };
@@ -24,11 +28,11 @@ use crate::{
 /// }
 /// ```
 ///
-pub async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageResponse {
+pub async fn handle_fetch_messages(session: &mut SessionLink) -> Response<FetchMessageResponse> {
     // Request a copy of the player data
     let Ok(Some(player)) = session.send(GetPlayerMessage).await else {
         // Not authenticated return empty count
-        return FetchMessageResponse { count: 0 };
+        return Response(FetchMessageResponse { count: 0 });
     };
 
     // Message with player name replaced
@@ -46,5 +50,5 @@ pub async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageRes
     );
 
     session.push(notify);
-    FetchMessageResponse { count: 1 }
+    Response(FetchMessageResponse { count: 1 })
 }

@@ -96,7 +96,7 @@ impl TdfDeserializeOwned for InstanceHost {
 pub struct InstanceDetails {
     /// The networking information for the instance
     #[tdf(tag = "ADDR")]
-    pub net: InstanceAddress,
+    pub net: InstanceNet,
     /// Whether the host requires a secure connection (SSLv3)
     #[tdf(tag = "SECU")]
     pub secure: bool,
@@ -113,6 +113,8 @@ pub enum InstanceNet {
     #[default]
     #[tdf(default)]
     Default,
+    // IpAddress = 0x0,
+    // XboxServer = 0x1,
 }
 
 #[derive(TdfSerialize)]
@@ -121,23 +123,6 @@ pub struct UpdateExtDataAttr {
     pub flags: u8,
     #[tdf(tag = "ID")]
     pub player_id: PlayerID,
-}
-
-#[derive(Debug, Copy, Clone)]
-#[repr(u8)]
-pub enum NetworkAddressType {
-    // XboxClient = 0x0,
-    // XboxServer = 0x1,
-    Pair = 0x2,
-    // IpAddress = 0x3,
-    // HostnameAddress = 0x4,
-}
-
-#[derive(Debug, Copy, Clone)]
-#[repr(u8)]
-pub enum ServerAddressType {
-    IpAddress = 0x0,
-    // XboxServer = 0x1,
 }
 
 /// Structure for storing extended network data
@@ -178,6 +163,11 @@ pub enum NetworkAddress {
     #[default]
     #[tdf(default)]
     Default,
+    // XboxClient = 0x0,
+    // XboxServer = 0x1,
+    // Pair = 0x2,
+    // IpAddress = 0x3,
+    // HostnameAddress = 0x4,
 }
 
 /// Type alias for ports which are always u16

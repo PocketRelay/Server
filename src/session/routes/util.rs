@@ -5,6 +5,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             util::*,
         },
+        packet::Response,
         DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
     state::{self, App},
@@ -30,8 +31,8 @@ use tokio::fs::read;
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_telemetry_server(_: &mut SessionLink) -> TelemetryServer {
-    TelemetryServer
+pub async fn handle_get_telemetry_server(_: &mut SessionLink) -> Response<TelemetryServer> {
+    Response(TelemetryServer)
 }
 
 /// Handles retrieving the details about the ticker server
@@ -42,8 +43,8 @@ pub async fn handle_get_telemetry_server(_: &mut SessionLink) -> TelemetryServer
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_ticker_server(_: &mut SessionLink) -> TickerServer {
-    TickerServer
+pub async fn handle_get_ticker_server(_: &mut SessionLink) -> Response<TickerServer> {
+    Response(TickerServer)
 }
 
 /// Handles responding to pre-auth requests which is the first request
@@ -77,13 +78,13 @@ pub async fn handle_get_ticker_server(_: &mut SessionLink) -> TickerServer {
 ///     }
 /// }
 /// ```
-pub async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthResponse> {
+pub async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<Response<PreAuthResponse>> {
     let host_target = match session.send(GetHostTarget {}).await {
         Ok(value) => value,
         Err(_) => return Err(ServerError::InvalidInformation),
     };
 
-    Ok(PreAuthResponse { host_target })
+    Ok(Response(PreAuthResponse { host_target }))
 }
 
 /// Handles post authentication requests. This provides information about other
@@ -94,7 +95,9 @@ pub async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthR
 /// ID: 27
 /// Content: {}
 /// ```
-pub async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthResponse> {
+pub async fn handle_post_auth(
+    session: &mut SessionLink,
+) -> ServerResult<Response<PostAuthResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await
@@ -106,11 +109,11 @@ pub async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAut
         link: Link::clone(&*session),
     });
 
-    Ok(PostAuthResponse {
+    Ok(Response(PostAuthResponse {
         telemetry: TelemetryServer,
         ticker: TickerServer,
         player_id,
-    })
+    }))
 }
 
 /// Handles ping update requests. These are sent by the client at the interval
@@ -123,13 +126,13 @@ pub async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAut
 /// Content: {}
 /// ```
 ///
-pub async fn handle_ping(_: &mut SessionLink) -> PingResponse {
+pub async fn handle_ping(_: &mut SessionLink) -> Response<PingResponse> {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_secs();
-    PingResponse { server_time }
+    Response(PingResponse { server_time })
 }
 
 /// Contents of the entitlements dmap file
@@ -156,7 +159,7 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 pub async fn handle_fetch_client_config(
     session: &mut SessionLink,
     req: FetchConfigRequest,
-) -> ServerResult<FetchConfigResponse> {
+) -> ServerResult<Response<FetchConfigResponse>> {
     let config = match req.id.as_ref() {
         "ME3_DATA" => data_config(session).await,
         "ME3_MSG" => messages(),
@@ -182,7 +185,7 @@ pub async fn handle_fetch_client_config(
         }
     };
 
-    Ok(FetchConfigResponse { config })
+    Ok(Response(FetchConfigResponse { config }))
 }
 
 /// Loads the entitlements from the entitlements file and parses
@@ -534,9 +537,8 @@ pub async fn handle_user_settings_save(
 /// Content: {}
 /// ```
 pub async fn handle_load_settings(
-    _state: &mut SessionLink,
     session: &mut SessionLink,
-) -> ServerResult<SettingsResponse> {
+) -> ServerResult<Response<SettingsResponse>> {
     let player = session
         .send(GetPlayerIdMessage)
         .await
@@ -559,5 +561,5 @@ pub async fn handle_load_settings(
     for value in data {
         settings.insert(value.key, value.value);
     }
-    Ok(SettingsResponse { settings })
+    Ok(Response(SettingsResponse { settings }))
 }

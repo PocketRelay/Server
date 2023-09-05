@@ -5,7 +5,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             stats::*,
         },
-        packet::{Request, Response},
+        packet::{PacketResponse, Request, Response},
         SessionLink,
     },
     state::App,
@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub async fn handle_normal_leaderboard(
     _: &mut SessionLink,
     req: Request<LeaderboardRequest>,
-) -> ServerResult<Response> {
+) -> ServerResult<PacketResponse> {
     let query = &*req;
     let group = get_group(&query.name).await?;
     let response = match group.get_normal(query.start, query.count) {
@@ -28,7 +28,7 @@ pub async fn handle_normal_leaderboard(
 pub async fn handle_centered_leaderboard(
     _: &mut SessionLink,
     req: Request<CenteredLeaderboardRequest>,
-) -> ServerResult<Response> {
+) -> ServerResult<PacketResponse> {
     let query = &*req;
     let group = get_group(&query.name).await?;
     let response = match group.get_centered(query.center, query.count) {
@@ -41,7 +41,7 @@ pub async fn handle_centered_leaderboard(
 pub async fn handle_filtered_leaderboard(
     _: &mut SessionLink,
     req: Request<FilteredLeaderboardRequest>,
-) -> ServerResult<Response> {
+) -> ServerResult<PacketResponse> {
     let query = &*req;
     let group = get_group(&query.name).await?;
     let response = match group.get_entry(query.id) {
@@ -69,10 +69,10 @@ pub async fn handle_filtered_leaderboard(
 pub async fn handle_leaderboard_entity_count(
     _: &mut SessionLink,
     req: EntityCountRequest,
-) -> ServerResult<EntityCountResponse> {
+) -> ServerResult<Response<EntityCountResponse>> {
     let group = get_group(&req.name).await?;
     let count = group.values.len();
-    Ok(EntityCountResponse { count })
+    Ok(Response(EntityCountResponse { count }))
 }
 
 async fn get_group(name: &str) -> ServerResult<Arc<LeaderboardGroup>> {
@@ -114,7 +114,7 @@ fn get_locale_name(code: &str) -> &str {
 pub async fn handle_leaderboard_group(
     _: &mut SessionLink,
     req: LeaderboardGroupRequest,
-) -> Option<LeaderboardGroupResponse<'static>> {
+) -> Option<Response<LeaderboardGroupResponse<'static>>> {
     let name = req.name;
     let is_n7 = name.starts_with("N7Rating");
     if !is_n7 && !name.starts_with("ChallengePoints") {
@@ -142,5 +142,5 @@ pub async fn handle_leaderboard_group(
             gname: "ME3ChallengePoints",
         }
     };
-    Some(group)
+    Some(Response(group))
 }

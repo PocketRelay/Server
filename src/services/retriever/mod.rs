@@ -13,7 +13,7 @@ use crate::{
     session::packet::{Packet, PacketCodec, PacketDebug, PacketHeader, PacketType},
     utils::{
         components::redirector,
-        models::{InstanceAddress, InstanceDetails, Port},
+        models::{InstanceDetails, InstanceNet, Port},
     },
 };
 
@@ -122,6 +122,8 @@ pub enum InstanceError {
     Blaze(#[from] BlazeError),
     #[error("Failed to retrieve instance: {0}")]
     InstanceRequest(#[from] RetrieverError),
+    #[error("Server response missing address")]
+    MissingAddress,
 }
 
 impl OfficialInstance {
@@ -172,7 +174,10 @@ impl OfficialInstance {
             .await?;
 
         // Extract the host and port turning the host into a string
-        let InstanceAddress { host, port } = instance.net;
+        let (host, port) = match instance.net {
+            InstanceNet::InstanceAddress(addr) => (addr.host, addr.port),
+            _ => return Err(InstanceError::MissingAddress),
+        };
         let host: String = host.into();
 
         debug!(

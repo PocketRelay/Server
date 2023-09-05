@@ -166,6 +166,6 @@ pub struct JoinGameResponse {
 #[repr(u8)]
 pub enum JoinGameState {
     JoinedGame = 0,
-    InQueue = 1,
-    GroupPartiallyJoined = 2,
+    // InQueue = 1,
+    // GroupPartiallyJoined = 2,
 }

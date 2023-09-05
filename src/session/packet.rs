@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::{fmt::Debug, sync::Arc};
 use std::{io, ops::Deref};
@@ -513,11 +515,11 @@ impl<T: FromRequest> Request<T> {
     /// repsonse
     ///
     /// `res` The into response type implementation
-    pub fn response<E>(&self, res: E) -> Response
+    pub fn response<E>(&self, res: E) -> PacketResponse
     where
         E: TdfSerialize,
     {
-        Response(Packet {
+        PacketResponse(Packet {
             header: self.header.response(),
             contents: Bytes::from(serialize_vec(&res)),
         })
@@ -541,9 +543,9 @@ where
 
 /// Type for route responses that have already been turned into
 /// packets usually for lifetime reasons
-pub struct Response(Packet);
+pub struct PacketResponse(Packet);
 
-impl IntoResponse for Response {
+impl IntoResponse for PacketResponse {
     /// Simply provide the already compute response
     fn into_response(self, _req: &Packet) -> Packet {
         self.0
@@ -593,14 +595,51 @@ pub trait IntoResponse: 'static {
     fn into_response(self, req: &Packet) -> Packet;
 }
 
+pub struct Response<E>(pub E);
+
 /// Into response imeplementation for encodable responses
 /// which just calls res.respond
-impl<E> IntoResponse for E
+impl<E> IntoResponse for Response<E>
 where
     E: TdfSerialize + 'static,
 {
     fn into_response(self, req: &Packet) -> Packet {
-        req.respond(self)
+        req.respond(self.0)
+    }
+}
+/// Into response imeplementation for encodable responses
+/// which just calls res.respond
+impl IntoResponse for () {
+    fn into_response(self, req: &Packet) -> Packet {
+        req.respond_empty()
+    }
+}
+
+/// Into response imeplementation for encodable responses
+/// which just calls res.respond
+impl<A, B> IntoResponse for Result<A, B>
+where
+    A: IntoResponse,
+    B: IntoResponse,
+{
+    fn into_response(self, req: &Packet) -> Packet {
+        match self {
+            Ok(value) => value.into_response(req),
+            Err(value) => value.into_response(req),
+        }
+    }
+}
+/// Into response imeplementation for encodable responses
+/// which just calls res.respond
+impl<A> IntoResponse for Option<A>
+where
+    A: IntoResponse,
+{
+    fn into_response(self, req: &Packet) -> Packet {
+        match self {
+            Some(value) => value.into_response(req),
+            None => req.respond_empty(),
+        }
     }
 }
 
@@ -659,9 +698,8 @@ impl<'a> Debug for PacketDebug<'a> {
 
         let mut r = TdfDeserializer::new(&self.packet.contents);
         let mut out = String::new();
-        let mut str = TdfStringifier::new(r, &mut out);
-
         out.push_str("{\n");
+        let mut str = TdfStringifier::new(r, &mut out);
 
         // Stringify the content or append error instead
         if !str.stringify() {

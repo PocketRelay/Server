@@ -1,7 +1,7 @@
 //! Router implementation for routing packet components to different functions
 //! and automatically decoding the packet contents to the function type
 
-use std::{collections::HashMap, future::Future, marker::PhantomData, pin::Pin};
+use std::{collections::HashMap, future::Future, marker::PhantomData};
 
 use tdf::DecodeError;
 

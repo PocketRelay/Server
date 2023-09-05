@@ -15,7 +15,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             game_manager::*,
         },
-        packet::PacketBody,
+        packet::{PacketBody, Response},
         GetGamePlayerMessage, GetPlayerGameMessage, GetPlayerIdMessage, SessionLink,
     },
     state::App,
@@ -26,7 +26,7 @@ use std::sync::Arc;
 pub async fn handle_join_game(
     session: &mut SessionLink,
     req: JoinGameRequest,
-) -> ServerResult<JoinGameResponse> {
+) -> ServerResult<Response<JoinGameResponse>> {
     let services = App::services();
 
     // Load the session
@@ -82,10 +82,10 @@ pub async fn handle_join_game(
             player,
             context: GameSetupContext::Dataless(DatalessContext::JoinGameSetup),
         });
-        Ok(JoinGameResponse {
+        Ok(Response(JoinGameResponse {
             game_id,
             state: JoinGameState::JoinedGame,
-        })
+        }))
     } else {
         Err(ServerError::InvalidInformation)
     }
@@ -172,7 +172,7 @@ pub async fn handle_get_game_data(
 pub async fn handle_create_game(
     session: &mut SessionLink,
     req: CreateGameRequest,
-) -> ServerResult<CreateGameResponse> {
+) -> ServerResult<Response<CreateGameResponse>> {
     let player: GamePlayer = session
         .send(GetGamePlayerMessage)
         .await
@@ -198,7 +198,7 @@ pub async fn handle_create_game(
         .matchmaking
         .do_send(CheckGameMessage { link, game_id });
 
-    Ok(CreateGameResponse { game_id })
+    Ok(Response(CreateGameResponse { game_id }))
 }
 
 /// Handles changing the attributes of the game with the provided ID
@@ -520,7 +520,7 @@ pub async fn handle_update_mesh_connection(
 pub async fn handle_start_matchmaking(
     session: &mut SessionLink,
     req: MatchmakingRequest,
-) -> ServerResult<MatchmakingResponse> {
+) -> ServerResult<Response<MatchmakingResponse>> {
     let player: GamePlayer = session
         .send(GetGamePlayerMessage)
         .await
@@ -559,7 +559,7 @@ pub async fn handle_start_matchmaking(
         }
     }
 
-    Ok(MatchmakingResponse { id: session_id })
+    Ok(Response(MatchmakingResponse { id: session_id }))
 }
 
 /// Handles cancelling matchmaking for the current session removing
