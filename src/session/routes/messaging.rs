@@ -1,9 +1,12 @@
 use crate::{
-    session::{models::messaging::*, GetPlayerMessage, PushExt, SessionLink},
+    session::{
+        models::messaging::*,
+        packet::{Packet, Response},
+        GetPlayerMessage, PushExt, SessionLink,
+    },
     state::App,
-    utils::components::{Components as C, Messaging as M},
+    utils::components::messaging,
 };
-use blaze_pk::packet::Packet;
 
 /// Handles requests from the client to fetch the server messages. The initial response contains
 /// the amount of messages and then each message is sent using a SendMessage notification.
@@ -25,11 +28,11 @@ use blaze_pk::packet::Packet;
 /// }
 /// ```
 ///
-pub async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageResponse {
+pub async fn handle_fetch_messages(session: &mut SessionLink) -> Response<FetchMessageResponse> {
     // Request a copy of the player data
     let Ok(Some(player)) = session.send(GetPlayerMessage).await else {
         // Not authenticated return empty count
-        return FetchMessageResponse { count: 0 };
+        return Response(FetchMessageResponse { count: 0 });
     };
 
     // Message with player name replaced
@@ -38,7 +41,8 @@ pub async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageRes
         .replace("{n}", &player.display_name);
 
     let notify = Packet::notify(
-        C::Messaging(M::SendMessage),
+        messaging::COMPONENT,
+        messaging::SEND_MESSAGE,
         MessageNotify {
             message,
             player_id: player.id,
@@ -46,5 +50,5 @@ pub async fn handle_fetch_messages(session: &mut SessionLink) -> FetchMessageRes
     );
 
     session.push(notify);
-    FetchMessageResponse { count: 1 }
+    Response(FetchMessageResponse { count: 1 })
 }

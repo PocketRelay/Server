@@ -4,7 +4,7 @@
 use crate::{
     database::entities::players::PlayerRole,
     middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade, ip_address::IpAddress},
-    session::Session,
+    session::{packet::PacketCodec, Session},
     state::{self, App},
     utils::logging::LOG_FILE_NAME,
 };
@@ -14,7 +14,6 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use blaze_pk::packet::PacketCodec;
 use interlink::service::Service;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};

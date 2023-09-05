@@ -6,6 +6,7 @@ use crate::{
             auth::*,
             errors::{ServerError, ServerResult},
         },
+        packet::Response,
         GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage,
     },
     state::App,
@@ -19,7 +20,7 @@ use tokio::fs::read_to_string;
 pub async fn handle_login(
     session: &mut SessionLink,
     req: LoginRequest,
-) -> ServerResult<AuthResponse> {
+) -> ServerResult<Response<AuthResponse>> {
     let db: &DatabaseConnection = App::database();
 
     let LoginRequest { email, password } = &req;
@@ -54,17 +55,17 @@ pub async fn handle_login(
 
     let session_token: String = Tokens::service_claim(player.id);
 
-    Ok(AuthResponse {
+    Ok(Response(AuthResponse {
         player,
         session_token,
         silent: false,
-    })
+    }))
 }
 
 pub async fn handle_silent_login(
     session: &mut SessionLink,
     req: SilentLoginRequest,
-) -> ServerResult<AuthResponse> {
+) -> ServerResult<Response<AuthResponse>> {
     let db: &DatabaseConnection = App::database();
 
     // Verify the authentication token
@@ -78,17 +79,17 @@ pub async fn handle_silent_login(
         .await
         .map_err(|_| ServerError::ServerUnavailable)?;
 
-    Ok(AuthResponse {
+    Ok(Response(AuthResponse {
         player,
         session_token: req.token,
         silent: true,
-    })
+    }))
 }
 
 pub async fn handle_origin_login(
     session: &mut SessionLink,
     req: OriginLoginRequest,
-) -> ServerResult<AuthResponse> {
+) -> ServerResult<Response<AuthResponse>> {
     let db: &DatabaseConnection = App::database();
 
     let services: &Services = App::services();
@@ -122,11 +123,11 @@ pub async fn handle_origin_login(
 
     let session_token: String = Tokens::service_claim(player.id);
 
-    Ok(AuthResponse {
+    Ok(Response(AuthResponse {
         player,
         session_token,
         silent: true,
-    })
+    }))
 }
 
 /// Handles logging out by the client this removes any current player data from the
@@ -213,14 +214,15 @@ static ENTITLEMENTS: &[Entitlement; 34] = &[
 /// }
 /// ```
 pub async fn handle_list_entitlements(
+    _: &mut SessionLink,
     req: ListEntitlementsRequest,
-) -> Option<ListEntitlementsResponse> {
+) -> Option<Response<ListEntitlementsResponse>> {
     let tag: String = req.tag;
     if !tag.is_empty() {
         return None;
     }
 
-    Some(ListEntitlementsResponse { list: ENTITLEMENTS })
+    Some(Response(ListEntitlementsResponse { list: ENTITLEMENTS }))
 }
 
 /// Handles logging into a persona. This system doesn't implement the persona system so
@@ -233,13 +235,15 @@ pub async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-pub async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<PersonaResponse> {
+pub async fn handle_login_persona(
+    session: &mut SessionLink,
+) -> ServerResult<Response<PersonaResponse>> {
     let player: Player = session
         .send(GetPlayerMessage)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
-    Ok(PersonaResponse { player })
+    Ok(Response(PersonaResponse { player }))
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -253,7 +257,10 @@ pub async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<Per
 ///     "MAIL": "ACCOUNT_EMAIL"
 /// }
 /// ```
-pub async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> {
+pub async fn handle_forgot_password(
+    _: &mut SessionLink,
+    req: ForgotPasswordRequest,
+) -> ServerResult<()> {
     debug!("Password reset request (Email: {})", req.email);
     Ok(())
 }
@@ -294,7 +301,7 @@ pub async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<
 pub async fn handle_create_account(
     session: &mut SessionLink,
     req: CreateAccountRequest,
-) -> ServerResult<AuthResponse> {
+) -> ServerResult<Response<AuthResponse>> {
     let email = req.email;
     if !EmailAddress::is_valid(&email) {
         return Err(ServerError::InvalidEmail);
@@ -348,11 +355,11 @@ pub async fn handle_create_account(
 
     let session_token = Tokens::service_claim(player.id);
 
-    Ok(AuthResponse {
+    Ok(Response(AuthResponse {
         player,
         session_token,
         silent: false,
-    })
+    }))
 }
 
 /// Expected to be getting information about the legal docs however the exact meaning
@@ -366,8 +373,8 @@ pub async fn handle_create_account(
 ///     "PTFM": "pc" // Platform
 /// }
 /// ```
-pub async fn handle_get_legal_docs_info() -> LegalDocsInfo {
-    LegalDocsInfo
+pub async fn handle_get_legal_docs_info(_: &mut SessionLink) -> Response<LegalDocsInfo> {
+    Response(LegalDocsInfo)
 }
 
 /// ```
@@ -380,17 +387,17 @@ pub async fn handle_get_legal_docs_info() -> LegalDocsInfo {
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_tos() -> LegalContent {
+pub async fn handle_tos(_: &mut SessionLink) -> Response<LegalContent> {
     let content = match read_to_string("data/terms_of_service.html").await {
         Ok(value) => Cow::Owned(value),
         Err(_) => Cow::Borrowed("<h1>This is a terms of service placeholder</h1>"),
     };
 
-    LegalContent {
+    Response(LegalContent {
         col: 0xdaed,
         content,
         path: "webterms/au/en/pc/default/09082020/02042022",
-    }
+    })
 }
 
 /// ```
@@ -403,17 +410,17 @@ pub async fn handle_tos() -> LegalContent {
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_privacy_policy() -> LegalContent {
+pub async fn handle_privacy_policy(_: &mut SessionLink) -> Response<LegalContent> {
     let content = match read_to_string("data/privacy_policy.html").await {
         Ok(value) => Cow::Owned(value),
         Err(_) => Cow::Borrowed("<h1>This is a privacy policy placeholder</h1>"),
     };
 
-    LegalContent {
+    Response(LegalContent {
         col: 0xc99c,
         content,
         path: "webprivacy/au/en/pc/default/08202020/02042022",
-    }
+    })
 }
 
 /// Handles retrieving an authentication token for use with the Galaxy At War HTTP service.
@@ -424,7 +431,9 @@ pub async fn handle_privacy_policy() -> LegalContent {
 /// ID: 35
 /// Content: {}
 /// ```
-pub async fn handle_get_auth_token(session: &mut SessionLink) -> ServerResult<GetTokenResponse> {
+pub async fn handle_get_auth_token(
+    session: &mut SessionLink,
+) -> ServerResult<Response<GetTokenResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await
@@ -432,5 +441,5 @@ pub async fn handle_get_auth_token(session: &mut SessionLink) -> ServerResult<Ge
         .ok_or(ServerError::FailedNoLoginAction)?;
     // Create a new token claim for the player to use with the API
     let token = Tokens::service_claim(player_id);
-    Ok(GetTokenResponse { token })
+    Ok(Response(GetTokenResponse { token }))
 }

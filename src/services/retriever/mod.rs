@@ -10,16 +10,13 @@ use std::{
 use self::origin::OriginFlowService;
 use crate::{
     config::RetrieverConfig,
+    session::packet::{Packet, PacketCodec, PacketDebug, PacketHeader, PacketType},
     utils::{
-        components::{Components, Redirector},
+        components::redirector,
         models::{InstanceDetails, InstanceNet, Port},
     },
 };
-use blaze_pk::{
-    codec::{Decodable, Encodable},
-    error::DecodeError,
-    packet::{Packet, PacketCodec, PacketComponents, PacketDebug, PacketHeader, PacketType},
-};
+
 use blaze_ssl_async::{stream::BlazeStream, BlazeError};
 use futures_util::{SinkExt, StreamExt};
 use interlink::prelude::*;
@@ -28,6 +25,7 @@ use models::InstanceRequest;
 use origin::OriginFlow;
 use reqwest;
 use serde::Deserialize;
+use tdf::{DecodeError, TdfDeserialize, TdfSerialize};
 use thiserror::Error;
 use tokio::io;
 use tokio_util::codec::Framed;
@@ -124,6 +122,8 @@ pub enum InstanceError {
     Blaze(#[from] BlazeError),
     #[error("Failed to retrieve instance: {0}")]
     InstanceRequest(#[from] RetrieverError),
+    #[error("Server response missing address")]
+    MissingAddress,
 }
 
 impl OfficialInstance {
@@ -167,13 +167,17 @@ impl OfficialInstance {
         // Request the server instance
         let instance: InstanceDetails = session
             .request(
-                Components::Redirector(Redirector::GetServerInstance),
+                redirector::COMPONENT,
+                redirector::GET_SERVER_INSTANCE,
                 InstanceRequest,
             )
             .await?;
 
         // Extract the host and port turning the host into a string
-        let InstanceNet { host, port } = instance.net;
+        let (host, port) = match instance.net {
+            InstanceNet::InstanceAddress(addr) => (addr.host, addr.port),
+            _ => return Err(InstanceError::MissingAddress),
+        };
         let host: String = host.into();
 
         debug!(
@@ -313,24 +317,30 @@ impl OfficialSession {
 
     /// Writes a request packet and waits until the response packet is
     /// recieved returning the contents of that response packet.
-    pub async fn request<Req: Encodable, Res: Decodable>(
+    pub async fn request<Req, Res>(
         &mut self,
-        component: Components,
+        component: u16,
+        command: u16,
         contents: Req,
-    ) -> RetrieverResult<Res> {
-        let response = self.request_raw(component, contents).await?;
+    ) -> RetrieverResult<Res>
+    where
+        Req: TdfSerialize,
+        for<'a> Res: TdfDeserialize<'a> + 'a,
+    {
+        let response = self.request_raw(component, command, contents).await?;
         let contents = response.decode::<Res>()?;
         Ok(contents)
     }
 
     /// Writes a request packet and waits until the response packet is
     /// recieved returning the contents of that response packet.
-    pub async fn request_raw<Req: Encodable>(
+    pub async fn request_raw<Req: TdfSerialize>(
         &mut self,
-        component: Components,
+        component: u16,
+        command: u16,
         contents: Req,
     ) -> RetrieverResult<Packet> {
-        let request = Packet::request(self.id, component, contents);
+        let request = Packet::request(self.id, component, command, contents);
 
         debug_log_packet(&request, "Sending to Official");
         let header = request.header;
@@ -344,19 +354,23 @@ impl OfficialSession {
     /// Writes a request packet and waits until the response packet is
     /// recieved returning the contents of that response packet. The
     /// request will have no content
-    pub async fn request_empty<Res: Decodable>(
-        &mut self,
-        component: Components,
-    ) -> RetrieverResult<Res> {
-        let response = self.request_empty_raw(component).await?;
+    pub async fn request_empty<Res>(&mut self, component: u16, command: u16) -> RetrieverResult<Res>
+    where
+        for<'a> Res: TdfDeserialize<'a> + 'a,
+    {
+        let response = self.request_empty_raw(component, command).await?;
         let contents = response.decode::<Res>()?;
         Ok(contents)
     }
 
     /// Writes a request packet and waits until the response packet is
     /// recieved returning the raw response packet
-    pub async fn request_empty_raw(&mut self, component: Components) -> RetrieverResult<Packet> {
-        let request = Packet::request_empty(self.id, component);
+    pub async fn request_empty_raw(
+        &mut self,
+        component: u16,
+        command: u16,
+    ) -> RetrieverResult<Packet> {
+        let request = Packet::request_empty(self.id, component, command);
         debug_log_packet(&request, "Sent to Official");
         let header = request.header;
         self.stream.send(request).await?;
@@ -397,10 +411,8 @@ fn debug_log_packet(packet: &Packet, action: &str) {
     if !log_enabled!(log::Level::Debug) {
         return;
     }
-    let component = Components::from_header(&packet.header);
     let debug = PacketDebug {
         packet,
-        component: component.as_ref(),
         minified: false,
     };
     debug!("\n{}\n{:?}", action, debug);

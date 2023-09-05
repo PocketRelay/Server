@@ -7,11 +7,12 @@ use crate::{
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
+        packet::Response,
         GetLookupMessage, GetSocketAddrMessage, HardwareFlagMessage, LookupResponse,
         NetworkInfoMessage, SessionLink, SetPlayerMessage,
     },
     state::App,
-    utils::models::NetAddress,
+    utils::models::NetworkAddress,
 };
 use log::error;
 use std::net::SocketAddr;
@@ -31,7 +32,10 @@ use std::net::SocketAddr;
 ///     "NAME": "",
 /// }
 /// ```
-pub async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> {
+pub async fn handle_lookup_user(
+    _: &mut SessionLink,
+    req: LookupRequest,
+) -> ServerResult<Response<LookupResponse>> {
     let services = App::services();
 
     // Lookup the session
@@ -55,7 +59,7 @@ pub async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupRespon
         _ => return Err(ServerError::InvalidInformation),
     };
 
-    Ok(response)
+    Ok(Response(response))
 }
 
 /// Attempts to resume an existing session for a player that has the
@@ -71,7 +75,7 @@ pub async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupRespon
 pub async fn handle_resume_session(
     session: &mut SessionLink,
     req: ResumeSessionRequest,
-) -> ServerResult<AuthResponse> {
+) -> ServerResult<Response<AuthResponse>> {
     let db = App::database();
 
     let session_token = req.session_token;
@@ -94,11 +98,11 @@ pub async fn handle_resume_session(
         return Err(ServerError::ServerUnavailable);
     }
 
-    Ok(AuthResponse {
+    Ok(Response(AuthResponse {
         player,
         session_token,
         silent: true,
-    })
+    }))
 }
 
 /// Handles updating the stored networking information for the current session
@@ -131,22 +135,24 @@ pub async fn handle_resume_session(
 /// }
 /// ```
 pub async fn handle_update_network(session: &mut SessionLink, mut req: UpdateNetworkRequest) {
-    let ext = &mut req.address.external;
+    if let NetworkAddress::AddressPair(pair) = &mut req.address {
+        let ext = &mut pair.external;
 
-    // If address is missing
-    if ext.0 .0.is_unspecified() {
-        // Obtain socket address from session
-        if let Ok(SocketAddr::V4(addr)) = session.send(GetSocketAddrMessage).await {
-            let ip = addr.ip();
-            // Replace address with new address and port with same as local port
-            ext.0 = NetAddress(*ip);
-            ext.1 = req.address.internal.1;
+        // If address is missing
+        if ext.addr.is_unspecified() {
+            // Obtain socket address from session
+            if let Ok(SocketAddr::V4(addr)) = session.send(GetSocketAddrMessage).await {
+                let ip = addr.ip();
+                // Replace address with new address and port with same as local port
+                ext.addr = *ip;
+                ext.port = pair.internal.port;
+            }
         }
     }
 
     let _ = session
         .send(NetworkInfoMessage {
-            groups: req.address,
+            address: req.address,
             qos: req.qos,
         })
         .await;
