@@ -5,7 +5,10 @@ use super::{
     packet::{FromRequest, IntoResponse, Packet},
     SessionLink,
 };
-use crate::utils::types::BoxFuture;
+use crate::utils::{
+    components::{component_key, ComponentKey},
+    types::BoxFuture,
+};
 use std::{collections::HashMap, future::Future, marker::PhantomData};
 use tdf::DecodeError;
 
@@ -72,7 +75,7 @@ where
 }
 
 pub struct Router {
-    routes: HashMap<(u16, u16), Box<dyn Route>>,
+    routes: HashMap<ComponentKey, Box<dyn Route>>,
 }
 
 impl Router {
@@ -93,7 +96,7 @@ impl Router {
         Format: 'static,
     {
         self.routes.insert(
-            (component, command),
+            component_key(component, command),
             Box::new(HandlerRoute {
                 handler: route,
                 _marker: PhantomData,
@@ -103,7 +106,10 @@ impl Router {
 
     pub fn handle<'a>(&self, state: &'a mut SessionLink, packet: &'a Packet) -> HandleResult<'a> {
         self.routes
-            .get(&(packet.header.component, packet.header.command))
+            .get(&component_key(
+                packet.header.component,
+                packet.header.command,
+            ))
             .ok_or(HandleError::MissingHandler)?
             .handle(state, packet)
     }
