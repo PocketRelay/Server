@@ -7,22 +7,17 @@ use crate::{
     session::{DetailsMessage, InformSessions, PushExt, Session, SetGameMessage},
     state::App,
     utils::{
-        components::{Components, GameManager, UserSessions},
         models::NetData,
         types::{GameID, PlayerID},
     },
 };
-use blaze_pk::{
-    codec::Encodable,
-    packet::{Packet, PacketBody},
-    types::TdfMap,
-    writer::TdfWriter,
-};
+
 use interlink::prelude::*;
 use log::debug;
 use models::*;
 use serde::Serialize;
 use std::sync::Arc;
+use tdf::{ObjectId, TdfSerializer};
 
 pub mod manager;
 pub mod models;
@@ -148,22 +143,22 @@ impl GamePlayer {
         }
     }
 
-    pub fn encode(&self, game_id: GameID, slot: usize, writer: &mut TdfWriter) {
-        writer.tag_empty_blob(b"BLOB");
-        writer.tag_u8(b"EXID", 0);
-        writer.tag_u32(b"GID", game_id);
-        writer.tag_u32(b"LOC", 0x64654445);
-        writer.tag_str(b"NAME", &self.player.display_name);
-        writer.tag_u32(b"PID", self.player.id);
-        self.net.tag_groups(b"PNET", writer);
-        writer.tag_usize(b"SID", slot);
-        writer.tag_u8(b"SLOT", 0);
-        writer.tag_value(b"STAT", &self.state);
-        writer.tag_u16(b"TIDX", 0xffff);
-        writer.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
-        writer.tag_triple(b"UGID", (0, 0, 0));
-        writer.tag_u32(b"UID", self.player.id);
-        writer.tag_group_end();
+    pub fn encode<S: TdfSerializer>(&self, game_id: GameID, slot: usize, w: &mut S) {
+        w.tag_blob_empty(b"BLOB");
+        w.tag_u8(b"EXID", 0);
+        w.tag_owned(b"GID", game_id);
+        w.tag_u32(b"LOC", 0x64654445);
+        w.tag_str(b"NAME", &self.player.display_name);
+        w.tag_u32(b"PID", self.player.id);
+        w.tag_ref(b"PNET", &self.net.addr);
+        w.tag_owned(b"SID", slot);
+        w.tag_u8(b"SLOT", 0);
+        w.tag_value(b"STAT", &self.state);
+        w.tag_u16(b"TIDX", 0xffff);
+        w.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
+        w.tag_owned(b"UGID", ObjectId::new_raw(0, 0, 0));
+        w.tag_u32(b"UID", self.player.id);
+        w.tag_group_end();
     }
 }
 
@@ -638,6 +633,7 @@ impl Game {
         let packet = Packet::notify(
             Components::GameManager(GameManager::PlayerRemoved),
             PlayerRemoved {
+                cntx: 0,
                 game_id: self.id,
                 player_id: player.player.id,
                 reason,
@@ -694,6 +690,8 @@ impl Game {
             HostMigrateStart {
                 game_id: self.id,
                 host_id: new_host.player.id,
+                pmig: 2,
+                slot: 0,
             },
         );
 

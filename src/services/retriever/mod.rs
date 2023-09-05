@@ -12,7 +12,7 @@ use crate::{
     config::RetrieverConfig,
     utils::{
         components::{Components, Redirector},
-        models::{InstanceDetails, InstanceNet, Port},
+        models::{InstanceAddress, InstanceDetails, Port},
     },
 };
 use blaze_pk::{
@@ -173,7 +173,7 @@ impl OfficialInstance {
             .await?;
 
         // Extract the host and port turning the host into a string
-        let InstanceNet { host, port } = instance.net;
+        let InstanceAddress { host, port } = instance.net;
         let host: String = host.into();
 
         debug!(

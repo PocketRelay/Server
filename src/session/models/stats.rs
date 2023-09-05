@@ -1,37 +1,27 @@
-use crate::{services::leaderboard::models::LeaderboardEntry, utils::types::PlayerID};
-use blaze_pk::{
-    codec::{Decodable, Encodable},
-    error::{DecodeError, DecodeResult},
-    reader::TdfReader,
-    tag::TdfType,
-    writer::TdfWriter,
+use blaze_pk::error::DecodeError;
+use tdf::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped};
+
+use crate::{
+    services::leaderboard::models::LeaderboardEntry,
+    utils::{components::user_sessions::PLAYER_TYPE, types::PlayerID},
 };
 
 /// Structure for the request to retrieve the entity count
 /// of a leaderboard
+#[derive(TdfDeserialize)]
 pub struct EntityCountRequest {
     /// The leaderboard name
+    #[tdf(tag = "NAME")]
     pub name: String,
-}
-
-impl Decodable for EntityCountRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let name: String = reader.tag(b"NAME")?;
-        Ok(Self { name })
-    }
 }
 
 /// Structure for the entity count response for finding the
 /// number of entities in a leaderboard section
+#[derive(TdfSerialize)]
 pub struct EntityCountResponse {
     /// The number of entities in the leaderboard
+    #[tdf(tag = "CNT")]
     pub count: usize,
-}
-
-impl Encodable for EntityCountResponse {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_usize(b"CNT", self.count);
-    }
 }
 
 /// Request for a list of leaderboard entries where the center
@@ -55,26 +45,17 @@ impl Encodable for EntityCountResponse {
 ///     "USET": (0, 0, 0)
 /// }
 /// ```
+#[derive(TdfDeserialize)]
 pub struct CenteredLeaderboardRequest {
+    /// The ID of the player to center on
+    #[tdf(tag = "CENT")]
+    pub center: PlayerID,
     /// The entity count
+    #[tdf(tag = "COUN")]
     pub count: usize,
     /// The leaderboard name
+    #[tdf(tag = "NAME")]
     pub name: String,
-    /// The ID of the player to center on
-    pub center: PlayerID,
-}
-
-impl Decodable for CenteredLeaderboardRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let center: PlayerID = reader.tag(b"CENT")?;
-        let count: usize = reader.tag(b"COUN")?;
-        let name: String = reader.tag(b"NAME")?;
-        Ok(Self {
-            center,
-            count,
-            name,
-        })
-    }
 }
 
 pub enum LeaderboardResponse<'a> {
@@ -86,39 +67,40 @@ pub enum LeaderboardResponse<'a> {
     Many(&'a [LeaderboardEntry]),
 }
 
-impl Encodable for LeaderboardEntry {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_str(b"ENAM", &self.player_name);
-        writer.tag_u32(b"ENID", self.player_id);
-        writer.tag_usize(b"RANK", self.rank);
-        let value_str = self.value.to_string();
-        writer.tag_str(b"RSTA", &value_str);
-        writer.tag_zero(b"RWFG");
-        writer.tag_union_unset(b"RWST");
-        {
-            writer.tag_list_start(b"STAT", TdfType::String, 1);
-            writer.write_str(&value_str);
-        }
-        writer.tag_zero(b"UATT");
-        writer.tag_group_end();
+impl TdfSerialize for LeaderboardEntry {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.group_body(|w| {
+            w.tag_str(b"ENAM", &self.player_name);
+            w.tag_u32(b"ENID", self.player_id);
+            w.tag_usize(b"RANK", self.rank);
+
+            let value_str = self.value.to_string();
+            w.tag_str(b"RSTA", &value_str);
+            w.tag_zero(b"RWFG");
+            w.tag_union_unset(b"RWST");
+
+            w.tag_list_slice(b"STAT", &[value_str]);
+
+            w.tag_zero(b"UATT");
+        });
     }
 }
 
-impl Encodable for LeaderboardResponse<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
+impl TdfTyped for LeaderboardEntry {
+    const TYPE: TdfType = TdfType::Group;
+}
+
+impl TdfSerialize for LeaderboardResponse<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         match self {
             Self::Empty => {
-                writer.tag_list_start(b"LDLS", TdfType::Group, 0);
+                w.tag_list_empty(b"LDLS", TdfType::Group);
             }
             Self::One(value) => {
-                writer.tag_list_start(b"LDLS", TdfType::Group, 1);
-                value.encode(writer);
+                w.tag_list_slice(b"LDLS", &[value]);
             }
             Self::Many(values) => {
-                writer.tag_list_start(b"LDLS", TdfType::Group, values.len());
-                for value in *values {
-                    value.encode(writer);
-                }
+                w.tag_list_slice(b"LDLS", *values);
             }
         }
     }
@@ -144,22 +126,17 @@ impl Encodable for LeaderboardResponse<'_> {
 ///   "USET": (0, 0, 0),
 /// }
 /// ```
+#[derive(TdfDeserialize)]
 pub struct LeaderboardRequest {
     /// The entity count
+    #[tdf(tag = "COUN")]
     pub count: usize,
     /// The leaderboard name
+    #[tdf(tag = "NAME")]
     pub name: String,
     /// The rank offset to start at
+    #[tdf(tag = "STRT")]
     pub start: usize,
-}
-
-impl Decodable for LeaderboardRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let count: usize = reader.tag(b"COUN")?;
-        let name: String = reader.tag(b"NAME")?;
-        let start: usize = reader.tag(b"STRT")?;
-        Ok(Self { count, name, start })
-    }
 }
 
 /// Structure for a request to get a leaderboard only
@@ -189,32 +166,27 @@ pub struct FilteredLeaderboardRequest {
     pub name: String,
 }
 
-impl Decodable for FilteredLeaderboardRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let count: usize = reader.until_list(b"IDLS", TdfType::VarInt)?;
+impl TdfDeserializeOwned for FilteredLeaderboardRequest {
+    fn deserialize_owned(r: &mut tdf::TdfDeserializer<'_>) -> tdf::DecodeResult<Self> {
+        let count: usize = r.until_list_typed(b"IDLS", TdfType::VarInt)?;
         if count < 1 {
             return Err(DecodeError::Other("Missing player ID for filter"));
         }
-        let id: PlayerID = reader.read_u32()?;
+        let id: PlayerID = r.read_u32()?;
         for _ in 1..count {
-            reader.skip_var_int();
+            r.skip_var_int();
         }
-        let name: String = reader.tag(b"NAME")?;
+        let name: String = r.tag(b"NAME")?;
         Ok(Self { id, name })
     }
 }
 
 /// Structure for a request for a leaderboard group
+#[derive(TdfDeserialize)]
 pub struct LeaderboardGroupRequest {
     /// The name of the leaderboard group
+    #[tdf(tag = "NAME")]
     pub name: String,
-}
-
-impl Decodable for LeaderboardGroupRequest {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let name: String = reader.tag(b"NAME")?;
-        Ok(Self { name })
-    }
 }
 
 /// Structure for a leaderboard group response.
@@ -226,41 +198,38 @@ pub struct LeaderboardGroupResponse<'a> {
     pub gname: &'a str,
 }
 
-impl Encodable for LeaderboardGroupResponse<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u8(b"ACSD", 0);
-        writer.tag_str(b"BNAM", &self.name);
-        writer.tag_str(b"DESC", &self.desc);
-        writer.tag_pair(b"ETYP", (0x7802, 0x1));
+impl TdfSerialize for LeaderboardGroupResponse<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_u8(b"ACSD", 0);
+        w.tag_str(b"BNAM", &self.name);
+        w.tag_str(b"DESC", &self.desc);
+        w.tag_alt(b"ETYP", PLAYER_TYPE);
+
         {
-            writer.tag_map_start(b"KSUM", TdfType::String, TdfType::Group, 1);
-            writer.write_str("accountcountry");
-            {
-                writer.tag_map_start(b"KSVL", TdfType::VarInt, TdfType::VarInt, 1);
-                writer.write_byte(0);
-                writer.write_byte(0);
-                writer.tag_group_end();
-            }
+            w.tag_map_start(b"KSUM", TdfType::String, TdfType::Group, 1);
+            w.write_str("accountcountry");
+            w.group_body(|w| {
+                w.tag_map_tuples(b"KSVL", &[(0u8, 0u8)]);
+            });
         }
-        writer.tag_u32(b"LBSZ", 0x7270e0);
+        w.tag_u32(b"LBSZ", 0x7270e0);
         {
-            writer.tag_list_start(b"LIST", TdfType::Group, 1);
-            {
-                writer.tag_str(b"CATG", "MassEffectStats");
-                writer.tag_str(b"DFLT", "0");
-                writer.tag_u8(b"DRVD", 0x0);
-                writer.tag_str(b"FRMT", "%d");
-                writer.tag_str(b"KIND", "");
-                writer.tag_str(b"LDSC", self.sdsc);
-                writer.tag_str(b"META", "W=200, HMC=tableColHeader3, REMC=tableRowEntry3");
-                writer.tag_str(b"NAME", self.sname);
-                writer.tag_str(b"SDSC", self.sdsc);
-                writer.tag_u8(b"TYPE", 0x0);
-                writer.tag_group_end();
-            }
+            w.tag_list_start(b"LIST", TdfType::Group, 1);
+            w.group_body(|w| {
+                w.tag_str(b"CATG", "MassEffectStats");
+                w.tag_str(b"DFLT", "0");
+                w.tag_u8(b"DRVD", 0x0);
+                w.tag_str(b"FRMT", "%d");
+                w.tag_str(b"KIND", "");
+                w.tag_str(b"LDSC", self.sdsc);
+                w.tag_str(b"META", "W=200, HMC=tableColHeader3, REMC=tableRowEntry3");
+                w.tag_str(b"NAME", self.sname);
+                w.tag_str(b"SDSC", self.sdsc);
+                w.tag_u8(b"TYPE", 0x0);
+            });
         }
-        writer. tag_str(b"META", "RF=@W=150, HMC=tableColHeader1, REMC=tableRowEntry1@ UF=@W=670, HMC=tableColHeader2, REMC=tableRowEntry2@");
-        writer.tag_str(b"NAME", self.gname);
-        writer.tag_str(b"SNAM", self.sname);
+        w.tag_str(b"META", "RF=@W=150, HMC=tableColHeader1, REMC=tableRowEntry1@ UF=@W=670, HMC=tableColHeader2, REMC=tableRowEntry2@");
+        w.tag_str(b"NAME", self.gname);
+        w.tag_str(b"SNAM", self.sname);
     }
 }

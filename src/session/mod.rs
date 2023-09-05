@@ -13,7 +13,7 @@ use crate::{
     },
     state::App,
     utils::{
-        components::{self, Components, UserSessions},
+        components::{self, game_manager::GAME_TYPE, Components, UserSessions},
         models::{NetData, NetGroups, Port, QosNetworkData, UpdateExtDataAttr},
         types::{GameID, PlayerID, SessionID},
     },
@@ -29,6 +29,7 @@ use blaze_pk::{
 use interlink::prelude::*;
 use log::{debug, error, log_enabled};
 use std::{fmt::Debug, io, net::SocketAddr};
+use tdf::{ObjectId, TdfSerialize, TdfTyped};
 
 pub mod models;
 pub mod routes;
@@ -290,7 +291,7 @@ impl Handler<UpdateClientMessage> for Session {
                 Components::UserSessions(UserSessions::SetSession),
                 SetSession {
                     player_id: player.id,
-                    session: self,
+                    session: &self.data,
                 },
             );
             self.push(packet);
@@ -331,7 +332,7 @@ impl Handler<InformSessions> for Session {
                 Components::UserSessions(UserSessions::SetSession),
                 SetSession {
                     player_id: player.id,
-                    session: self,
+                    session: &self.data,
                 },
             );
 
@@ -373,7 +374,7 @@ impl Handler<NetworkInfoMessage> for Session {
     fn handle(&mut self, msg: NetworkInfoMessage, ctx: &mut ServiceContext<Self>) {
         let net = &mut &mut self.data.net;
         net.qos = msg.qos;
-        net.groups = Some(msg.groups);
+        net.addr = Some(msg.groups);
 
         // Notify the client of the change via a message rather than
         // directly so its sent after the response
@@ -606,34 +607,33 @@ impl Debug for SessionPacketDebug<'_> {
     }
 }
 
-impl Encodable for SessionData {
-    fn encode(&self, writer: &mut TdfWriter) {
-        self.net.tag_groups(b"ADDR", writer);
-        writer.tag_str(b"BPS", "ea-sjc");
-        writer.tag_str_empty(b"CTY");
-        writer.tag_var_int_list_empty(b"CVAR");
-        {
-            writer.tag_map_start(b"DMAP", TdfType::VarInt, TdfType::VarInt, 1);
-            writer.write_u32(0x70001);
-            writer.write_u16(0x409a);
-        }
-        writer.tag_u16(b"HWFG", self.net.hardware_flags);
-        {
+impl TdfSerialize for SessionData {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.group_body(|w| {
+            w.tag_ref(b"ADDR", &self.net.addr);
+            w.tag_str(b"BPS", "ea-sjc");
+            w.tag_str_empty(b"CTY");
+            w.tag_var_int_list_empty(b"CVAR");
+
+            w.tag_map_tuples(b"DMAP", &[0x70001, 0x409a]);
+
+            w.tag_u16(b"HWFG", self.net.hardware_flags);
+
             // Ping latency to the Quality of service servers
-            writer.tag_list_start(b"PSLM", TdfType::VarInt, 1);
-            0xfff0fff.encode(writer);
-        }
-        writer.tag_value(b"QDAT", &self.net.qos);
-        writer.tag_u8(b"UATT", 0);
-        if let Some(game_id) = &self.game {
-            writer.tag_list_start(b"ULST", TdfType::Triple, 1);
-            (4, 1, *game_id).encode(writer);
-        }
-        writer.tag_group_end();
+            w.tag_list_slice(b"PSLM", &[0xfff0fff]);
+
+            w.tag_value(b"QDAT", &self.net.qos);
+            w.tag_u8(b"UATT", 0);
+            if let Some(game_id) = &self.game {
+                w.tag_list_slice(b"ULST", &[ObjectId::new(GAME_TYPE, *game_id as u64)]);
+            }
+        });
     }
 }
 
-value_type!(SessionData, TdfType::Group);
+impl TdfTyped for SessionData {
+    const TYPE: TdfType = TdfType::Group;
+}
 
 /// Session update for a session other than ourselves
 /// which contains the details for that session
@@ -646,16 +646,16 @@ struct SessionUpdate<'a> {
     display_name: &'a str,
 }
 
-impl Encodable for SessionUpdate<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_value(b"DATA", &self.session.data);
+impl TdfSerialize for SessionUpdate<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_value(b"DATA", &self.session.data);
 
-        writer.group(b"USER", |writer| {
-            writer.tag_u32(b"AID", self.player_id);
+        w.group(b"USER", |writer| {
+            writer.tag_owned(b"AID", self.player_id);
             writer.tag_u32(b"ALOC", 0x64654445);
-            writer.tag_empty_blob(b"EXBB");
+            writer.tag_blob_empty(b"EXBB");
             writer.tag_u8(b"EXID", 0);
-            writer.tag_u32(b"ID", self.player_id);
+            writer.tag_owned(b"ID", self.player_id);
             writer.tag_str(b"NAME", self.display_name);
         });
     }
@@ -667,34 +667,30 @@ pub struct LookupResponse {
     display_name: String,
 }
 
-impl Encodable for LookupResponse {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_value(b"EDAT", &self.session_data);
+impl TdfSerialize for LookupResponse {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_value(b"EDAT", &self.session_data);
 
-        writer.tag_u8(b"FLGS", 2);
+        w.tag_u8(b"FLGS", 2);
 
-        writer.group(b"USER", |writer| {
-            writer.tag_u32(b"AID", self.player_id);
-            writer.tag_u32(b"ALOC", 0x64654445);
-            writer.tag_empty_blob(b"EXBB");
-            writer.tag_u8(b"EXID", 0);
-            writer.tag_u32(b"ID", self.player_id);
-            writer.tag_str(b"NAME", &self.display_name);
+        w.group(b"USER", |w| {
+            w.tag_owned(b"AID", self.player_id);
+            w.tag_u32(b"ALOC", 0x64654445);
+            w.tag_empty_blob(b"EXBB");
+            w.tag_u8(b"EXID", 0);
+            w.tag_owned(b"ID", self.player_id);
+            w.tag_str(b"NAME", &self.display_name);
         });
     }
 }
 
 /// Session update for ourselves
+#[derive(TdfSerialize)]
 struct SetSession<'a> {
-    /// The player ID the update is for
-    player_id: PlayerID,
     /// The session this update is for
-    session: &'a Session,
-}
-
-impl Encodable for SetSession<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_value(b"DATA", &self.session.data);
-        writer.tag_u32(b"USID", self.player_id);
-    }
+    #[tdf(tag = "DATA")]
+    session: &'a SessionData,
+    /// The player ID the update is for
+    #[tdf(tag = "USID")]
+    player_id: PlayerID,
 }

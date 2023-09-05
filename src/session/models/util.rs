@@ -11,6 +11,7 @@ use blaze_pk::{
     writer::TdfWriter,
 };
 use std::borrow::Cow;
+use tdf::TdfSerialize;
 
 /// Possibly regions that the telemetry server is disabled for?
 pub const TELEMTRY_DISA: &str = "AD,AF,AG,AI,AL,AM,AN,AO,AQ,AR,AS,AW,AX,AZ,BA,BB,BD,BF,BH,BI,BJ,BM,BN,BO,BR,BS,BT,BV,BW,BY,BZ,CC,CD,CF,CG,CI,CK,CL,CM,CN,CO,CR,CU,CV,CX,DJ,DM,DO,DZ,EC,EG,EH,ER,ET,FJ,FK,FM,FO,GA,GD,GE,GF,GG,GH,GI,GL,GM,GN,GP,GQ,GS,GT,GU,GW,GY,HM,HN,HT,ID,IL,IM,IN,IO,IQ,IR,IS,JE,JM,JO,KE,KG,KH,KI,KM,KN,KP,KR,KW,KY,KZ,LA,LB,LC,LI,LK,LR,LS,LY,MA,MC,MD,ME,MG,MH,ML,MM,MN,MO,MP,MQ,MR,MS,MU,MV,MW,MY,MZ,NA,NC,NE,NF,NG,NI,NP,NR,NU,OM,PA,PE,PF,PG,PH,PK,PM,PN,PS,PW,PY,QA,RE,RS,RW,SA,SB,SC,SD,SG,SH,SJ,SL,SM,SN,SO,SR,ST,SV,SY,SZ,TC,TD,TF,TG,TH,TJ,TK,TL,TM,TN,TO,TT,TV,TZ,UA,UG,UM,UY,UZ,VA,VC,VE,VG,VN,VU,WF,WS,YE,YT,ZM,ZW,ZZ";
@@ -36,25 +37,25 @@ pub const LOCAL_HTTP_PORT: Port = 42131;
 /// Structure for encoding the telemetry server details
 pub struct TelemetryServer;
 
-impl Encodable for TelemetryServer {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.group(b"TELE", |writer| {
+impl TdfSerialize for TelemetryServer {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.group(b"TELE", |w| {
             // Last known telemetry addresses: 159.153.235.32, gostelemetry.blaze3.ea.com
-            writer.tag_str(b"ADRS", "127.0.0.1");
-            writer.tag_zero(b"ANON");
-            writer.tag_str(b"DISA", TELEMTRY_DISA);
-            writer.tag_str(b"FILT", "-UION/****");
-            writer.tag_u32(b"LOC", 1701727834);
-            writer.tag_str(b"NOOK", "US,CA,MX");
+            w.tag_str(b"ADRS", "127.0.0.1");
+            w.tag_zero(b"ANON");
+            w.tag_str(b"DISA", TELEMTRY_DISA);
+            w.tag_str(b"FILT", "-UION/****");
+            w.tag_u32(b"LOC", 1701727834);
+            w.tag_str(b"NOOK", "US,CA,MX");
             // Last known telemetry port: 9988
-            writer.tag_u16(b"PORT", TELEMETRY_PORT);
-            writer.tag_u16(b"SDLY", 15000);
-            writer.tag_str(b"SESS", "pcwdjtOCVpD");
+            w.tag_owned(b"PORT", TELEMETRY_PORT);
+            w.tag_u16(b"SDLY", 15000);
+            w.tag_str(b"SESS", "pcwdjtOCVpD");
             let key: Cow<str> = String::from_utf8_lossy(TELEMETRY_KEY);
 
-            writer.tag_str(b"SKEY", &key);
-            writer.tag_u8(b"SPCT", 75);
-            writer.tag_str_empty(b"STIM");
+            w.tag_str(b"SKEY", &key);
+            w.tag_u8(b"SPCT", 75);
+            w.tag_str_empty(b"STIM");
         });
     }
 }
@@ -66,9 +67,9 @@ const TICKER_KEY: &str = "1,10.23.15.2:8999,masseffect-3-pc,10,50,50,50,50,0,12"
 /// Structure for encoding the ticker server details
 pub struct TickerServer;
 
-impl Encodable for TickerServer {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.group(b"TICK", |writer| {
+impl TdfSerialize for TickerServer {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.group(b"TICK", |writer| {
             // Last known ticker addresses: 10.23.15.2, 10.10.78.150
             writer.tag_str(b"ADRS", "127.0.0.1");
             // Last known ticker port: 8999
@@ -88,46 +89,44 @@ pub struct PreAuthResponse {
     pub host_target: SessionHostTarget,
 }
 
-impl Encodable for PreAuthResponse {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_zero(b"ANON");
-        writer.tag_str(b"ASRC", SRC_VERSION);
+impl TdfSerialize for PreAuthResponse {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_zero(b"ANON");
+        w.tag_str(b"ASRC", SRC_VERSION);
         // This list appears to contain the IDs of the components that the game
         // uses throughout its lifecycle
-        writer.tag_slice_list(
+        w.tag_list_slice(
             b"CIDS",
             &[
                 0x1, 0x19, 0x4, 0x1c, 0x7, 0x9, 0xf802, 0x7800, 0xf, 0x7801, 0x7802, 0x7803,
                 0x7805, 0x7806, 0x7d0,
             ],
         );
-        writer.tag_str_empty(b"CNGN");
+        w.tag_str_empty(b"CNGN");
 
         // Double nested map containing configuration options for
         // ping intervals and VOIP headset update rates
-        writer.group(b"CONF", |writer| {
-            writer.tag_map_start(b"CONF", TdfType::String, TdfType::String, 3);
-
-            writer.write_str("pingPeriod");
-            writer.write_str(PING_PERIOD);
-
-            writer.write_str("voipHeadsetUpdateRate");
-            writer.write_str("1000");
-
-            // XLSP (Xbox Live Server Platform)
-            writer.write_str("xlspConnectionIdleTimeout");
-            writer.write_str("300");
+        w.group(b"CONF", |w| {
+            w.tag_map_tuples(
+                b"CONF",
+                &[
+                    ("pingPeriod", PING_PERIOD),
+                    ("voipHeadsetUpdateRate", "1000"),
+                    // XLSP (Xbox Live Server Platform)
+                    ("xlspConnectionIdleTimeout", "300"),
+                ],
+            );
         });
 
-        writer.tag_str(b"INST", "masseffect-3-pc");
-        writer.tag_zero(b"MINR");
-        writer.tag_str(b"NASP", "cem_ea_id");
-        writer.tag_str_empty(b"PILD");
-        writer.tag_str(b"PLAT", "pc");
-        writer.tag_str_empty(b"PTAG");
+        w.tag_str(b"INST", "masseffect-3-pc");
+        w.tag_zero(b"MINR");
+        w.tag_str(b"NASP", "cem_ea_id");
+        w.tag_str_empty(b"PILD");
+        w.tag_str(b"PLAT", "pc");
+        w.tag_str_empty(b"PTAG");
 
         // Quality Of Service Server details
-        writer.group(b"QOSS", |writer| {
+        w.group(b"QOSS", |writer| {
             let (http_host, http_port) = if self.host_target.local_http {
                 ("127.0.0.1", LOCAL_HTTP_PORT)
             } else {
@@ -151,11 +150,12 @@ impl Encodable for PreAuthResponse {
                 // Key for the server
                 writer.write_str("ea-sjc");
 
-                // Same as the Bioware primary server
-                writer.tag_str(b"PSA", http_host);
-                writer.tag_u16(b"PSP", http_port);
-                writer.tag_str(b"SNA", "prod-sjc");
-                writer.tag_group_end();
+                w.group_body(|w| {
+                    // Same as the Bioware primary server
+                    writer.tag_str(b"PSA", http_host);
+                    writer.tag_u16(b"PSP", http_port);
+                    writer.tag_str(b"SNA", "prod-sjc");
+                });
             }
 
             // Possibly server version ID (1161889797)
@@ -163,9 +163,9 @@ impl Encodable for PreAuthResponse {
         });
 
         // Server src version
-        writer.tag_str(b"RSRC", SRC_VERSION);
+        w.tag_str(b"RSRC", SRC_VERSION);
         // Server blaze version
-        writer.tag_str(b"SVER", BLAZE_VERSION)
+        w.tag_str(b"SVER", BLAZE_VERSION)
     }
 }
 

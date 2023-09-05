@@ -104,6 +104,8 @@ pub mod authentication {
 }
 
 pub mod game_manager {
+    use tdf::ObjectType;
+
     pub const COMPONENT: u16 = 0x4;
 
     // Components
@@ -211,6 +213,9 @@ pub mod game_manager {
     pub const CREATE_DYNAMIC_DEDICATED_SERVER_GAME: u16 = 0xDC;
     // 0xDD-0xE5 --
     pub const GAME_NAME_CHANGE: u16 = 0xE6;
+
+    // Object Types
+    pub const GAME_TYPE: ObjectType = ObjectType::new(COMPONENT, 1);
 }
 
 pub mod redirector {
@@ -291,6 +296,8 @@ pub mod messaging {
 }
 
 pub mod association_lists {
+    use tdf::ObjectType;
+
     pub const COMPONENT: u16 = 0x19;
 
     // Components
@@ -303,6 +310,9 @@ pub mod association_lists {
     pub const SUBSCRIBE_TO_LISTS: u16 = 0x7;
     pub const UNSUBSCRIBE_TO_LISTS: u16 = 0x8;
     pub const GET_CONFIG_LISTS_INFO: u16 = 0x9;
+
+    // Object Types
+    pub const ASSOC_LIST_REF: ObjectType = ObjectType::new(COMPONENT, 1);
 }
 
 pub mod game_reporting {
@@ -331,6 +341,8 @@ pub mod game_reporting {
 }
 
 pub mod user_sessions {
+    use tdf::ObjectType;
+
     pub const COMPONENT: u16 = 0x7802;
 
     // Components
@@ -357,6 +369,9 @@ pub mod user_sessions {
     pub const SESSION_DETAILS: u16 = 0x2;
     pub const FETCH_EXTENDED_DATA: u16 = 0x3;
     pub const UPDATE_EXTENDED_DATA_ATTRIBUTE: u16 = 0x5;
+
+    // Object Types
+    pub const PLAYER_TYPE: ObjectType = ObjectType::new(COMPONENT, 1);
 }
 
 #[rustfmt::skip]
