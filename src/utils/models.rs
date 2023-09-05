@@ -74,7 +74,7 @@ impl TdfSerialize for InstanceHost {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         match self {
             InstanceHost::Host(value) => w.tag_str(b"HOST", value),
-            InstanceHost::Address(value) => w.tag_value(b"IP", value),
+            InstanceHost::Address(value) => w.tag_u32(b"IP", (*value).into()),
         }
     }
 }
@@ -104,7 +104,7 @@ pub struct InstanceDetails {
     pub xdns: bool,
 }
 
-#[derive(Default, Debug, Clone, TdfSerialize, TdfDeserialize, TdfTyped)]
+#[derive(Default, TdfSerialize, TdfDeserialize, TdfTyped)]
 pub enum InstanceNet {
     #[tdf(key = 0x0, tag = "VALU")]
     InstanceAddress(InstanceAddress),
@@ -168,7 +168,8 @@ pub enum NatType {
     Unknown = 0x4,
 }
 
-#[derive(Default, Debug, Clone, TdfSerialize, TdfDeserialize, TdfTyped)]
+#[derive(Default, Debug, Clone, TdfSerialize, TdfDeserialize, TdfTyped, Serialize)]
+#[serde(untagged)]
 pub enum NetworkAddress {
     #[tdf(key = 0x2, tag = "VALU")]
     AddressPair(IpPairAddress),
@@ -190,7 +191,7 @@ pub struct NetData {
 }
 
 /// Pair of socket addresses
-#[derive(Debug, Clone, TdfDeserialize, TdfSerialize, TdfTyped)]
+#[derive(Debug, Clone, TdfDeserialize, TdfSerialize, TdfTyped, Serialize)]
 #[tdf(group)]
 pub struct IpPairAddress {
     #[tdf(tag = "EXIP")]
@@ -215,8 +216,8 @@ impl Serialize for PairAddress {
     {
         // TODO: Dashboard likely incompatible now due to serialize change
         let mut s = serializer.serialize_struct("PairAddress", 2)?;
-        s.serialize_field("address", &self.0)?;
-        s.serialize_field("port", &self.1)?;
+        s.serialize_field("address", &self.addr)?;
+        s.serialize_field("port", &self.port)?;
         s.end()
     }
 }

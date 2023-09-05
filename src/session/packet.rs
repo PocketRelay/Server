@@ -370,7 +370,6 @@ impl Packet {
     /// `component` The packet component
     /// `contents`  The packet contents
     pub fn request<C: TdfSerialize>(id: u16, component: u16, command: u16, contents: C) -> Packet {
-        let (component, command) = component.values();
         Self {
             header: PacketHeader::request(id, component, command),
             contents: Bytes::from(serialize_vec(&contents)),
@@ -520,7 +519,7 @@ impl<T: FromRequest> Request<T> {
     {
         Response(Packet {
             header: self.header.response(),
-            contents: Bytes::from(res.encode_bytes()),
+            contents: Bytes::from(serialize_vec(&res)),
         })
     }
 }
@@ -580,7 +579,7 @@ pub trait FromRequest: Sized + Send + 'static {
 
 impl<D> FromRequest for D
 where
-    for<'de> D: TdfDeserialize<'de> + Send + 'de,
+    for<'de> D: TdfDeserialize<'de> + Send + 'static,
 {
     fn from_request(req: &Packet) -> DecodeResult<Self> {
         req.decode()

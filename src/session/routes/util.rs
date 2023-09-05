@@ -30,7 +30,7 @@ use tokio::fs::read;
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_telemetry_server() -> TelemetryServer {
+pub async fn handle_get_telemetry_server(_: &mut SessionLink) -> TelemetryServer {
     TelemetryServer
 }
 
@@ -42,7 +42,7 @@ pub async fn handle_get_telemetry_server() -> TelemetryServer {
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_ticker_server() -> TickerServer {
+pub async fn handle_get_ticker_server(_: &mut SessionLink) -> TickerServer {
     TickerServer
 }
 
@@ -123,7 +123,7 @@ pub async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAut
 /// Content: {}
 /// ```
 ///
-pub async fn handle_ping() -> PingResponse {
+pub async fn handle_ping(_: &mut SessionLink) -> PingResponse {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
@@ -163,13 +163,13 @@ pub async fn handle_fetch_client_config(
         "ME3_ENT" => load_entitlements(),
         "ME3_DIME" => {
             let mut map = TdfMap::with_capacity(1);
-            map.insert("Config", ME3_DIME);
+            map.insert("Config".to_string(), ME3_DIME.to_string());
             map
         }
         "ME3_BINI_VERSION" => {
             let mut map = TdfMap::with_capacity(2);
-            map.insert("SECTION", "BINI_PC_COMPRESSED");
-            map.insert("VERSION", "40128");
+            map.insert("SECTION".to_string(), "BINI_PC_COMPRESSED".to_string());
+            map.insert("VERSION".to_string(), "40128".to_string());
             map
         }
         "ME3_BINI_PC_COMPRESSED" => load_coalesced().await?,
@@ -190,7 +190,7 @@ pub async fn handle_fetch_client_config(
 fn load_entitlements() -> TdfMap<String, String> {
     let mut map = TdfMap::<String, String>::new();
     for (key, value) in ME3_ENT.lines().filter_map(|line| line.split_once('=')) {
-        map.insert(key.to_string(), value.to_string())
+        map.insert(key.to_string(), value.to_string());
     }
     map
 }
@@ -278,7 +278,6 @@ fn create_base64_map(bytes: &[u8]) -> ChunkMap {
 
     output.insert("CHUNK_SIZE".to_string(), CHUNK_LENGTH.to_string());
     output.insert("DATA_SIZE".to_string(), length.to_string());
-    output.order();
     output
 }
 
@@ -332,7 +331,6 @@ fn messages() -> TdfMap<String, String> {
 
     intro.append(1, &mut config);
 
-    config.order();
     config
 }
 
@@ -396,17 +394,17 @@ impl Message {
             map.insert(format!("{prefix}image"), image);
         }
 
-        map.insert(format!("{prefix}message"), &self.message);
+        map.insert(format!("{prefix}message"), self.message.to_string());
         for lang in &langs {
-            map.insert(format!("{prefix}message_{lang}"), &self.message);
+            map.insert(format!("{prefix}message_{lang}"), self.message.to_string());
         }
 
         map.insert(format!("{prefix}priority"), self.priority.to_string());
 
         if let Some(title) = &self.title {
-            map.insert(format!("{prefix}title"), title);
+            map.insert(format!("{prefix}title"), title.to_string());
             for lang in &langs {
-                map.insert(format!("{prefix}title_{lang}"), title);
+                map.insert(format!("{prefix}title_{lang}"), title.to_string());
             }
         }
 
@@ -451,22 +449,28 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
     let tele_port = TELEMETRY_PORT;
 
     let mut config = TdfMap::with_capacity(15);
-    config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/"));
-    config.insert("IMG_MNGR_BASE_URL", format!("{prefix}/content/"));
-    config.insert("IMG_MNGR_MAX_BYTES", "1048576".to_string());
-    config.insert("IMG_MNGR_MAX_IMAGES", "5".to_string());
-    config.insert("JOB_THROTTLE_0", "10000".to_string());
-    config.insert("JOB_THROTTLE_1", "5000".to_string());
-    config.insert("JOB_THROTTLE_2", "1000".to_string());
-    config.insert("MATCH_MAKING_RULES_VERSION", "5".to_string());
-    config.insert("MULTIPLAYER_PROTOCOL_VERSION", "3".to_string());
-    config.insert("TEL_DISABLE", TELEMTRY_DISA.to_string());
-    config.insert("TEL_DOMAIN", "pc/masseffect-3-pc-anon".to_string());
-    config.insert("TEL_FILTER", "-UION/****".to_string());
-    config.insert("TEL_PORT", tele_port.to_string());
-    config.insert("TEL_SEND_DELAY", "15000".to_string());
-    config.insert("TEL_SEND_PCT", "75".to_string());
-    config.insert("TEL_SERVER", "127.0.0.1".to_string());
+    config.insert("GAW_SERVER_BASE_URL".to_string(), format!("{prefix}/"));
+    config.insert(
+        "IMG_MNGR_BASE_URL".to_string(),
+        format!("{prefix}/content/"),
+    );
+    config.insert("IMG_MNGR_MAX_BYTES".to_string(), "1048576".to_string());
+    config.insert("IMG_MNGR_MAX_IMAGES".to_string(), "5".to_string());
+    config.insert("JOB_THROTTLE_0".to_string(), "10000".to_string());
+    config.insert("JOB_THROTTLE_1".to_string(), "5000".to_string());
+    config.insert("JOB_THROTTLE_2".to_string(), "1000".to_string());
+    config.insert("MATCH_MAKING_RULES_VERSION".to_string(), "5".to_string());
+    config.insert("MULTIPLAYER_PROTOCOL_VERSION".to_string(), "3".to_string());
+    config.insert("TEL_DISABLE".to_string(), TELEMTRY_DISA.to_string());
+    config.insert(
+        "TEL_DOMAIN".to_string(),
+        "pc/masseffect-3-pc-anon".to_string(),
+    );
+    config.insert("TEL_FILTER".to_string(), "-UION/****".to_string());
+    config.insert("TEL_PORT".to_string(), tele_port.to_string());
+    config.insert("TEL_SEND_DELAY".to_string(), "15000".to_string());
+    config.insert("TEL_SEND_PCT".to_string(), "75".to_string());
+    config.insert("TEL_SERVER".to_string(), "127.0.0.1".to_string());
     config
 }
 
@@ -480,7 +484,10 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
 ///     "TVAL": 90000000
 /// }
 /// ```
-pub async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
+pub async fn handle_suspend_user_ping(
+    _state: &mut SessionLink,
+    req: SuspendPingRequest,
+) -> ServerResult<()> {
     match req.value {
         20000000 => Err(ServerError::Suspend12D),
         90000000 => Err(ServerError::Suspend12E),
@@ -526,7 +533,10 @@ pub async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-pub async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<SettingsResponse> {
+pub async fn handle_load_settings(
+    _state: &mut SessionLink,
+    session: &mut SessionLink,
+) -> ServerResult<SettingsResponse> {
     let player = session
         .send(GetPlayerIdMessage)
         .await
@@ -547,8 +557,7 @@ pub async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<Set
     // Encode the player data into a settings map and order it
     let mut settings = TdfMap::<String, String>::with_capacity(data.len());
     for value in data {
-        settings.insert(value.key, value.value)
+        settings.insert(value.key, value.value);
     }
-    settings.order();
     Ok(SettingsResponse { settings })
 }

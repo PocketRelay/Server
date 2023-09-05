@@ -213,6 +213,7 @@ static ENTITLEMENTS: &[Entitlement; 34] = &[
 /// }
 /// ```
 pub async fn handle_list_entitlements(
+    _: &mut SessionLink,
     req: ListEntitlementsRequest,
 ) -> Option<ListEntitlementsResponse> {
     let tag: String = req.tag;
@@ -253,7 +254,10 @@ pub async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<Per
 ///     "MAIL": "ACCOUNT_EMAIL"
 /// }
 /// ```
-pub async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> {
+pub async fn handle_forgot_password(
+    _: &mut SessionLink,
+    req: ForgotPasswordRequest,
+) -> ServerResult<()> {
     debug!("Password reset request (Email: {})", req.email);
     Ok(())
 }
@@ -380,7 +384,7 @@ pub async fn handle_get_legal_docs_info() -> LegalDocsInfo {
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_tos() -> LegalContent {
+pub async fn handle_tos(_: &mut SessionLink) -> LegalContent {
     let content = match read_to_string("data/terms_of_service.html").await {
         Ok(value) => Cow::Owned(value),
         Err(_) => Cow::Borrowed("<h1>This is a terms of service placeholder</h1>"),
@@ -403,7 +407,7 @@ pub async fn handle_tos() -> LegalContent {
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_privacy_policy() -> LegalContent {
+pub async fn handle_privacy_policy(_: &mut SessionLink) -> LegalContent {
     let content = match read_to_string("data/privacy_policy.html").await {
         Ok(value) => Cow::Owned(value),
         Err(_) => Cow::Borrowed("<h1>This is a privacy policy placeholder</h1>"),

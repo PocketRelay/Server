@@ -31,7 +31,10 @@ use std::net::SocketAddr;
 ///     "NAME": "",
 /// }
 /// ```
-pub async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> {
+pub async fn handle_lookup_user(
+    _: &mut SessionLink,
+    req: LookupRequest,
+) -> ServerResult<LookupResponse> {
     let services = App::services();
 
     // Lookup the session
@@ -135,13 +138,13 @@ pub async fn handle_update_network(session: &mut SessionLink, mut req: UpdateNet
         let ext = &mut pair.external;
 
         // If address is missing
-        if ext.0 .0.is_unspecified() {
+        if ext.addr.is_unspecified() {
             // Obtain socket address from session
             if let Ok(SocketAddr::V4(addr)) = session.send(GetSocketAddrMessage).await {
                 let ip = addr.ip();
                 // Replace address with new address and port with same as local port
-                ext.0 = *ip;
-                ext.1 = req.address.internal.1;
+                ext.addr = *ip;
+                ext.port = pair.internal.port;
             }
         }
     }

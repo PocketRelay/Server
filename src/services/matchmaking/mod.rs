@@ -3,13 +3,12 @@ use crate::{
         models::{AsyncMatchmakingStatus, GameSetupContext},
         AddPlayerMessage, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
     },
-    session::PushExt,
+    session::{packet::Packet, PushExt},
     utils::{
-        components::{Components, GameManager},
+        components::game_manager,
         types::{GameID, PlayerID},
     },
 };
-use blaze_pk::packet::Packet;
 use interlink::prelude::*;
 use log::debug;
 use rules::RuleSet;
@@ -106,7 +105,8 @@ impl Handler<CheckGameMessage> for Matchmaking {
 
                             // Send the async update (TODO: Do this at intervals)
                             entry.player.link.push(Packet::notify(
-                                Components::GameManager(GameManager::MatchmakingAsyncStatus),
+                                game_manager::COMPONENT,
+                                game_manager::MATCHMAKING_ASYNC_STATUS,
                                 AsyncMatchmakingStatus { player_id: msid },
                             ));
 

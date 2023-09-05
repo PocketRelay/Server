@@ -157,10 +157,10 @@ impl GamePlayer {
         w.tag_ref(b"PNET", &self.net.addr);
         w.tag_owned(b"SID", slot);
         w.tag_u8(b"SLOT", 0);
-        w.tag_value(b"STAT", &self.state);
+        w.tag_ref(b"STAT", &self.state);
         w.tag_u16(b"TIDX", 0xffff);
         w.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
-        w.tag_owned(b"UGID", ObjectId::new_raw(0, 0, 0));
+        w.tag_alt(b"UGID", ObjectId::new_raw(0, 0, 0));
         w.tag_u32(b"UID", self.player.id);
         w.tag_group_end();
     }
@@ -300,7 +300,8 @@ impl Handler<SetAttributesMessage> for Game {
                 attributes: &attributes,
             },
         );
-        self.attributes.extend(attributes);
+
+        self.attributes.insert_presorted(attributes.into_inner());
         self.push_all(&packet);
 
         // Don't update matchmaking for full games

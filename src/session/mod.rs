@@ -246,7 +246,7 @@ impl StreamHandler<io::Result<Packet>> for Session {
             let mut addr = ctx.link();
             tokio::spawn(async move {
                 let router = App::router();
-                let response = match router.handle(&mut addr, packet) {
+                let response = match router.handle(&mut addr, &packet) {
                     // Await the handler response future
                     Ok(fut) => fut.await,
 
@@ -254,7 +254,7 @@ impl StreamHandler<io::Result<Packet>> for Session {
                     Err(err) => {
                         match err {
                             // No handler set-up just respond with a default empty response
-                            HandleError::MissingHandler(packet) => packet.respond_empty(),
+                            HandleError::MissingHandler => packet.respond_empty(),
                             HandleError::Decoding(err) => {
                                 error!("Error while decoding packet: {:?}", err);
                                 return;
@@ -603,14 +603,14 @@ impl TdfSerialize for SessionData {
             w.tag_str_empty(b"CTY");
             w.tag_var_int_list_empty(b"CVAR");
 
-            w.tag_map_tuples(b"DMAP", &[0x70001, 0x409a]);
+            w.tag_map_tuples(b"DMAP", &[(0x70001, 0x409a)]);
 
             w.tag_u16(b"HWFG", self.net.hardware_flags);
 
             // Ping latency to the Quality of service servers
             w.tag_list_slice(b"PSLM", &[0xfff0fff]);
 
-            w.tag_value(b"QDAT", &self.net.qos);
+            w.tag_ref(b"QDAT", &self.net.qos);
             w.tag_u8(b"UATT", 0);
             if let Some(game_id) = &self.game {
                 w.tag_list_slice(b"ULST", &[ObjectId::new(GAME_TYPE, *game_id as u64)]);
@@ -636,7 +636,7 @@ struct SessionUpdate<'a> {
 
 impl TdfSerialize for SessionUpdate<'_> {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        w.tag_value(b"DATA", &self.session.data);
+        w.tag_ref(b"DATA", &self.session.data);
 
         w.group(b"USER", |writer| {
             writer.tag_owned(b"AID", self.player_id);
@@ -657,14 +657,14 @@ pub struct LookupResponse {
 
 impl TdfSerialize for LookupResponse {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        w.tag_value(b"EDAT", &self.session_data);
+        w.tag_ref(b"EDAT", &self.session_data);
 
         w.tag_u8(b"FLGS", 2);
 
         w.group(b"USER", |w| {
             w.tag_owned(b"AID", self.player_id);
             w.tag_u32(b"ALOC", 0x64654445);
-            w.tag_empty_blob(b"EXBB");
+            w.tag_blob_empty(b"EXBB");
             w.tag_u8(b"EXID", 0);
             w.tag_owned(b"ID", self.player_id);
             w.tag_str(b"NAME", &self.display_name);
@@ -673,12 +673,16 @@ impl TdfSerialize for LookupResponse {
 }
 
 /// Session update for ourselves
-#[derive(TdfSerialize)]
 struct SetSession<'a> {
     /// The session this update is for
-    #[tdf(tag = "DATA")]
     session: &'a SessionData,
     /// The player ID the update is for
-    #[tdf(tag = "USID")]
     player_id: PlayerID,
+}
+
+impl TdfSerialize for SetSession<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_ref(b"DATA", self.session);
+        w.tag_owned(b"USID", self.player_id)
+    }
 }

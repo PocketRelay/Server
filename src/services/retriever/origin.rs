@@ -5,11 +5,11 @@ use super::{models::OriginLoginResponse, OfficialSession, RetrieverResult};
 use crate::{
     database::entities::{Player, PlayerData},
     session::models::{auth::OriginLoginRequest, util::SettingsResponse},
-    utils::components::{Authentication, Components, Util},
+    utils::components::{authentication, util},
 };
-use blaze_pk::types::TdfMap;
 use log::{debug, error, warn};
 use sea_orm::{DatabaseConnection, DbErr};
+use tdf::TdfMap;
 use thiserror::Error;
 
 /// Service for providing origin flows from a retriever
@@ -99,8 +99,9 @@ impl OriginFlow {
         let value = self
             .session
             .request::<OriginLoginRequest, OriginLoginResponse>(
-                Components::Authentication(Authentication::OriginLogin),
-                OriginLoginRequest { token },
+                authentication::COMPONENT,
+                authentication::ORIGIN_LOGIN,
+                OriginLoginRequest { token, ty: 1 },
             )
             .await?;
 
@@ -116,7 +117,7 @@ impl OriginFlow {
     async fn get_settings(&mut self) -> RetrieverResult<TdfMap<String, String>> {
         let value = self
             .session
-            .request_empty::<SettingsResponse>(Components::Util(Util::UserSettingsLoadAll))
+            .request_empty::<SettingsResponse>(util::COMPONENT, util::USER_SETTINGS_LOAD_ALL)
             .await?;
         Ok(value.settings)
     }

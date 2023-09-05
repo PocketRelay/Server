@@ -1,4 +1,4 @@
-use tdf::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType};
+use tdf::{Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped};
 
 use crate::{
     services::{
@@ -82,7 +82,7 @@ pub struct UpdateMeshRequest {
     pub targets: Vec<MeshTarget>,
 }
 
-#[derive(TdfDeserialize)]
+#[derive(TdfDeserialize, TdfTyped)]
 #[tdf(group)]
 pub struct MeshTarget {
     #[tdf(tag = "PID")]
@@ -110,13 +110,13 @@ impl TdfDeserializeOwned for MatchmakingRequest {
             if values_count < 1 {
                 continue;
             }
-            let value: String = r.read_string()?;
+            let value: String = String::deserialize_owned(r)?;
             if values_count > 1 {
                 for _ in 1..rule_count {
-                    r.skip_blob()?;
+                    Blob::skip(r)?;
                 }
             }
-            r.skip_group()?;
+            GroupSlice::deserialize_content_skip(r)?;
             rules.push((name, value));
         }
         Ok(Self {
@@ -147,7 +147,8 @@ pub struct JoinGameRequest {
     pub user: JoinGameRequestUser,
 }
 
-#[derive(TdfDeserialize)]
+#[derive(TdfDeserialize, TdfTyped)]
+#[tdf(group)]
 pub struct JoinGameRequestUser {
     #[tdf(tag = "ID")]
     pub id: PlayerID,
@@ -161,7 +162,7 @@ pub struct JoinGameResponse {
     pub state: JoinGameState,
 }
 
-#[derive(TdfSerialize)]
+#[derive(TdfSerialize, TdfTyped, Copy, Clone)]
 #[repr(u8)]
 pub enum JoinGameState {
     JoinedGame = 0,

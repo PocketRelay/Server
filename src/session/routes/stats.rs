@@ -6,12 +6,16 @@ use crate::{
             stats::*,
         },
         packet::{Request, Response},
+        SessionLink,
     },
     state::App,
 };
 use std::sync::Arc;
 
-pub async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> ServerResult<Response> {
+pub async fn handle_normal_leaderboard(
+    _: &mut SessionLink,
+    req: Request<LeaderboardRequest>,
+) -> ServerResult<Response> {
     let query = &*req;
     let group = get_group(&query.name).await?;
     let response = match group.get_normal(query.start, query.count) {
@@ -22,6 +26,7 @@ pub async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> Serv
 }
 
 pub async fn handle_centered_leaderboard(
+    _: &mut SessionLink,
     req: Request<CenteredLeaderboardRequest>,
 ) -> ServerResult<Response> {
     let query = &*req;
@@ -34,6 +39,7 @@ pub async fn handle_centered_leaderboard(
 }
 
 pub async fn handle_filtered_leaderboard(
+    _: &mut SessionLink,
     req: Request<FilteredLeaderboardRequest>,
 ) -> ServerResult<Response> {
     let query = &*req;
@@ -61,6 +67,7 @@ pub async fn handle_filtered_leaderboard(
 /// }
 /// ```
 pub async fn handle_leaderboard_entity_count(
+    _: &mut SessionLink,
     req: EntityCountRequest,
 ) -> ServerResult<EntityCountResponse> {
     let group = get_group(&req.name).await?;
@@ -105,6 +112,7 @@ fn get_locale_name(code: &str) -> &str {
 /// }
 /// ```
 pub async fn handle_leaderboard_group(
+    _: &mut SessionLink,
     req: LeaderboardGroupRequest,
 ) -> Option<LeaderboardGroupResponse<'static>> {
     let name = req.name;

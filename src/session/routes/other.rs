@@ -58,6 +58,6 @@ pub async fn handle_submit_offline(session: &mut SessionLink) {
 ///     "OFRC": 0
 /// }
 /// ```
-pub async fn handle_get_lists() -> AssocListResponse {
+pub async fn handle_get_lists(_: &mut SessionLink) -> AssocListResponse {
     AssocListResponse
 }

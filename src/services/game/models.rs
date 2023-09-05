@@ -1,9 +1,14 @@
 use super::{AttrMap, Game, GamePlayer};
-use crate::utils::types::{GameID, GameSlot, PlayerID};
+use crate::utils::{
+    models::NetworkAddress,
+    types::{GameID, GameSlot, PlayerID},
+};
 use bitflags::bitflags;
 
 use serde::Serialize;
-use tdf::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped};
+use tdf::{
+    TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfType, TdfTyped,
+};
 
 /// Different states the game can be in
 #[derive(
@@ -48,9 +53,15 @@ bitflags! {
     }
 }
 
+impl From<GameSettings> for u16 {
+    fn from(value: GameSettings) -> Self {
+        value.bits()
+    }
+}
+
 impl TdfSerialize for GameSettings {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        self.bits().serialize(w)
+        <u16 as TdfSerializeOwned>::serialize_owned(self.bits(), w)
     }
 }
 
@@ -106,14 +117,18 @@ pub struct SettingChange {
 }
 
 /// Packet for game attribute changes
-#[derive(TdfSerialize)]
 pub struct AttributesChange<'a> {
     /// Borrowed game attributes map
-    #[tdf(tag = "ATTR")]
     pub attributes: &'a AttrMap,
     /// The id of the game the attributes have changed for
-    #[tdf(tag = "GID")]
     pub id: GameID,
+}
+
+impl TdfSerialize for AttributesChange<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_ref(b"ATTR", self.attributes);
+        w.tag_owned(b"GID", self.id)
+    }
 }
 
 /// Message for a player joining notification
@@ -172,12 +187,9 @@ impl TdfSerialize for GameDetails<'_> {
         // Game details
         w.group(b"GAME", |w| {
             w.tag_list_iter_owned(b"ADMN", game.players.iter().map(|player| player.player.id));
-            w.tag_value(b"ATTR", &game.attributes);
-            {
-                w.tag_list_start(b"CAP", TdfType::VarInt, 2);
-                w.write_u8(4);
-                w.write_u8(0);
-            }
+            w.tag_ref(b"ATTR", &game.attributes);
+
+            w.tag_list_slice(b"CAP", &[4u8, 0u8]);
 
             w.tag_u32(b"GID", game.id);
             w.tag_str(b"GNAM", &host_player.player.display_name);
@@ -185,29 +197,29 @@ impl TdfSerialize for GameDetails<'_> {
             w.tag_u64(b"GPVH", 0x5a4f2b378b715c6);
             w.tag_u16(b"GSET", game.setting.bits());
             w.tag_u64(b"GSID", 0x4000000a76b645);
-            w.tag_value(b"GSTA", &game.state);
+            w.tag_ref(b"GSTA", &game.state);
 
             w.tag_str_empty(b"GTYP");
             {
                 w.tag_list_start(b"HNET", TdfType::Group, 1);
                 w.write_byte(2);
-                if let Some(groups) = &host_player.net.addr {
-                    groups.encode(w);
+                if let NetworkAddress::AddressPair(pair) = &host_player.net.addr {
+                    TdfSerialize::serialize(pair, w)
                 }
             }
 
             w.tag_u32(b"HSES", host_player.player.id);
             w.tag_zero(b"IGNO");
             w.tag_u8(b"MCAP", 4);
-            w.tag_value(b"NQOS", &host_player.net.qos);
+            w.tag_ref(b"NQOS", &host_player.net.qos);
             w.tag_zero(b"NRES");
             w.tag_zero(b"NTOP");
             w.tag_str_empty(b"PGID");
-            w.tag_empty_blob(b"PGSR");
+            w.tag_blob_empty(b"PGSR");
 
-            w.group(b"PHST", |writer| {
-                writer.tag_u32(b"HPID", host_player.player.id);
-                writer.tag_zero(b"HSLT");
+            w.group(b"PHST", |w| {
+                w.tag_u32(b"HPID", host_player.player.id);
+                w.tag_zero(b"HSLT");
             });
 
             w.tag_u8(b"PRES", 0x1);
@@ -216,16 +228,16 @@ impl TdfSerialize for GameDetails<'_> {
             w.tag_u32(b"SEED", 0x4cbc8585);
             w.tag_u8(b"TCAP", 0x0);
 
-            w.group(b"THST", |writer| {
-                writer.tag_u32(b"HPID", host_player.player.id);
-                writer.tag_u8(b"HSLT", 0x0);
+            w.group(b"THST", |w| {
+                w.tag_u32(b"HPID", host_player.player.id);
+                w.tag_u8(b"HSLT", 0x0);
             });
 
             w.tag_str(b"UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
             w.tag_u8(b"VOIP", 0x2);
             w.tag_str(b"VSTR", VSTR);
-            w.tag_empty_blob(b"XNNC");
-            w.tag_empty_blob(b"XSES");
+            w.tag_blob_empty(b"XNNC");
+            w.tag_blob_empty(b"XSES");
         });
 
         // Player list
@@ -271,50 +283,44 @@ pub struct GetGameDetails<'a> {
 
 impl TdfSerialize for GetGameDetails<'_> {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        w.tag_list_start(b"GDAT", TdfType::Group, 1);
         let game = self.game;
         let host_player = match game.players.first() {
             Some(value) => value,
             None => return,
         };
 
-        w.tag_list_iter_owned(b"ADMN", game.players.iter().map(|player| player.player.id));
-        w.tag_value(b"ATTR", &game.attributes);
-        {
-            w.tag_list_start(b"CAP", TdfType::VarInt, 2);
-            w.write_u8(4);
-            w.write_u8(0);
-        }
-        w.tag_u32(b"GID", game.id);
-        w.tag_str(b"GNAM", &host_player.player.display_name);
-        w.tag_u16(b"GSET", game.setting.bits());
-        w.tag_value(b"GSTA", &game.state);
-        {
-            w.tag_list_start(b"HNET", TdfType::Group, 1);
-            w.write_byte(2);
-            if let Some(groups) = &host_player.net.addr {
-                groups.encode(w);
+        w.tag_list_start(b"GDAT", TdfType::Group, 1);
+        w.group_body(|w| {
+            w.tag_list_iter_owned(b"ADMN", game.players.iter().map(|player| player.player.id));
+            w.tag_ref(b"ATTR", &game.attributes);
+            w.tag_list_slice(b"CAP", &[4u8, 0u8]);
+
+            w.tag_u32(b"GID", game.id);
+            w.tag_str(b"GNAM", &host_player.player.display_name);
+            w.tag_u16(b"GSET", game.setting.bits());
+            w.tag_ref(b"GSTA", &game.state);
+            {
+                w.tag_list_start(b"HNET", TdfType::Group, 1);
+                w.write_byte(2);
+                if let NetworkAddress::AddressPair(pair) = &host_player.net.addr {
+                    TdfSerialize::serialize(pair, w)
+                }
             }
-        }
-        w.tag_u32(b"HOST", host_player.player.id);
-        w.tag_zero(b"NTOP");
+            w.tag_u32(b"HOST", host_player.player.id);
+            w.tag_zero(b"NTOP");
 
-        {
-            w.tag_list_start(b"PCNT", TdfType::VarInt, 2);
-            w.write_u8(1);
-            w.write_u8(0);
-        }
+            w.tag_list_slice(b"PCNT", &[1u8, 0u8]);
 
-        w.tag_u8(b"PRES", 0x2);
-        w.tag_str(b"PSAS", "ea-sjc");
-        w.tag_str_empty(b"PSID");
-        w.tag_zero(b"QCAP");
-        w.tag_zero(b"QCNT");
-        w.tag_zero(b"SID");
-        w.tag_zero(b"TCAP");
-        w.tag_u8(b"VOIP", 0x2);
-        w.tag_str(b"VSTR", VSTR);
-        w.tag_group_end();
+            w.tag_u8(b"PRES", 0x2);
+            w.tag_str(b"PSAS", "ea-sjc");
+            w.tag_str_empty(b"PSID");
+            w.tag_zero(b"QCAP");
+            w.tag_zero(b"QCNT");
+            w.tag_zero(b"SID");
+            w.tag_zero(b"TCAP");
+            w.tag_u8(b"VOIP", 0x2);
+            w.tag_str(b"VSTR", VSTR);
+        });
     }
 }
 

@@ -1,4 +1,4 @@
-use blaze_pk::packet::{IntoResponse, Packet};
+use crate::session::packet::{IntoResponse, Packet};
 
 pub type ServerResult<T> = Result<T, ServerError>;
 

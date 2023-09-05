@@ -15,11 +15,11 @@ use crate::{
             errors::{ServerError, ServerResult},
             game_manager::*,
         },
+        packet::PacketBody,
         GetGamePlayerMessage, GetPlayerGameMessage, GetPlayerIdMessage, SessionLink,
     },
     state::App,
 };
-use blaze_pk::packet::PacketBody;
 use log::{debug, info};
 use std::sync::Arc;
 
@@ -91,7 +91,10 @@ pub async fn handle_join_game(
     }
 }
 
-pub async fn handle_get_game_data(mut req: GetGameDataRequest) -> ServerResult<PacketBody> {
+pub async fn handle_get_game_data(
+    _: &mut SessionLink,
+    mut req: GetGameDataRequest,
+) -> ServerResult<PacketBody> {
     let services = App::services();
 
     if req.game_list.is_empty() {
@@ -218,7 +221,10 @@ pub async fn handle_create_game(
 ///     "GID": 1
 /// }
 /// ```
-pub async fn handle_set_attributes(req: SetAttributesRequest) -> ServerResult<()> {
+pub async fn handle_set_attributes(
+    _: &mut SessionLink,
+    req: SetAttributesRequest,
+) -> ServerResult<()> {
     let services = App::services();
     let link = services
         .game_manager
@@ -249,7 +255,7 @@ pub async fn handle_set_attributes(req: SetAttributesRequest) -> ServerResult<()
 ///     "GSTA": 130
 /// }
 /// ```
-pub async fn handle_set_state(req: SetStateRequest) -> ServerResult<()> {
+pub async fn handle_set_state(_: &mut SessionLink, req: SetStateRequest) -> ServerResult<()> {
     let services = App::services();
     let link = services
         .game_manager
@@ -278,7 +284,7 @@ pub async fn handle_set_state(req: SetStateRequest) -> ServerResult<()> {
 ///     "GSET": 285
 /// }
 /// ```
-pub async fn handle_set_setting(req: SetSettingRequest) -> ServerResult<()> {
+pub async fn handle_set_setting(_: &mut SessionLink, req: SetSettingRequest) -> ServerResult<()> {
     let services = App::services();
     let link = services
         .game_manager
@@ -312,7 +318,7 @@ pub async fn handle_set_setting(req: SetSettingRequest) -> ServerResult<()> {
 ///     "REAS": 6
 /// }
 /// ```
-pub async fn handle_remove_player(req: RemovePlayerRequest) {
+pub async fn handle_remove_player(_: &mut SessionLink, req: RemovePlayerRequest) {
     let services = App::services();
     let game = match services
         .game_manager
@@ -351,7 +357,7 @@ pub async fn handle_remove_player(req: RemovePlayerRequest) {
 /// ```
 pub async fn handle_update_mesh_connection(
     session: &mut SessionLink,
-    req: UpdateMeshRequest,
+    mut req: UpdateMeshRequest,
 ) -> ServerResult<()> {
     let id = match session.send(GetPlayerIdMessage).await {
         Ok(Some(value)) => value,

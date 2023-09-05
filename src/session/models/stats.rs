@@ -1,5 +1,7 @@
-use blaze_pk::error::DecodeError;
-use tdf::{TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped};
+use tdf::{
+    types::var_int::skip_var_int, DecodeError, TdfDeserialize, TdfDeserializeOwned, TdfSerialize,
+    TdfType, TdfTyped,
+};
 
 use crate::{
     services::leaderboard::models::LeaderboardEntry,
@@ -97,7 +99,8 @@ impl TdfSerialize for LeaderboardResponse<'_> {
                 w.tag_list_empty(b"LDLS", TdfType::Group);
             }
             Self::One(value) => {
-                w.tag_list_slice(b"LDLS", &[value]);
+                w.tag_list_start(b"LDLS", TdfType::Group, 1);
+                value.serialize(w);
             }
             Self::Many(values) => {
                 w.tag_list_slice(b"LDLS", *values);
@@ -172,9 +175,9 @@ impl TdfDeserializeOwned for FilteredLeaderboardRequest {
         if count < 1 {
             return Err(DecodeError::Other("Missing player ID for filter"));
         }
-        let id: PlayerID = r.read_u32()?;
+        let id: PlayerID = PlayerID::deserialize_owned(r)?;
         for _ in 1..count {
-            r.skip_var_int();
+            skip_var_int(r)?;
         }
         let name: String = r.tag(b"NAME")?;
         Ok(Self { id, name })
@@ -207,7 +210,7 @@ impl TdfSerialize for LeaderboardGroupResponse<'_> {
 
         {
             w.tag_map_start(b"KSUM", TdfType::String, TdfType::Group, 1);
-            w.write_str("accountcountry");
+            "accountcountry".serialize(w);
             w.group_body(|w| {
                 w.tag_map_tuples(b"KSVL", &[(0u8, 0u8)]);
             });

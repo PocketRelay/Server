@@ -1,5 +1,7 @@
 use crate::utils::components;
 
+use super::router::Router;
+
 mod auth;
 mod game_manager;
 mod messaging;
