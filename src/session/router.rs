@@ -9,8 +9,22 @@ use crate::utils::{
     components::{component_key, ComponentKey},
     types::BoxFuture,
 };
-use std::{collections::HashMap, future::Future, marker::PhantomData};
+use std::{
+    collections::HashMap,
+    future::Future,
+    hash::{BuildHasherDefault, Hasher},
+    marker::PhantomData,
+};
 use tdf::DecodeError;
+
+/// Error that can occur while handling a packet
+#[derive(Debug)]
+pub enum HandleError {
+    /// There wasn't an available handler for the provided packet
+    MissingHandler,
+    /// Decoding error while reading the packet
+    Decoding(DecodeError),
+}
 
 pub struct FormatA;
 pub struct FormatB;
@@ -75,13 +89,14 @@ where
 }
 
 pub struct Router {
-    routes: HashMap<ComponentKey, Box<dyn Route>>,
+    /// Map for looking up a route based on the component key
+    routes: HashMap<ComponentKey, Box<dyn Route>, BuildHasherDefault<ComponentKeyHasher>>,
 }
 
 impl Router {
     pub fn new() -> Self {
         Self {
-            routes: HashMap::new(),
+            routes: Default::default(),
         }
     }
 
@@ -115,11 +130,21 @@ impl Router {
     }
 }
 
-/// Error that can occur while handling a packet
-#[derive(Debug)]
-pub enum HandleError {
-    /// There wasn't an available handler for the provided packet
-    MissingHandler,
-    /// Decoding error while reading the packet
-    Decoding(DecodeError),
+/// "Hasher" used by the router map that just directly stores the integer value
+/// from the component key as no hashing is required
+#[derive(Default)]
+pub struct ComponentKeyHasher(u32);
+
+impl Hasher for ComponentKeyHasher {
+    fn finish(&self) -> u64 {
+        self.0 as u64
+    }
+
+    fn write(&mut self, _bytes: &[u8]) {
+        panic!("Attempted to use component key hasher to hash bytes")
+    }
+
+    fn write_u32(&mut self, i: u32) {
+        self.0 = i;
+    }
 }
