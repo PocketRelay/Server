@@ -26,16 +26,18 @@ pub enum HandleError {
     Decoding(DecodeError),
 }
 
-pub struct FormatA;
-pub struct FormatB;
+/// Type for handlers that include a request and response
+pub struct HandlerRequest<Req, Res>(PhantomData<fn(Req) -> Res>);
+/// Type for handlers that include a response but no request
+pub struct HandlerOmitRequest<Res>(PhantomData<fn() -> Res>);
 
 type HandleResult<'a> = Result<BoxFuture<'a, Packet>, HandleError>;
 
-pub trait Handler<'a, Req, Res, Format>: Send + Sync + 'static {
+pub trait Handler<'a, Type>: Send + Sync + 'static {
     fn handle(&self, state: &'a mut SessionLink, packet: &'a Packet) -> HandleResult<'a>;
 }
 
-impl<'a, Fun, Fut, Req, Res> Handler<'a, Req, Res, FormatA> for Fun
+impl<'a, Fun, Fut, Req, Res> Handler<'a, HandlerRequest<Req, Res>> for Fun
 where
     Fun: Fn(&'a mut SessionLink, Req) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'a,
@@ -52,7 +54,7 @@ where
     }
 }
 
-impl<'a, Fun, Fut, Res> Handler<'a, (), Res, FormatB> for Fun
+impl<'a, Fun, Fut, Res> Handler<'a, HandlerOmitRequest<Res>> for Fun
 where
     Fun: Fn(&'a mut SessionLink) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'a,
@@ -67,20 +69,18 @@ where
     }
 }
 
-struct HandlerRoute<H, Req, Res, Format> {
+struct HandlerRoute<H, Format> {
     handler: H,
-    _marker: PhantomData<fn(Req, Format) -> Res>,
+    _marker: PhantomData<fn(Format)>,
 }
 
 trait Route: Send + Sync {
     fn handle<'s>(&self, state: &'s mut SessionLink, packet: &'s Packet) -> HandleResult<'s>;
 }
 
-impl<H, Req, Res, Format> Route for HandlerRoute<H, Req, Res, Format>
+impl<H, Format> Route for HandlerRoute<H, Format>
 where
-    for<'a> H: Handler<'a, Req, Res, Format>,
-    Req: FromRequest,
-    Res: IntoResponse,
+    for<'a> H: Handler<'a, Format>,
     Format: 'static,
 {
     fn handle<'s>(&self, state: &'s mut SessionLink, packet: &'s Packet) -> HandleResult<'s> {
@@ -100,14 +100,12 @@ impl Router {
         }
     }
 
-    pub fn route<Req, Res, Format>(
+    pub fn route<Format>(
         &mut self,
         component: u16,
         command: u16,
-        route: impl for<'a> Handler<'a, Req, Res, Format>,
+        route: impl for<'a> Handler<'a, Format>,
     ) where
-        Req: FromRequest,
-        Res: IntoResponse,
         Format: 'static,
     {
         self.routes.insert(
