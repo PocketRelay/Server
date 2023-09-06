@@ -18,7 +18,7 @@ use std::borrow::Cow;
 use tokio::fs::read_to_string;
 
 pub async fn handle_login(
-    session: &mut SessionLink,
+    session: &SessionLink,
     req: LoginRequest,
 ) -> ServerResult<Response<AuthResponse>> {
     let db: &DatabaseConnection = App::database();
@@ -63,7 +63,7 @@ pub async fn handle_login(
 }
 
 pub async fn handle_silent_login(
-    session: &mut SessionLink,
+    session: &SessionLink,
     req: SilentLoginRequest,
 ) -> ServerResult<Response<AuthResponse>> {
     let db: &DatabaseConnection = App::database();
@@ -87,7 +87,7 @@ pub async fn handle_silent_login(
 }
 
 pub async fn handle_origin_login(
-    session: &mut SessionLink,
+    session: &SessionLink,
     req: OriginLoginRequest,
 ) -> ServerResult<Response<AuthResponse>> {
     let db: &DatabaseConnection = App::database();
@@ -138,7 +138,7 @@ pub async fn handle_origin_login(
 /// ID: 8
 /// Content: {}
 /// ```
-pub async fn handle_logout(session: &mut SessionLink) {
+pub async fn handle_logout(session: &SessionLink) {
     let _ = session.send(SetPlayerMessage(None)).await;
 }
 
@@ -214,7 +214,7 @@ static ENTITLEMENTS: &[Entitlement; 34] = &[
 /// }
 /// ```
 pub async fn handle_list_entitlements(
-    _: &mut SessionLink,
+    _: &SessionLink,
     req: ListEntitlementsRequest,
 ) -> Option<Response<ListEntitlementsResponse>> {
     let tag: String = req.tag;
@@ -236,7 +236,7 @@ pub async fn handle_list_entitlements(
 /// }
 /// ```
 pub async fn handle_login_persona(
-    session: &mut SessionLink,
+    session: &SessionLink,
 ) -> ServerResult<Response<PersonaResponse>> {
     let player: Player = session
         .send(GetPlayerMessage)
@@ -258,7 +258,7 @@ pub async fn handle_login_persona(
 /// }
 /// ```
 pub async fn handle_forgot_password(
-    _: &mut SessionLink,
+    _: &SessionLink,
     req: ForgotPasswordRequest,
 ) -> ServerResult<()> {
     debug!("Password reset request (Email: {})", req.email);
@@ -299,7 +299,7 @@ pub async fn handle_forgot_password(
 /// ```
 ///
 pub async fn handle_create_account(
-    session: &mut SessionLink,
+    session: &SessionLink,
     req: CreateAccountRequest,
 ) -> ServerResult<Response<AuthResponse>> {
     let email = req.email;
@@ -373,7 +373,7 @@ pub async fn handle_create_account(
 ///     "PTFM": "pc" // Platform
 /// }
 /// ```
-pub async fn handle_get_legal_docs_info(_: &mut SessionLink) -> Response<LegalDocsInfo> {
+pub async fn handle_get_legal_docs_info(_: &SessionLink) -> Response<LegalDocsInfo> {
     Response(LegalDocsInfo)
 }
 
@@ -387,7 +387,7 @@ pub async fn handle_get_legal_docs_info(_: &mut SessionLink) -> Response<LegalDo
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_tos(_: &mut SessionLink) -> Response<LegalContent> {
+pub async fn handle_tos(_: &SessionLink) -> Response<LegalContent> {
     let content = match read_to_string("data/terms_of_service.html").await {
         Ok(value) => Cow::Owned(value),
         Err(_) => Cow::Borrowed("<h1>This is a terms of service placeholder</h1>"),
@@ -410,7 +410,7 @@ pub async fn handle_tos(_: &mut SessionLink) -> Response<LegalContent> {
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_privacy_policy(_: &mut SessionLink) -> Response<LegalContent> {
+pub async fn handle_privacy_policy(_: &SessionLink) -> Response<LegalContent> {
     let content = match read_to_string("data/privacy_policy.html").await {
         Ok(value) => Cow::Owned(value),
         Err(_) => Cow::Borrowed("<h1>This is a privacy policy placeholder</h1>"),
@@ -432,7 +432,7 @@ pub async fn handle_privacy_policy(_: &mut SessionLink) -> Response<LegalContent
 /// Content: {}
 /// ```
 pub async fn handle_get_auth_token(
-    session: &mut SessionLink,
+    session: &SessionLink,
 ) -> ServerResult<Response<GetTokenResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)

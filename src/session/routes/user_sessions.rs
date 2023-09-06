@@ -33,7 +33,7 @@ use std::net::SocketAddr;
 /// }
 /// ```
 pub async fn handle_lookup_user(
-    _: &mut SessionLink,
+    _: &SessionLink,
     req: LookupRequest,
 ) -> ServerResult<Response<LookupResponse>> {
     let services = App::services();
@@ -73,7 +73,7 @@ pub async fn handle_lookup_user(
 /// }
 /// ```
 pub async fn handle_resume_session(
-    session: &mut SessionLink,
+    session: &SessionLink,
     req: ResumeSessionRequest,
 ) -> ServerResult<Response<AuthResponse>> {
     let db = App::database();
@@ -134,7 +134,7 @@ pub async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-pub async fn handle_update_network(session: &mut SessionLink, mut req: UpdateNetworkRequest) {
+pub async fn handle_update_network(session: &SessionLink, mut req: UpdateNetworkRequest) {
     if let NetworkAddress::AddressPair(pair) = &mut req.address {
         let ext = &mut pair.external;
 
@@ -167,7 +167,7 @@ pub async fn handle_update_network(session: &mut SessionLink, mut req: UpdateNet
 ///     "HWFG": 0
 /// }
 /// ```
-pub async fn handle_update_hardware_flag(session: &mut SessionLink, req: HardwareFlagRequest) {
+pub async fn handle_update_hardware_flag(session: &SessionLink, req: HardwareFlagRequest) {
     let _ = session
         .send(HardwareFlagMessage {
             value: req.hardware_flag,

@@ -13,7 +13,7 @@ use crate::{
 use std::sync::Arc;
 
 pub async fn handle_normal_leaderboard(
-    _: &mut SessionLink,
+    _: &SessionLink,
     req: Request<LeaderboardRequest>,
 ) -> ServerResult<PacketResponse> {
     let query = &*req;
@@ -26,7 +26,7 @@ pub async fn handle_normal_leaderboard(
 }
 
 pub async fn handle_centered_leaderboard(
-    _: &mut SessionLink,
+    _: &SessionLink,
     req: Request<CenteredLeaderboardRequest>,
 ) -> ServerResult<PacketResponse> {
     let query = &*req;
@@ -39,7 +39,7 @@ pub async fn handle_centered_leaderboard(
 }
 
 pub async fn handle_filtered_leaderboard(
-    _: &mut SessionLink,
+    _: &SessionLink,
     req: Request<FilteredLeaderboardRequest>,
 ) -> ServerResult<PacketResponse> {
     let query = &*req;
@@ -67,7 +67,7 @@ pub async fn handle_filtered_leaderboard(
 /// }
 /// ```
 pub async fn handle_leaderboard_entity_count(
-    _: &mut SessionLink,
+    _: &SessionLink,
     req: EntityCountRequest,
 ) -> ServerResult<Response<EntityCountResponse>> {
     let group = get_group(&req.name).await?;
@@ -112,7 +112,7 @@ fn get_locale_name(code: &str) -> &str {
 /// }
 /// ```
 pub async fn handle_leaderboard_group(
-    _: &mut SessionLink,
+    _: &SessionLink,
     req: LeaderboardGroupRequest,
 ) -> Option<Response<LeaderboardGroupResponse<'static>>> {
     let name = req.name;

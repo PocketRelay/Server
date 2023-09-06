@@ -34,17 +34,17 @@ pub struct HandlerOmitRequest<Res>(PhantomData<fn() -> Res>);
 type HandleResult<'a> = Result<BoxFuture<'a, Packet>, HandleError>;
 
 pub trait Handler<'a, Type>: Send + Sync + 'static {
-    fn handle(&self, state: &'a mut SessionLink, packet: &'a Packet) -> HandleResult<'a>;
+    fn handle(&self, state: &'a SessionLink, packet: &'a Packet) -> HandleResult<'a>;
 }
 
 impl<'a, Fun, Fut, Req, Res> Handler<'a, HandlerRequest<Req, Res>> for Fun
 where
-    Fun: Fn(&'a mut SessionLink, Req) -> Fut + Send + Sync + 'static,
+    Fun: Fn(&'a SessionLink, Req) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'a,
     Req: FromRequest,
     Res: IntoResponse,
 {
-    fn handle(&self, state: &'a mut SessionLink, packet: &'a Packet) -> HandleResult<'a> {
+    fn handle(&self, state: &'a SessionLink, packet: &'a Packet) -> HandleResult<'a> {
         let req = Req::from_request(packet).map_err(HandleError::Decoding)?;
         let future = self(state, req);
         Ok(Box::pin(async move {
@@ -56,11 +56,11 @@ where
 
 impl<'a, Fun, Fut, Res> Handler<'a, HandlerOmitRequest<Res>> for Fun
 where
-    Fun: Fn(&'a mut SessionLink) -> Fut + Send + Sync + 'static,
+    Fun: Fn(&'a SessionLink) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'a,
     Res: IntoResponse,
 {
-    fn handle(&self, state: &'a mut SessionLink, packet: &'a Packet) -> HandleResult<'a> {
+    fn handle(&self, state: &'a SessionLink, packet: &'a Packet) -> HandleResult<'a> {
         let future = self(state);
         Ok(Box::pin(async move {
             let res = future.await;
@@ -75,7 +75,7 @@ struct HandlerRoute<H, Format> {
 }
 
 trait Route: Send + Sync {
-    fn handle<'s>(&self, state: &'s mut SessionLink, packet: &'s Packet) -> HandleResult<'s>;
+    fn handle<'s>(&self, state: &'s SessionLink, packet: &'s Packet) -> HandleResult<'s>;
 }
 
 impl<H, Format> Route for HandlerRoute<H, Format>
@@ -83,7 +83,7 @@ where
     for<'a> H: Handler<'a, Format>,
     Format: 'static,
 {
-    fn handle<'s>(&self, state: &'s mut SessionLink, packet: &'s Packet) -> HandleResult<'s> {
+    fn handle<'s>(&self, state: &'s SessionLink, packet: &'s Packet) -> HandleResult<'s> {
         self.handler.handle(state, packet)
     }
 }
@@ -117,7 +117,7 @@ impl Router {
         );
     }
 
-    pub fn handle<'a>(&self, state: &'a mut SessionLink, packet: &'a Packet) -> HandleResult<'a> {
+    pub fn handle<'a>(&self, state: &'a SessionLink, packet: &'a Packet) -> HandleResult<'a> {
         self.routes
             .get(&component_key(
                 packet.header.component,

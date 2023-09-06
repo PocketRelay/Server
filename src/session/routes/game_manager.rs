@@ -24,7 +24,7 @@ use log::{debug, info};
 use std::sync::Arc;
 
 pub async fn handle_join_game(
-    session: &mut SessionLink,
+    session: &SessionLink,
     req: JoinGameRequest,
 ) -> ServerResult<Response<JoinGameResponse>> {
     let services = App::services();
@@ -92,7 +92,7 @@ pub async fn handle_join_game(
 }
 
 pub async fn handle_get_game_data(
-    _: &mut SessionLink,
+    _: &SessionLink,
     mut req: GetGameDataRequest,
 ) -> ServerResult<PacketBody> {
     let services = App::services();
@@ -170,7 +170,7 @@ pub async fn handle_get_game_data(
 /// }
 /// ```
 pub async fn handle_create_game(
-    session: &mut SessionLink,
+    session: &SessionLink,
     req: CreateGameRequest,
 ) -> ServerResult<Response<CreateGameResponse>> {
     let player: GamePlayer = session
@@ -221,10 +221,7 @@ pub async fn handle_create_game(
 ///     "GID": 1
 /// }
 /// ```
-pub async fn handle_set_attributes(
-    _: &mut SessionLink,
-    req: SetAttributesRequest,
-) -> ServerResult<()> {
+pub async fn handle_set_attributes(_: &SessionLink, req: SetAttributesRequest) -> ServerResult<()> {
     let services = App::services();
     let link = services
         .game_manager
@@ -255,7 +252,7 @@ pub async fn handle_set_attributes(
 ///     "GSTA": 130
 /// }
 /// ```
-pub async fn handle_set_state(_: &mut SessionLink, req: SetStateRequest) -> ServerResult<()> {
+pub async fn handle_set_state(_: &SessionLink, req: SetStateRequest) -> ServerResult<()> {
     let services = App::services();
     let link = services
         .game_manager
@@ -284,7 +281,7 @@ pub async fn handle_set_state(_: &mut SessionLink, req: SetStateRequest) -> Serv
 ///     "GSET": 285
 /// }
 /// ```
-pub async fn handle_set_setting(_: &mut SessionLink, req: SetSettingRequest) -> ServerResult<()> {
+pub async fn handle_set_setting(_: &SessionLink, req: SetSettingRequest) -> ServerResult<()> {
     let services = App::services();
     let link = services
         .game_manager
@@ -318,7 +315,7 @@ pub async fn handle_set_setting(_: &mut SessionLink, req: SetSettingRequest) -> 
 ///     "REAS": 6
 /// }
 /// ```
-pub async fn handle_remove_player(_: &mut SessionLink, req: RemovePlayerRequest) {
+pub async fn handle_remove_player(_: &SessionLink, req: RemovePlayerRequest) {
     let services = App::services();
     let game = match services
         .game_manager
@@ -356,7 +353,7 @@ pub async fn handle_remove_player(_: &mut SessionLink, req: RemovePlayerRequest)
 /// }
 /// ```
 pub async fn handle_update_mesh_connection(
-    session: &mut SessionLink,
+    session: &SessionLink,
     mut req: UpdateMeshRequest,
 ) -> ServerResult<()> {
     let id = match session.send(GetPlayerIdMessage).await {
@@ -518,7 +515,7 @@ pub async fn handle_update_mesh_connection(
 /// }
 /// ```
 pub async fn handle_start_matchmaking(
-    session: &mut SessionLink,
+    session: &SessionLink,
     req: MatchmakingRequest,
 ) -> ServerResult<Response<MatchmakingResponse>> {
     let player: GamePlayer = session
@@ -572,7 +569,7 @@ pub async fn handle_start_matchmaking(
 ///     "MSID": 1
 /// }
 /// ```
-pub async fn handle_cancel_matchmaking(session: &mut SessionLink) {
+pub async fn handle_cancel_matchmaking(session: &SessionLink) {
     session
         .exec(|session, _| {
             let services = App::services();

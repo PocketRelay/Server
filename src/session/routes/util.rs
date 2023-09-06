@@ -31,7 +31,7 @@ use tokio::fs::read;
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_telemetry_server(_: &mut SessionLink) -> Response<TelemetryServer> {
+pub async fn handle_get_telemetry_server(_: &SessionLink) -> Response<TelemetryServer> {
     Response(TelemetryServer)
 }
 
@@ -43,7 +43,7 @@ pub async fn handle_get_telemetry_server(_: &mut SessionLink) -> Response<Teleme
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_ticker_server(_: &mut SessionLink) -> Response<TickerServer> {
+pub async fn handle_get_ticker_server(_: &SessionLink) -> Response<TickerServer> {
     Response(TickerServer)
 }
 
@@ -78,7 +78,7 @@ pub async fn handle_get_ticker_server(_: &mut SessionLink) -> Response<TickerSer
 ///     }
 /// }
 /// ```
-pub async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<Response<PreAuthResponse>> {
+pub async fn handle_pre_auth(session: &SessionLink) -> ServerResult<Response<PreAuthResponse>> {
     let host_target = match session.send(GetHostTarget {}).await {
         Ok(value) => value,
         Err(_) => return Err(ServerError::InvalidInformation),
@@ -95,9 +95,7 @@ pub async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<Response
 /// ID: 27
 /// Content: {}
 /// ```
-pub async fn handle_post_auth(
-    session: &mut SessionLink,
-) -> ServerResult<Response<PostAuthResponse>> {
+pub async fn handle_post_auth(session: &SessionLink) -> ServerResult<Response<PostAuthResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await
@@ -126,7 +124,7 @@ pub async fn handle_post_auth(
 /// Content: {}
 /// ```
 ///
-pub async fn handle_ping(_: &mut SessionLink) -> Response<PingResponse> {
+pub async fn handle_ping(_: &SessionLink) -> Response<PingResponse> {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
@@ -157,7 +155,7 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 /// }
 /// ```
 pub async fn handle_fetch_client_config(
-    session: &mut SessionLink,
+    session: &SessionLink,
     req: FetchConfigRequest,
 ) -> ServerResult<Response<FetchConfigResponse>> {
     let config = match req.id.as_ref() {
@@ -488,7 +486,7 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
 /// }
 /// ```
 pub async fn handle_suspend_user_ping(
-    _state: &mut SessionLink,
+    _state: &SessionLink,
     req: SuspendPingRequest,
 ) -> ServerResult<()> {
     match req.value {
@@ -510,7 +508,7 @@ pub async fn handle_suspend_user_ping(
 /// }
 /// ```
 pub async fn handle_user_settings_save(
-    session: &mut SessionLink,
+    session: &SessionLink,
     req: SettingsSaveRequest,
 ) -> ServerResult<()> {
     let player = session
@@ -537,7 +535,7 @@ pub async fn handle_user_settings_save(
 /// Content: {}
 /// ```
 pub async fn handle_load_settings(
-    session: &mut SessionLink,
+    session: &SessionLink,
 ) -> ServerResult<Response<SettingsResponse>> {
     let player = session
         .send(GetPlayerIdMessage)

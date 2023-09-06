@@ -28,7 +28,7 @@ use crate::{
 /// }
 /// ```
 ///
-pub async fn handle_fetch_messages(session: &mut SessionLink) -> Response<FetchMessageResponse> {
+pub async fn handle_fetch_messages(session: &SessionLink) -> Response<FetchMessageResponse> {
     // Request a copy of the player data
     let Ok(Some(player)) = session.send(GetPlayerMessage).await else {
         // Not authenticated return empty count
