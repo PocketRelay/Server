@@ -1,10 +1,7 @@
 use crate::{
     services::leaderboard::{models::*, QueryMessage},
     session::{
-        models::{
-            errors::{ServerError, ServerResult},
-            stats::*,
-        },
+        models::{errors::ServerResult, stats::*},
         packet::PacketResponse,
         router::{Blaze, BlazeWithHeader},
     },
@@ -75,10 +72,8 @@ async fn get_group(name: &str) -> ServerResult<Arc<LeaderboardGroup>> {
     let services = App::services();
     let leaderboard = &services.leaderboard;
     let ty = LeaderboardType::from_value(name);
-    leaderboard
-        .send(QueryMessage(ty))
-        .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)
+    let result = leaderboard.send(QueryMessage(ty)).await?;
+    Ok(result)
 }
 
 fn get_locale_name(code: &str) -> &str {

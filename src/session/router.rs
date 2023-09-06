@@ -60,7 +60,7 @@ where
         })
     }
 }
-impl<'a, Fun, Fut, A, Res> Handler<'a, HandlerRequest<(A), Res>> for Fun
+impl<'a, Fun, Fut, A, Res> Handler<'a, HandlerRequest<A, Res>> for Fun
 where
     Fun: Fn(A) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'a,

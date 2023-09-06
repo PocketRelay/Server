@@ -11,6 +11,20 @@ use crate::{
     utils::types::{GameID, PlayerID, SessionID},
 };
 
+#[derive(Debug, Clone)]
+#[repr(u16)]
+#[allow(unused)]
+pub enum GameManagerError {
+    InvalidGameId = 0x2,
+    GameFull = 0x4,
+    PlayerNotFound = 0x65,
+    AlreadyGameMember = 0x67,
+    RemovePlayerFailed = 0x68,
+    JoinPlayerFailed = 0x6c,
+    AlreadyInQueue = 0x70,
+    TeamFull = 0xff,
+}
+
 /// Structure of the request for creating new games contains the
 /// initial game attributes and game setting
 #[derive(TdfDeserialize)]

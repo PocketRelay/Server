@@ -4,7 +4,7 @@ use crate::{
     session::{
         models::{
             auth::AuthResponse,
-            errors::{ServerError, ServerResult},
+            errors::{GlobalError, ServerResult},
             user_sessions::*,
         },
         router::Blaze,
@@ -14,7 +14,6 @@ use crate::{
     state::App,
     utils::models::NetworkAddress,
 };
-use log::error;
 use std::net::SocketAddr;
 
 /// Attempts to lookup another authenticated session details
@@ -48,14 +47,14 @@ pub async fn handle_lookup_user(
     // Ensure there wasn't an error
     let session = match session {
         Ok(Some(value)) => value,
-        _ => return Err(ServerError::InvalidInformation),
+        _ => return Err(GlobalError::System.into()),
     };
 
     // Get the lookup response from the session
     let response = session.send(GetLookupMessage {}).await;
     let response = match response {
         Ok(Some(value)) => value,
-        _ => return Err(ServerError::InvalidInformation),
+        _ => return Err(GlobalError::System.into()),
     };
 
     Ok(Blaze(response))
@@ -79,23 +78,11 @@ pub async fn handle_resume_session(
 
     let session_token = req.session_token;
 
-    let player: Player = match Tokens::service_verify(db, &session_token).await {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Error while attempt to resume session: {err:?}");
-            return Err(ServerError::InvalidSession);
-        }
-    };
+    let player: Player = Tokens::service_verify(db, &session_token).await?;
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down
-    if session
-        .send(SetPlayerMessage(Some(player.clone())))
-        .await
-        .is_err()
-    {
-        return Err(ServerError::ServerUnavailable);
-    }
+    session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
     Ok(Blaze(AuthResponse {
         player,

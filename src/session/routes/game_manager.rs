@@ -12,7 +12,7 @@ use crate::{
     },
     session::{
         models::{
-            errors::{ServerError, ServerResult},
+            errors::{GlobalError, ServerResult},
             game_manager::*,
         },
         packet::PacketBody,
@@ -33,9 +33,8 @@ pub async fn handle_join_game(
     // Load the session
     let player: GamePlayer = session
         .send(GetGamePlayerMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
 
     // Lookup the session join target
     let session = services
@@ -48,33 +47,28 @@ pub async fn handle_join_game(
     // Ensure there wasn't an error
     let session = match session {
         Ok(Some(value)) => value,
-        _ => return Err(ServerError::InvalidInformation),
+        _ => return Err(GlobalError::System.into()),
     };
 
     // Find the game ID for the target session
     let game_id = session.send(GetPlayerGameMessage {}).await;
     let game_id = match game_id {
         Ok(Some(value)) => value,
-        _ => return Err(ServerError::InvalidInformation),
+        _ => return Err(GlobalError::System.into()),
     };
 
     let game = services
         .game_manager
         .send(GetGameMessage { game_id })
-        .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+        .await?;
 
     let game = match game {
         Some(value) => value,
-        None => return Err(ServerError::InvalidInformation),
+        None => return Err(GameManagerError::InvalidGameId.into()),
     };
 
     // Check the game is joinable
-    let join_state = match game.send(CheckJoinableMessage { rule_set: None }).await {
-        Ok(value) => value,
-        // Game is no longer available
-        Err(_) => return Err(ServerError::InvalidInformation),
-    };
+    let join_state = game.send(CheckJoinableMessage { rule_set: None }).await?;
 
     // Join the game
     if let GameJoinableState::Joinable = join_state {
@@ -88,7 +82,7 @@ pub async fn handle_join_game(
             state: JoinGameState::JoinedGame,
         }))
     } else {
-        Err(ServerError::InvalidInformation)
+        Err(GameManagerError::GameFull.into())
     }
 }
 
@@ -98,7 +92,7 @@ pub async fn handle_get_game_data(
     let services = App::services();
 
     if req.game_list.is_empty() {
-        return Err(ServerError::InvalidInformation);
+        return Err(GlobalError::System.into());
     }
 
     let game_id = req.game_list.remove(0);
@@ -106,14 +100,10 @@ pub async fn handle_get_game_data(
     let game = services
         .game_manager
         .send(GetGameMessage { game_id })
-        .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?
-        .ok_or(ServerError::InvalidInformation)?;
+        .await?
+        .ok_or(GameManagerError::InvalidGameId)?;
 
-    let body = game
-        .send(GetGameDataMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+    let body = game.send(GetGameDataMessage).await?;
 
     Ok(body)
 }
@@ -175,23 +165,18 @@ pub async fn handle_create_game(
 ) -> ServerResult<Blaze<CreateGameResponse>> {
     let player: GamePlayer = session
         .send(GetGamePlayerMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
     let services = App::services();
 
-    let (link, game_id) = match services
+    let (link, game_id) = services
         .game_manager
         .send(CreateMessage {
             attributes: req.attributes,
             setting: req.setting,
             host: player,
         })
-        .await
-    {
-        Ok(value) => value,
-        Err(_) => return Err(ServerError::ServerUnavailable),
-    };
+        .await?;
 
     // Notify matchmaking of the new game
     let _ = services
@@ -228,15 +213,13 @@ pub async fn handle_set_attributes(Blaze(req): Blaze<SetAttributesRequest>) -> S
         .send(GetGameMessage {
             game_id: req.game_id,
         })
-        .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+        .await?;
 
     if let Some(link) = link {
         link.send(SetAttributesMessage {
             attributes: req.attributes,
         })
-        .await
-        .map_err(|_| ServerError::InvalidInformation)?;
+        .await?;
     }
 
     Ok(())
@@ -259,13 +242,10 @@ pub async fn handle_set_state(Blaze(req): Blaze<SetStateRequest>) -> ServerResul
         .send(GetGameMessage {
             game_id: req.game_id,
         })
-        .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+        .await?;
 
     if let Some(link) = link {
-        link.send(SetStateMessage { state: req.state })
-            .await
-            .map_err(|_| ServerError::InvalidInformation)?;
+        link.send(SetStateMessage { state: req.state }).await?;
     }
 
     Ok(())
@@ -288,15 +268,13 @@ pub async fn handle_set_setting(Blaze(req): Blaze<SetSettingRequest>) -> ServerR
         .send(GetGameMessage {
             game_id: req.game_id,
         })
-        .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+        .await?;
 
     if let Some(link) = link {
         link.send(SetSettingMessage {
             setting: req.setting,
         })
-        .await
-        .map_err(|_| ServerError::InvalidInformation)?;
+        .await?;
     }
 
     Ok(())
@@ -356,10 +334,9 @@ pub async fn handle_update_mesh_connection(
     session: SessionLink,
     Blaze(mut req): Blaze<UpdateMeshRequest>,
 ) -> ServerResult<()> {
-    let id = match session.send(GetPlayerIdMessage).await {
-        Ok(Some(value)) => value,
-        Ok(None) => return Err(ServerError::FailedNoLoginAction),
-        Err(_) => return Err(ServerError::ServerUnavailable),
+    let id = match session.send(GetPlayerIdMessage).await? {
+        Some(value) => value,
+        None => return Err(GlobalError::AuthenticationRequired.into()),
     };
 
     let target = match req.targets.pop() {
@@ -374,8 +351,7 @@ pub async fn handle_update_mesh_connection(
         .send(GetGameMessage {
             game_id: req.game_id,
         })
-        .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)?;
+        .await?;
 
     let link = match link {
         Some(value) => value,
@@ -520,9 +496,8 @@ pub async fn handle_start_matchmaking(
 ) -> ServerResult<Blaze<MatchmakingResponse>> {
     let player: GamePlayer = session
         .send(GetGamePlayerMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
 
     let session_id = player.player.id;
 
@@ -532,28 +507,20 @@ pub async fn handle_start_matchmaking(
 
     let rule_set = Arc::new(req.rules);
 
-    let result = match services
+    let result = services
         .game_manager
         .send(TryAddMessage {
             player,
             rule_set: rule_set.clone(),
         })
-        .await
-    {
-        Ok(value) => value,
-        Err(_) => return Err(ServerError::ServerUnavailable),
-    };
+        .await?;
 
     // If adding failed attempt to queue instead
     if let TryAddResult::Failure(player) = result {
-        if services
+        services
             .matchmaking
             .send(QueuePlayerMessage { player, rule_set })
-            .await
-            .is_err()
-        {
-            return Err(ServerError::ServerUnavailable);
-        }
+            .await?;
     }
 
     Ok(Blaze(MatchmakingResponse { id: session_id }))

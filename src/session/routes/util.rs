@@ -2,7 +2,7 @@ use crate::{
     database::entities::PlayerData,
     session::{
         models::{
-            errors::{ServerError, ServerResult},
+            errors::{GlobalError, ServerResult},
             util::*,
         },
         router::Blaze,
@@ -14,7 +14,7 @@ use base64ct::{Base64, Encoding};
 use embeddy::Embedded;
 use flate2::{write::ZlibEncoder, Compression};
 use interlink::prelude::Link;
-use log::{error, warn};
+use log::error;
 use std::{
     io::Write,
     path::Path,
@@ -79,11 +79,7 @@ pub async fn handle_get_ticker_server() -> Blaze<TickerServer> {
 /// }
 /// ```
 pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Blaze<PreAuthResponse>> {
-    let host_target = match session.send(GetHostTarget {}).await {
-        Ok(value) => value,
-        Err(_) => return Err(ServerError::InvalidInformation),
-    };
-
+    let host_target = session.send(GetHostTarget {}).await?;
     Ok(Blaze(PreAuthResponse { host_target }))
 }
 
@@ -98,9 +94,8 @@ pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Blaze<PreAuth
 pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Blaze<PostAuthResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
 
     // Queue the session details to be sent to this client
     let _ = session.do_send(DetailsMessage {
@@ -225,11 +220,11 @@ fn generate_coalesced(bytes: &[u8]) -> ServerResult<ChunkMap> {
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::new(6));
         encoder.write_all(bytes).map_err(|_| {
             error!("Failed to encode coalesced with ZLib (write stage)");
-            ServerError::ServerUnavailable
+            GlobalError::System
         })?;
         encoder.finish().map_err(|_| {
             error!("Failed to encode coalesced with ZLib (finish stage)");
-            ServerError::ServerUnavailable
+            GlobalError::System
         })?
     };
 
@@ -487,8 +482,8 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
 /// ```
 pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> ServerResult<()> {
     match req.value {
-        20000000 => Err(ServerError::Suspend12D),
-        90000000 => Err(ServerError::Suspend12E),
+        20000000 => Err(UtilError::SuspendPingTimeTooSmall.into()),
+        90000000 => Err(UtilError::PingSuspended.into()),
         _ => Ok(()),
     }
 }
@@ -510,17 +505,12 @@ pub async fn handle_user_settings_save(
 ) -> ServerResult<()> {
     let player = session
         .send(GetPlayerIdMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
 
     let db = App::database();
-    if let Err(err) = PlayerData::set(db, player, req.key, req.value).await {
-        warn!("Failed to update player data: {err:?}");
-        Err(ServerError::ServerUnavailable)
-    } else {
-        Ok(())
-    }
+    PlayerData::set(db, player, req.key, req.value).await?;
+    Ok(())
 }
 
 /// Handles loading all the user details for the current account and sending them to the
@@ -534,20 +524,13 @@ pub async fn handle_user_settings_save(
 pub async fn handle_load_settings(session: SessionLink) -> ServerResult<Blaze<SettingsResponse>> {
     let player = session
         .send(GetPlayerIdMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
 
     let db = App::database();
 
     // Load the player data from the database
-    let data: Vec<PlayerData> = match PlayerData::all(db, player).await {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Failed to load player data: {err:?}");
-            return Err(ServerError::ServerUnavailable);
-        }
-    };
+    let data: Vec<PlayerData> = PlayerData::all(db, player).await?;
 
     // Encode the player data into a settings map and order it
     let mut settings = TdfMap::<String, String>::with_capacity(data.len());

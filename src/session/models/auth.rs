@@ -3,6 +3,32 @@ use tdf::{TdfDeserialize, TdfSerialize, TdfSerializer, TdfType, TdfTyped};
 use crate::{database::entities::Player, utils::types::PlayerID};
 use std::borrow::Cow;
 
+#[derive(Debug, Clone)]
+#[repr(u16)]
+#[allow(unused)]
+pub enum AuthenticationError {
+    InvalidUser = 0xb,
+    InvalidPassword = 0xc,
+    InvalidToken = 0xd,
+    ExpiredToken = 0xe,
+    Exists = 0xf,
+    TooYoung = 0x10,
+    NoAccount = 0x11,
+    PersonaNotFound = 0x12,
+    PersonaInactive = 0x13,
+    InvalidPMail = 0x14,
+    InvalidField = 0x15,
+    InvalidEmail = 0x16,
+    InvalidStatus = 0x17,
+    InvalidSessionKey = 0x1f,
+    PersonaBanned = 0x20,
+    InvalidPersona = 0x21,
+    Banned = 0x2b,
+    FieldInvalidChars = 0xc9,
+    FieldTooShort = 0xca,
+    FieldTooLong = 0xcb,
+}
+
 /// Login through login prompt menu with email and password
 /// ```
 /// {
