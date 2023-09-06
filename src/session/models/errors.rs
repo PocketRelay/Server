@@ -11,15 +11,15 @@ use super::{auth::AuthenticationError, game_manager::GameManagerError, util::Uti
 
 pub type ServerResult<T> = Result<T, BlazeError>;
 
-#[test]
-fn decode_error() {
-    let value: i32 = 19791881;
-    let bytes = value.to_le_bytes();
-    let mut out = [0u8; 2];
-    out.copy_from_slice(&bytes[2..]);
-    let out = u16::from_le_bytes(out);
-    println!("{:#00x}", out);
-}
+// #[test]
+// fn decode_error() {
+//     let value: i32 = 19791881;
+//     let bytes = value.to_le_bytes();
+//     let mut out = [0u8; 2];
+//     out.copy_from_slice(&bytes[2..]);
+//     let out = u16::from_le_bytes(out);
+//     println!("{:#00x}", out);
+// }
 
 #[derive(Debug, Clone)]
 #[repr(u16)]
