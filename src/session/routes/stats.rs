@@ -2,8 +2,7 @@ use crate::{
     services::leaderboard::{models::*, QueryMessage},
     session::{
         models::{errors::ServerResult, stats::*},
-        packet::PacketResponse,
-        router::{Blaze, BlazeWithHeader},
+        router::{Blaze, BlazeWithHeader, PacketResponse},
     },
     state::App,
 };

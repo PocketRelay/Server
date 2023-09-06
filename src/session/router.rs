@@ -3,7 +3,7 @@
 
 use super::{
     models::errors::BlazeError,
-    packet::{IntoResponse, Packet, PacketHeader, PacketResponse},
+    packet::{Packet, PacketHeader},
     SessionLink,
 };
 use crate::{
@@ -306,5 +306,83 @@ impl Hasher for ComponentKeyHasher {
 
     fn write_u32(&mut self, i: u32) {
         self.0 = i;
+    }
+}
+
+/// Wrapping structure for raw Bytes structures that can
+/// be used as packet response
+pub struct PacketBody(Bytes);
+
+impl<T> From<T> for PacketBody
+where
+    T: TdfSerialize,
+{
+    fn from(value: T) -> Self {
+        let bytes = serialize_vec(&value);
+        let bytes = Bytes::from(bytes);
+        PacketBody(bytes)
+    }
+}
+
+/// Type for route responses that have already been turned into
+/// packets usually for lifetime reasons
+pub struct PacketResponse(pub Packet);
+
+impl IntoResponse for PacketResponse {
+    /// Simply provide the already compute response
+    fn into_response(self, _req: &Packet) -> Packet {
+        self.0
+    }
+}
+
+impl IntoResponse for PacketBody {
+    fn into_response(self, req: &Packet) -> Packet {
+        Packet {
+            header: req.header.response(),
+            contents: self.0,
+        }
+    }
+}
+
+/// Trait for a type that can be converted into a packet
+/// response using the header from the request packet
+pub trait IntoResponse: 'static {
+    /// Into packet conversion
+    fn into_response(self, req: &Packet) -> Packet;
+}
+
+/// Into response imeplementation for encodable responses
+/// which just calls res.respond
+impl IntoResponse for () {
+    fn into_response(self, req: &Packet) -> Packet {
+        req.respond_empty()
+    }
+}
+
+/// Into response imeplementation for encodable responses
+/// which just calls res.respond
+impl<A, B> IntoResponse for Result<A, B>
+where
+    A: IntoResponse,
+    B: IntoResponse,
+{
+    fn into_response(self, req: &Packet) -> Packet {
+        match self {
+            Ok(value) => value.into_response(req),
+            Err(value) => value.into_response(req),
+        }
+    }
+}
+/// Into response imeplementation for encodable responses
+/// which just calls res.respond
+impl<A> IntoResponse for Option<A>
+where
+    A: IntoResponse,
+{
+    fn into_response(self, req: &Packet) -> Packet {
+        match self {
+            Some(value) => value.into_response(req),
+            None => req.respond_empty(),
+        }
     }
 }

@@ -5,8 +5,8 @@ use crate::{
         matchmaking::{rules::RuleSet, CheckGameMessage},
     },
     session::{
-        packet::{Packet, PacketBody},
-        DetailsMessage, InformSessions, PushExt, Session, SetGameMessage,
+        packet::Packet, router::PacketBody, DetailsMessage, InformSessions, PushExt, Session,
+        SetGameMessage,
     },
     state::App,
     utils::{

@@ -4,7 +4,7 @@ use sea_orm::DbErr;
 
 use crate::{
     services::tokens::VerifyError,
-    session::packet::{IntoResponse, Packet},
+    session::{packet::Packet, router::IntoResponse},
 };
 
 use super::{auth::AuthenticationError, game_manager::GameManagerError, util::UtilError};
