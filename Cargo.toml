@@ -112,11 +112,6 @@ version = "0.4"
 default-features = false
 features = ["std", "serde"]
 
-
-# Patch which updates the windows-sys dep
-[patch.crates-io]
-local-ip-address = { git = "https://github.com/jacobtread/local-ip-address.git" }
-
 [profile.release]
 strip = true
 lto = true
