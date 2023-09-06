@@ -443,7 +443,6 @@ impl Packet {
 /// Tokio codec for encoding and decoding packets
 pub struct PacketCodec;
 
-/// Decoder implementation
 impl Decoder for PacketCodec {
     type Error = io::Error;
     type Item = Packet;
@@ -460,31 +459,10 @@ impl Decoder for PacketCodec {
     }
 }
 
-/// Encoder implementation for owned packets
 impl Encoder<Packet> for PacketCodec {
     type Error = io::Error;
 
     fn encode(&mut self, item: Packet, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        item.write(dst);
-        Ok(())
-    }
-}
-
-/// Encoder implementation for borrowed packets
-impl Encoder<&Packet> for PacketCodec {
-    type Error = io::Error;
-
-    fn encode(&mut self, item: &Packet, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        item.write(dst);
-        Ok(())
-    }
-}
-
-/// Encoder implementation for arc reference packets
-impl Encoder<Arc<Packet>> for PacketCodec {
-    type Error = io::Error;
-
-    fn encode(&mut self, item: Arc<Packet>, dst: &mut BytesMut) -> Result<(), Self::Error> {
         item.write(dst);
         Ok(())
     }
