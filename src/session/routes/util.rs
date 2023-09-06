@@ -5,7 +5,6 @@ use crate::{
             errors::{ServerError, ServerResult},
             util::*,
         },
-        packet::Response,
         router::Blaze,
         DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
@@ -32,8 +31,8 @@ use tokio::fs::read;
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_telemetry_server() -> Response<TelemetryServer> {
-    Response(TelemetryServer)
+pub async fn handle_get_telemetry_server() -> Blaze<TelemetryServer> {
+    Blaze(TelemetryServer)
 }
 
 /// Handles retrieving the details about the ticker server
@@ -44,8 +43,8 @@ pub async fn handle_get_telemetry_server() -> Response<TelemetryServer> {
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_ticker_server() -> Response<TickerServer> {
-    Response(TickerServer)
+pub async fn handle_get_ticker_server() -> Blaze<TickerServer> {
+    Blaze(TickerServer)
 }
 
 /// Handles responding to pre-auth requests which is the first request
@@ -79,13 +78,13 @@ pub async fn handle_get_ticker_server() -> Response<TickerServer> {
 ///     }
 /// }
 /// ```
-pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Response<PreAuthResponse>> {
+pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Blaze<PreAuthResponse>> {
     let host_target = match session.send(GetHostTarget {}).await {
         Ok(value) => value,
         Err(_) => return Err(ServerError::InvalidInformation),
     };
 
-    Ok(Response(PreAuthResponse { host_target }))
+    Ok(Blaze(PreAuthResponse { host_target }))
 }
 
 /// Handles post authentication requests. This provides information about other
@@ -96,7 +95,7 @@ pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Response<PreA
 /// ID: 27
 /// Content: {}
 /// ```
-pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Response<PostAuthResponse>> {
+pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Blaze<PostAuthResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await
@@ -108,7 +107,7 @@ pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Response<Pos
         link: Link::clone(&session),
     });
 
-    Ok(Response(PostAuthResponse {
+    Ok(Blaze(PostAuthResponse {
         telemetry: TelemetryServer,
         ticker: TickerServer,
         player_id,
@@ -125,13 +124,13 @@ pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Response<Pos
 /// Content: {}
 /// ```
 ///
-pub async fn handle_ping() -> Response<PingResponse> {
+pub async fn handle_ping() -> Blaze<PingResponse> {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_secs();
-    Response(PingResponse { server_time })
+    Blaze(PingResponse { server_time })
 }
 
 /// Contents of the entitlements dmap file
@@ -158,7 +157,7 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 pub async fn handle_fetch_client_config(
     session: SessionLink,
     Blaze(req): Blaze<FetchConfigRequest>,
-) -> ServerResult<Response<FetchConfigResponse>> {
+) -> ServerResult<Blaze<FetchConfigResponse>> {
     let config = match req.id.as_ref() {
         "ME3_DATA" => data_config(&session).await,
         "ME3_MSG" => messages(),
@@ -184,7 +183,7 @@ pub async fn handle_fetch_client_config(
         }
     };
 
-    Ok(Response(FetchConfigResponse { config }))
+    Ok(Blaze(FetchConfigResponse { config }))
 }
 
 /// Loads the entitlements from the entitlements file and parses
@@ -532,9 +531,7 @@ pub async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-pub async fn handle_load_settings(
-    session: SessionLink,
-) -> ServerResult<Response<SettingsResponse>> {
+pub async fn handle_load_settings(session: SessionLink) -> ServerResult<Blaze<SettingsResponse>> {
     let player = session
         .send(GetPlayerIdMessage)
         .await
@@ -557,5 +554,5 @@ pub async fn handle_load_settings(
     for value in data {
         settings.insert(value.key, value.value);
     }
-    Ok(Response(SettingsResponse { settings }))
+    Ok(Blaze(SettingsResponse { settings }))
 }

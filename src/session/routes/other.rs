@@ -1,9 +1,5 @@
 use crate::{
-    session::{
-        models::other::*,
-        packet::{Packet, Response},
-        PushExt, SessionLink,
-    },
+    session::{models::other::*, packet::Packet, router::Blaze, PushExt, SessionLink},
     utils::components::game_reporting,
 };
 
@@ -62,6 +58,6 @@ pub async fn handle_submit_offline(session: SessionLink) {
 ///     "OFRC": 0
 /// }
 /// ```
-pub async fn handle_get_lists() -> Response<AssocListResponse> {
-    Response(AssocListResponse)
+pub async fn handle_get_lists() -> Blaze<AssocListResponse> {
+    Blaze(AssocListResponse)
 }

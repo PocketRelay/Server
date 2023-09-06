@@ -185,6 +185,15 @@ where
     }
 }
 
+impl<V> IntoResponse for Blaze<V>
+where
+    V: TdfSerialize + 'static,
+{
+    fn into_response(self, req: &Packet) -> Packet {
+        req.respond(self.0)
+    }
+}
+
 pub struct BlazeWithHeader<V> {
     pub req: V,
     pub header: PacketHeader,

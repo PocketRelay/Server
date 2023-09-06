@@ -7,7 +7,6 @@ use crate::{
             errors::{ServerError, ServerResult},
             user_sessions::*,
         },
-        packet::Response,
         router::Blaze,
         GetLookupMessage, GetSocketAddrMessage, HardwareFlagMessage, LookupResponse,
         NetworkInfoMessage, SessionLink, SetPlayerMessage,
@@ -35,7 +34,7 @@ use std::net::SocketAddr;
 /// ```
 pub async fn handle_lookup_user(
     Blaze(req): Blaze<LookupRequest>,
-) -> ServerResult<Response<LookupResponse>> {
+) -> ServerResult<Blaze<LookupResponse>> {
     let services = App::services();
 
     // Lookup the session
@@ -59,7 +58,7 @@ pub async fn handle_lookup_user(
         _ => return Err(ServerError::InvalidInformation),
     };
 
-    Ok(Response(response))
+    Ok(Blaze(response))
 }
 
 /// Attempts to resume an existing session for a player that has the
@@ -75,7 +74,7 @@ pub async fn handle_lookup_user(
 pub async fn handle_resume_session(
     session: SessionLink,
     Blaze(req): Blaze<ResumeSessionRequest>,
-) -> ServerResult<Response<AuthResponse>> {
+) -> ServerResult<Blaze<AuthResponse>> {
     let db = App::database();
 
     let session_token = req.session_token;
@@ -98,7 +97,7 @@ pub async fn handle_resume_session(
         return Err(ServerError::ServerUnavailable);
     }
 
-    Ok(Response(AuthResponse {
+    Ok(Blaze(AuthResponse {
         player,
         session_token,
         silent: true,

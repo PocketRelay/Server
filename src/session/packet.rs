@@ -532,18 +532,6 @@ pub trait IntoResponse: 'static {
     fn into_response(self, req: &Packet) -> Packet;
 }
 
-pub struct Response<E>(pub E);
-
-/// Into response imeplementation for encodable responses
-/// which just calls res.respond
-impl<E> IntoResponse for Response<E>
-where
-    E: TdfSerialize + 'static,
-{
-    fn into_response(self, req: &Packet) -> Packet {
-        req.respond(self.0)
-    }
-}
 /// Into response imeplementation for encodable responses
 /// which just calls res.respond
 impl IntoResponse for () {

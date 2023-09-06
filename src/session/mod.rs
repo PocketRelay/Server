@@ -20,7 +20,7 @@ use crate::{
 };
 
 use interlink::prelude::*;
-use log::{debug, error, log_enabled};
+use log::{debug, log_enabled};
 use std::{fmt::Debug, io, net::SocketAddr};
 use tdf::{ObjectId, TdfSerialize, TdfType, TdfTyped};
 

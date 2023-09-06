@@ -5,9 +5,8 @@ use crate::{
             errors::{ServerError, ServerResult},
             stats::*,
         },
-        packet::{PacketResponse, Response},
+        packet::PacketResponse,
         router::{Blaze, BlazeWithHeader},
-        SessionLink,
     },
     state::App,
 };
@@ -66,10 +65,10 @@ pub async fn handle_filtered_leaderboard(
 /// ```
 pub async fn handle_leaderboard_entity_count(
     Blaze(req): Blaze<EntityCountRequest>,
-) -> ServerResult<Response<EntityCountResponse>> {
+) -> ServerResult<Blaze<EntityCountResponse>> {
     let group = get_group(&req.name).await?;
     let count = group.values.len();
-    Ok(Response(EntityCountResponse { count }))
+    Ok(Blaze(EntityCountResponse { count }))
 }
 
 async fn get_group(name: &str) -> ServerResult<Arc<LeaderboardGroup>> {
@@ -110,7 +109,7 @@ fn get_locale_name(code: &str) -> &str {
 /// ```
 pub async fn handle_leaderboard_group(
     Blaze(req): Blaze<LeaderboardGroupRequest>,
-) -> Option<Response<LeaderboardGroupResponse<'static>>> {
+) -> Option<Blaze<LeaderboardGroupResponse<'static>>> {
     let name = req.name;
     let is_n7 = name.starts_with("N7Rating");
     if !is_n7 && !name.starts_with("ChallengePoints") {
@@ -138,5 +137,5 @@ pub async fn handle_leaderboard_group(
             gname: "ME3ChallengePoints",
         }
     };
-    Some(Response(group))
+    Some(Blaze(group))
 }

@@ -15,7 +15,7 @@ use crate::{
             errors::{ServerError, ServerResult},
             game_manager::*,
         },
-        packet::{PacketBody, Response},
+        packet::PacketBody,
         router::Blaze,
         GetGamePlayerMessage, GetPlayerGameMessage, GetPlayerIdMessage, SessionLink,
     },
@@ -27,7 +27,7 @@ use std::sync::Arc;
 pub async fn handle_join_game(
     session: SessionLink,
     Blaze(req): Blaze<JoinGameRequest>,
-) -> ServerResult<Response<JoinGameResponse>> {
+) -> ServerResult<Blaze<JoinGameResponse>> {
     let services = App::services();
 
     // Load the session
@@ -83,7 +83,7 @@ pub async fn handle_join_game(
             player,
             context: GameSetupContext::Dataless(DatalessContext::JoinGameSetup),
         });
-        Ok(Response(JoinGameResponse {
+        Ok(Blaze(JoinGameResponse {
             game_id,
             state: JoinGameState::JoinedGame,
         }))
@@ -172,7 +172,7 @@ pub async fn handle_get_game_data(
 pub async fn handle_create_game(
     session: SessionLink,
     Blaze(req): Blaze<CreateGameRequest>,
-) -> ServerResult<Response<CreateGameResponse>> {
+) -> ServerResult<Blaze<CreateGameResponse>> {
     let player: GamePlayer = session
         .send(GetGamePlayerMessage)
         .await
@@ -198,7 +198,7 @@ pub async fn handle_create_game(
         .matchmaking
         .do_send(CheckGameMessage { link, game_id });
 
-    Ok(Response(CreateGameResponse { game_id }))
+    Ok(Blaze(CreateGameResponse { game_id }))
 }
 
 /// Handles changing the attributes of the game with the provided ID
@@ -517,7 +517,7 @@ pub async fn handle_update_mesh_connection(
 pub async fn handle_start_matchmaking(
     session: SessionLink,
     Blaze(req): Blaze<MatchmakingRequest>,
-) -> ServerResult<Response<MatchmakingResponse>> {
+) -> ServerResult<Blaze<MatchmakingResponse>> {
     let player: GamePlayer = session
         .send(GetGamePlayerMessage)
         .await
@@ -556,7 +556,7 @@ pub async fn handle_start_matchmaking(
         }
     }
 
-    Ok(Response(MatchmakingResponse { id: session_id }))
+    Ok(Blaze(MatchmakingResponse { id: session_id }))
 }
 
 /// Handles cancelling matchmaking for the current session removing

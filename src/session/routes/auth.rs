@@ -6,7 +6,6 @@ use crate::{
             auth::*,
             errors::{ServerError, ServerResult},
         },
-        packet::Response,
         router::Blaze,
         GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage,
     },
@@ -21,7 +20,7 @@ use tokio::fs::read_to_string;
 pub async fn handle_login(
     session: SessionLink,
     Blaze(req): Blaze<LoginRequest>,
-) -> ServerResult<Response<AuthResponse>> {
+) -> ServerResult<Blaze<AuthResponse>> {
     let db: &DatabaseConnection = App::database();
 
     let LoginRequest { email, password } = &req;
@@ -56,7 +55,7 @@ pub async fn handle_login(
 
     let session_token: String = Tokens::service_claim(player.id);
 
-    Ok(Response(AuthResponse {
+    Ok(Blaze(AuthResponse {
         player,
         session_token,
         silent: false,
@@ -66,7 +65,7 @@ pub async fn handle_login(
 pub async fn handle_silent_login(
     session: SessionLink,
     Blaze(req): Blaze<SilentLoginRequest>,
-) -> ServerResult<Response<AuthResponse>> {
+) -> ServerResult<Blaze<AuthResponse>> {
     let db: &DatabaseConnection = App::database();
 
     // Verify the authentication token
@@ -80,7 +79,7 @@ pub async fn handle_silent_login(
         .await
         .map_err(|_| ServerError::ServerUnavailable)?;
 
-    Ok(Response(AuthResponse {
+    Ok(Blaze(AuthResponse {
         player,
         session_token: req.token,
         silent: true,
@@ -90,7 +89,7 @@ pub async fn handle_silent_login(
 pub async fn handle_origin_login(
     session: SessionLink,
     Blaze(req): Blaze<OriginLoginRequest>,
-) -> ServerResult<Response<AuthResponse>> {
+) -> ServerResult<Blaze<AuthResponse>> {
     let db: &DatabaseConnection = App::database();
 
     let services: &Services = App::services();
@@ -124,7 +123,7 @@ pub async fn handle_origin_login(
 
     let session_token: String = Tokens::service_claim(player.id);
 
-    Ok(Response(AuthResponse {
+    Ok(Blaze(AuthResponse {
         player,
         session_token,
         silent: true,
@@ -216,13 +215,13 @@ static ENTITLEMENTS: &[Entitlement; 34] = &[
 /// ```
 pub async fn handle_list_entitlements(
     Blaze(req): Blaze<ListEntitlementsRequest>,
-) -> Option<Response<ListEntitlementsResponse>> {
+) -> Option<Blaze<ListEntitlementsResponse>> {
     let tag: String = req.tag;
     if !tag.is_empty() {
         return None;
     }
 
-    Some(Response(ListEntitlementsResponse { list: ENTITLEMENTS }))
+    Some(Blaze(ListEntitlementsResponse { list: ENTITLEMENTS }))
 }
 
 /// Handles logging into a persona. This system doesn't implement the persona system so
@@ -235,13 +234,13 @@ pub async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-pub async fn handle_login_persona(session: SessionLink) -> ServerResult<Response<PersonaResponse>> {
+pub async fn handle_login_persona(session: SessionLink) -> ServerResult<Blaze<PersonaResponse>> {
     let player: Player = session
         .send(GetPlayerMessage)
         .await
         .map_err(|_| ServerError::ServerUnavailable)?
         .ok_or(ServerError::FailedNoLoginAction)?;
-    Ok(Response(PersonaResponse { player }))
+    Ok(Blaze(PersonaResponse { player }))
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -296,7 +295,7 @@ pub async fn handle_forgot_password(Blaze(req): Blaze<ForgotPasswordRequest>) ->
 pub async fn handle_create_account(
     session: SessionLink,
     Blaze(req): Blaze<CreateAccountRequest>,
-) -> ServerResult<Response<AuthResponse>> {
+) -> ServerResult<Blaze<AuthResponse>> {
     let email = req.email;
     if !EmailAddress::is_valid(&email) {
         return Err(ServerError::InvalidEmail);
@@ -350,7 +349,7 @@ pub async fn handle_create_account(
 
     let session_token = Tokens::service_claim(player.id);
 
-    Ok(Response(AuthResponse {
+    Ok(Blaze(AuthResponse {
         player,
         session_token,
         silent: false,
@@ -368,8 +367,8 @@ pub async fn handle_create_account(
 ///     "PTFM": "pc" // Platform
 /// }
 /// ```
-pub async fn handle_get_legal_docs_info() -> Response<LegalDocsInfo> {
-    Response(LegalDocsInfo)
+pub async fn handle_get_legal_docs_info() -> Blaze<LegalDocsInfo> {
+    Blaze(LegalDocsInfo)
 }
 
 /// ```
@@ -382,13 +381,13 @@ pub async fn handle_get_legal_docs_info() -> Response<LegalDocsInfo> {
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_tos() -> Response<LegalContent> {
+pub async fn handle_tos() -> Blaze<LegalContent> {
     let content = match read_to_string("data/terms_of_service.html").await {
         Ok(value) => Cow::Owned(value),
         Err(_) => Cow::Borrowed("<h1>This is a terms of service placeholder</h1>"),
     };
 
-    Response(LegalContent {
+    Blaze(LegalContent {
         col: 0xdaed,
         content,
         path: "webterms/au/en/pc/default/09082020/02042022",
@@ -405,13 +404,13 @@ pub async fn handle_tos() -> Response<LegalContent> {
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_privacy_policy() -> Response<LegalContent> {
+pub async fn handle_privacy_policy() -> Blaze<LegalContent> {
     let content = match read_to_string("data/privacy_policy.html").await {
         Ok(value) => Cow::Owned(value),
         Err(_) => Cow::Borrowed("<h1>This is a privacy policy placeholder</h1>"),
     };
 
-    Response(LegalContent {
+    Blaze(LegalContent {
         col: 0xc99c,
         content,
         path: "webprivacy/au/en/pc/default/08202020/02042022",
@@ -426,9 +425,7 @@ pub async fn handle_privacy_policy() -> Response<LegalContent> {
 /// ID: 35
 /// Content: {}
 /// ```
-pub async fn handle_get_auth_token(
-    session: SessionLink,
-) -> ServerResult<Response<GetTokenResponse>> {
+pub async fn handle_get_auth_token(session: SessionLink) -> ServerResult<Blaze<GetTokenResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await
@@ -436,5 +433,5 @@ pub async fn handle_get_auth_token(
         .ok_or(ServerError::FailedNoLoginAction)?;
     // Create a new token claim for the player to use with the API
     let token = Tokens::service_claim(player_id);
-    Ok(Response(GetTokenResponse { token }))
+    Ok(Blaze(GetTokenResponse { token }))
 }
