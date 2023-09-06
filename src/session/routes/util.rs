@@ -6,6 +6,7 @@ use crate::{
             util::*,
         },
         packet::Response,
+        router::Blaze,
         DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
     state::{self, App},
@@ -31,7 +32,7 @@ use tokio::fs::read;
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_telemetry_server(_: &SessionLink) -> Response<TelemetryServer> {
+pub async fn handle_get_telemetry_server() -> Response<TelemetryServer> {
     Response(TelemetryServer)
 }
 
@@ -43,7 +44,7 @@ pub async fn handle_get_telemetry_server(_: &SessionLink) -> Response<TelemetryS
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_ticker_server(_: &SessionLink) -> Response<TickerServer> {
+pub async fn handle_get_ticker_server() -> Response<TickerServer> {
     Response(TickerServer)
 }
 
@@ -78,7 +79,7 @@ pub async fn handle_get_ticker_server(_: &SessionLink) -> Response<TickerServer>
 ///     }
 /// }
 /// ```
-pub async fn handle_pre_auth(session: &SessionLink) -> ServerResult<Response<PreAuthResponse>> {
+pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Response<PreAuthResponse>> {
     let host_target = match session.send(GetHostTarget {}).await {
         Ok(value) => value,
         Err(_) => return Err(ServerError::InvalidInformation),
@@ -95,7 +96,7 @@ pub async fn handle_pre_auth(session: &SessionLink) -> ServerResult<Response<Pre
 /// ID: 27
 /// Content: {}
 /// ```
-pub async fn handle_post_auth(session: &SessionLink) -> ServerResult<Response<PostAuthResponse>> {
+pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Response<PostAuthResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await
@@ -104,7 +105,7 @@ pub async fn handle_post_auth(session: &SessionLink) -> ServerResult<Response<Po
 
     // Queue the session details to be sent to this client
     let _ = session.do_send(DetailsMessage {
-        link: Link::clone(&*session),
+        link: Link::clone(&session),
     });
 
     Ok(Response(PostAuthResponse {
@@ -124,7 +125,7 @@ pub async fn handle_post_auth(session: &SessionLink) -> ServerResult<Response<Po
 /// Content: {}
 /// ```
 ///
-pub async fn handle_ping(_: &SessionLink) -> Response<PingResponse> {
+pub async fn handle_ping() -> Response<PingResponse> {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
@@ -155,11 +156,11 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 /// }
 /// ```
 pub async fn handle_fetch_client_config(
-    session: &SessionLink,
-    req: FetchConfigRequest,
+    session: SessionLink,
+    Blaze(req): Blaze<FetchConfigRequest>,
 ) -> ServerResult<Response<FetchConfigResponse>> {
     let config = match req.id.as_ref() {
-        "ME3_DATA" => data_config(session).await,
+        "ME3_DATA" => data_config(&session).await,
         "ME3_MSG" => messages(),
         "ME3_ENT" => load_entitlements(),
         "ME3_DIME" => {
@@ -485,10 +486,7 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
 ///     "TVAL": 90000000
 /// }
 /// ```
-pub async fn handle_suspend_user_ping(
-    _state: &SessionLink,
-    req: SuspendPingRequest,
-) -> ServerResult<()> {
+pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> ServerResult<()> {
     match req.value {
         20000000 => Err(ServerError::Suspend12D),
         90000000 => Err(ServerError::Suspend12E),
@@ -508,8 +506,8 @@ pub async fn handle_suspend_user_ping(
 /// }
 /// ```
 pub async fn handle_user_settings_save(
-    session: &SessionLink,
-    req: SettingsSaveRequest,
+    session: SessionLink,
+    Blaze(req): Blaze<SettingsSaveRequest>,
 ) -> ServerResult<()> {
     let player = session
         .send(GetPlayerIdMessage)
@@ -535,7 +533,7 @@ pub async fn handle_user_settings_save(
 /// Content: {}
 /// ```
 pub async fn handle_load_settings(
-    session: &SessionLink,
+    session: SessionLink,
 ) -> ServerResult<Response<SettingsResponse>> {
     let player = session
         .send(GetPlayerIdMessage)

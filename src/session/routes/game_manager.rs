@@ -16,6 +16,7 @@ use crate::{
             game_manager::*,
         },
         packet::{PacketBody, Response},
+        router::Blaze,
         GetGamePlayerMessage, GetPlayerGameMessage, GetPlayerIdMessage, SessionLink,
     },
     state::App,
@@ -24,8 +25,8 @@ use log::{debug, info};
 use std::sync::Arc;
 
 pub async fn handle_join_game(
-    session: &SessionLink,
-    req: JoinGameRequest,
+    session: SessionLink,
+    Blaze(req): Blaze<JoinGameRequest>,
 ) -> ServerResult<Response<JoinGameResponse>> {
     let services = App::services();
 
@@ -92,8 +93,7 @@ pub async fn handle_join_game(
 }
 
 pub async fn handle_get_game_data(
-    _: &SessionLink,
-    mut req: GetGameDataRequest,
+    Blaze(mut req): Blaze<GetGameDataRequest>,
 ) -> ServerResult<PacketBody> {
     let services = App::services();
 
@@ -170,8 +170,8 @@ pub async fn handle_get_game_data(
 /// }
 /// ```
 pub async fn handle_create_game(
-    session: &SessionLink,
-    req: CreateGameRequest,
+    session: SessionLink,
+    Blaze(req): Blaze<CreateGameRequest>,
 ) -> ServerResult<Response<CreateGameResponse>> {
     let player: GamePlayer = session
         .send(GetGamePlayerMessage)
@@ -221,7 +221,7 @@ pub async fn handle_create_game(
 ///     "GID": 1
 /// }
 /// ```
-pub async fn handle_set_attributes(_: &SessionLink, req: SetAttributesRequest) -> ServerResult<()> {
+pub async fn handle_set_attributes(Blaze(req): Blaze<SetAttributesRequest>) -> ServerResult<()> {
     let services = App::services();
     let link = services
         .game_manager
@@ -252,7 +252,7 @@ pub async fn handle_set_attributes(_: &SessionLink, req: SetAttributesRequest) -
 ///     "GSTA": 130
 /// }
 /// ```
-pub async fn handle_set_state(_: &SessionLink, req: SetStateRequest) -> ServerResult<()> {
+pub async fn handle_set_state(Blaze(req): Blaze<SetStateRequest>) -> ServerResult<()> {
     let services = App::services();
     let link = services
         .game_manager
@@ -281,7 +281,7 @@ pub async fn handle_set_state(_: &SessionLink, req: SetStateRequest) -> ServerRe
 ///     "GSET": 285
 /// }
 /// ```
-pub async fn handle_set_setting(_: &SessionLink, req: SetSettingRequest) -> ServerResult<()> {
+pub async fn handle_set_setting(Blaze(req): Blaze<SetSettingRequest>) -> ServerResult<()> {
     let services = App::services();
     let link = services
         .game_manager
@@ -315,7 +315,7 @@ pub async fn handle_set_setting(_: &SessionLink, req: SetSettingRequest) -> Serv
 ///     "REAS": 6
 /// }
 /// ```
-pub async fn handle_remove_player(_: &SessionLink, req: RemovePlayerRequest) {
+pub async fn handle_remove_player(Blaze(req): Blaze<RemovePlayerRequest>) {
     let services = App::services();
     let game = match services
         .game_manager
@@ -353,8 +353,8 @@ pub async fn handle_remove_player(_: &SessionLink, req: RemovePlayerRequest) {
 /// }
 /// ```
 pub async fn handle_update_mesh_connection(
-    session: &SessionLink,
-    mut req: UpdateMeshRequest,
+    session: SessionLink,
+    Blaze(mut req): Blaze<UpdateMeshRequest>,
 ) -> ServerResult<()> {
     let id = match session.send(GetPlayerIdMessage).await {
         Ok(Some(value)) => value,
@@ -515,8 +515,8 @@ pub async fn handle_update_mesh_connection(
 /// }
 /// ```
 pub async fn handle_start_matchmaking(
-    session: &SessionLink,
-    req: MatchmakingRequest,
+    session: SessionLink,
+    Blaze(req): Blaze<MatchmakingRequest>,
 ) -> ServerResult<Response<MatchmakingResponse>> {
     let player: GamePlayer = session
         .send(GetGamePlayerMessage)
@@ -569,7 +569,7 @@ pub async fn handle_start_matchmaking(
 ///     "MSID": 1
 /// }
 /// ```
-pub async fn handle_cancel_matchmaking(session: &SessionLink) {
+pub async fn handle_cancel_matchmaking(session: SessionLink) {
     session
         .exec(|session, _| {
             let services = App::services();

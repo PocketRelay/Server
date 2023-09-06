@@ -490,42 +490,6 @@ impl Encoder<Arc<Packet>> for PacketCodec {
     }
 }
 
-/// Structure wrapping a from request type to include a packet
-/// header to allow the response type to be created
-pub struct Request<T: FromRequest> {
-    /// The decoded request type
-    pub req: T,
-    /// The packet header from the request
-    pub header: PacketHeader,
-}
-
-/// Deref implementation so that the request fields can be
-/// directly accessed
-impl<T: FromRequest> Deref for Request<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.req
-    }
-}
-
-impl<T: FromRequest> Request<T> {
-    /// Creates a response from the provided response type value
-    /// returning a Response structure which can be used as a Route
-    /// repsonse
-    ///
-    /// `res` The into response type implementation
-    pub fn response<E>(&self, res: E) -> PacketResponse
-    where
-        E: TdfSerialize,
-    {
-        PacketResponse(Packet {
-            header: self.header.response(),
-            contents: Bytes::from(serialize_vec(&res)),
-        })
-    }
-}
-
 /// Wrapping structure for raw Bytes structures that can
 /// be used as packet response
 pub struct PacketBody(Bytes);
@@ -543,7 +507,7 @@ where
 
 /// Type for route responses that have already been turned into
 /// packets usually for lifetime reasons
-pub struct PacketResponse(Packet);
+pub struct PacketResponse(pub Packet);
 
 impl IntoResponse for PacketResponse {
     /// Simply provide the already compute response
@@ -558,33 +522,6 @@ impl IntoResponse for PacketBody {
             header: req.header.response(),
             contents: self.0,
         }
-    }
-}
-
-impl<T: FromRequest> FromRequest for Request<T> {
-    fn from_request(req: &Packet) -> DecodeResult<Self> {
-        let inner = T::from_request(req)?;
-        let header = req.header;
-        Ok(Self { req: inner, header })
-    }
-}
-
-/// Trait implementing by structures which can be created from a request
-/// packet and is used for the arguments on routing functions
-pub trait FromRequest: Sized + Send + 'static {
-    /// Takes the value from the request returning a decode result of
-    /// whether the value could be created
-    ///
-    /// `req` The request packet
-    fn from_request(req: &Packet) -> DecodeResult<Self>;
-}
-
-impl<D> FromRequest for D
-where
-    for<'de> D: TdfDeserialize<'de> + Send + 'static,
-{
-    fn from_request(req: &Packet) -> DecodeResult<Self> {
-        req.decode()
     }
 }
 

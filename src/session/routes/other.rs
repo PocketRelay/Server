@@ -32,7 +32,7 @@ use crate::{
 ///     "GTYP": "massEffectReport"
 /// }
 /// ```
-pub async fn handle_submit_offline(session: &SessionLink) {
+pub async fn handle_submit_offline(session: SessionLink) {
     session.push(Packet::notify(
         game_reporting::COMPONENT,
         game_reporting::GAME_REPORT_SUBMITTED,
@@ -62,6 +62,6 @@ pub async fn handle_submit_offline(session: &SessionLink) {
 ///     "OFRC": 0
 /// }
 /// ```
-pub async fn handle_get_lists(_: &SessionLink) -> Response<AssocListResponse> {
+pub async fn handle_get_lists() -> Response<AssocListResponse> {
     Response(AssocListResponse)
 }

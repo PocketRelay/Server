@@ -8,6 +8,7 @@ use crate::{
             user_sessions::*,
         },
         packet::Response,
+        router::Blaze,
         GetLookupMessage, GetSocketAddrMessage, HardwareFlagMessage, LookupResponse,
         NetworkInfoMessage, SessionLink, SetPlayerMessage,
     },
@@ -33,8 +34,7 @@ use std::net::SocketAddr;
 /// }
 /// ```
 pub async fn handle_lookup_user(
-    _: &SessionLink,
-    req: LookupRequest,
+    Blaze(req): Blaze<LookupRequest>,
 ) -> ServerResult<Response<LookupResponse>> {
     let services = App::services();
 
@@ -73,8 +73,8 @@ pub async fn handle_lookup_user(
 /// }
 /// ```
 pub async fn handle_resume_session(
-    session: &SessionLink,
-    req: ResumeSessionRequest,
+    session: SessionLink,
+    Blaze(req): Blaze<ResumeSessionRequest>,
 ) -> ServerResult<Response<AuthResponse>> {
     let db = App::database();
 
@@ -134,7 +134,10 @@ pub async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-pub async fn handle_update_network(session: &SessionLink, mut req: UpdateNetworkRequest) {
+pub async fn handle_update_network(
+    session: SessionLink,
+    Blaze(mut req): Blaze<UpdateNetworkRequest>,
+) {
     if let NetworkAddress::AddressPair(pair) = &mut req.address {
         let ext = &mut pair.external;
 
@@ -167,7 +170,10 @@ pub async fn handle_update_network(session: &SessionLink, mut req: UpdateNetwork
 ///     "HWFG": 0
 /// }
 /// ```
-pub async fn handle_update_hardware_flag(session: &SessionLink, req: HardwareFlagRequest) {
+pub async fn handle_update_hardware_flag(
+    session: SessionLink,
+    Blaze(req): Blaze<HardwareFlagRequest>,
+) {
     let _ = session
         .send(HardwareFlagMessage {
             value: req.hardware_flag,

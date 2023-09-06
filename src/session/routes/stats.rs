@@ -5,7 +5,8 @@ use crate::{
             errors::{ServerError, ServerResult},
             stats::*,
         },
-        packet::{PacketResponse, Request, Response},
+        packet::{PacketResponse, Response},
+        router::{Blaze, BlazeWithHeader},
         SessionLink,
     },
     state::App,
@@ -13,10 +14,9 @@ use crate::{
 use std::sync::Arc;
 
 pub async fn handle_normal_leaderboard(
-    _: &SessionLink,
-    req: Request<LeaderboardRequest>,
+    req: BlazeWithHeader<LeaderboardRequest>,
 ) -> ServerResult<PacketResponse> {
-    let query = &*req;
+    let query = &req.req;
     let group = get_group(&query.name).await?;
     let response = match group.get_normal(query.start, query.count) {
         Some((values, _)) => LeaderboardResponse::Many(values),
@@ -26,10 +26,9 @@ pub async fn handle_normal_leaderboard(
 }
 
 pub async fn handle_centered_leaderboard(
-    _: &SessionLink,
-    req: Request<CenteredLeaderboardRequest>,
+    req: BlazeWithHeader<CenteredLeaderboardRequest>,
 ) -> ServerResult<PacketResponse> {
-    let query = &*req;
+    let query = &req.req;
     let group = get_group(&query.name).await?;
     let response = match group.get_centered(query.center, query.count) {
         Some(values) => LeaderboardResponse::Many(values),
@@ -39,10 +38,9 @@ pub async fn handle_centered_leaderboard(
 }
 
 pub async fn handle_filtered_leaderboard(
-    _: &SessionLink,
-    req: Request<FilteredLeaderboardRequest>,
+    req: BlazeWithHeader<FilteredLeaderboardRequest>,
 ) -> ServerResult<PacketResponse> {
-    let query = &*req;
+    let query = &req.req;
     let group = get_group(&query.name).await?;
     let response = match group.get_entry(query.id) {
         Some(value) => LeaderboardResponse::One(value),
@@ -67,8 +65,7 @@ pub async fn handle_filtered_leaderboard(
 /// }
 /// ```
 pub async fn handle_leaderboard_entity_count(
-    _: &SessionLink,
-    req: EntityCountRequest,
+    Blaze(req): Blaze<EntityCountRequest>,
 ) -> ServerResult<Response<EntityCountResponse>> {
     let group = get_group(&req.name).await?;
     let count = group.values.len();
@@ -112,8 +109,7 @@ fn get_locale_name(code: &str) -> &str {
 /// }
 /// ```
 pub async fn handle_leaderboard_group(
-    _: &SessionLink,
-    req: LeaderboardGroupRequest,
+    Blaze(req): Blaze<LeaderboardGroupRequest>,
 ) -> Option<Response<LeaderboardGroupResponse<'static>>> {
     let name = req.name;
     let is_n7 = name.starts_with("N7Rating");

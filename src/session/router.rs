@@ -2,70 +2,104 @@
 //! and automatically decoding the packet contents to the function type
 
 use super::{
-    packet::{FromRequest, IntoResponse, Packet},
+    models::errors::BlazeError,
+    packet::{IntoResponse, Packet, PacketHeader, PacketResponse},
     SessionLink,
 };
-use crate::utils::{
-    components::{component_key, ComponentKey},
-    types::BoxFuture,
+use crate::{
+    session::models::errors::GlobalError,
+    utils::{
+        components::{component_key, ComponentKey},
+        types::BoxFuture,
+    },
 };
+use bytes::Bytes;
+use log::error;
 use std::{
     collections::HashMap,
-    future::Future,
+    convert::Infallible,
+    future::{ready, Future},
     hash::{BuildHasherDefault, Hasher},
     marker::PhantomData,
 };
-use tdf::DecodeError;
-
-/// Error that can occur while handling a packet
-#[derive(Debug)]
-pub enum HandleError {
-    /// There wasn't an available handler for the provided packet
-    MissingHandler,
-    /// Decoding error while reading the packet
-    Decoding(DecodeError),
-}
+use tdf::{serialize_vec, TdfDeserialize, TdfDeserializer, TdfSerialize};
 
 /// Type for handlers that include a request and response
 pub struct HandlerRequest<Req, Res>(PhantomData<fn(Req) -> Res>);
-/// Type for handlers that include a response but no request
-pub struct HandlerOmitRequest<Res>(PhantomData<fn() -> Res>);
 
-type HandleResult<'a> = Result<BoxFuture<'a, Packet>, HandleError>;
-
-pub trait Handler<'a, Type>: Send + Sync + 'static {
-    fn handle(&self, state: &'a SessionLink, packet: &'a Packet) -> HandleResult<'a>;
+pub trait Handler<'a, Args>: Send + Sync + 'static {
+    fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
+    where
+        'f: 'a;
 }
 
-impl<'a, Fun, Fut, Req, Res> Handler<'a, HandlerRequest<Req, Res>> for Fun
+impl<'a, Fun, Fut, A, B, Res> Handler<'a, HandlerRequest<(A, B), Res>> for Fun
 where
-    Fun: Fn(&'a SessionLink, Req) -> Fut + Send + Sync + 'static,
+    Fun: Fn(A, B) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'a,
-    Req: FromRequest,
+    A: FromPacketRequest + Send,
+    B: FromPacketRequest + Send,
     Res: IntoResponse,
 {
-    fn handle(&self, state: &'a SessionLink, packet: &'a Packet) -> HandleResult<'a> {
-        let req = Req::from_request(packet).map_err(HandleError::Decoding)?;
-        let future = self(state, req);
-        Ok(Box::pin(async move {
-            let res = future.await;
-            res.into_response(packet)
-        }))
+    fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
+    where
+        'f: 'a,
+    {
+        Box::pin(async move {
+            let req = req;
+            let a = match A::from_packet_request(&req).await {
+                Ok(value) => value,
+                Err(error) => return error.into_response(req.packet),
+            };
+            let b = match B::from_packet_request(&req).await {
+                Ok(value) => value,
+                Err(error) => return error.into_response(req.packet),
+            };
+            let res = self(a, b).await;
+            res.into_response(req.packet)
+        })
+    }
+}
+impl<'a, Fun, Fut, A, Res> Handler<'a, HandlerRequest<(A), Res>> for Fun
+where
+    Fun: Fn(A) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Res> + Send + 'a,
+    A: FromPacketRequest + Send,
+    Res: IntoResponse,
+{
+    fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
+    where
+        'f: 'a,
+    {
+        Box::pin(async move {
+            let req = req;
+            let a = match A::from_packet_request(&req).await {
+                Ok(value) => value,
+                Err(error) => return error.into_response(req.packet),
+            };
+
+            let res = self(a).await;
+            res.into_response(req.packet)
+        })
     }
 }
 
-impl<'a, Fun, Fut, Res> Handler<'a, HandlerOmitRequest<Res>> for Fun
+pub struct Nothing;
+
+impl<'a, Fun, Fut, Res> Handler<'a, HandlerRequest<Nothing, Res>> for Fun
 where
-    Fun: Fn(&'a SessionLink) -> Fut + Send + Sync + 'static,
+    Fun: Fn() -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'a,
     Res: IntoResponse,
 {
-    fn handle(&self, state: &'a SessionLink, packet: &'a Packet) -> HandleResult<'a> {
-        let future = self(state);
-        Ok(Box::pin(async move {
-            let res = future.await;
-            res.into_response(packet)
-        }))
+    fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
+    where
+        'f: 'a,
+    {
+        Box::pin(async move {
+            let res = self().await;
+            res.into_response(req.packet)
+        })
     }
 }
 
@@ -75,7 +109,9 @@ struct HandlerRoute<H, Format> {
 }
 
 trait Route: Send + Sync {
-    fn handle<'s>(&self, state: &'s SessionLink, packet: &'s Packet) -> HandleResult<'s>;
+    fn handle<'f, 's>(&'f self, req: PacketRequest<'s>) -> BoxFuture<'s, Packet>
+    where
+        'f: 's;
 }
 
 impl<H, Format> Route for HandlerRoute<H, Format>
@@ -83,8 +119,117 @@ where
     for<'a> H: Handler<'a, Format>,
     Format: 'static,
 {
-    fn handle<'s>(&self, state: &'s SessionLink, packet: &'s Packet) -> HandleResult<'s> {
-        self.handler.handle(state, packet)
+    fn handle<'f, 's>(&'f self, req: PacketRequest<'s>) -> BoxFuture<'s, Packet>
+    where
+        'f: 's,
+    {
+        self.handler.handle(req)
+    }
+}
+
+pub struct PacketRequest<'a> {
+    pub state: &'a SessionLink,
+    pub packet: &'a Packet,
+}
+
+pub trait FromPacketRequest: Sized {
+    type Rejection: IntoResponse;
+
+    fn from_packet_request<'a>(
+        req: &PacketRequest<'a>,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a;
+}
+
+impl IntoResponse for Infallible {
+    fn into_response(self, _: &Packet) -> Packet {
+        unreachable!("Request should **never** fail")
+    }
+}
+
+impl FromPacketRequest for SessionLink {
+    type Rejection = Infallible;
+
+    fn from_packet_request<'a>(
+        req: &PacketRequest<'a>,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        let state = req.state;
+        Box::pin(ready(Ok(state.clone())))
+    }
+}
+
+pub struct Blaze<V>(pub V);
+
+impl<V> FromPacketRequest for Blaze<V>
+where
+    for<'a> V: TdfDeserialize<'a> + Send + 'a,
+{
+    type Rejection = BlazeError;
+
+    fn from_packet_request<'a>(
+        req: &PacketRequest<'a>,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        let mut r = TdfDeserializer::new(&req.packet.contents);
+
+        Box::pin(ready(V::deserialize(&mut r).map(Blaze).map_err(|err| {
+            error!("Error while decoding packet: {:?}", err);
+            GlobalError::System.into()
+        })))
+    }
+}
+
+pub struct BlazeWithHeader<V> {
+    pub req: V,
+    pub header: PacketHeader,
+}
+
+impl<V> BlazeWithHeader<V>
+where
+    for<'a> V: TdfDeserialize<'a> + Send + 'a,
+{
+    pub fn response<E>(&self, res: E) -> PacketResponse
+    where
+        E: TdfSerialize,
+    {
+        PacketResponse(Packet {
+            header: self.header.response(),
+            contents: Bytes::from(serialize_vec(&res)),
+        })
+    }
+}
+
+impl<V> FromPacketRequest for BlazeWithHeader<V>
+where
+    for<'a> V: TdfDeserialize<'a> + Send + 'a,
+{
+    type Rejection = BlazeError;
+
+    fn from_packet_request<'a>(
+        req: &PacketRequest<'a>,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        let mut r = TdfDeserializer::new(&req.packet.contents);
+
+        Box::pin(ready(
+            V::deserialize(&mut r)
+                .map(|value| BlazeWithHeader {
+                    req: value,
+                    header: req.packet.header,
+                })
+                .map_err(|err| {
+                    error!("Error while decoding packet: {:?}", err);
+                    GlobalError::System.into()
+                }),
+        ))
     }
 }
 
@@ -117,14 +262,22 @@ impl Router {
         );
     }
 
-    pub fn handle<'a>(&self, state: &'a SessionLink, packet: &'a Packet) -> HandleResult<'a> {
-        self.routes
-            .get(&component_key(
-                packet.header.component,
-                packet.header.command,
-            ))
-            .ok_or(HandleError::MissingHandler)?
-            .handle(state, packet)
+    pub fn handle<'r, 'a>(
+        &'r self,
+        state: &'a SessionLink,
+        packet: &'a Packet,
+    ) -> Option<BoxFuture<'a, Packet>>
+    where
+        'r: 'a,
+    {
+        Some(
+            self.routes
+                .get(&component_key(
+                    packet.header.component,
+                    packet.header.command,
+                ))?
+                .handle(PacketRequest { state, packet }),
+        )
     }
 }
 

@@ -24,10 +24,7 @@ use log::{debug, error, log_enabled};
 use std::{fmt::Debug, io, net::SocketAddr};
 use tdf::{ObjectId, TdfSerialize, TdfType, TdfTyped};
 
-use self::{
-    packet::{Packet, PacketDebug},
-    router::HandleError,
-};
+use self::packet::{Packet, PacketDebug};
 
 pub mod models;
 pub mod packet;
@@ -243,26 +240,17 @@ impl StreamHandler<io::Result<Packet>> for Session {
     fn handle(&mut self, msg: io::Result<Packet>, ctx: &mut ServiceContext<Self>) {
         if let Ok(packet) = msg {
             self.debug_log_packet("Read", &packet);
-            let mut addr = ctx.link();
+            let addr = ctx.link();
             tokio::spawn(async move {
                 let router = App::router();
-                let response = match router.handle(&mut addr, &packet) {
+                let response = match router.handle(&addr, &packet) {
                     // Await the handler response future
-                    Ok(fut) => fut.await,
+                    Some(fut) => fut.await,
 
-                    // Handle any errors that occur
-                    Err(err) => {
-                        match err {
-                            // No handler set-up just respond with a default empty response
-                            HandleError::MissingHandler => {
-                                debug!("Missing packet handler");
-                                packet.respond_empty()
-                            }
-                            HandleError::Decoding(err) => {
-                                error!("Error while decoding packet: {:?}", err);
-                                return;
-                            }
-                        }
+                    // Handle no handler for packet
+                    None => {
+                        debug!("Missing packet handler");
+                        packet.respond_empty()
                     }
                 };
                 // Push the response to the client
