@@ -103,7 +103,7 @@ impl TdfSerialize for LeaderboardResponse<'_> {
                 value.serialize(w);
             }
             Self::Many(values) => {
-                w.tag_list_slice(b"LDLS", *values);
+                w.tag_list_slice(b"LDLS", values);
             }
         }
     }
