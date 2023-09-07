@@ -24,10 +24,7 @@ use std::{
 };
 use tdf::{serialize_vec, TdfDeserialize, TdfDeserializer, TdfSerialize};
 
-/// Type for handlers that include a request and response
-pub struct HandlerRequest<Req, Res>(PhantomData<fn(Req) -> Res>);
-
-pub trait Handler<'a, Args>: Send + Sync + 'static {
+pub trait Handler<'a, Args, Res>: Send + Sync + 'static {
     fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
     where
         'f: 'a;
@@ -35,11 +32,11 @@ pub trait Handler<'a, Args>: Send + Sync + 'static {
 
 /// Wrapper around [Handler] that stores the required associated
 /// generic types allowing it to have its typed erased using [ErasedHandler]
-struct HandlerRoute<H, Format> {
+struct HandlerRoute<H, Args, Res> {
     /// The wrapped handler
     handler: H,
     /// The associated type info
-    _marker: PhantomData<fn(Format)>,
+    _marker: PhantomData<fn(Args) -> Res>,
 }
 
 /// Wrapper around [Handler] that erasings the associated generic types
@@ -50,10 +47,11 @@ trait ErasedHandler: Send + Sync {
         'f: 'a;
 }
 
-impl<H, Format> ErasedHandler for HandlerRoute<H, Format>
+impl<H, Args, Res> ErasedHandler for HandlerRoute<H, Args, Res>
 where
-    for<'a> H: Handler<'a, Format>,
-    Format: 'static,
+    for<'a> H: Handler<'a, Args, Res>,
+    Args: 'static,
+    Res: 'static,
 {
     #[inline]
     fn handle<'f, 'a>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
@@ -81,13 +79,14 @@ impl Router {
         }
     }
 
-    pub fn route<Format>(
+    pub fn route<Args, Res>(
         &mut self,
         component: u16,
         command: u16,
-        route: impl for<'a> Handler<'a, Format>,
+        route: impl for<'a> Handler<'a, Args, Res>,
     ) where
-        Format: 'static,
+        Args: 'static,
+        Res: 'static,
     {
         self.routes.insert(
             component_key(component, command),
@@ -294,10 +293,10 @@ impl IntoPacketResponse for RawBlaze {
     }
 }
 
-impl<A, B> IntoPacketResponse for Result<A, B>
+impl<T, E> IntoPacketResponse for Result<T, E>
 where
-    A: IntoPacketResponse,
-    B: IntoPacketResponse,
+    T: IntoPacketResponse,
+    E: IntoPacketResponse,
 {
     fn into_response(self, req: &Packet) -> Packet {
         match self {
@@ -307,9 +306,9 @@ where
     }
 }
 
-impl<A> IntoPacketResponse for Option<A>
+impl<V> IntoPacketResponse for Option<V>
 where
-    A: IntoPacketResponse,
+    V: IntoPacketResponse,
 {
     fn into_response(self, req: &Packet) -> Packet {
         match self {
@@ -349,7 +348,7 @@ macro_rules! impl_handler {
     ) => {
 
         #[allow(non_snake_case, unused_mut)]
-        impl<'a, Fun, Fut, $($ty,)* Res> Handler<'a, HandlerRequest<($($ty,)*), Res>> for Fun
+        impl<'a, Fun, Fut, $($ty,)* Res> Handler<'a, ($($ty,)*), Res> for Fun
         where
             Fun: Fn($($ty),*) -> Fut + Send + Sync + 'static,
             Fut: Future<Output = Res> + Send + 'a,
