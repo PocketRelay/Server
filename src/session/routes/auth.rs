@@ -81,6 +81,7 @@ pub async fn handle_origin_login(
     session: SessionLink,
     Blaze(req): Blaze<OriginLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
+    let config = App::config();
     let db: &DatabaseConnection = App::database();
 
     let services: &Services = App::services();
@@ -98,7 +99,7 @@ pub async fn handle_origin_login(
         }
     };
 
-    let player: Player = match flow.login(db, req.token).await {
+    let player: Player = match flow.login(db, req.token, config).await {
         Ok(value) => value,
         Err(err) => {
             error!("Failed to login with origin: {}", err);
@@ -284,6 +285,7 @@ pub async fn handle_create_account(
     Blaze(req): Blaze<CreateAccountRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     let email = req.email;
+    let config = App::config();
     if !EmailAddress::is_valid(&email) {
         return Err(AuthenticationError::InvalidEmail.into());
     }
@@ -310,7 +312,8 @@ pub async fn handle_create_account(
     let display_name: String = email.chars().take(99).collect::<String>();
 
     // Create a new player
-    let player: Player = Player::create(db, email, display_name, Some(hashed_password)).await?;
+    let player: Player =
+        Player::create(db, email, display_name, Some(hashed_password), config).await?;
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down

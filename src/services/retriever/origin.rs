@@ -3,6 +3,7 @@
 
 use super::{models::OriginLoginResponse, OfficialSession, RetrieverResult};
 use crate::{
+    config::RuntimeConfig,
     database::entities::{Player, PlayerData},
     session::models::{auth::OriginLoginRequest, util::SettingsResponse},
     utils::components::{authentication, util},
@@ -63,6 +64,7 @@ impl OriginFlow {
         &mut self,
         db: &DatabaseConnection,
         token: String,
+        config: &RuntimeConfig,
     ) -> Result<Player, OriginError> {
         // Authenticate with the official servers
         let details = self
@@ -75,7 +77,8 @@ impl OriginFlow {
             return Ok(player);
         }
 
-        let player: Player = Player::create(db, details.email, details.display_name, None).await?;
+        let player: Player =
+            Player::create(db, details.email, details.display_name, None, config).await?;
 
         // If data fetching is ena
         if self.data {

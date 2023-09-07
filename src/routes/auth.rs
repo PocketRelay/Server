@@ -133,7 +133,7 @@ pub async fn create(Json(req): Json<CreateRequest>) -> AuthRes<TokenResponse> {
     }
 
     let password: String = hash_password(&password)?;
-    let player: Player = Player::create(db, email, username, Some(password)).await?;
+    let player: Player = Player::create(db, email, username, Some(password), config).await?;
 
     Ok(player.into())
 }
