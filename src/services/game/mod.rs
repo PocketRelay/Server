@@ -521,7 +521,7 @@ impl Handler<SnapshotMessage> for Game {
 
 /// Message for getting an encoded packet body of the game data
 #[derive(Message)]
-#[msg(rtype = "PacketBody")]
+#[msg(rtype = "RawBlaze")]
 pub struct GetGameDataMessage;
 
 /// Handler for getting an encoded packet body of the game data

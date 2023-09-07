@@ -33,95 +33,32 @@ pub trait Handler<'a, Args>: Send + Sync + 'static {
         'f: 'a;
 }
 
-impl<'a, Fun, Fut, A, B, Res> Handler<'a, HandlerRequest<(A, B), Res>> for Fun
-where
-    Fun: Fn(A, B) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = Res> + Send + 'a,
-    A: FromPacketRequest + Send,
-    B: FromPacketRequest + Send,
-    Res: IntoPacketResponse,
-{
-    fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
-    where
-        'f: 'a,
-    {
-        Box::pin(async move {
-            let req = req;
-            let a = match A::from_packet_request(&req).await {
-                Ok(value) => value,
-                Err(error) => return error.into_response(req.packet),
-            };
-            let b = match B::from_packet_request(&req).await {
-                Ok(value) => value,
-                Err(error) => return error.into_response(req.packet),
-            };
-            let res = self(a, b).await;
-            res.into_response(req.packet)
-        })
-    }
-}
-impl<'a, Fun, Fut, A, Res> Handler<'a, HandlerRequest<A, Res>> for Fun
-where
-    Fun: Fn(A) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = Res> + Send + 'a,
-    A: FromPacketRequest + Send,
-    Res: IntoPacketResponse,
-{
-    fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
-    where
-        'f: 'a,
-    {
-        Box::pin(async move {
-            let req = req;
-            let a = match A::from_packet_request(&req).await {
-                Ok(value) => value,
-                Err(error) => return error.into_response(req.packet),
-            };
-
-            let res = self(a).await;
-            res.into_response(req.packet)
-        })
-    }
-}
-
-pub struct Nothing;
-
-impl<'a, Fun, Fut, Res> Handler<'a, HandlerRequest<Nothing, Res>> for Fun
-where
-    Fun: Fn() -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = Res> + Send + 'a,
-    Res: IntoPacketResponse,
-{
-    fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
-    where
-        'f: 'a,
-    {
-        Box::pin(async move {
-            let res = self().await;
-            res.into_response(req.packet)
-        })
-    }
-}
-
+/// Wrapper around [Handler] that stores the required associated
+/// generic types allowing it to have its typed erased using [ErasedHandler]
 struct HandlerRoute<H, Format> {
+    /// The wrapped handler
     handler: H,
+    /// The associated type info
     _marker: PhantomData<fn(Format)>,
 }
 
-trait Route: Send + Sync {
-    fn handle<'f, 's>(&'f self, req: PacketRequest<'s>) -> BoxFuture<'s, Packet>
+/// Wrapper around [Handler] that erasings the associated generic types
+/// so that it can be stored within the [Router]
+trait ErasedHandler: Send + Sync {
+    fn handle<'f, 'a>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
     where
-        'f: 's;
+        'f: 'a;
 }
 
-impl<H, Format> Route for HandlerRoute<H, Format>
+impl<H, Format> ErasedHandler for HandlerRoute<H, Format>
 where
     for<'a> H: Handler<'a, Format>,
     Format: 'static,
 {
-    fn handle<'f, 's>(&'f self, req: PacketRequest<'s>) -> BoxFuture<'s, Packet>
+    #[inline]
+    fn handle<'f, 'a>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
     where
-        'f: 's,
+        'f: 'a,
     {
         self.handler.handle(req)
     }
@@ -134,7 +71,7 @@ pub struct PacketRequest<'a> {
 
 pub struct Router {
     /// Map for looking up a route based on the component key
-    routes: HashMap<ComponentKey, Box<dyn Route>, BuildHasherDefault<ComponentKeyHasher>>,
+    routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<ComponentKeyHasher>>,
 }
 
 impl Router {
@@ -207,20 +144,6 @@ pub trait FromPacketRequest: Sized {
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a;
-}
-
-impl FromPacketRequest for SessionLink {
-    type Rejection = Infallible;
-
-    fn from_packet_request<'a>(
-        req: &PacketRequest<'a>,
-    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
-    where
-        Self: 'a,
-    {
-        let state = req.state;
-        Box::pin(ready(Ok(state.clone())))
-    }
 }
 
 /// Wrapper for providing deserialization [FromPacketRequest] and
@@ -319,22 +242,24 @@ where
     }
 }
 
-impl IntoPacketResponse for Packet {
-    /// Simply provide the already compute response
-    fn into_response(self, _req: &Packet) -> Packet {
-        self
+impl FromPacketRequest for SessionLink {
+    type Rejection = Infallible;
+
+    fn from_packet_request<'a>(
+        req: &PacketRequest<'a>,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        let state = req.state;
+        Box::pin(ready(Ok(state.clone())))
     }
 }
 
-/// Trait for a type that can be converted into a packet
-/// response using the header from the request packet
 pub trait IntoPacketResponse: 'static {
-    /// Into packet conversion
     fn into_response(self, req: &Packet) -> Packet;
 }
 
-/// Into response imeplementation for encodable responses
-/// which just calls res.respond
 impl IntoPacketResponse for () {
     fn into_response(self, req: &Packet) -> Packet {
         Packet::response_empty(req)
@@ -343,7 +268,14 @@ impl IntoPacketResponse for () {
 
 impl IntoPacketResponse for Infallible {
     fn into_response(self, _: &Packet) -> Packet {
-        unreachable!("Request should **never** fail")
+        // Infallible can never be constructed so this can never happen
+        unreachable!()
+    }
+}
+
+impl IntoPacketResponse for Packet {
+    fn into_response(self, _req: &Packet) -> Packet {
+        self
     }
 }
 
@@ -358,15 +290,10 @@ where
 
 impl IntoPacketResponse for RawBlaze {
     fn into_response(self, req: &Packet) -> Packet {
-        Packet {
-            header: req.header.response(),
-            contents: self.0,
-        }
+        Packet::new_response(req, self.0)
     }
 }
 
-/// Into response imeplementation for encodable responses
-/// which just calls res.respond
 impl<A, B> IntoPacketResponse for Result<A, B>
 where
     A: IntoPacketResponse,
@@ -379,8 +306,7 @@ where
         }
     }
 }
-/// Into response imeplementation for encodable responses
-/// which just calls res.respond
+
 impl<A> IntoPacketResponse for Option<A>
 where
     A: IntoPacketResponse,
@@ -392,3 +318,65 @@ where
         }
     }
 }
+
+// Macro for expanding a macro for every tuple variant
+#[rustfmt::skip]
+macro_rules! all_the_tuples {
+    ($name:ident) => {
+        $name!([]);
+        $name!([T1]);
+        $name!([T1, T2]);
+        $name!([T1, T2, T3]);
+        $name!([T1, T2, T3, T4]);
+        $name!([T1, T2, T3, T4, T5]);
+        $name!([T1, T2, T3, T4, T5, T6]);
+        $name!([T1, T2, T3, T4, T5, T6, T7]);
+        $name!([T1, T2, T3, T4, T5, T6, T7, T8]);
+        $name!([T1, T2, T3, T4, T5, T6, T7, T8, T9]);
+        $name!([T1, T2, T3, T4, T5, T6, T7, T8, T9, T10]);
+        $name!([T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11]);
+        $name!([T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12]);
+        $name!([T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13]);
+        $name!([T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14]);
+        $name!([T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15]);
+    };
+}
+
+// Macro for implementing a handler for a tuple of arguments
+macro_rules! impl_handler {
+    (
+        [$($ty:ident),*]
+    ) => {
+
+        #[allow(non_snake_case, unused_mut)]
+        impl<'a, Fun, Fut, $($ty,)* Res> Handler<'a, HandlerRequest<($($ty,)*), Res>> for Fun
+        where
+            Fun: Fn($($ty),*) -> Fut + Send + Sync + 'static,
+            Fut: Future<Output = Res> + Send + 'a,
+            $( $ty: FromPacketRequest + Send, )*
+            Res: IntoPacketResponse,
+        {
+            fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
+            where
+                'f: 'a,
+            {
+                Box::pin(async move {
+                    let req = req;
+                    $(
+
+                        let $ty = match $ty::from_packet_request(&req).await {
+                            Ok(value) => value,
+                            Err(rejection) => return rejection.into_response(req.packet),
+                        };
+                    )*
+
+                    let res = self($($ty),* ).await;
+                    res.into_response(req.packet)
+                })
+            }
+        }
+    };
+}
+
+// Implement a handler for every tuple
+all_the_tuples!(impl_handler);
