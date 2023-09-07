@@ -328,7 +328,7 @@ impl OfficialSession {
         for<'a> Res: TdfDeserialize<'a> + 'a,
     {
         let response = self.request_raw(component, command, contents).await?;
-        let contents = response.decode::<Res>()?;
+        let contents = response.deserialize::<Res>()?;
         Ok(contents)
     }
 
@@ -359,7 +359,7 @@ impl OfficialSession {
         for<'a> Res: TdfDeserialize<'a> + 'a,
     {
         let response = self.request_empty_raw(component, command).await?;
-        let contents = response.decode::<Res>()?;
+        let contents = response.deserialize::<Res>()?;
         Ok(contents)
     }
 

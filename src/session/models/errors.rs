@@ -4,7 +4,7 @@ use sea_orm::DbErr;
 
 use crate::{
     services::tokens::VerifyError,
-    session::{packet::Packet, router::IntoResponse},
+    session::{packet::Packet, router::IntoPacketResponse},
 };
 
 use super::{auth::AuthenticationError, game_manager::GameManagerError, util::UtilError};
@@ -107,8 +107,8 @@ impl From<UtilError> for BlazeError {
     }
 }
 
-impl IntoResponse for BlazeError {
+impl IntoPacketResponse for BlazeError {
     fn into_response(self, req: &Packet) -> Packet {
-        req.respond_error_empty(self.0)
+        Packet::error_empty(req, self.0)
     }
 }

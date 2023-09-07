@@ -5,7 +5,7 @@ use crate::{
         matchmaking::{rules::RuleSet, CheckGameMessage},
     },
     session::{
-        packet::Packet, router::PacketBody, DetailsMessage, InformSessions, PushExt, Session,
+        packet::Packet, router::RawBlaze, DetailsMessage, InformSessions, PushExt, Session,
         SetGameMessage,
     },
     state::App,
@@ -534,7 +534,7 @@ impl Handler<GetGameDataMessage> for Game {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         let data = GetGameDetails { game: self };
-        let data: PacketBody = data.into();
+        let data: RawBlaze = data.into();
         Mr(data)
     }
 }

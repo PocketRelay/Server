@@ -2,7 +2,8 @@ use crate::{
     services::leaderboard::{models::*, QueryMessage},
     session::{
         models::{errors::ServerResult, stats::*},
-        router::{Blaze, BlazeWithHeader, PacketResponse},
+        packet::Packet,
+        router::{Blaze, BlazeWithHeader},
     },
     state::App,
 };
@@ -10,7 +11,7 @@ use std::sync::Arc;
 
 pub async fn handle_normal_leaderboard(
     req: BlazeWithHeader<LeaderboardRequest>,
-) -> ServerResult<PacketResponse> {
+) -> ServerResult<Packet> {
     let query = &req.req;
     let group = get_group(&query.name).await?;
     let response = match group.get_normal(query.start, query.count) {
@@ -22,7 +23,7 @@ pub async fn handle_normal_leaderboard(
 
 pub async fn handle_centered_leaderboard(
     req: BlazeWithHeader<CenteredLeaderboardRequest>,
-) -> ServerResult<PacketResponse> {
+) -> ServerResult<Packet> {
     let query = &req.req;
     let group = get_group(&query.name).await?;
     let response = match group.get_centered(query.center, query.count) {
@@ -34,7 +35,7 @@ pub async fn handle_centered_leaderboard(
 
 pub async fn handle_filtered_leaderboard(
     req: BlazeWithHeader<FilteredLeaderboardRequest>,
-) -> ServerResult<PacketResponse> {
+) -> ServerResult<Packet> {
     let query = &req.req;
     let group = get_group(&query.name).await?;
     let response = match group.get_entry(query.id) {

@@ -15,7 +15,7 @@ use crate::{
             errors::{GlobalError, ServerResult},
             game_manager::*,
         },
-        router::{Blaze, PacketBody},
+        router::{Blaze, RawBlaze},
         GetGamePlayerMessage, GetPlayerGameMessage, GetPlayerIdMessage, SessionLink,
     },
     state::App,
@@ -87,7 +87,7 @@ pub async fn handle_join_game(
 
 pub async fn handle_get_game_data(
     Blaze(mut req): Blaze<GetGameDataRequest>,
-) -> ServerResult<PacketBody> {
+) -> ServerResult<RawBlaze> {
     let services = App::services();
 
     if req.game_list.is_empty() {

@@ -250,7 +250,7 @@ impl StreamHandler<io::Result<Packet>> for Session {
                     // Handle no handler for packet
                     None => {
                         debug!("Missing packet handler");
-                        packet.respond_empty()
+                        Packet::response_empty(&packet)
                     }
                 };
                 // Push the response to the client

@@ -39,7 +39,7 @@ where
     Fut: Future<Output = Res> + Send + 'a,
     A: FromPacketRequest + Send,
     B: FromPacketRequest + Send,
-    Res: IntoResponse,
+    Res: IntoPacketResponse,
 {
     fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
     where
@@ -65,7 +65,7 @@ where
     Fun: Fn(A) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'a,
     A: FromPacketRequest + Send,
-    Res: IntoResponse,
+    Res: IntoPacketResponse,
 {
     fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
     where
@@ -90,7 +90,7 @@ impl<'a, Fun, Fut, Res> Handler<'a, HandlerRequest<Nothing, Res>> for Fun
 where
     Fun: Fn() -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'a,
-    Res: IntoResponse,
+    Res: IntoPacketResponse,
 {
     fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
     where
@@ -130,116 +130,6 @@ where
 pub struct PacketRequest<'a> {
     pub state: &'a SessionLink,
     pub packet: &'a Packet,
-}
-
-pub trait FromPacketRequest: Sized {
-    type Rejection: IntoResponse;
-
-    fn from_packet_request<'a>(
-        req: &PacketRequest<'a>,
-    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
-    where
-        Self: 'a;
-}
-
-impl IntoResponse for Infallible {
-    fn into_response(self, _: &Packet) -> Packet {
-        unreachable!("Request should **never** fail")
-    }
-}
-
-impl FromPacketRequest for SessionLink {
-    type Rejection = Infallible;
-
-    fn from_packet_request<'a>(
-        req: &PacketRequest<'a>,
-    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
-    where
-        Self: 'a,
-    {
-        let state = req.state;
-        Box::pin(ready(Ok(state.clone())))
-    }
-}
-
-pub struct Blaze<V>(pub V);
-
-impl<V> FromPacketRequest for Blaze<V>
-where
-    for<'a> V: TdfDeserialize<'a> + Send + 'a,
-{
-    type Rejection = BlazeError;
-
-    fn from_packet_request<'a>(
-        req: &PacketRequest<'a>,
-    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
-    where
-        Self: 'a,
-    {
-        let mut r = TdfDeserializer::new(&req.packet.contents);
-
-        Box::pin(ready(V::deserialize(&mut r).map(Blaze).map_err(|err| {
-            error!("Error while decoding packet: {:?}", err);
-            GlobalError::System.into()
-        })))
-    }
-}
-
-impl<V> IntoResponse for Blaze<V>
-where
-    V: TdfSerialize + 'static,
-{
-    fn into_response(self, req: &Packet) -> Packet {
-        req.respond(self.0)
-    }
-}
-
-pub struct BlazeWithHeader<V> {
-    pub req: V,
-    pub header: PacketHeader,
-}
-
-impl<V> BlazeWithHeader<V>
-where
-    for<'a> V: TdfDeserialize<'a> + Send + 'a,
-{
-    pub fn response<E>(&self, res: E) -> PacketResponse
-    where
-        E: TdfSerialize,
-    {
-        PacketResponse(Packet {
-            header: self.header.response(),
-            contents: Bytes::from(serialize_vec(&res)),
-        })
-    }
-}
-
-impl<V> FromPacketRequest for BlazeWithHeader<V>
-where
-    for<'a> V: TdfDeserialize<'a> + Send + 'a,
-{
-    type Rejection = BlazeError;
-
-    fn from_packet_request<'a>(
-        req: &PacketRequest<'a>,
-    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
-    where
-        Self: 'a,
-    {
-        let mut r = TdfDeserializer::new(&req.packet.contents);
-
-        Box::pin(ready(
-            V::deserialize(&mut r)
-                .map(|value| BlazeWithHeader {
-                    req: value,
-                    header: req.packet.header,
-                })
-                .map_err(|err| {
-                    error!("Error while decoding packet: {:?}", err);
-                    GlobalError::System.into()
-                }),
-        ))
-    }
 }
 
 pub struct Router {
@@ -309,33 +199,164 @@ impl Hasher for ComponentKeyHasher {
     }
 }
 
-/// Wrapping structure for raw Bytes structures that can
-/// be used as packet response
-pub struct PacketBody(Bytes);
+pub trait FromPacketRequest: Sized {
+    type Rejection: IntoPacketResponse;
 
-impl<T> From<T> for PacketBody
+    fn from_packet_request<'a>(
+        req: &PacketRequest<'a>,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a;
+}
+
+impl FromPacketRequest for SessionLink {
+    type Rejection = Infallible;
+
+    fn from_packet_request<'a>(
+        req: &PacketRequest<'a>,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        let state = req.state;
+        Box::pin(ready(Ok(state.clone())))
+    }
+}
+
+/// Wrapper for providing deserialization [FromPacketRequest] and
+/// serialization [IntoPacketResponse] for TDF contents
+pub struct Blaze<V>(pub V);
+
+/// Wrapper for providing deserialization [FromPacketRequest] and
+/// serialization [IntoPacketResponse] for TDF contents
+///
+/// Stores the packet header so that it can be used for generating
+/// responses
+pub struct BlazeWithHeader<V> {
+    pub req: V,
+    pub header: PacketHeader,
+}
+
+/// [Blaze] tdf type for contents that have already been
+/// serialized ahead of time
+pub struct RawBlaze(Bytes);
+
+impl<T> From<T> for RawBlaze
 where
     T: TdfSerialize,
 {
     fn from(value: T) -> Self {
         let bytes = serialize_vec(&value);
         let bytes = Bytes::from(bytes);
-        PacketBody(bytes)
+        RawBlaze(bytes)
     }
 }
 
-/// Type for route responses that have already been turned into
-/// packets usually for lifetime reasons
-pub struct PacketResponse(pub Packet);
+impl<V> FromPacketRequest for Blaze<V>
+where
+    for<'a> V: TdfDeserialize<'a> + Send + 'a,
+{
+    type Rejection = BlazeError;
 
-impl IntoResponse for PacketResponse {
+    fn from_packet_request<'a>(
+        req: &PacketRequest<'a>,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        let result = match req.packet.deserialize::<'a, V>() {
+            Ok(value) => Ok(Blaze(value)),
+            Err(err) => {
+                error!("Error while decoding packet: {:?}", err);
+                Err(GlobalError::System.into())
+            }
+        };
+
+        Box::pin(ready(result))
+    }
+}
+
+impl<V> BlazeWithHeader<V>
+where
+    for<'a> V: TdfDeserialize<'a> + Send + 'a,
+{
+    pub fn response<E>(&self, res: E) -> Packet
+    where
+        E: TdfSerialize,
+    {
+        Packet {
+            header: self.header.response(),
+            contents: Bytes::from(serialize_vec(&res)),
+        }
+    }
+}
+
+impl<V> FromPacketRequest for BlazeWithHeader<V>
+where
+    for<'a> V: TdfDeserialize<'a> + Send + 'a,
+{
+    type Rejection = BlazeError;
+
+    fn from_packet_request<'a>(
+        req: &PacketRequest<'a>,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        let mut r = TdfDeserializer::new(&req.packet.contents);
+
+        Box::pin(ready(
+            V::deserialize(&mut r)
+                .map(|value| BlazeWithHeader {
+                    req: value,
+                    header: req.packet.header,
+                })
+                .map_err(|err| {
+                    error!("Error while decoding packet: {:?}", err);
+                    GlobalError::System.into()
+                }),
+        ))
+    }
+}
+
+impl IntoPacketResponse for Packet {
     /// Simply provide the already compute response
     fn into_response(self, _req: &Packet) -> Packet {
-        self.0
+        self
     }
 }
 
-impl IntoResponse for PacketBody {
+/// Trait for a type that can be converted into a packet
+/// response using the header from the request packet
+pub trait IntoPacketResponse: 'static {
+    /// Into packet conversion
+    fn into_response(self, req: &Packet) -> Packet;
+}
+
+/// Into response imeplementation for encodable responses
+/// which just calls res.respond
+impl IntoPacketResponse for () {
+    fn into_response(self, req: &Packet) -> Packet {
+        Packet::response_empty(req)
+    }
+}
+
+impl IntoPacketResponse for Infallible {
+    fn into_response(self, _: &Packet) -> Packet {
+        unreachable!("Request should **never** fail")
+    }
+}
+
+impl<V> IntoPacketResponse for Blaze<V>
+where
+    V: TdfSerialize + 'static,
+{
+    fn into_response(self, req: &Packet) -> Packet {
+        Packet::response(req, self.0)
+    }
+}
+
+impl IntoPacketResponse for RawBlaze {
     fn into_response(self, req: &Packet) -> Packet {
         Packet {
             header: req.header.response(),
@@ -344,27 +365,12 @@ impl IntoResponse for PacketBody {
     }
 }
 
-/// Trait for a type that can be converted into a packet
-/// response using the header from the request packet
-pub trait IntoResponse: 'static {
-    /// Into packet conversion
-    fn into_response(self, req: &Packet) -> Packet;
-}
-
 /// Into response imeplementation for encodable responses
 /// which just calls res.respond
-impl IntoResponse for () {
-    fn into_response(self, req: &Packet) -> Packet {
-        req.respond_empty()
-    }
-}
-
-/// Into response imeplementation for encodable responses
-/// which just calls res.respond
-impl<A, B> IntoResponse for Result<A, B>
+impl<A, B> IntoPacketResponse for Result<A, B>
 where
-    A: IntoResponse,
-    B: IntoResponse,
+    A: IntoPacketResponse,
+    B: IntoPacketResponse,
 {
     fn into_response(self, req: &Packet) -> Packet {
         match self {
@@ -375,14 +381,14 @@ where
 }
 /// Into response imeplementation for encodable responses
 /// which just calls res.respond
-impl<A> IntoResponse for Option<A>
+impl<A> IntoPacketResponse for Option<A>
 where
-    A: IntoResponse,
+    A: IntoPacketResponse,
 {
     fn into_response(self, req: &Packet) -> Packet {
         match self {
             Some(value) => value.into_response(req),
-            None => req.respond_empty(),
+            None => Packet::response_empty(req),
         }
     }
 }
