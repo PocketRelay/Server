@@ -24,10 +24,8 @@ use std::{
 };
 use tdf::{serialize_vec, TdfDeserialize, TdfDeserializer, TdfSerialize};
 
-pub trait Handler<'a, Args, Res>: Send + Sync + 'static {
-    fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
-    where
-        'f: 'a;
+pub trait Handler<Args, Res>: Send + Sync + 'static {
+    fn handle(&self, req: PacketRequest) -> BoxFuture<'_, Packet>;
 }
 
 /// Wrapper around [Handler] that stores the required associated
@@ -42,29 +40,26 @@ struct HandlerRoute<H, Args, Res> {
 /// Wrapper around [Handler] that erasings the associated generic types
 /// so that it can be stored within the [Router]
 trait ErasedHandler: Send + Sync {
-    fn handle<'f, 'a>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
-    where
-        'f: 'a;
+    fn handle(&self, req: PacketRequest) -> BoxFuture<'_, Packet>;
 }
 
+/// Erased handler implementation for all [Handler] implementations using [HandlerRoute]
 impl<H, Args, Res> ErasedHandler for HandlerRoute<H, Args, Res>
 where
-    for<'a> H: Handler<'a, Args, Res>,
+    H: Handler<Args, Res>,
     Args: 'static,
     Res: 'static,
 {
     #[inline]
-    fn handle<'f, 'a>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
-    where
-        'f: 'a,
-    {
+    fn handle(&self, req: PacketRequest) -> BoxFuture<'_, Packet> {
         self.handler.handle(req)
     }
 }
 
-pub struct PacketRequest<'a> {
-    pub state: &'a SessionLink,
-    pub packet: &'a Packet,
+///
+pub struct PacketRequest {
+    pub state: SessionLink,
+    pub packet: Packet,
 }
 
 pub struct Router {
@@ -79,12 +74,8 @@ impl Router {
         }
     }
 
-    pub fn route<Args, Res>(
-        &mut self,
-        component: u16,
-        command: u16,
-        route: impl for<'a> Handler<'a, Args, Res>,
-    ) where
+    pub fn route<Args, Res>(&mut self, component: u16, command: u16, route: impl Handler<Args, Res>)
+    where
         Args: 'static,
         Res: 'static,
     {
@@ -97,22 +88,20 @@ impl Router {
         );
     }
 
-    pub fn handle<'r, 'a>(
-        &'r self,
-        state: &'a SessionLink,
-        packet: &'a Packet,
-    ) -> Option<BoxFuture<'a, Packet>>
-    where
-        'r: 'a,
-    {
-        Some(
-            self.routes
-                .get(&component_key(
-                    packet.header.component,
-                    packet.header.command,
-                ))?
-                .handle(PacketRequest { state, packet }),
-        )
+    pub fn handle(
+        &self,
+        state: SessionLink,
+        packet: Packet,
+    ) -> Result<BoxFuture<'_, Packet>, Packet> {
+        let route = match self.routes.get(&component_key(
+            packet.header.component,
+            packet.header.command,
+        )) {
+            Some(value) => value,
+            None => return Err(packet),
+        };
+
+        Ok(route.handle(PacketRequest { state, packet }))
     }
 }
 
@@ -139,7 +128,7 @@ pub trait FromPacketRequest: Sized {
     type Rejection: IntoPacketResponse;
 
     fn from_packet_request<'a>(
-        req: &PacketRequest<'a>,
+        req: &'a PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a;
@@ -181,7 +170,7 @@ where
     type Rejection = BlazeError;
 
     fn from_packet_request<'a>(
-        req: &PacketRequest<'a>,
+        req: &'a PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -198,10 +187,7 @@ where
     }
 }
 
-impl<V> BlazeWithHeader<V>
-where
-    for<'a> V: TdfDeserialize<'a> + Send + 'a,
-{
+impl<V> BlazeWithHeader<V> {
     pub fn response<E>(&self, res: E) -> Packet
     where
         E: TdfSerialize,
@@ -220,7 +206,7 @@ where
     type Rejection = BlazeError;
 
     fn from_packet_request<'a>(
-        req: &PacketRequest<'a>,
+        req: &'a PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -245,13 +231,13 @@ impl FromPacketRequest for SessionLink {
     type Rejection = Infallible;
 
     fn from_packet_request<'a>(
-        req: &PacketRequest<'a>,
+        req: &'a PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
     {
-        let state = req.state;
-        Box::pin(ready(Ok(state.clone())))
+        let state = req.state.clone();
+        Box::pin(ready(Ok(state)))
     }
 }
 
@@ -348,16 +334,14 @@ macro_rules! impl_handler {
     ) => {
 
         #[allow(non_snake_case, unused_mut)]
-        impl<'a, Fun, Fut, $($ty,)* Res> Handler<'a, ($($ty,)*), Res> for Fun
+        impl<Fun, Fut, $($ty,)* Res> Handler<($($ty,)*), Res> for Fun
         where
             Fun: Fn($($ty),*) -> Fut + Send + Sync + 'static,
-            Fut: Future<Output = Res> + Send + 'a,
+            Fut: Future<Output = Res> + Send,
             $( $ty: FromPacketRequest + Send, )*
             Res: IntoPacketResponse,
         {
-            fn handle<'f>(&'f self, req: PacketRequest<'a>) -> BoxFuture<'a, Packet>
-            where
-                'f: 'a,
+            fn handle(&self, req: PacketRequest) -> BoxFuture<'_, Packet>
             {
                 Box::pin(async move {
                     let req = req;
@@ -365,12 +349,12 @@ macro_rules! impl_handler {
 
                         let $ty = match $ty::from_packet_request(&req).await {
                             Ok(value) => value,
-                            Err(rejection) => return rejection.into_response(req.packet),
+                            Err(rejection) => return rejection.into_response(&req.packet),
                         };
                     )*
 
                     let res = self($($ty),* ).await;
-                    res.into_response(req.packet)
+                    res.into_response(&req.packet)
                 })
             }
         }

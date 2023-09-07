@@ -243,12 +243,12 @@ impl StreamHandler<io::Result<Packet>> for Session {
             let addr = ctx.link();
             tokio::spawn(async move {
                 let router = App::router();
-                let response = match router.handle(&addr, &packet) {
+                let response = match router.handle(addr.clone(), packet) {
                     // Await the handler response future
-                    Some(fut) => fut.await,
+                    Ok(fut) => fut.await,
 
                     // Handle no handler for packet
-                    None => {
+                    Err(packet) => {
                         debug!("Missing packet handler");
                         Packet::response_empty(&packet)
                     }
