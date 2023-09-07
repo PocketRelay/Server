@@ -267,7 +267,7 @@ impl TdfSerialize for Entitlement {
         w.tag_u8(b"STRC", 0);
         w.tag_str(b"TAG", self.tag);
         w.tag_str_empty(b"TDAY");
-        w.tag_u8(b"TTYPE", self.ty);
+        w.tag_u8(b"TYPE", self.ty);
         w.tag_u8(b"UCNT", 0);
         w.tag_u8(b"VER", 0);
         w.tag_group_end();
