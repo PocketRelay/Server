@@ -175,15 +175,15 @@ where
     where
         Self: 'a,
     {
-        let result = match req.packet.deserialize::<'a, V>() {
-            Ok(value) => Ok(Blaze(value)),
-            Err(err) => {
-                error!("Error while decoding packet: {:?}", err);
-                Err(GlobalError::System.into())
-            }
-        };
-
-        Box::pin(ready(result))
+        Box::pin(ready(
+            req.packet
+                .deserialize::<'a, V>()
+                .map_err(|err| {
+                    error!("Error while decoding packet: {:?}", err);
+                    GlobalError::System.into()
+                })
+                .map(Blaze),
+        ))
     }
 }
 
