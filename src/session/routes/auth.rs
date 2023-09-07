@@ -1,7 +1,10 @@
 use crate::{
     config::RuntimeConfig,
     database::{entities::Player, DatabaseConnection},
-    services::{retriever::GetOriginFlow, Services},
+    services::{
+        retriever::{GetOriginFlow, Retriever},
+        tokens::Tokens,
+    },
     session::{
         models::{
             auth::*,
@@ -13,6 +16,7 @@ use crate::{
     utils::hashing::{hash_password, verify_password},
 };
 use email_address::EmailAddress;
+use interlink::prelude::Link;
 use log::{debug, error};
 use std::{borrow::Cow, sync::Arc};
 use tokio::fs::read_to_string;
@@ -20,7 +24,7 @@ use tokio::fs::read_to_string;
 pub async fn handle_login(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(tokens): Extension<Arc<Tokens>>,
     Blaze(req): Blaze<LoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     let LoginRequest { email, password } = &req;
@@ -49,7 +53,7 @@ pub async fn handle_login(
     // Update the session stored player
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token: String = services.tokens.claim(player.id);
+    let session_token: String = tokens.claim(player.id);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -61,11 +65,11 @@ pub async fn handle_login(
 pub async fn handle_silent_login(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(tokens): Extension<Arc<Tokens>>,
     Blaze(req): Blaze<SilentLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     // Verify the authentication token
-    let player: Player = services.tokens.verify_player(&db, &req.token).await?;
+    let player: Player = tokens.verify_player(&db, &req.token).await?;
 
     // Update the session stored player
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
@@ -81,11 +85,12 @@ pub async fn handle_origin_login(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(tokens): Extension<Arc<Tokens>>,
+    Extension(retriever): Extension<Link<Retriever>>,
     Blaze(req): Blaze<OriginLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     // Obtain an origin flow
-    let mut flow = match services.retriever.send(GetOriginFlow).await {
+    let mut flow = match retriever.send(GetOriginFlow).await {
         Ok(Ok(value)) => value,
         Ok(Err(err)) => {
             error!("Failed to obtain origin flow: {}", err);
@@ -108,7 +113,7 @@ pub async fn handle_origin_login(
     // Update the session stored player
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token: String = services.tokens.claim(player.id);
+    let session_token: String = tokens.claim(player.id);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -282,7 +287,7 @@ pub async fn handle_create_account(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(tokens): Extension<Arc<Tokens>>,
     Blaze(req): Blaze<CreateAccountRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     let email = req.email;
@@ -317,7 +322,7 @@ pub async fn handle_create_account(
     // the server is shutting down
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token = services.tokens.claim(player.id);
+    let session_token = tokens.claim(player.id);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -397,13 +402,13 @@ pub async fn handle_privacy_policy() -> Blaze<LegalContent> {
 /// ```
 pub async fn handle_get_auth_token(
     session: SessionLink,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(tokens): Extension<Arc<Tokens>>,
 ) -> ServerResult<Blaze<GetTokenResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await?
         .ok_or(GlobalError::AuthenticationRequired)?;
     // Create a new token claim for the player to use with the API
-    let token = services.tokens.claim(player_id);
+    let token = tokens.claim(player_id);
     Ok(Blaze(GetTokenResponse { token }))
 }

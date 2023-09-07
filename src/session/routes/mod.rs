@@ -1,10 +1,5 @@
-use std::sync::Arc;
-
-use sea_orm::DatabaseConnection;
-
-use crate::{config::RuntimeConfig, services::Services, utils::components};
-
-use super::router::{BlazeRouter, BlazeRouterBuilder};
+use super::router::BlazeRouterBuilder;
+use crate::utils::components;
 
 mod auth;
 mod game_manager;
@@ -20,18 +15,11 @@ mod util;
 /// rustfmt is disabled because it messes up the neat formatting of the 
 /// route additions
 #[rustfmt::skip]
-pub fn router(
-    database: DatabaseConnection,
-    services: Arc<Services>,
-    config: Arc<RuntimeConfig>
-) -> Arc<BlazeRouter> {
+pub fn router() -> BlazeRouterBuilder {
 
     
     let mut builder = BlazeRouterBuilder::new();
 
-    builder.add_extension(database);
-    builder.add_extension(services);
-    builder.add_extension(config);
 
     // Authentication 
     {
@@ -133,5 +121,5 @@ pub fn router(
         builder.route(a::COMPONENT, a::GET_LISTS, handle_get_lists);
     }
 
-    builder.build()
+    builder
 }

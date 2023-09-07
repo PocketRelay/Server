@@ -278,6 +278,7 @@ impl Packet {
         Self::new_notify(component, command, serialize_bytes(&contents))
     }
 
+    #[inline]
     pub fn request<V>(id: u16, component: u16, command: u16, contents: V) -> Packet
     where
         V: TdfSerialize,

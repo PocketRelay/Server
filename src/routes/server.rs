@@ -5,7 +5,7 @@ use crate::{
     config::{RuntimeConfig, VERSION},
     database::entities::players::PlayerRole,
     middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade, ip_address::IpAddress},
-    services::Services,
+    services::{game::manager::GameManager, matchmaking::Matchmaking, sessions::AuthedSessions},
     session::{packet::PacketCodec, router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
 };
@@ -15,7 +15,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::service::Service;
+use interlink::{prelude::Link, service::Service};
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::sync::{
@@ -77,7 +77,9 @@ pub async fn dashboard_details(
 pub async fn upgrade(
     IpAddress(socket_addr): IpAddress,
     Extension(router): Extension<Arc<BlazeRouter>>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(matchmaking): Extension<Link<Matchmaking>>,
+    Extension(sessions): Extension<Link<AuthedSessions>>,
     upgrade: BlazeUpgrade,
 ) -> Response {
     // TODO: Socket address extraction for forwarded reverse proxy
@@ -108,7 +110,9 @@ pub async fn upgrade(
                 writer,
                 socket_addr,
                 router,
-                services,
+                game_manager,
+                matchmaking,
+                sessions,
             )
         });
     });

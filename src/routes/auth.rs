@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     config::RuntimeConfig,
     database::entities::Player,
-    services::Services,
+    services::tokens::Tokens,
     utils::hashing::{hash_password, verify_password},
 };
 use axum::{
@@ -74,7 +74,7 @@ pub struct TokenResponse {
 /// containing the authentication token for the user
 pub async fn login(
     Extension(db): Extension<DatabaseConnection>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(tokens): Extension<Arc<Tokens>>,
     Json(req): Json<LoginRequest>,
 ) -> AuthRes<TokenResponse> {
     let LoginRequest { email, password } = req;
@@ -92,7 +92,7 @@ pub async fn login(
         return Err(AuthError::InvalidCredentails);
     }
 
-    let token = services.tokens.claim(player.id);
+    let token = tokens.claim(player.id);
     Ok(Json(TokenResponse { token }))
 }
 
@@ -116,7 +116,7 @@ pub struct CreateRequest {
 pub async fn create(
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(tokens): Extension<Arc<Tokens>>,
     Json(req): Json<CreateRequest>,
 ) -> AuthRes<TokenResponse> {
     if config.dashboard.disable_registration {
@@ -142,7 +142,7 @@ pub async fn create(
     let password: String = hash_password(&password)?;
     let player: Player = Player::create(&db, email, username, Some(password), &config).await?;
 
-    let token = services.tokens.claim(player.id);
+    let token = tokens.claim(player.id);
     Ok(Json(TokenResponse { token }))
 }
 

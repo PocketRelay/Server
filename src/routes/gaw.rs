@@ -11,7 +11,7 @@ use crate::{
         DatabaseConnection, DbErr, DbResult,
     },
     middleware::xml::Xml,
-    services::Services,
+    services::tokens::Tokens,
     utils::parsing::PlayerClass,
 };
 use axum::{
@@ -98,9 +98,9 @@ pub async fn get_ratings(
     Path(id): Path<String>,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(tokens): Extension<Arc<Tokens>>,
 ) -> Result<Xml, GAWError> {
-    let (gaw_data, promotions) = get_player_gaw_data(&db, &services, &id, &config).await?;
+    let (gaw_data, promotions) = get_player_gaw_data(&db, &tokens, &id, &config).await?;
     Ok(ratings_response(gaw_data, promotions))
 }
 
@@ -138,9 +138,9 @@ pub async fn increase_ratings(
     Query(query): Query<IncreaseQuery>,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(tokens): Extension<Arc<Tokens>>,
 ) -> Result<Xml, GAWError> {
-    let (gaw_data, promotions) = get_player_gaw_data(&db, &services, &id, &config).await?;
+    let (gaw_data, promotions) = get_player_gaw_data(&db, &tokens, &id, &config).await?;
     let gaw_data = gaw_data
         .increase(&db, (query.a, query.b, query.c, query.d, query.e))
         .await?;
@@ -154,12 +154,11 @@ pub async fn increase_ratings(
 /// `id` The hex ID of the player
 async fn get_player_gaw_data(
     db: &DatabaseConnection,
-    services: &Services,
+    tokens: &Tokens,
     token: &str,
     config: &RuntimeConfig,
 ) -> Result<(GalaxyAtWar, u32), GAWError> {
-    let player: Player = services
-        .tokens
+    let player: Player = tokens
         .verify_player(db, token)
         .await
         .map_err(|_| GAWError::InvalidToken)?;

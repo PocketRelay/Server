@@ -6,10 +6,13 @@ use crate::{
     database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
     services::{
-        game::{manager::GetGameMessage, models::RemoveReason, GamePlayer, RemovePlayerMessage},
-        matchmaking::RemoveQueueMessage,
-        sessions::{AddMessage, RemoveMessage},
-        Services,
+        game::{
+            manager::{GameManager, GetGameMessage},
+            models::RemoveReason,
+            GamePlayer, RemovePlayerMessage,
+        },
+        matchmaking::{Matchmaking, RemoveQueueMessage},
+        sessions::{AddMessage, AuthedSessions, RemoveMessage},
     },
     utils::{
         components::{self, game_manager::GAME_TYPE, user_sessions},
@@ -53,7 +56,10 @@ pub struct Session {
     data: SessionData,
 
     router: Arc<BlazeRouter>,
-    services: Arc<Services>,
+
+    game_manager: Link<GameManager>,
+    matchmaking: Link<Matchmaking>,
+    sessions: Link<AuthedSessions>,
 }
 
 #[derive(Default, Clone)]
@@ -163,7 +169,7 @@ impl Handler<SetPlayerMessage> for Session {
         // If we are setting a new player
         if let Some(player) = msg.0 {
             // Add the session to authenticated sessions
-            let _ = self.services.sessions.do_send(AddMessage {
+            let _ = self.sessions.do_send(AddMessage {
                 player_id: player.id,
                 link: ctx.link(),
             });
@@ -437,18 +443,15 @@ impl Handler<DetailsMessage> for Session {
 }
 
 impl Session {
-    /// Creates a new session with the provided values.
-    ///
-    /// `id`             The unique session ID
-    /// `values`         The networking TcpStream and address
-    /// `message_sender` The message sender for session messages
     pub fn new(
         id: SessionID,
         host_target: SessionHostTarget,
         writer: SinkLink<Packet>,
         addr: SocketAddr,
         router: Arc<BlazeRouter>,
-        services: Arc<Services>,
+        game_manager: Link<GameManager>,
+        matchmaking: Link<Matchmaking>,
+        sessions: Link<AuthedSessions>,
     ) -> Self {
         Self {
             id,
@@ -457,7 +460,9 @@ impl Session {
             host_target,
             addr,
             router,
-            services,
+            game_manager,
+            matchmaking,
+            sessions,
         }
     }
 
@@ -504,7 +509,7 @@ impl Session {
 
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    pub fn remove_games(&mut self, services: Arc<Services>) {
+    pub fn remove_games(&mut self) {
         // Don't attempt to remove if theres no active player
         let player_id = match &self.data.player {
             Some(value) => value.id,
@@ -512,10 +517,11 @@ impl Session {
         };
 
         if let Some(game_id) = self.data.game.take() {
+            let game_manager = self.game_manager.clone();
             // Remove the player from the game
             tokio::spawn(async move {
                 // Obtain the current game
-                let game = match services.game_manager.send(GetGameMessage { game_id }).await {
+                let game = match game_manager.send(GetGameMessage { game_id }).await {
                     Ok(Some(value)) => value,
                     _ => return,
                 };
@@ -530,16 +536,14 @@ impl Session {
             });
         } else {
             // Remove the player from matchmaking if present
-            let _ = services
-                .matchmaking
-                .do_send(RemoveQueueMessage { player_id });
+            let _ = self.matchmaking.do_send(RemoveQueueMessage { player_id });
         }
     }
 
     /// Removes the player from the authenticated sessions list
     /// if the player is authenticated
     pub fn clear_auth(&mut self) {
-        self.remove_games(self.services.clone());
+        self.remove_games();
 
         // Check that theres authentication
         let player = match self.data.player.take() {
@@ -548,7 +552,7 @@ impl Session {
         };
 
         // Send the remove session message
-        let _ = self.services.sessions.do_send(RemoveMessage {
+        let _ = self.sessions.do_send(RemoveMessage {
             player_id: player.id,
         });
     }

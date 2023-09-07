@@ -1,15 +1,14 @@
 use crate::{
     services::{
         game::{
-            manager::{CreateMessage, GetGameMessage, TryAddMessage, TryAddResult},
+            manager::{CreateMessage, GameManager, GetGameMessage, TryAddMessage, TryAddResult},
             models::{DatalessContext, GameSetupContext},
             AddPlayerMessage, CheckJoinableMessage, GameJoinableState, GamePlayer,
             GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage, SetSettingMessage,
             SetStateMessage, UpdateMeshMessage,
         },
-        matchmaking::{CheckGameMessage, QueuePlayerMessage},
-        sessions::LookupMessage,
-        Services,
+        matchmaking::{CheckGameMessage, Matchmaking, QueuePlayerMessage},
+        sessions::{AuthedSessions, LookupMessage},
     },
     session::{
         models::{
@@ -20,12 +19,14 @@ use crate::{
         GetGamePlayerMessage, GetPlayerGameMessage, GetPlayerIdMessage, SessionLink,
     },
 };
+use interlink::prelude::Link;
 use log::{debug, info};
 use std::sync::Arc;
 
 pub async fn handle_join_game(
     session: SessionLink,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(sessions): Extension<Link<AuthedSessions>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
     Blaze(req): Blaze<JoinGameRequest>,
 ) -> ServerResult<Blaze<JoinGameResponse>> {
     // Load the session
@@ -35,8 +36,7 @@ pub async fn handle_join_game(
         .ok_or(GlobalError::AuthenticationRequired)?;
 
     // Lookup the session join target
-    let session = services
-        .sessions
+    let session = sessions
         .send(LookupMessage {
             player_id: req.user.id,
         })
@@ -55,10 +55,7 @@ pub async fn handle_join_game(
         _ => return Err(GlobalError::System.into()),
     };
 
-    let game = services
-        .game_manager
-        .send(GetGameMessage { game_id })
-        .await?;
+    let game = game_manager.send(GetGameMessage { game_id }).await?;
 
     let game = match game {
         Some(value) => value,
@@ -86,7 +83,7 @@ pub async fn handle_join_game(
 
 pub async fn handle_get_game_data(
     Blaze(mut req): Blaze<GetGameDataRequest>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
 ) -> ServerResult<RawBlaze> {
     if req.game_list.is_empty() {
         return Err(GlobalError::System.into());
@@ -94,8 +91,7 @@ pub async fn handle_get_game_data(
 
     let game_id = req.game_list.remove(0);
 
-    let game = services
-        .game_manager
+    let game = game_manager
         .send(GetGameMessage { game_id })
         .await?
         .ok_or(GameManagerError::InvalidGameId)?;
@@ -158,7 +154,8 @@ pub async fn handle_get_game_data(
 /// ```
 pub async fn handle_create_game(
     session: SessionLink,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(matchmaking): Extension<Link<Matchmaking>>,
     Blaze(req): Blaze<CreateGameRequest>,
 ) -> ServerResult<Blaze<CreateGameResponse>> {
     let player: GamePlayer = session
@@ -166,8 +163,7 @@ pub async fn handle_create_game(
         .await?
         .ok_or(GlobalError::AuthenticationRequired)?;
 
-    let (link, game_id) = services
-        .game_manager
+    let (link, game_id) = game_manager
         .send(CreateMessage {
             attributes: req.attributes,
             setting: req.setting,
@@ -176,9 +172,7 @@ pub async fn handle_create_game(
         .await?;
 
     // Notify matchmaking of the new game
-    let _ = services
-        .matchmaking
-        .do_send(CheckGameMessage { link, game_id });
+    let _ = matchmaking.do_send(CheckGameMessage { link, game_id });
 
     Ok(Blaze(CreateGameResponse { game_id }))
 }
@@ -204,11 +198,10 @@ pub async fn handle_create_game(
 /// }
 /// ```
 pub async fn handle_set_attributes(
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
     Blaze(req): Blaze<SetAttributesRequest>,
 ) -> ServerResult<()> {
-    let link = services
-        .game_manager
+    let link = game_manager
         .send(GetGameMessage {
             game_id: req.game_id,
         })
@@ -235,11 +228,10 @@ pub async fn handle_set_attributes(
 /// }
 /// ```
 pub async fn handle_set_state(
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
     Blaze(req): Blaze<SetStateRequest>,
 ) -> ServerResult<()> {
-    let link = services
-        .game_manager
+    let link = game_manager
         .send(GetGameMessage {
             game_id: req.game_id,
         })
@@ -263,11 +255,10 @@ pub async fn handle_set_state(
 /// }
 /// ```
 pub async fn handle_set_setting(
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
     Blaze(req): Blaze<SetSettingRequest>,
 ) -> ServerResult<()> {
-    let link = services
-        .game_manager
+    let link = game_manager
         .send(GetGameMessage {
             game_id: req.game_id,
         })
@@ -297,11 +288,10 @@ pub async fn handle_set_setting(
 /// }
 /// ```
 pub async fn handle_remove_player(
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
     Blaze(req): Blaze<RemovePlayerRequest>,
 ) {
-    let game = match services
-        .game_manager
+    let game = match game_manager
         .send(GetGameMessage {
             game_id: req.game_id,
         })
@@ -337,7 +327,7 @@ pub async fn handle_remove_player(
 /// ```
 pub async fn handle_update_mesh_connection(
     session: SessionLink,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
     Blaze(mut req): Blaze<UpdateMeshRequest>,
 ) -> ServerResult<()> {
     let id = match session.send(GetPlayerIdMessage).await? {
@@ -350,8 +340,7 @@ pub async fn handle_update_mesh_connection(
         None => return Ok(()),
     };
 
-    let link = services
-        .game_manager
+    let link = game_manager
         .send(GetGameMessage {
             game_id: req.game_id,
         })
@@ -496,7 +485,8 @@ pub async fn handle_update_mesh_connection(
 /// ```
 pub async fn handle_start_matchmaking(
     session: SessionLink,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(matchmaking): Extension<Link<Matchmaking>>,
     Blaze(req): Blaze<MatchmakingRequest>,
 ) -> ServerResult<Blaze<MatchmakingResponse>> {
     let player: GamePlayer = session
@@ -510,8 +500,7 @@ pub async fn handle_start_matchmaking(
 
     let rule_set = Arc::new(req.rules);
 
-    let result = services
-        .game_manager
+    let result = game_manager
         .send(TryAddMessage {
             player,
             rule_set: rule_set.clone(),
@@ -520,8 +509,7 @@ pub async fn handle_start_matchmaking(
 
     // If adding failed attempt to queue instead
     if let TryAddResult::Failure(player) = result {
-        services
-            .matchmaking
+        matchmaking
             .send(QueuePlayerMessage { player, rule_set })
             .await?;
     }
@@ -539,13 +527,10 @@ pub async fn handle_start_matchmaking(
 ///     "MSID": 1
 /// }
 /// ```
-pub async fn handle_cancel_matchmaking(
-    Extension(services): Extension<Arc<Services>>,
-    session: SessionLink,
-) {
+pub async fn handle_cancel_matchmaking(session: SessionLink) {
     session
         .exec(|session, _| {
-            session.remove_games(services);
+            session.remove_games();
         })
         .await
         .ok();

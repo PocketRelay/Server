@@ -3,7 +3,7 @@ use crate::{
         entities::{players::PlayerRole, Player},
         DbErr,
     },
-    services::{tokens::VerifyError, Services},
+    services::tokens::{Tokens, VerifyError},
     utils::types::BoxFuture,
 };
 use axum::{
@@ -73,9 +73,9 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
             .get::<DatabaseConnection>()
             .expect("Database connection extension missing")
             .clone();
-        let services = parts
+        let tokens = parts
             .extensions
-            .get::<Arc<Services>>()
+            .get::<Arc<Tokens>>()
             .expect("Database connection extension missing")
             .clone();
 
@@ -88,7 +88,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
                 .ok_or(TokenError::MissingToken)?;
 
             // Verify the token claim
-            let player: Player = services.tokens.verify_player(&db, token).await?;
+            let player: Player = tokens.verify_player(&db, token).await?;
 
             Ok(Self(player, PhantomData))
         })

@@ -1,3 +1,10 @@
+use crate::{
+    config::{RuntimeConfig, VERSION},
+    services::{
+        game::manager::GameManager, leaderboard::Leaderboard, matchmaking::Matchmaking,
+        retriever::Retriever, sessions::AuthedSessions, tokens::Tokens,
+    },
+};
 use axum::{Extension, Server};
 use config::load_config;
 use log::{error, info, LevelFilter};
@@ -7,11 +14,6 @@ use std::{
 };
 use tokio::{join, select, signal};
 use utils::logging;
-
-use crate::{
-    config::{RuntimeConfig, ServicesConfig, VERSION},
-    services::Services,
-};
 
 mod config;
 mod database;
@@ -36,11 +38,6 @@ async fn main() {
     // Create the server socket address while the port is still available
     let addr: SocketAddr = (Ipv4Addr::UNSPECIFIED, config.port).into();
 
-    // Config data passed onto the services
-    let services_config = ServicesConfig {
-        retriever: config.retriever,
-    };
-
     // Create menu message
     let menu_message = {
         // Message with server version variable replaced
@@ -59,28 +56,45 @@ async fn main() {
         dashboard: config.dashboard,
     };
 
-    let (db, services, _) = join!(
-        // Initialize the database
-        database::init(&runtime_config),
-        // Initialize the services
-        Services::init(services_config),
-        // Display the connection urls message
-        logging::log_connection_urls(config.port)
-    );
+    tokio::spawn(logging::log_connection_urls(config.port));
 
-    let services = Arc::new(services);
+    let (db, retriever, tokens) = join!(
+        database::init(&runtime_config),
+        Retriever::new(config.retriever),
+        Tokens::new()
+    );
+    let matchmaking = Matchmaking::start();
+    let game_manager = GameManager::start(matchmaking.clone());
+    let leaderboard = Leaderboard::start();
+    let sessions = AuthedSessions::start();
+    let tokens = Arc::new(tokens);
     let config = Arc::new(runtime_config);
 
     // Initialize session router
-    let router = session::routes::router(db.clone(), services.clone(), config.clone());
+    let mut router = session::routes::router();
+
+    router.add_extension(db.clone());
+    router.add_extension(config.clone());
+    router.add_extension(retriever.clone());
+    router.add_extension(matchmaking.clone());
+    router.add_extension(game_manager.clone());
+    router.add_extension(leaderboard.clone());
+    router.add_extension(sessions.clone());
+    router.add_extension(tokens.clone());
+
+    let router = router.build();
 
     // Create the HTTP router
     let router = routes::router()
         // Apply data extensions
         .layer(Extension(db))
-        .layer(Extension(services))
         .layer(Extension(config))
         .layer(Extension(router))
+        .layer(Extension(matchmaking))
+        .layer(Extension(game_manager))
+        .layer(Extension(leaderboard))
+        .layer(Extension(sessions))
+        .layer(Extension(tokens))
         .into_make_service_with_connect_info::<SocketAddr>();
 
     // Create futures for server and shutdown signal

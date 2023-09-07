@@ -1,14 +1,9 @@
-use std::sync::Arc;
-
 use crate::{
     database::entities::players::PlayerRole,
     middleware::auth::Auth,
-    services::{
-        game::{
-            manager::{GetGameMessage, SnapshotQueryMessage},
-            GameSnapshot, SnapshotMessage,
-        },
-        Services,
+    services::game::{
+        manager::{GameManager, GetGameMessage, SnapshotQueryMessage},
+        GameSnapshot, SnapshotMessage,
     },
     utils::types::GameID,
 };
@@ -18,7 +13,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::prelude::LinkError;
+use interlink::prelude::{Link, LinkError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -68,7 +63,7 @@ pub struct GamesResponse {
 /// players with admin level or greater access.
 pub async fn get_games(
     Query(query): Query<GamesRequest>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
     auth: Auth,
 ) -> GamesRes<GamesResponse> {
     let GamesRequest { offset, count } = query;
@@ -78,8 +73,7 @@ pub async fn get_games(
     let offset: usize = offset * count;
 
     // Retrieve the game snapshots
-    let (games, more) = services
-        .game_manager
+    let (games, more) = game_manager
         .send(SnapshotQueryMessage {
             offset,
             count,
@@ -99,13 +93,12 @@ pub async fn get_games(
 /// players with admin level or greater access.
 pub async fn get_game(
     Path(game_id): Path<GameID>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(game_manager): Extension<Link<GameManager>>,
     auth: Auth,
 ) -> GamesRes<GameSnapshot> {
     let auth = auth.into_inner();
 
-    let game = services
-        .game_manager
+    let game = game_manager
         .send(GetGameMessage { game_id })
         .await?
         .ok_or(GamesError::NotFound)?;

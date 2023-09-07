@@ -54,10 +54,6 @@ pub fn load_config() -> Option<Config> {
     Some(config)
 }
 
-pub struct ServicesConfig {
-    pub retriever: RetrieverConfig,
-}
-
 #[derive(Deserialize)]
 #[serde(default)]
 pub struct Config {

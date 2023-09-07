@@ -1,8 +1,12 @@
+use interlink::prelude::Link;
 use sea_orm::DatabaseConnection;
 
 use crate::{
     database::entities::Player,
-    services::{sessions::LookupMessage, tokens::Tokens, Services},
+    services::{
+        sessions::{AuthedSessions, LookupMessage},
+        tokens::Tokens,
+    },
     session::{
         models::{
             auth::AuthResponse,
@@ -34,11 +38,10 @@ use std::{net::SocketAddr, sync::Arc};
 /// ```
 pub async fn handle_lookup_user(
     Blaze(req): Blaze<LookupRequest>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(sessions): Extension<Link<AuthedSessions>>,
 ) -> ServerResult<Blaze<LookupResponse>> {
     // Lookup the session
-    let session = services
-        .sessions
+    let session = sessions
         .send(LookupMessage {
             player_id: req.player_id,
         })
@@ -73,12 +76,12 @@ pub async fn handle_lookup_user(
 pub async fn handle_resume_session(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(services): Extension<Arc<Services>>,
+    Extension(tokens): Extension<Arc<Tokens>>,
     Blaze(req): Blaze<ResumeSessionRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     let session_token = req.session_token;
 
-    let player: Player = services.tokens.verify_player(&db, &session_token).await?;
+    let player: Player = tokens.verify_player(&db, &session_token).await?;
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down
