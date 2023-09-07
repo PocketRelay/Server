@@ -2,7 +2,7 @@ use crate::{
     config::{Config, RuntimeConfig, ServicesConfig},
     database::{self, DatabaseConnection},
     services::Services,
-    session::{self, router::Router},
+    session::{self, router::BlazeRouter},
     utils::logging,
 };
 use tokio::join;
@@ -21,7 +21,7 @@ pub struct App {
     /// Runtime global configuration
     pub config: RuntimeConfig,
     /// Global session router
-    pub router: Router,
+    pub router: BlazeRouter,
 }
 
 /// Static global state value
@@ -79,7 +79,7 @@ impl App {
     }
 
     /// Obtains a static reference to the session router
-    pub fn router() -> &'static Router {
+    pub fn router() -> &'static BlazeRouter {
         match unsafe { &GLOBAL_STATE } {
             Some(value) => &value.router,
             None => panic!("Global state not initialized"),

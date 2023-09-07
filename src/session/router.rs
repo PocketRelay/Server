@@ -62,12 +62,12 @@ pub struct PacketRequest {
     pub packet: Packet,
 }
 
-pub struct Router {
+pub struct BlazeRouter {
     /// Map for looking up a route based on the component key
     routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<ComponentKeyHasher>>,
 }
 
-impl Router {
+impl BlazeRouter {
     pub fn new() -> Self {
         Self {
             routes: Default::default(),

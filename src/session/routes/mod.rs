@@ -1,6 +1,6 @@
 use crate::utils::components;
 
-use super::router::Router;
+use super::router::BlazeRouter;
 
 mod auth;
 mod game_manager;
@@ -16,8 +16,8 @@ mod util;
 /// rustfmt is disabled because it messes up the neat formatting of the 
 /// route additions
 #[rustfmt::skip]
-pub fn router() -> Router {
-    let mut router = Router::new();
+pub fn router() -> BlazeRouter {
+    let mut router = BlazeRouter::new();
 
     // Authentication 
     {
