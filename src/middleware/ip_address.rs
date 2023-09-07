@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     async_trait,
@@ -12,7 +12,7 @@ use hyper::{HeaderMap, StatusCode};
 use log::warn;
 use thiserror::Error;
 
-use crate::state::App;
+use crate::config::RuntimeConfig;
 
 /// Middleware for extracting the server public address
 pub struct IpAddress(pub SocketAddr);
@@ -27,7 +27,12 @@ where
     type Rejection = IpAddressError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let reverse_proxy = App::config().reverse_proxy;
+        let config = parts
+            .extensions
+            .get::<Arc<RuntimeConfig>>()
+            .expect("Missing runtime config");
+
+        let reverse_proxy = config.reverse_proxy;
         if reverse_proxy {
             let ip = match extract_ip_header(&parts.headers) {
                 Some(ip) => ip,

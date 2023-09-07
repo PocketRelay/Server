@@ -1,20 +1,21 @@
 use crate::{
+    config::VERSION,
     database::entities::PlayerData,
     session::{
         models::{
             errors::{GlobalError, ServerResult},
             util::*,
         },
-        router::Blaze,
+        router::{Blaze, Extension},
         DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
-    state::{self, App},
 };
 use base64ct::{Base64, Encoding};
 use embeddy::Embedded;
 use flate2::{write::ZlibEncoder, Compression};
 use interlink::prelude::Link;
 use log::error;
+use sea_orm::DatabaseConnection;
 use std::{
     io::Write,
     path::Path,
@@ -316,7 +317,7 @@ fn messages() -> TdfMap<String, String> {
         title: Some("Pocket Relay".to_owned()),
         message: format!(
             "You are connected to Pocket Relay <font color='#FFFF66'>(v{})</font>",
-            state::VERSION,
+            VERSION,
         ),
         priority: 1,
         tracking_id: Some(1),
@@ -501,6 +502,7 @@ pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> 
 /// ```
 pub async fn handle_user_settings_save(
     session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
     Blaze(req): Blaze<SettingsSaveRequest>,
 ) -> ServerResult<()> {
     let player = session
@@ -508,8 +510,7 @@ pub async fn handle_user_settings_save(
         .await?
         .ok_or(GlobalError::AuthenticationRequired)?;
 
-    let db = App::database();
-    PlayerData::set(db, player, req.key, req.value).await?;
+    PlayerData::set(&db, player, req.key, req.value).await?;
     Ok(())
 }
 
@@ -521,16 +522,17 @@ pub async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-pub async fn handle_load_settings(session: SessionLink) -> ServerResult<Blaze<SettingsResponse>> {
+pub async fn handle_load_settings(
+    session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+) -> ServerResult<Blaze<SettingsResponse>> {
     let player = session
         .send(GetPlayerIdMessage)
         .await?
         .ok_or(GlobalError::AuthenticationRequired)?;
 
-    let db = App::database();
-
     // Load the player data from the database
-    let data: Vec<PlayerData> = PlayerData::all(db, player).await?;
+    let data: Vec<PlayerData> = PlayerData::all(&db, player).await?;
 
     // Encode the player data into a settings map and order it
     let mut settings = TdfMap::<String, String>::with_capacity(data.len());

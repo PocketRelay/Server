@@ -25,8 +25,8 @@ pub struct Services {
 impl Services {
     pub async fn init(config: ServicesConfig) -> Self {
         let (retriever, tokens) = join!(Retriever::new(config.retriever), Tokens::new());
-        let game_manager = GameManager::start();
         let matchmaking = Matchmaking::start();
+        let game_manager = GameManager::start(matchmaking.clone());
         let leaderboard = Leaderboard::start();
         let sessions = AuthedSessions::start();
 

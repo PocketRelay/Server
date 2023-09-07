@@ -1,3 +1,5 @@
+use self::manager::GameManager;
+use super::matchmaking::Matchmaking;
 use crate::{
     database::entities::Player,
     services::{
@@ -8,14 +10,12 @@ use crate::{
         packet::Packet, router::RawBlaze, DetailsMessage, InformSessions, PushExt, Session,
         SetGameMessage,
     },
-    state::App,
     utils::{
         components::{game_manager, user_sessions},
         models::NetData,
         types::{GameID, PlayerID},
     },
 };
-
 use interlink::prelude::*;
 use log::debug;
 use models::*;
@@ -38,14 +38,16 @@ pub struct Game {
     pub attributes: AttrMap,
     /// The list of players in this game
     pub players: Vec<GamePlayer>,
+    /// Services access
+    pub game_manager: Link<GameManager>,
+    pub matchmaking: Link<Matchmaking>,
 }
 
 impl Service for Game {
     fn stopping(&mut self) {
         debug!("Game is stopping (GID: {})", self.id);
         // Remove the stopping game
-        let services = App::services();
-        let _ = services
+        let _ = self
             .game_manager
             .do_send(RemoveGameMessage { game_id: self.id });
     }
@@ -57,13 +59,21 @@ impl Game {
     /// `id`         The unique ID for the game
     /// `attributes` The initial game attributes
     /// `setting`    The initial game setting value
-    pub fn start(id: GameID, attributes: AttrMap, setting: GameSettings) -> Link<Game> {
+    pub fn start(
+        id: GameID,
+        attributes: AttrMap,
+        setting: GameSettings,
+        game_manager: Link<GameManager>,
+        matchmaking: Link<Matchmaking>,
+    ) -> Link<Game> {
         let this = Game {
             id,
             state: GameState::Initializing,
             setting,
             attributes,
             players: Vec::with_capacity(4),
+            game_manager,
+            matchmaking,
         };
 
         this.start()
@@ -306,8 +316,7 @@ impl Handler<SetAttributesMessage> for Game {
 
         // Don't update matchmaking for full games
         if self.players.len() < Self::MAX_PLAYERS {
-            let services = App::services();
-            let _ = services.matchmaking.do_send(CheckGameMessage {
+            let _ = self.matchmaking.do_send(CheckGameMessage {
                 link: ctx.link(),
                 game_id: self.id,
             });

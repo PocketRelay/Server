@@ -1,13 +1,15 @@
+use std::sync::Arc;
+
 use crate::{
+    config::RuntimeConfig,
     database::entities::Player,
-    services::tokens::Tokens,
-    state::App,
+    services::Services,
     utils::hashing::{hash_password, verify_password},
 };
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
+    Extension, Json,
 };
 use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
@@ -70,13 +72,15 @@ pub struct TokenResponse {
 /// Handles authenticating a user using a username and
 /// password. Upon success will provide a [`TokenResponse`]
 /// containing the authentication token for the user
-pub async fn login(Json(req): Json<LoginRequest>) -> AuthRes<TokenResponse> {
+pub async fn login(
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(services): Extension<Arc<Services>>,
+    Json(req): Json<LoginRequest>,
+) -> AuthRes<TokenResponse> {
     let LoginRequest { email, password } = req;
 
-    let db: &DatabaseConnection = App::database();
-
     // Find a player with the matching email
-    let player: Player = Player::by_email(db, &email)
+    let player: Player = Player::by_email(&db, &email)
         .await?
         .ok_or(AuthError::InvalidCredentails)?;
 
@@ -88,7 +92,8 @@ pub async fn login(Json(req): Json<LoginRequest>) -> AuthRes<TokenResponse> {
         return Err(AuthError::InvalidCredentails);
     }
 
-    Ok(player.into())
+    let token = services.tokens.claim(player.id);
+    Ok(Json(TokenResponse { token }))
 }
 
 /// Request structure for creating a new account contains
@@ -108,8 +113,12 @@ pub struct CreateRequest {
 /// Handles creating a new user from the provided credentials.
 /// Upon success will provide a [`TokenResponse`] containing
 /// the authentication token for the created user
-pub async fn create(Json(req): Json<CreateRequest>) -> AuthRes<TokenResponse> {
-    let config = App::config();
+pub async fn create(
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(services): Extension<Arc<Services>>,
+    Json(req): Json<CreateRequest>,
+) -> AuthRes<TokenResponse> {
     if config.dashboard.disable_registration {
         return Err(AuthError::RegistrationDisabled);
     }
@@ -125,26 +134,16 @@ pub async fn create(Json(req): Json<CreateRequest>) -> AuthRes<TokenResponse> {
         return Err(AuthError::InvalidUsername);
     }
 
-    let db: &DatabaseConnection = App::database();
-
     // Validate email taken status
-    if Player::by_email(db, &email).await?.is_some() {
+    if Player::by_email(&db, &email).await?.is_some() {
         return Err(AuthError::EmailTaken);
     }
 
     let password: String = hash_password(&password)?;
-    let player: Player = Player::create(db, email, username, Some(password), config).await?;
+    let player: Player = Player::create(&db, email, username, Some(password), &config).await?;
 
-    Ok(player.into())
-}
-
-/// Allow conversion from player into JSON token response for simplicity
-impl From<Player> for Json<TokenResponse> {
-    fn from(value: Player) -> Self {
-        // Claim a token and response with a response
-        let token: String = Tokens::service_claim(value.id);
-        Json(TokenResponse { token })
-    }
+    let token = services.tokens.claim(player.id);
+    Ok(Json(TokenResponse { token }))
 }
 
 /// Response implementation for auth errors

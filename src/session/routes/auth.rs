@@ -1,28 +1,28 @@
 use crate::{
+    config::RuntimeConfig,
     database::{entities::Player, DatabaseConnection},
-    services::{retriever::GetOriginFlow, tokens::Tokens, Services},
+    services::{retriever::GetOriginFlow, Services},
     session::{
         models::{
             auth::*,
             errors::{GlobalError, ServerResult},
         },
-        router::Blaze,
+        router::{Blaze, Extension},
         GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage,
     },
-    state::App,
     utils::hashing::{hash_password, verify_password},
 };
 use email_address::EmailAddress;
 use log::{debug, error};
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 use tokio::fs::read_to_string;
 
 pub async fn handle_login(
     session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(services): Extension<Arc<Services>>,
     Blaze(req): Blaze<LoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
-    let db: &DatabaseConnection = App::database();
-
     let LoginRequest { email, password } = &req;
 
     // Ensure the email is actually valid
@@ -31,7 +31,7 @@ pub async fn handle_login(
     }
 
     // Find a non origin player with that email
-    let player: Player = Player::by_email(db, email)
+    let player: Player = Player::by_email(&db, email)
         .await?
         .ok_or(AuthenticationError::InvalidUser)?;
 
@@ -49,7 +49,7 @@ pub async fn handle_login(
     // Update the session stored player
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token: String = Tokens::service_claim(player.id);
+    let session_token: String = services.tokens.claim(player.id);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -60,12 +60,12 @@ pub async fn handle_login(
 
 pub async fn handle_silent_login(
     session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(services): Extension<Arc<Services>>,
     Blaze(req): Blaze<SilentLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
-    let db: &DatabaseConnection = App::database();
-
     // Verify the authentication token
-    let player: Player = Tokens::service_verify(db, &req.token).await?;
+    let player: Player = services.tokens.verify_player(&db, &req.token).await?;
 
     // Update the session stored player
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
@@ -79,13 +79,11 @@ pub async fn handle_silent_login(
 
 pub async fn handle_origin_login(
     session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(services): Extension<Arc<Services>>,
     Blaze(req): Blaze<OriginLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
-    let config = App::config();
-    let db: &DatabaseConnection = App::database();
-
-    let services: &Services = App::services();
-
     // Obtain an origin flow
     let mut flow = match services.retriever.send(GetOriginFlow).await {
         Ok(Ok(value)) => value,
@@ -99,7 +97,7 @@ pub async fn handle_origin_login(
         }
     };
 
-    let player: Player = match flow.login(db, req.token, config).await {
+    let player: Player = match flow.login(&db, req.token, &config).await {
         Ok(value) => value,
         Err(err) => {
             error!("Failed to login with origin: {}", err);
@@ -110,7 +108,7 @@ pub async fn handle_origin_login(
     // Update the session stored player
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token: String = Tokens::service_claim(player.id);
+    let session_token: String = services.tokens.claim(player.id);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -282,17 +280,17 @@ pub async fn handle_forgot_password(Blaze(req): Blaze<ForgotPasswordRequest>) ->
 ///
 pub async fn handle_create_account(
     session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(services): Extension<Arc<Services>>,
     Blaze(req): Blaze<CreateAccountRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     let email = req.email;
-    let config = App::config();
     if !EmailAddress::is_valid(&email) {
         return Err(AuthenticationError::InvalidEmail.into());
     }
 
-    let db = App::database();
-
-    match Player::by_email(db, &email).await? {
+    match Player::by_email(&db, &email).await? {
         // Continue normally for non taken emails
         None => {}
         // Handle email address is already in use
@@ -313,13 +311,13 @@ pub async fn handle_create_account(
 
     // Create a new player
     let player: Player =
-        Player::create(db, email, display_name, Some(hashed_password), config).await?;
+        Player::create(&db, email, display_name, Some(hashed_password), &config).await?;
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token = Tokens::service_claim(player.id);
+    let session_token = services.tokens.claim(player.id);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -397,12 +395,15 @@ pub async fn handle_privacy_policy() -> Blaze<LegalContent> {
 /// ID: 35
 /// Content: {}
 /// ```
-pub async fn handle_get_auth_token(session: SessionLink) -> ServerResult<Blaze<GetTokenResponse>> {
+pub async fn handle_get_auth_token(
+    session: SessionLink,
+    Extension(services): Extension<Arc<Services>>,
+) -> ServerResult<Blaze<GetTokenResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await?
         .ok_or(GlobalError::AuthenticationRequired)?;
     // Create a new token claim for the player to use with the API
-    let token = Tokens::service_claim(player_id);
+    let token = services.tokens.claim(player_id);
     Ok(Blaze(GetTokenResponse { token }))
 }

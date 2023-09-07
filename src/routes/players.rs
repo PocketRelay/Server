@@ -6,7 +6,6 @@ use crate::{
         DatabaseConnection, DbErr,
     },
     middleware::auth::{AdminAuth, Auth},
-    state::App,
     utils::{
         hashing::{hash_password, verify_password},
         types::PlayerID,
@@ -16,13 +15,13 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
+    Extension, Json,
 };
+use email_address::EmailAddress;
 use log::error;
 use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use thiserror::Error;
-use email_address::EmailAddress;
 
 /// Enum for errors that could occur when accessing any of
 /// the players routes
@@ -111,16 +110,16 @@ pub struct PlayersResponse {
 /// `_auth` The currently authenticated (Admin) player
 pub async fn get_players(
     Query(query): Query<PlayersQuery>,
+    Extension(db): Extension<DatabaseConnection>,
     _auth: AdminAuth,
 ) -> PlayersRes<PlayersResponse> {
     const DEFAULT_COUNT: u8 = 20;
 
-    let db = App::database();
     let count = query.count.unwrap_or(DEFAULT_COUNT);
 
     let paginator = players::Entity::find()
         .order_by_asc(players::Column::Id)
-        .paginate(db, count as u64);
+        .paginate(&db, count as u64);
     let page = query.offset as u64;
     let total_pages = paginator.num_pages().await?;
     let more = page < total_pages;
@@ -146,9 +145,12 @@ pub async fn get_self(auth: Auth) -> Json<Player> {
 ///
 /// `player_id` The ID of the player to get
 /// `_auth`     The currently authenticated (Admin) player
-pub async fn get_player(Path(player_id): Path<PlayerID>, _auth: AdminAuth) -> PlayersRes<Player> {
-    let db = App::database();
-    let player = find_player(db, player_id).await?;
+pub async fn get_player(
+    Path(player_id): Path<PlayerID>,
+    _auth: AdminAuth,
+    Extension(db): Extension<DatabaseConnection>,
+) -> PlayersRes<Player> {
+    let player = find_player(&db, player_id).await?;
     Ok(Json(player))
 }
 
@@ -176,20 +178,20 @@ pub struct UpdateDetailsRequest {
 pub async fn set_details(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
+    Extension(db): Extension<DatabaseConnection>,
     Json(req): Json<UpdateDetailsRequest>,
 ) -> PlayersResult<()> {
     let auth = auth.into_inner();
 
     // Get the target player
-    let db = App::database();
-    let player = find_player(db, player_id).await?;
+    let player = find_player(&db, player_id).await?;
 
     // Check modification permission
     if !auth.has_permission_over(&player) {
         return Err(PlayersError::InvalidPermission);
     }
 
-    attempt_set_details(db, player, req).await?;
+    attempt_set_details(&db, player, req).await?;
 
     // Ok status code indicating updated
     Ok(())
@@ -205,6 +207,7 @@ pub async fn set_details(
 /// `req`  The details update request
 pub async fn update_details(
     auth: Auth,
+    Extension(db): Extension<DatabaseConnection>,
     Json(req): Json<UpdateDetailsRequest>,
 ) -> PlayersResult<()> {
     // Obtain the player from auth
@@ -214,8 +217,7 @@ pub async fn update_details(
         return Err(PlayersError::InvalidEmail);
     }
 
-    let db = App::database();
-    attempt_set_details(db, player, req).await?;
+    attempt_set_details(&db, player, req).await?;
 
     // Ok status code indicating updated
     Ok(())
@@ -278,13 +280,13 @@ pub struct SetPasswordRequest {
 pub async fn set_password(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
+    Extension(db): Extension<DatabaseConnection>,
     Json(req): Json<SetPasswordRequest>,
 ) -> PlayersResult<()> {
     let auth = auth.into_inner();
 
     // Get the target player
-    let db = App::database();
-    let player = find_player(db, player_id).await?;
+    let player = find_player(&db, player_id).await?;
 
     // Check modification permission
     if !auth.has_permission_over(&player) {
@@ -292,7 +294,7 @@ pub async fn set_password(
     }
 
     let password = hash_password(&req.password)?;
-    player.set_password(db, password).await?;
+    player.set_password(&db, password).await?;
 
     // Ok status code indicating updated
     Ok(())
@@ -310,6 +312,7 @@ pub struct SetPlayerRoleRequest {
 pub async fn set_role(
     Path(player_id): Path<PlayerID>,
     auth: AdminAuth,
+    Extension(db): Extension<DatabaseConnection>,
     Json(req): Json<SetPlayerRoleRequest>,
 ) -> PlayersResult<()> {
     let auth = auth.into_inner();
@@ -327,10 +330,9 @@ pub async fn set_role(
     }
 
     // Get the target player
-    let db = App::database();
-    let player = find_player(db, player_id).await?;
+    let player = find_player(&db, player_id).await?;
 
-    player.set_role(db, role).await?;
+    player.set_role(&db, role).await?;
 
     Ok(())
 }
@@ -351,6 +353,7 @@ pub struct UpdatePasswordRequest {
 /// as the request data
 pub async fn update_password(
     auth: Auth,
+    Extension(db): Extension<DatabaseConnection>,
     Json(req): Json<UpdatePasswordRequest>,
 ) -> PlayersResult<()> {
     let UpdatePasswordRequest {
@@ -371,9 +374,8 @@ pub async fn update_password(
         return Err(PlayersError::InvalidPassword);
     }
 
-    let db = App::database();
     let password = hash_password(&new_password)?;
-    player.set_password(db, password).await?;
+    player.set_password(&db, password).await?;
 
     Ok(())
 }
@@ -384,18 +386,21 @@ pub async fn update_password(
 ///
 /// `player_id` The ID of the player to delete
 /// `auth`      The currently authenticated (Admin) player
-pub async fn delete_player(auth: AdminAuth, Path(player_id): Path<PlayerID>) -> PlayersResult<()> {
+pub async fn delete_player(
+    auth: AdminAuth,
+    Path(player_id): Path<PlayerID>,
+    Extension(db): Extension<DatabaseConnection>,
+) -> PlayersResult<()> {
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
-    let db = App::database();
-    let player: Player = find_player(db, player_id).await?;
+    let player: Player = find_player(&db, player_id).await?;
 
     if !auth.can_delete(&player) {
         return Err(PlayersError::InvalidPermission);
     }
 
-    player.delete(db).await?;
+    player.delete(&db).await?;
     Ok(())
 }
 /// Request to update the password of the current user account
@@ -408,7 +413,11 @@ pub struct DeleteSelfRequest {
 /// DELETE /api/players/self
 ///
 /// Route for deleting the authenticated player
-pub async fn delete_self(auth: Auth, Json(req): Json<DeleteSelfRequest>) -> PlayersResult<()> {
+pub async fn delete_self(
+    auth: Auth,
+    Extension(db): Extension<DatabaseConnection>,
+    Json(req): Json<DeleteSelfRequest>,
+) -> PlayersResult<()> {
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
@@ -422,8 +431,7 @@ pub async fn delete_self(auth: Auth, Json(req): Json<DeleteSelfRequest>) -> Play
         return Err(PlayersError::InvalidPassword);
     }
 
-    let db = App::database();
-    auth.delete(db).await?;
+    auth.delete(&db).await?;
     Ok(())
 }
 
@@ -453,10 +461,10 @@ impl Serialize for PlayerDataMap {
 /// `_admin`    The currently authenticated (Admin) player
 pub async fn all_data(
     Path(player_id): Path<PlayerID>,
+    Extension(db): Extension<DatabaseConnection>,
     _admin: AdminAuth,
 ) -> PlayersRes<PlayerDataMap> {
-    let db = App::database();
-    let data = PlayerData::all(db, player_id).await?;
+    let data = PlayerData::all(&db, player_id).await?;
     Ok(Json(PlayerDataMap(data)))
 }
 
@@ -471,17 +479,17 @@ pub async fn all_data(
 /// `auth`      The currently authenticated player
 pub async fn get_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
+    Extension(db): Extension<DatabaseConnection>,
     auth: Auth,
 ) -> PlayersRes<PlayerData> {
     let auth = auth.into_inner();
-    let db = App::database();
-    let player: Player = find_player(db, player_id).await?;
+    let player: Player = find_player(&db, player_id).await?;
 
     if !auth.has_permission_over(&player) {
         return Err(PlayersError::InvalidPermission);
     }
 
-    let value = PlayerData::get(db, player.id, &key)
+    let value = PlayerData::get(&db, player.id, &key)
         .await?
         .ok_or(PlayersError::DataNotFound)?;
     Ok(Json(value))
@@ -505,20 +513,20 @@ pub struct SetDataRequest {
 /// `req`       The request containing the data value
 pub async fn set_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
+    Extension(db): Extension<DatabaseConnection>,
     auth: AdminAuth,
     Json(req): Json<SetDataRequest>,
 ) -> PlayersRes<PlayerData> {
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
-    let db = App::database();
-    let player: Player = find_player(db, player_id).await?;
+    let player: Player = find_player(&db, player_id).await?;
 
     if !auth.has_permission_over(&player) {
         return Err(PlayersError::InvalidPermission);
     }
 
-    let data = PlayerData::set(db, player.id, key, req.value).await?;
+    let data = PlayerData::set(&db, player.id, key, req.value).await?;
     Ok(Json(data))
 }
 
@@ -532,19 +540,19 @@ pub async fn set_data(
 /// `auth`      The currently authenticated (Admin) player
 pub async fn delete_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
+    Extension(db): Extension<DatabaseConnection>,
     auth: AdminAuth,
 ) -> PlayersResult<()> {
     // Obtain the authenticated player
     let auth = auth.into_inner();
 
-    let db = App::database();
-    let player: Player = find_player(db, player_id).await?;
+    let player: Player = find_player(&db, player_id).await?;
 
     if !auth.has_permission_over(&player) {
         return Err(PlayersError::InvalidPermission);
     }
 
-    PlayerData::delete(db, player.id, &key).await?;
+    PlayerData::delete(&db, player.id, &key).await?;
 
     Ok(())
 }
@@ -558,11 +566,11 @@ pub async fn delete_data(
 /// `_admin`    The currently authenticated (Admin) player
 pub async fn get_player_gaw(
     Path(player_id): Path<PlayerID>,
+    Extension(db): Extension<DatabaseConnection>,
     _admin: AdminAuth,
 ) -> PlayersRes<GalaxyAtWar> {
-    let db = App::database();
-    let player = find_player(db, player_id).await?;
-    let galax_at_war = GalaxyAtWar::find_or_create(db, player.id, 0.0).await?;
+    let player = find_player(&db, player_id).await?;
+    let galax_at_war = GalaxyAtWar::find_or_create(&db, player.id, 0.0).await?;
     Ok(Json(galax_at_war))
 }
 

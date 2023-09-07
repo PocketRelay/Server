@@ -2,22 +2,26 @@
 //! about the server such as the version and services running
 
 use crate::{
+    config::{RuntimeConfig, VERSION},
     database::entities::players::PlayerRole,
     middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade, ip_address::IpAddress},
-    session::{packet::PacketCodec, Session},
-    state::{self, App},
+    services::Services,
+    session::{packet::PacketCodec, router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
 };
 use axum::{
     body::Empty,
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    Json,
+    Extension, Json,
 };
 use interlink::service::Service;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
 use tokio::{fs::read_to_string, io::split};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
@@ -41,7 +45,7 @@ pub struct ServerDetails {
 pub async fn server_details() -> Json<ServerDetails> {
     Json(ServerDetails {
         ident: "POCKET_RELAY_SERVER",
-        version: state::VERSION,
+        version: VERSION,
     })
 }
 
@@ -57,9 +61,9 @@ pub struct DashboardDetails {
 /// Handles providing the server details. The Pocket Relay client tool
 /// uses this endpoint to validate that the provided host is a valid
 /// Pocket Relay server.
-pub async fn dashboard_details() -> Json<DashboardDetails> {
-    let config = App::config();
-
+pub async fn dashboard_details(
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+) -> Json<DashboardDetails> {
     Json(DashboardDetails {
         disable_registration: config.dashboard.disable_registration,
     })
@@ -70,7 +74,12 @@ pub async fn dashboard_details() -> Json<DashboardDetails> {
 /// Handles upgrading connections from the Pocket Relay Client tool
 /// from HTTP over to the Blaze protocol for proxing the game traffic
 /// as blaze sessions using HTTP Upgrade
-pub async fn upgrade(IpAddress(socket_addr): IpAddress, upgrade: BlazeUpgrade) -> Response {
+pub async fn upgrade(
+    IpAddress(socket_addr): IpAddress,
+    Extension(router): Extension<Arc<BlazeRouter>>,
+    Extension(services): Extension<Arc<Services>>,
+    upgrade: BlazeUpgrade,
+) -> Response {
     // TODO: Socket address extraction for forwarded reverse proxy
 
     tokio::spawn(async move {
@@ -93,7 +102,14 @@ pub async fn upgrade(IpAddress(socket_addr): IpAddress, upgrade: BlazeUpgrade) -
             ctx.attach_stream(read, true);
             let writer = ctx.attach_sink(write);
 
-            Session::new(session_id, socket.host_target, writer, socket_addr)
+            Session::new(
+                session_id,
+                socket.host_target,
+                writer,
+                socket_addr,
+                router,
+                services,
+            )
         });
     });
 

@@ -1,10 +1,14 @@
 use crate::{
+    config::RuntimeConfig,
     session::{
-        models::messaging::*, packet::Packet, router::Blaze, GetPlayerMessage, PushExt, SessionLink,
+        models::messaging::*,
+        packet::Packet,
+        router::{Blaze, Extension},
+        GetPlayerMessage, PushExt, SessionLink,
     },
-    state::App,
     utils::components::messaging,
 };
+use std::sync::Arc;
 
 /// Handles requests from the client to fetch the server messages. The initial response contains
 /// the amount of messages and then each message is sent using a SendMessage notification.
@@ -26,7 +30,10 @@ use crate::{
 /// }
 /// ```
 ///
-pub async fn handle_fetch_messages(session: SessionLink) -> Blaze<FetchMessageResponse> {
+pub async fn handle_fetch_messages(
+    session: SessionLink,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+) -> Blaze<FetchMessageResponse> {
     // Request a copy of the player data
     let Ok(Some(player)) = session.send(GetPlayerMessage).await else {
         // Not authenticated return empty count
@@ -34,9 +41,7 @@ pub async fn handle_fetch_messages(session: SessionLink) -> Blaze<FetchMessageRe
     };
 
     // Message with player name replaced
-    let message: String = App::config()
-        .menu_message
-        .replace("{n}", &player.display_name);
+    let message: String = config.menu_message.replace("{n}", &player.display_name);
 
     let notify = Packet::notify(
         messaging::COMPONENT,

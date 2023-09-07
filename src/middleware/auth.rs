@@ -3,8 +3,7 @@ use crate::{
         entities::{players::PlayerRole, Player},
         DbErr,
     },
-    services::tokens::{Tokens, VerifyError},
-    state::App,
+    services::{tokens::VerifyError, Services},
     utils::types::BoxFuture,
 };
 use axum::{
@@ -13,7 +12,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use std::marker::PhantomData;
+use sea_orm::DatabaseConnection;
+use std::{marker::PhantomData, sync::Arc};
 use thiserror::Error;
 
 /// Extractor for extracting authentication from a request
@@ -68,6 +68,17 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
         'b: 'c,
         Self: 'c,
     {
+        let db = parts
+            .extensions
+            .get::<DatabaseConnection>()
+            .expect("Database connection extension missing")
+            .clone();
+        let services = parts
+            .extensions
+            .get::<Arc<Services>>()
+            .expect("Database connection extension missing")
+            .clone();
+
         Box::pin(async move {
             // Extract the token from the headers
             let token = parts
@@ -77,8 +88,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
                 .ok_or(TokenError::MissingToken)?;
 
             // Verify the token claim
-            let db = App::database();
-            let player: Player = Tokens::service_verify(db, token).await?;
+            let player: Player = services.tokens.verify_player(&db, token).await?;
 
             Ok(Self(player, PhantomData))
         })

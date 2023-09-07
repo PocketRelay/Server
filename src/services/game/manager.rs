@@ -3,7 +3,10 @@ use super::{
     AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
     GameSnapshot,
 };
-use crate::{services::matchmaking::rules::RuleSet, utils::types::GameID};
+use crate::{
+    services::matchmaking::{rules::RuleSet, Matchmaking},
+    utils::types::GameID,
+};
 use interlink::prelude::*;
 use log::debug;
 use std::{collections::HashMap, sync::Arc};
@@ -18,14 +21,16 @@ pub struct GameManager {
     games: HashMap<GameID, Link<Game>>,
     /// Stored value for the ID to give the next game
     next_id: GameID,
+    matchmaking: Link<Matchmaking>,
 }
 
 impl GameManager {
     /// Starts a new game manager service returning its link
-    pub fn start() -> Link<GameManager> {
+    pub fn start(matchmaking: Link<Matchmaking>) -> Link<GameManager> {
         let this = GameManager {
             games: Default::default(),
             next_id: 1,
+            matchmaking,
         };
         this.start()
     }
@@ -119,18 +124,20 @@ pub struct CreateMessage {
 impl Handler<CreateMessage> for GameManager {
     type Response = Mr<CreateMessage>;
 
-    fn handle(
-        &mut self,
-        mut msg: CreateMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    fn handle(&mut self, mut msg: CreateMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
         let id = self.next_id;
 
         self.next_id = self.next_id.wrapping_add(1);
 
         msg.host.state = PlayerState::ActiveConnected;
 
-        let link = Game::start(id, msg.attributes, msg.setting);
+        let link = Game::start(
+            id,
+            msg.attributes,
+            msg.setting,
+            ctx.link(),
+            self.matchmaking.clone(),
+        );
         self.games.insert(id, link.clone());
 
         let _ = link.do_send(AddPlayerMessage {

@@ -1,18 +1,22 @@
+use std::sync::Arc;
+
 use crate::{
     database::entities::players::PlayerRole,
     middleware::auth::Auth,
-    services::game::{
-        manager::{GetGameMessage, SnapshotQueryMessage},
-        GameSnapshot, SnapshotMessage,
+    services::{
+        game::{
+            manager::{GetGameMessage, SnapshotQueryMessage},
+            GameSnapshot, SnapshotMessage,
+        },
+        Services,
     },
-    state::App,
     utils::types::GameID,
 };
 use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
+    Extension, Json,
 };
 use interlink::prelude::LinkError;
 use serde::{Deserialize, Serialize};
@@ -62,14 +66,16 @@ pub struct GamesResponse {
 ///
 /// Player networking information is included for requesting
 /// players with admin level or greater access.
-pub async fn get_games(Query(query): Query<GamesRequest>, auth: Auth) -> GamesRes<GamesResponse> {
+pub async fn get_games(
+    Query(query): Query<GamesRequest>,
+    Extension(services): Extension<Arc<Services>>,
+    auth: Auth,
+) -> GamesRes<GamesResponse> {
     let GamesRequest { offset, count } = query;
     let auth = auth.into_inner();
 
     let count: usize = count.unwrap_or(20) as usize;
     let offset: usize = offset * count;
-
-    let services = App::services();
 
     // Retrieve the game snapshots
     let (games, more) = services
@@ -91,9 +97,12 @@ pub async fn get_games(Query(query): Query<GamesRequest>, auth: Auth) -> GamesRe
 ///
 /// Player networking information is included for requesting
 /// players with admin level or greater access.
-pub async fn get_game(Path(game_id): Path<GameID>, auth: Auth) -> GamesRes<GameSnapshot> {
+pub async fn get_game(
+    Path(game_id): Path<GameID>,
+    Extension(services): Extension<Arc<Services>>,
+    auth: Auth,
+) -> GamesRes<GameSnapshot> {
     let auth = auth.into_inner();
-    let services = App::services();
 
     let game = services
         .game_manager

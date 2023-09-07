@@ -5,7 +5,6 @@ use crate::{
         entities::{Player, PlayerData},
         DatabaseConnection, DbResult,
     },
-    state::App,
     utils::parsing::{KitNameDeployed, PlayerClass},
 };
 use interlink::prelude::*;
@@ -36,7 +35,7 @@ struct GroupState {
 /// of the specific leaderboard type
 #[derive(Message)]
 #[msg(rtype = "Arc<LeaderboardGroup>")]
-pub struct QueryMessage(pub LeaderboardType);
+pub struct QueryMessage(pub LeaderboardType, pub DatabaseConnection);
 
 impl Handler<QueryMessage> for Leaderboard {
     type Response = Fr<QueryMessage>;
@@ -69,7 +68,7 @@ impl Handler<QueryMessage> for Leaderboard {
 
         Fr::new(Box::pin(async move {
             // Compute new leaderboard values
-            let values = Self::compute(&ty).await;
+            let values = Self::compute(&ty, msg.1).await;
             let group = Arc::new(LeaderboardGroup::new(values));
 
             // Store the group and respond to the request
@@ -123,13 +122,11 @@ impl Leaderboard {
     /// on their value.
     ///
     /// `ty` The leaderboard type
-    async fn compute(ty: &LeaderboardType) -> Box<[LeaderboardEntry]> {
+    async fn compute(ty: &LeaderboardType, db: DatabaseConnection) -> Box<[LeaderboardEntry]> {
         let start_time = Instant::now();
 
         // The amount of players to process in each database request
         const BATCH_COUNT: u64 = 20;
-
-        let db = App::database();
 
         let mut values: Vec<LeaderboardEntry> = Vec::new();
 
@@ -137,10 +134,10 @@ impl Leaderboard {
 
         let mut paginator = players::Entity::find()
             .order_by_asc(players::Column::Id)
-            .paginate(db, BATCH_COUNT);
+            .paginate(&db, BATCH_COUNT);
 
         // Function pointer to the computing function for the desired type
-        let fun: fn(&'static DatabaseConnection, Player) -> Lf = match ty {
+        let fun: fn(DatabaseConnection, Player) -> Lf = match ty {
             LeaderboardType::N7Rating => compute_n7_player,
             LeaderboardType::ChallengePoints => compute_cp_player,
         };
@@ -157,7 +154,7 @@ impl Leaderboard {
 
             // Add the futures for all the players
             for player in players {
-                join_set.spawn(fun(db, player));
+                join_set.spawn(fun(db.clone(), player));
             }
 
             // Await computed results
@@ -191,12 +188,12 @@ type Lf = BoxFuture<'static, DbResult<LeaderboardEntry>>;
 ///
 /// `db`     The database connection
 /// `player` The player to rank
-fn compute_n7_player(db: &'static DatabaseConnection, player: Player) -> Lf {
+fn compute_n7_player(db: DatabaseConnection, player: Player) -> Lf {
     Box::pin(async move {
         let mut total_promotions: u32 = 0;
         let mut total_level: u32 = 0;
 
-        let data: Vec<PlayerData> = PlayerData::all(db, player.id).await?;
+        let data: Vec<PlayerData> = PlayerData::all(&db, player.id).await?;
 
         let mut classes: Vec<PlayerClass> = Vec::new();
         let mut characters: Vec<KitNameDeployed> = Vec::new();
@@ -241,9 +238,9 @@ fn compute_n7_player(db: &'static DatabaseConnection, player: Player) -> Lf {
 ///
 /// `db`     The database connection
 /// `player` The player to rank
-fn compute_cp_player(db: &'static DatabaseConnection, player: Player) -> Lf {
+fn compute_cp_player(db: DatabaseConnection, player: Player) -> Lf {
     Box::pin(async move {
-        let value = PlayerData::get_challenge_points(db, player.id)
+        let value = PlayerData::get_challenge_points(&db, player.id)
             .await
             .unwrap_or(0);
         Ok(LeaderboardEntry {

@@ -11,7 +11,6 @@ use crate::{
         sessions::{AddMessage, RemoveMessage},
         Services,
     },
-    state::App,
     utils::{
         components::{self, game_manager::GAME_TYPE, user_sessions},
         models::{NetData, NetworkAddress, Port, QosNetworkData, UpdateExtDataAttr},
@@ -21,10 +20,13 @@ use crate::{
 
 use interlink::prelude::*;
 use log::{debug, log_enabled};
-use std::{fmt::Debug, io, net::SocketAddr};
+use std::{fmt::Debug, io, net::SocketAddr, sync::Arc};
 use tdf::{ObjectId, TdfSerialize, TdfType, TdfTyped};
 
-use self::packet::{Packet, PacketDebug};
+use self::{
+    packet::{Packet, PacketDebug},
+    router::BlazeRouter,
+};
 
 pub mod models;
 pub mod packet;
@@ -49,6 +51,9 @@ pub struct Session {
 
     /// Data associated with this session
     data: SessionData,
+
+    router: Arc<BlazeRouter>,
+    services: Arc<Services>,
 }
 
 #[derive(Default, Clone)]
@@ -64,8 +69,7 @@ pub struct SessionData {
 
 impl Service for Session {
     fn stopping(&mut self) {
-        let services = App::services();
-        self.clear_auth(services);
+        self.clear_auth();
         debug!("Session stopped (SID: {})", self.id);
     }
 }
@@ -153,15 +157,13 @@ pub struct SetPlayerMessage(pub Option<Player>);
 impl Handler<SetPlayerMessage> for Session {
     type Response = ();
     fn handle(&mut self, msg: SetPlayerMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
-        let services = App::services();
-
         // Clear the current authentication
-        self.clear_auth(services);
+        self.clear_auth();
 
         // If we are setting a new player
         if let Some(player) = msg.0 {
             // Add the session to authenticated sessions
-            let _ = services.sessions.do_send(AddMessage {
+            let _ = self.services.sessions.do_send(AddMessage {
                 player_id: player.id,
                 link: ctx.link(),
             });
@@ -241,8 +243,8 @@ impl StreamHandler<io::Result<Packet>> for Session {
         if let Ok(packet) = msg {
             self.debug_log_packet("Read", &packet);
             let addr = ctx.link();
+            let router = self.router.clone();
             tokio::spawn(async move {
-                let router = App::router();
                 let response = match router.handle(addr.clone(), packet) {
                     // Await the handler response future
                     Ok(fut) => fut.await,
@@ -445,6 +447,8 @@ impl Session {
         host_target: SessionHostTarget,
         writer: SinkLink<Packet>,
         addr: SocketAddr,
+        router: Arc<BlazeRouter>,
+        services: Arc<Services>,
     ) -> Self {
         Self {
             id,
@@ -452,6 +456,8 @@ impl Session {
             data: SessionData::default(),
             host_target,
             addr,
+            router,
+            services,
         }
     }
 
@@ -498,7 +504,7 @@ impl Session {
 
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    pub fn remove_games(&mut self, services: &'static Services) {
+    pub fn remove_games(&mut self, services: Arc<Services>) {
         // Don't attempt to remove if theres no active player
         let player_id = match &self.data.player {
             Some(value) => value.id,
@@ -532,8 +538,8 @@ impl Session {
 
     /// Removes the player from the authenticated sessions list
     /// if the player is authenticated
-    pub fn clear_auth(&mut self, services: &'static Services) {
-        self.remove_games(services);
+    pub fn clear_auth(&mut self) {
+        self.remove_games(self.services.clone());
 
         // Check that theres authentication
         let player = match self.data.player.take() {
@@ -542,7 +548,7 @@ impl Session {
         };
 
         // Send the remove session message
-        let _ = services.sessions.do_send(RemoveMessage {
+        let _ = self.services.sessions.do_send(RemoveMessage {
             player_id: player.id,
         });
     }

@@ -1,20 +1,21 @@
+use sea_orm::DatabaseConnection;
+
 use crate::{
     database::entities::Player,
-    services::{sessions::LookupMessage, tokens::Tokens},
+    services::{sessions::LookupMessage, tokens::Tokens, Services},
     session::{
         models::{
             auth::AuthResponse,
             errors::{GlobalError, ServerResult},
             user_sessions::*,
         },
-        router::Blaze,
+        router::{Blaze, Extension},
         GetLookupMessage, GetSocketAddrMessage, HardwareFlagMessage, LookupResponse,
         NetworkInfoMessage, SessionLink, SetPlayerMessage,
     },
-    state::App,
     utils::models::NetworkAddress,
 };
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 /// Attempts to lookup another authenticated session details
 ///
@@ -33,9 +34,8 @@ use std::net::SocketAddr;
 /// ```
 pub async fn handle_lookup_user(
     Blaze(req): Blaze<LookupRequest>,
+    Extension(services): Extension<Arc<Services>>,
 ) -> ServerResult<Blaze<LookupResponse>> {
-    let services = App::services();
-
     // Lookup the session
     let session = services
         .sessions
@@ -72,13 +72,13 @@ pub async fn handle_lookup_user(
 /// ```
 pub async fn handle_resume_session(
     session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(services): Extension<Arc<Services>>,
     Blaze(req): Blaze<ResumeSessionRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
-    let db = App::database();
-
     let session_token = req.session_token;
 
-    let player: Player = Tokens::service_verify(db, &session_token).await?;
+    let player: Player = services.tokens.verify_player(&db, &session_token).await?;
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down

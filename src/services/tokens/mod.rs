@@ -17,9 +17,7 @@ use tokio::{
     io::{self, AsyncReadExt},
 };
 
-use crate::{database::entities::Player, state::App, utils::types::PlayerID};
-
-use super::Services;
+use crate::{database::entities::Player, utils::types::PlayerID};
 
 /// Token provider and verification service
 pub struct Tokens {
@@ -74,18 +72,10 @@ impl Tokens {
         Ok(())
     }
 
-    /// Claim by directly obtaining the services reference. This
-    /// exists because everywhere claim is used its always using
-    /// a call to [`App::services`] before
-    pub fn service_claim(id: u32) -> String {
-        let services = App::services();
-        services.tokens.claim(id)
-    }
-
     /// Creates a new claim using the provided claim value
     ///
     /// `id`    The ID of the player to claim for
-    fn claim(&self, id: u32) -> String {
+    pub fn claim(&self, id: u32) -> String {
         // Compute expiry timestamp
         let exp = SystemTime::now()
             .checked_add(Self::EXPIRY_TIME)
@@ -111,18 +101,12 @@ impl Tokens {
         [msg, sig].join(".")
     }
 
-    /// Verify by directly obtaining the services reference. This
-    /// exists because everywhere verify is used its always using
-    /// a call to [`App::services`] before
-    ///
-    /// Looks up the player that token verifies and treats missing
-    /// players as invalid tokens.
-    pub async fn service_verify(
+    pub async fn verify_player(
+        &self,
         db: &DatabaseConnection,
         token: &str,
     ) -> Result<Player, VerifyError> {
-        let services: &'static Services = App::services();
-        let player_id: PlayerID = services.tokens.verify(token)?;
+        let player_id: PlayerID = self.verify(token)?;
 
         Player::by_id(db, player_id)
             .await

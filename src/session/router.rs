@@ -16,11 +16,13 @@ use crate::{
 use bytes::Bytes;
 use log::error;
 use std::{
+    any::{Any, TypeId},
     collections::HashMap,
     convert::Infallible,
     future::{ready, Future},
     hash::{BuildHasherDefault, Hasher},
     marker::PhantomData,
+    sync::Arc,
 };
 use tdf::{serialize_vec, TdfDeserialize, TdfDeserializer, TdfSerialize};
 
@@ -60,18 +62,42 @@ where
 pub struct PacketRequest {
     pub state: SessionLink,
     pub packet: Packet,
+    pub extensions: Arc<AnyMap>,
 }
 
-pub struct BlazeRouter {
+impl PacketRequest {
+    pub fn extension<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        self.extensions
+            .get(&TypeId::of::<T>())
+            .and_then(|boxed| (&**boxed as &(dyn Any + 'static)).downcast_ref())
+    }
+}
+
+type AnyMap = HashMap<TypeId, Box<dyn Any + Send + Sync>, BuildHasherDefault<IdHasher>>;
+
+pub struct BlazeRouterBuilder {
     /// Map for looking up a route based on the component key
     routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<ComponentKeyHasher>>,
+    extensions: AnyMap,
 }
 
-impl BlazeRouter {
+impl BlazeRouterBuilder {
     pub fn new() -> Self {
         Self {
             routes: Default::default(),
+            extensions: Default::default(),
         }
+    }
+
+    pub fn add_extension<T: Send + Sync + 'static>(&mut self, val: T) -> Option<T> {
+        self.extensions
+            .insert(TypeId::of::<T>(), Box::new(val))
+            .and_then(|boxed| {
+                (boxed as Box<dyn Any + 'static>)
+                    .downcast()
+                    .ok()
+                    .map(|boxed| *boxed)
+            })
     }
 
     pub fn route<Args, Res>(&mut self, component: u16, command: u16, route: impl Handler<Args, Res>)
@@ -88,6 +114,21 @@ impl BlazeRouter {
         );
     }
 
+    pub fn build(self) -> Arc<BlazeRouter> {
+        Arc::new(BlazeRouter {
+            routes: self.routes,
+            extensions: Arc::new(self.extensions),
+        })
+    }
+}
+
+pub struct BlazeRouter {
+    /// Map for looking up a route based on the component key
+    routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<ComponentKeyHasher>>,
+    extensions: Arc<AnyMap>,
+}
+
+impl BlazeRouter {
     pub fn handle(
         &self,
         state: SessionLink,
@@ -101,7 +142,11 @@ impl BlazeRouter {
             None => return Err(packet),
         };
 
-        Ok(route.handle(PacketRequest { state, packet }))
+        Ok(route.handle(PacketRequest {
+            state,
+            packet,
+            extensions: self.extensions.clone(),
+        }))
     }
 }
 
@@ -121,6 +166,28 @@ impl Hasher for ComponentKeyHasher {
 
     fn write_u32(&mut self, i: u32) {
         self.0 = i;
+    }
+}
+
+// With TypeIds as keys, there's no need to hash them. They are already hashes
+// themselves, coming from the compiler. The IdHasher just holds the u64 of
+// the TypeId, and then returns it, instead of doing any bit fiddling.
+#[derive(Default)]
+pub struct IdHasher(u64);
+
+impl Hasher for IdHasher {
+    fn write(&mut self, _: &[u8]) {
+        panic!("Attempted to use id hasher to hash bytes")
+    }
+
+    #[inline]
+    fn write_u64(&mut self, id: u64) {
+        self.0 = id;
+    }
+
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
     }
 }
 
@@ -151,6 +218,35 @@ pub struct BlazeWithHeader<V> {
 /// [Blaze] tdf type for contents that have already been
 /// serialized ahead of time
 pub struct RawBlaze(Bytes);
+
+pub struct Extension<T>(pub T);
+
+impl<T> FromPacketRequest for Extension<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    type Rejection = BlazeError;
+
+    fn from_packet_request<'a>(
+        req: &'a PacketRequest,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        Box::pin(ready(
+            req.extension()
+                .ok_or_else(|| {
+                    error!(
+                        "Attempted to extract missing extension {}",
+                        std::any::type_name::<T>()
+                    );
+                    GlobalError::System.into()
+                })
+                .cloned()
+                .map(Extension),
+        ))
+    }
+}
 
 impl<T> From<T> for RawBlaze
 where

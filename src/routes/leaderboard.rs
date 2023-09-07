@@ -1,15 +1,20 @@
+use std::sync::Arc;
+
 use crate::{
-    services::leaderboard::{models::*, QueryMessage},
-    state::App,
+    services::{
+        leaderboard::{models::*, QueryMessage},
+        Services,
+    },
     utils::types::PlayerID,
 };
 use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
+    Extension, Json,
 };
 use interlink::prelude::LinkError;
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -67,13 +72,14 @@ pub struct LeaderboardResponse<'a> {
 /// `query` The leaderboard query
 pub async fn get_leaderboard(
     Path(name): Path<String>,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(services): Extension<Arc<Services>>,
     Query(query): Query<LeaderboardQuery>,
 ) -> Result<Response, LeaderboardError> {
     let LeaderboardQuery { offset, count } = query;
 
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-    let services = App::services();
     let leaderboard = &services.leaderboard;
 
     /// The default number of entries to return in a leaderboard response
@@ -84,7 +90,7 @@ pub async fn get_leaderboard(
     // Calculate the start and ending indexes
     let start: usize = offset * count;
 
-    let group = leaderboard.send(QueryMessage(ty)).await?;
+    let group = leaderboard.send(QueryMessage(ty, db)).await?;
 
     let (entries, more) = group
         .get_normal(start, count)
@@ -107,14 +113,13 @@ pub async fn get_leaderboard(
 /// `name`      The name of the leaderboard type to query
 /// `player_id` The ID of the player to find the leaderboard ranking of
 pub async fn get_player_ranking(
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(services): Extension<Arc<Services>>,
     Path((name, player_id)): Path<(String, PlayerID)>,
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-    let services = App::services();
-    let leaderboard = &services.leaderboard;
-
-    let group = leaderboard.send(QueryMessage(ty)).await?;
+    let group = services.leaderboard.send(QueryMessage(ty, db)).await?;
 
     let entry = match group.get_entry(player_id) {
         Some(value) => value,
