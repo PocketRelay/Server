@@ -14,50 +14,38 @@ use axum::{
 };
 use interlink::prelude::{Link, LinkError};
 use sea_orm::DatabaseConnection;
-use std::marker::PhantomData;
 use thiserror::Error;
 
-/// Extractor for extracting authentication from a request
-/// authorization header Bearer token
-pub struct Auth<V: AuthVerifier = ()>(pub Player, PhantomData<V>);
+pub struct Auth(pub Player);
+pub struct AdminAuth(pub Player);
 
-impl<V: AuthVerifier> Auth<V> {
-    /// Converts the auth guard into its inner player
-    pub fn into_inner(self) -> Player {
-        self.0
-    }
-}
+impl<S> FromRequestParts<S> for AdminAuth {
+    type Rejection = TokenError;
 
-/// Alias for an auth gaurd using admin verification
-pub type AdminAuth = Auth<AdminVerify>;
-
-pub trait AuthVerifier {
-    /// Verify function for checking that the provided
-    /// player meets the requirements
-    fn verify(player: &Player) -> bool;
-}
-
-/// Unit auth verifier type for accepting any player
-impl AuthVerifier for () {
-    fn verify(_player: &Player) -> bool {
-        true
-    }
-}
-
-/// Auth verifier implementation requiring a role of
-/// Admin or higher
-pub struct AdminVerify;
-
-impl AuthVerifier for AdminVerify {
-    fn verify(player: &Player) -> bool {
-        player.role >= PlayerRole::Admin
+    fn from_request_parts<'a, 'b, 'c>(
+        parts: &'a mut axum::http::request::Parts,
+        state: &'b S,
+    ) -> BoxFuture<'c, Result<Self, Self::Rejection>>
+    where
+        'a: 'c,
+        'b: 'c,
+        Self: 'c,
+    {
+        let auth = Auth::from_request_parts(parts, state);
+        Box::pin(async move {
+            let Auth(player) = auth.await?;
+            if player.role < PlayerRole::Admin {
+                return Err(TokenError::MissingRole);
+            }
+            Ok(AdminAuth(player))
+        })
     }
 }
 
 /// The HTTP header that contains the authentication token
 const TOKEN_HEADER: &str = "X-Token";
 
-impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
+impl<S> FromRequestParts<S> for Auth {
     type Rejection = TokenError;
 
     fn from_request_parts<'a, 'b, 'c>(
@@ -101,7 +89,7 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
                 .await?
                 .ok_or(TokenError::InvalidToken)?;
 
-            Ok(Self(player, PhantomData))
+            Ok(Self(player))
         })
     }
 }
@@ -119,6 +107,9 @@ pub enum TokenError {
     /// The provided token was not a valid token
     #[error("Invalid token")]
     InvalidToken,
+    /// Authentication is not high enough role
+    #[error("Missing required role")]
+    MissingRole,
     /// Database error
     #[error("Internal server error")]
     Database(#[from] DbErr),
@@ -135,6 +126,7 @@ impl IntoResponse for TokenError {
         let status = match &self {
             Self::MissingToken => StatusCode::BAD_REQUEST,
             Self::InvalidToken | Self::ExpiredToken => StatusCode::UNAUTHORIZED,
+            Self::MissingRole => StatusCode::FORBIDDEN,
             Self::Database(_) | Self::SessionService(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 

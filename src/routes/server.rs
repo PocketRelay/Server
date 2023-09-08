@@ -132,10 +132,9 @@ pub async fn upgrade(
 /// Handles loading and responding with the server log file
 /// contents for the log section on the super admin portion
 /// of the dashboard
-pub async fn get_log(auth: AdminAuth) -> Result<String, StatusCode> {
-    let auth = auth.into_inner();
+pub async fn get_log(AdminAuth(auth): AdminAuth) -> Result<String, StatusCode> {
     if auth.role < PlayerRole::SuperAdmin {
-        return Err(StatusCode::UNAUTHORIZED);
+        return Err(StatusCode::FORBIDDEN);
     }
     let path = std::path::Path::new(LOG_FILE_NAME);
     read_to_string(path)

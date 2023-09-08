@@ -64,10 +64,9 @@ pub struct GamesResponse {
 pub async fn get_games(
     Query(query): Query<GamesRequest>,
     Extension(game_manager): Extension<Link<GameManager>>,
-    auth: Auth,
+    Auth(auth): Auth,
 ) -> GamesRes<GamesResponse> {
     let GamesRequest { offset, count } = query;
-    let auth = auth.into_inner();
 
     let count: usize = count.unwrap_or(20) as usize;
     let offset: usize = offset * count;
@@ -94,10 +93,8 @@ pub async fn get_games(
 pub async fn get_game(
     Path(game_id): Path<GameID>,
     Extension(game_manager): Extension<Link<GameManager>>,
-    auth: Auth,
+    Auth(auth): Auth,
 ) -> GamesRes<GameSnapshot> {
-    let auth = auth.into_inner();
-
     let game = game_manager
         .send(GetGameMessage { game_id })
         .await?
