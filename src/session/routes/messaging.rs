@@ -1,5 +1,5 @@
 use crate::{
-    config::RuntimeConfig,
+    config::{RuntimeConfig, VERSION},
     session::{
         models::messaging::*,
         packet::Packet,
@@ -41,7 +41,12 @@ pub async fn handle_fetch_messages(
     };
 
     // Message with player name replaced
-    let message: String = config.menu_message.replace("{n}", &player.display_name);
+    let mut message: String = config
+        .menu_message
+        .replace("{v}", VERSION)
+        .replace("{n}", &player.display_name);
+    // Line terminator for the end of the message
+    message.push(char::from(0x0A));
 
     let notify = Packet::notify(
         messaging::COMPONENT,
