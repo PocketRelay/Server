@@ -5,7 +5,7 @@ use crate::{
     config::{RuntimeConfig, VERSION},
     database::entities::players::PlayerRole,
     middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade, ip_address::IpAddress},
-    services::{game::manager::GameManager, matchmaking::Matchmaking, sessions::AuthedSessions},
+    services::{game::manager::GameManager, sessions::AuthedSessions},
     session::{packet::PacketCodec, router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
 };
@@ -78,7 +78,6 @@ pub async fn upgrade(
     IpAddress(socket_addr): IpAddress,
     Extension(router): Extension<Arc<BlazeRouter>>,
     Extension(game_manager): Extension<Link<GameManager>>,
-    Extension(matchmaking): Extension<Link<Matchmaking>>,
     Extension(sessions): Extension<Link<AuthedSessions>>,
     upgrade: BlazeUpgrade,
 ) -> Response {
@@ -111,7 +110,6 @@ pub async fn upgrade(
                 socket_addr,
                 router,
                 game_manager,
-                matchmaking,
                 sessions,
             )
         });

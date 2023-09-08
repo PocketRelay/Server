@@ -1,16 +1,26 @@
 use super::{
     models::{DatalessContext, GameSettings, GameSetupContext, PlayerState},
+    rules::RuleSet,
     AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
     GameSnapshot,
 };
 use crate::{
-    services::matchmaking::{rules::RuleSet, Matchmaking},
-    utils::types::GameID,
+    services::game::models::AsyncMatchmakingStatus,
+    session::{packet::Packet, PushExt},
+    utils::{
+        components::game_manager,
+        types::{GameID, PlayerID},
+    },
 };
 use interlink::prelude::*;
 use log::debug;
-use std::{collections::HashMap, sync::Arc};
-use tokio::task::JoinSet;
+use std::{
+    collections::{HashMap, VecDeque},
+    ops::DerefMut,
+    sync::Arc,
+    time::SystemTime,
+};
+use tokio::{sync::RwLock, task::JoinSet};
 
 /// Manager which controls all the active games on the server
 /// commanding them to do different actions and removing them
@@ -21,18 +31,84 @@ pub struct GameManager {
     games: HashMap<GameID, Link<Game>>,
     /// Stored value for the ID to give the next game
     next_id: GameID,
-    matchmaking: Link<Matchmaking>,
+    /// Matchmaking entry queue
+    queue: Arc<RwLock<VecDeque<MatchmakingEntry>>>,
 }
 
 impl GameManager {
     /// Starts a new game manager service returning its link
-    pub fn start(matchmaking: Link<Matchmaking>) -> Link<GameManager> {
+    pub fn start() -> Link<GameManager> {
         let this = GameManager {
             games: Default::default(),
             next_id: 1,
-            matchmaking,
+            queue: Default::default(),
         };
         this.start()
+    }
+}
+
+/// Entry into the matchmaking queue
+struct MatchmakingEntry {
+    /// The player entry
+    player: GamePlayer,
+    /// The rules that a game must match for the player to join
+    rule_set: Arc<RuleSet>,
+    /// Time that the player entered matchmaking
+    started: SystemTime,
+}
+
+/// Message to remove a player from the matchmaking queue
+#[derive(Message)]
+pub struct RemoveQueueMessage {
+    /// The player ID of the player to remove
+    pub player_id: PlayerID,
+}
+
+impl Handler<RemoveQueueMessage> for GameManager {
+    /// Empty response type
+    type Response = Fr<RemoveQueueMessage>;
+
+    fn handle(
+        &mut self,
+        msg: RemoveQueueMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let queue_handle = self.queue.clone();
+        Fr::new(Box::pin(async move {
+            let mut queue = queue_handle.write().await;
+            queue.retain(|value| value.player.player.id != msg.player_id);
+        }))
+    }
+}
+
+/// Message to add a new player to the matchmaking queue
+#[derive(Message)]
+pub struct QueuePlayerMessage {
+    /// The player to add to the queue
+    pub player: GamePlayer,
+    /// The rules for the player
+    pub rule_set: Arc<RuleSet>,
+}
+
+impl Handler<QueuePlayerMessage> for GameManager {
+    /// Empty response type
+    type Response = Fr<QueuePlayerMessage>;
+
+    fn handle(
+        &mut self,
+        msg: QueuePlayerMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let started = SystemTime::now();
+        let queue_handle = self.queue.clone();
+        Fr::new(Box::pin(async move {
+            let mut queue = queue_handle.write().await;
+            queue.push_back(MatchmakingEntry {
+                player: msg.player,
+                rule_set: msg.rule_set,
+                started,
+            });
+        }))
     }
 }
 
@@ -131,13 +207,7 @@ impl Handler<CreateMessage> for GameManager {
 
         msg.host.state = PlayerState::ActiveConnected;
 
-        let link = Game::start(
-            id,
-            msg.attributes,
-            msg.setting,
-            ctx.link(),
-            self.matchmaking.clone(),
-        );
+        let link = Game::start(id, msg.attributes, msg.setting, ctx.link());
         self.games.insert(id, link.clone());
 
         let _ = link.do_send(AddPlayerMessage {
@@ -240,5 +310,98 @@ impl Handler<RemoveGameMessage> for GameManager {
         if let Some(value) = self.games.remove(&msg.game_id) {
             value.stop();
         }
+    }
+}
+
+/// Process the contents of the matchmaking queue against
+/// a game link
+#[derive(Message)]
+pub struct ProcessQueueMessage {
+    pub link: Link<Game>,
+    pub game_id: GameID,
+}
+
+impl Handler<ProcessQueueMessage> for GameManager {
+    type Response = Fr<ProcessQueueMessage>;
+
+    fn handle(
+        &mut self,
+        msg: ProcessQueueMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let queue_handle = self.queue.clone();
+
+        Fr::new(Box::pin(async move {
+            let mut queue = queue_handle.write().await;
+            let queue = queue.deref_mut();
+            if queue.is_empty() {
+                return;
+            }
+
+            let link = msg.link;
+
+            while let Some(entry) = queue.front() {
+                let join_state = match link
+                    .send(CheckJoinableMessage {
+                        rule_set: Some(entry.rule_set.clone()),
+                    })
+                    .await
+                {
+                    Ok(value) => value,
+                    // Game is no longer available stop checking
+                    Err(_) => break,
+                };
+
+                // TODO: If player has been in queue long enough create
+                // a game matching their specifics
+
+                match join_state {
+                    GameJoinableState::Joinable => {
+                        let entry = queue
+                            .pop_front()
+                            .expect("Expecting matchmaking entry but nothing was present");
+
+                        debug!(
+                            "Found player from queue adding them to the game (GID: {})",
+                            msg.game_id
+                        );
+                        let time = SystemTime::now();
+                        let elapsed = time.duration_since(entry.started);
+                        if let Ok(elapsed) = elapsed {
+                            debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
+                        }
+
+                        let msid = entry.player.player.id;
+
+                        // Send the async update (TODO: Do this at intervals)
+                        entry.player.link.push(Packet::notify(
+                            game_manager::COMPONENT,
+                            game_manager::MATCHMAKING_ASYNC_STATUS,
+                            AsyncMatchmakingStatus { player_id: msid },
+                        ));
+
+                        // Add the player to the game
+                        if link
+                            .do_send(AddPlayerMessage {
+                                player: entry.player,
+                                context: GameSetupContext::Matchmaking(msid),
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    GameJoinableState::Full => {
+                        // If the game is not joinable push the entry back to the
+                        // front of the queue and early return
+                        break;
+                    }
+                    GameJoinableState::NotMatch => {
+                        // TODO: Check started time and timeout
+                        // player if they've been waiting too long
+                    }
+                }
+            }
+        }))
     }
 }

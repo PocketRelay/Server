@@ -1,13 +1,15 @@
 use crate::{
     services::{
         game::{
-            manager::{CreateMessage, GameManager, GetGameMessage, TryAddMessage, TryAddResult},
+            manager::{
+                CreateMessage, GameManager, GetGameMessage, ProcessQueueMessage,
+                QueuePlayerMessage, TryAddMessage, TryAddResult,
+            },
             models::{DatalessContext, GameSetupContext},
             AddPlayerMessage, CheckJoinableMessage, GameJoinableState, GamePlayer,
             GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage, SetSettingMessage,
             SetStateMessage, UpdateMeshMessage,
         },
-        matchmaking::{CheckGameMessage, Matchmaking, QueuePlayerMessage},
         sessions::{AuthedSessions, LookupMessage},
     },
     session::{
@@ -155,7 +157,6 @@ pub async fn handle_get_game_data(
 pub async fn handle_create_game(
     session: SessionLink,
     Extension(game_manager): Extension<Link<GameManager>>,
-    Extension(matchmaking): Extension<Link<Matchmaking>>,
     Blaze(req): Blaze<CreateGameRequest>,
 ) -> ServerResult<Blaze<CreateGameResponse>> {
     let player: GamePlayer = session
@@ -172,7 +173,7 @@ pub async fn handle_create_game(
         .await?;
 
     // Notify matchmaking of the new game
-    let _ = matchmaking.do_send(CheckGameMessage { link, game_id });
+    let _ = game_manager.do_send(ProcessQueueMessage { link, game_id });
 
     Ok(Blaze(CreateGameResponse { game_id }))
 }
@@ -486,7 +487,6 @@ pub async fn handle_update_mesh_connection(
 pub async fn handle_start_matchmaking(
     session: SessionLink,
     Extension(game_manager): Extension<Link<GameManager>>,
-    Extension(matchmaking): Extension<Link<Matchmaking>>,
     Blaze(req): Blaze<MatchmakingRequest>,
 ) -> ServerResult<Blaze<MatchmakingResponse>> {
     let player: GamePlayer = session
@@ -509,7 +509,7 @@ pub async fn handle_start_matchmaking(
 
     // If adding failed attempt to queue instead
     if let TryAddResult::Failure(player) = result {
-        matchmaking
+        game_manager
             .send(QueuePlayerMessage { player, rule_set })
             .await?;
     }

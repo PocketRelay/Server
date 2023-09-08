@@ -1,12 +1,10 @@
 use tdf::{Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped};
 
 use crate::{
-    services::{
-        game::{
-            models::{GameSettings, GameState, PlayerState, RemoveReason},
-            AttrMap,
-        },
-        matchmaking::rules::RuleSet,
+    services::game::{
+        models::{GameSettings, GameState, PlayerState, RemoveReason},
+        rules::RuleSet,
+        AttrMap,
     },
     utils::types::{GameID, PlayerID, SessionID},
 };

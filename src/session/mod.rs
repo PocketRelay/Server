@@ -7,11 +7,10 @@ use crate::{
     middleware::blaze_upgrade::BlazeScheme,
     services::{
         game::{
-            manager::{GameManager, GetGameMessage},
+            manager::{GameManager, GetGameMessage, RemoveQueueMessage},
             models::RemoveReason,
             GamePlayer, RemovePlayerMessage,
         },
-        matchmaking::{Matchmaking, RemoveQueueMessage},
         sessions::{AddMessage, AuthedSessions, RemoveMessage},
     },
     utils::{
@@ -58,7 +57,6 @@ pub struct Session {
     router: Arc<BlazeRouter>,
 
     game_manager: Link<GameManager>,
-    matchmaking: Link<Matchmaking>,
     sessions: Link<AuthedSessions>,
 }
 
@@ -450,7 +448,6 @@ impl Session {
         addr: SocketAddr,
         router: Arc<BlazeRouter>,
         game_manager: Link<GameManager>,
-        matchmaking: Link<Matchmaking>,
         sessions: Link<AuthedSessions>,
     ) -> Self {
         Self {
@@ -461,7 +458,6 @@ impl Session {
             addr,
             router,
             game_manager,
-            matchmaking,
             sessions,
         }
     }
@@ -536,7 +532,7 @@ impl Session {
             });
         } else {
             // Remove the player from matchmaking if present
-            let _ = self.matchmaking.do_send(RemoveQueueMessage { player_id });
+            let _ = self.game_manager.do_send(RemoveQueueMessage { player_id });
         }
     }
 

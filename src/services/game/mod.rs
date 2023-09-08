@@ -1,11 +1,7 @@
-use self::manager::GameManager;
-use super::matchmaking::Matchmaking;
+use self::{manager::GameManager, rules::RuleSet};
 use crate::{
     database::entities::Player,
-    services::{
-        game::manager::RemoveGameMessage,
-        matchmaking::{rules::RuleSet, CheckGameMessage},
-    },
+    services::game::manager::{ProcessQueueMessage, RemoveGameMessage},
     session::{
         packet::Packet, router::RawBlaze, DetailsMessage, InformSessions, PushExt, Session,
         SetGameMessage,
@@ -25,6 +21,7 @@ use tdf::{ObjectId, TdfMap, TdfSerialize, TdfSerializer};
 
 pub mod manager;
 pub mod models;
+pub mod rules;
 
 /// Game service running within the server
 pub struct Game {
@@ -40,7 +37,6 @@ pub struct Game {
     pub players: Vec<GamePlayer>,
     /// Services access
     pub game_manager: Link<GameManager>,
-    pub matchmaking: Link<Matchmaking>,
 }
 
 impl Service for Game {
@@ -64,7 +60,6 @@ impl Game {
         attributes: AttrMap,
         setting: GameSettings,
         game_manager: Link<GameManager>,
-        matchmaking: Link<Matchmaking>,
     ) -> Link<Game> {
         let this = Game {
             id,
@@ -73,7 +68,6 @@ impl Game {
             attributes,
             players: Vec::with_capacity(4),
             game_manager,
-            matchmaking,
         };
 
         this.start()
@@ -316,7 +310,7 @@ impl Handler<SetAttributesMessage> for Game {
 
         // Don't update matchmaking for full games
         if self.players.len() < Self::MAX_PLAYERS {
-            let _ = self.matchmaking.do_send(CheckGameMessage {
+            let _ = self.game_manager.do_send(ProcessQueueMessage {
                 link: ctx.link(),
                 game_id: self.id,
             });

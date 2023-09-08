@@ -1,8 +1,8 @@
 use crate::{
     config::{RuntimeConfig, VERSION},
     services::{
-        game::manager::GameManager, leaderboard::Leaderboard, matchmaking::Matchmaking,
-        retriever::Retriever, sessions::AuthedSessions, tokens::Tokens,
+        game::manager::GameManager, leaderboard::Leaderboard, retriever::Retriever,
+        sessions::AuthedSessions, tokens::Tokens,
     },
 };
 use axum::{Extension, Server};
@@ -63,8 +63,7 @@ async fn main() {
         Retriever::new(config.retriever),
         Tokens::new()
     );
-    let matchmaking = Matchmaking::start();
-    let game_manager = GameManager::start(matchmaking.clone());
+    let game_manager = GameManager::start();
     let leaderboard = Leaderboard::start();
     let sessions = AuthedSessions::start();
     let tokens = Arc::new(tokens);
@@ -76,7 +75,6 @@ async fn main() {
     router.add_extension(db.clone());
     router.add_extension(config.clone());
     router.add_extension(retriever.clone());
-    router.add_extension(matchmaking.clone());
     router.add_extension(game_manager.clone());
     router.add_extension(leaderboard.clone());
     router.add_extension(sessions.clone());
@@ -90,7 +88,6 @@ async fn main() {
         .layer(Extension(db))
         .layer(Extension(config))
         .layer(Extension(router))
-        .layer(Extension(matchmaking))
         .layer(Extension(game_manager))
         .layer(Extension(leaderboard))
         .layer(Extension(sessions))
