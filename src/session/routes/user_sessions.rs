@@ -141,10 +141,9 @@ pub async fn handle_update_network(
         // If address is missing
         if ext.addr.is_unspecified() {
             // Obtain socket address from session
-            if let Ok(SocketAddr::V4(addr)) = session.send(GetSocketAddrMessage).await {
-                let ip = addr.ip();
+            if let Ok(addr) = session.send(GetSocketAddrMessage).await {
                 // Replace address with new address and port with same as local port
-                ext.addr = *ip;
+                ext.addr = addr;
                 ext.port = pair.internal.port;
             }
         }

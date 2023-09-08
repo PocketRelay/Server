@@ -75,7 +75,7 @@ pub async fn dashboard_details(
 /// from HTTP over to the Blaze protocol for proxing the game traffic
 /// as blaze sessions using HTTP Upgrade
 pub async fn upgrade(
-    IpAddress(socket_addr): IpAddress,
+    IpAddress(addr): IpAddress,
     Extension(router): Extension<Arc<BlazeRouter>>,
     Extension(game_manager): Extension<Link<GameManager>>,
     Extension(sessions): Extension<Link<Sessions>>,
@@ -107,7 +107,7 @@ pub async fn upgrade(
                 session_id,
                 socket.host_target,
                 writer,
-                socket_addr,
+                addr,
                 router,
                 game_manager,
                 sessions,

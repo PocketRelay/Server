@@ -22,7 +22,12 @@ use crate::{
 
 use interlink::prelude::*;
 use log::{debug, log_enabled};
-use std::{fmt::Debug, io, net::SocketAddr, sync::Arc};
+use std::{
+    fmt::Debug,
+    io,
+    net::{Ipv4Addr, SocketAddr},
+    sync::Arc,
+};
 use tdf::{ObjectId, TdfSerialize, TdfType, TdfTyped};
 
 use self::{
@@ -43,7 +48,7 @@ pub struct Session {
     id: SessionID,
 
     /// Connection socket addr
-    addr: SocketAddr,
+    addr: Ipv4Addr,
 
     /// Packet writer sink for the session
     writer: SinkLink<Packet>,
@@ -298,7 +303,7 @@ impl Handler<UpdateClientMessage> for Session {
 }
 
 #[derive(Message)]
-#[msg(rtype = "SocketAddr")]
+#[msg(rtype = "Ipv4Addr")]
 pub struct GetSocketAddrMessage;
 
 impl Handler<GetSocketAddrMessage> for Session {
@@ -445,7 +450,7 @@ impl Session {
         id: SessionID,
         host_target: SessionHostTarget,
         writer: SinkLink<Packet>,
-        addr: SocketAddr,
+        addr: Ipv4Addr,
         router: Arc<BlazeRouter>,
         game_manager: Link<GameManager>,
         sessions: Link<Sessions>,
