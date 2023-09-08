@@ -46,11 +46,12 @@ async fn main() {
         dashboard: config.dashboard,
     };
 
+    // This step may take longer than expected so its spawned instead of joined
     tokio::spawn(logging::log_connection_urls(config.port));
 
     let (db, retriever, sessions) = join!(
         database::init(&runtime_config),
-        Retriever::new(config.retriever),
+        Retriever::start(config.retriever),
         Sessions::start()
     );
     let game_manager = GameManager::start();

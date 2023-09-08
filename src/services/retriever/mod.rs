@@ -247,7 +247,7 @@ impl Retriever {
     /// ip address of the gosredirector.ea.com host and then creates a
     /// connection to the redirector server and obtains the IP and Port
     /// of the Official server.
-    pub async fn new(config: RetrieverConfig) -> Link<Retriever> {
+    pub async fn start(config: RetrieverConfig) -> Link<Retriever> {
         let instance = if config.enabled {
             match OfficialInstance::obtain().await {
                 Ok(value) => Some(value),
