@@ -165,7 +165,7 @@ async fn get_player_gaw_data(
         .map_err(|_| GAWError::ServerError)?
         .map_err(|_| GAWError::InvalidToken)?;
 
-    let player = Player::by_id(&db, player_id)
+    let player = Player::by_id(db, player_id)
         .await?
         .ok_or(GAWError::InvalidToken)?;
 
