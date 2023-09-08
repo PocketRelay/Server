@@ -10,7 +10,7 @@ use crate::{
             GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage, SetSettingMessage,
             SetStateMessage, UpdateMeshMessage,
         },
-        sessions::{AuthedSessions, LookupMessage},
+        sessions::{LookupMessage, Sessions},
     },
     session::{
         models::{
@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 pub async fn handle_join_game(
     session: SessionLink,
-    Extension(sessions): Extension<Link<AuthedSessions>>,
+    Extension(sessions): Extension<Link<Sessions>>,
     Extension(game_manager): Extension<Link<GameManager>>,
     Blaze(req): Blaze<JoinGameRequest>,
 ) -> ServerResult<Blaze<JoinGameResponse>> {

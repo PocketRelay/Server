@@ -2,7 +2,7 @@ use crate::{
     config::{RuntimeConfig, VERSION},
     services::{
         game::manager::GameManager, leaderboard::Leaderboard, retriever::Retriever,
-        sessions::AuthedSessions, tokens::Tokens,
+        sessions::Sessions,
     },
 };
 use axum::{Extension, Server};
@@ -58,15 +58,13 @@ async fn main() {
 
     tokio::spawn(logging::log_connection_urls(config.port));
 
-    let (db, retriever, tokens) = join!(
+    let (db, retriever, sessions) = join!(
         database::init(&runtime_config),
         Retriever::new(config.retriever),
-        Tokens::new()
+        Sessions::start()
     );
     let game_manager = GameManager::start();
     let leaderboard = Leaderboard::start();
-    let sessions = AuthedSessions::start();
-    let tokens = Arc::new(tokens);
     let config = Arc::new(runtime_config);
 
     // Initialize session router
@@ -78,7 +76,6 @@ async fn main() {
     router.add_extension(game_manager.clone());
     router.add_extension(leaderboard.clone());
     router.add_extension(sessions.clone());
-    router.add_extension(tokens.clone());
 
     let router = router.build();
 
@@ -91,7 +88,6 @@ async fn main() {
         .layer(Extension(game_manager))
         .layer(Extension(leaderboard))
         .layer(Extension(sessions))
-        .layer(Extension(tokens))
         .into_make_service_with_connect_info::<SocketAddr>();
 
     // Create futures for server and shutdown signal

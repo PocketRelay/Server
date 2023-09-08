@@ -11,7 +11,7 @@ use crate::{
         DatabaseConnection, DbErr, DbResult,
     },
     middleware::xml::Xml,
-    services::tokens::Tokens,
+    services::sessions::{Sessions, VerifyTokenMessage},
     utils::parsing::PlayerClass,
 };
 use axum::{
@@ -20,6 +20,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension,
 };
+use interlink::prelude::Link;
 use serde::Deserialize;
 use std::{fmt::Display, sync::Arc};
 use tokio::try_join;
@@ -98,9 +99,9 @@ pub async fn get_ratings(
     Path(id): Path<String>,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(tokens): Extension<Arc<Tokens>>,
+    Extension(sessions): Extension<Link<Sessions>>,
 ) -> Result<Xml, GAWError> {
-    let (gaw_data, promotions) = get_player_gaw_data(&db, &tokens, &id, &config).await?;
+    let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
     Ok(ratings_response(gaw_data, promotions))
 }
 
@@ -138,9 +139,9 @@ pub async fn increase_ratings(
     Query(query): Query<IncreaseQuery>,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(tokens): Extension<Arc<Tokens>>,
+    Extension(sessions): Extension<Link<Sessions>>,
 ) -> Result<Xml, GAWError> {
-    let (gaw_data, promotions) = get_player_gaw_data(&db, &tokens, &id, &config).await?;
+    let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
     let gaw_data = gaw_data
         .increase(&db, (query.a, query.b, query.c, query.d, query.e))
         .await?;
@@ -154,14 +155,19 @@ pub async fn increase_ratings(
 /// `id` The hex ID of the player
 async fn get_player_gaw_data(
     db: &DatabaseConnection,
-    tokens: &Tokens,
+    sessions: Link<Sessions>,
     token: &str,
     config: &RuntimeConfig,
 ) -> Result<(GalaxyAtWar, u32), GAWError> {
-    let player: Player = tokens
-        .verify_player(db, token)
+    let player_id = sessions
+        .send(VerifyTokenMessage(token.to_string()))
         .await
+        .map_err(|_| GAWError::ServerError)?
         .map_err(|_| GAWError::InvalidToken)?;
+
+    let player = Player::by_id(&db, player_id)
+        .await?
+        .ok_or(GAWError::InvalidToken)?;
 
     let (gaw_data, promotions) = try_join!(
         GalaxyAtWar::find_or_create(db, player.id, config.galaxy_at_war.decay),

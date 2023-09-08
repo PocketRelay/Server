@@ -3,13 +3,10 @@ use sea_orm::DatabaseConnection;
 
 use crate::{
     database::entities::Player,
-    services::{
-        sessions::{AuthedSessions, LookupMessage},
-        tokens::Tokens,
-    },
+    services::sessions::{LookupMessage, Sessions, VerifyError, VerifyTokenMessage},
     session::{
         models::{
-            auth::AuthResponse,
+            auth::{AuthResponse, AuthenticationError},
             errors::{GlobalError, ServerResult},
             user_sessions::*,
         },
@@ -19,7 +16,7 @@ use crate::{
     },
     utils::models::NetworkAddress,
 };
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 /// Attempts to lookup another authenticated session details
 ///
@@ -38,7 +35,7 @@ use std::{net::SocketAddr, sync::Arc};
 /// ```
 pub async fn handle_lookup_user(
     Blaze(req): Blaze<LookupRequest>,
-    Extension(sessions): Extension<Link<AuthedSessions>>,
+    Extension(sessions): Extension<Link<Sessions>>,
 ) -> ServerResult<Blaze<LookupResponse>> {
     // Lookup the session
     let session = sessions
@@ -76,12 +73,23 @@ pub async fn handle_lookup_user(
 pub async fn handle_resume_session(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(tokens): Extension<Arc<Tokens>>,
+    Extension(sessions): Extension<Link<Sessions>>,
     Blaze(req): Blaze<ResumeSessionRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     let session_token = req.session_token;
 
-    let player: Player = tokens.verify_player(&db, &session_token).await?;
+    // Verify the authentication token
+    let player_id = sessions
+        .send(VerifyTokenMessage(session_token.clone()))
+        .await?
+        .map_err(|err| match err {
+            VerifyError::Expired => AuthenticationError::ExpiredToken,
+            VerifyError::Invalid => AuthenticationError::InvalidToken,
+        })?;
+
+    let player = Player::by_id(&db, player_id)
+        .await?
+        .ok_or(AuthenticationError::InvalidToken)?;
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down

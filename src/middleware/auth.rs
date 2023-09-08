@@ -3,7 +3,7 @@ use crate::{
         entities::{players::PlayerRole, Player},
         DbErr,
     },
-    services::tokens::{Tokens, VerifyError},
+    services::sessions::{Sessions, VerifyError, VerifyTokenMessage},
     utils::types::BoxFuture,
 };
 use axum::{
@@ -12,8 +12,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use interlink::prelude::{Link, LinkError};
 use sea_orm::DatabaseConnection;
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 use thiserror::Error;
 
 /// Extractor for extracting authentication from a request
@@ -73,9 +74,9 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
             .get::<DatabaseConnection>()
             .expect("Database connection extension missing")
             .clone();
-        let tokens = parts
+        let sessions = parts
             .extensions
-            .get::<Arc<Tokens>>()
+            .get::<Link<Sessions>>()
             .expect("Database connection extension missing")
             .clone();
 
@@ -87,8 +88,18 @@ impl<V: AuthVerifier, S> FromRequestParts<S> for Auth<V> {
                 .and_then(|value| value.to_str().ok())
                 .ok_or(TokenError::MissingToken)?;
 
-            // Verify the token claim
-            let player: Player = tokens.verify_player(&db, token).await?;
+            let player_id = sessions
+                .send(VerifyTokenMessage(token.to_string()))
+                .await
+                .map_err(TokenError::SessionService)?
+                .map_err(|err| match err {
+                    VerifyError::Expired => TokenError::ExpiredToken,
+                    VerifyError::Invalid => TokenError::InvalidToken,
+                })?;
+
+            let player = Player::by_id(&db, player_id)
+                .await?
+                .ok_or(TokenError::InvalidToken)?;
 
             Ok(Self(player, PhantomData))
         })
@@ -111,15 +122,9 @@ pub enum TokenError {
     /// Database error
     #[error("Internal server error")]
     Database(#[from] DbErr),
-}
-
-impl From<VerifyError> for TokenError {
-    fn from(value: VerifyError) -> Self {
-        match value {
-            VerifyError::Expired => Self::ExpiredToken,
-            _ => Self::InvalidToken,
-        }
-    }
+    /// Session service error
+    #[error("Session service unavailable")]
+    SessionService(LinkError),
 }
 
 /// IntoResponse implementation for TokenError to allow it to be
@@ -130,7 +135,7 @@ impl IntoResponse for TokenError {
         let status = match &self {
             Self::MissingToken => StatusCode::BAD_REQUEST,
             Self::InvalidToken | Self::ExpiredToken => StatusCode::UNAUTHORIZED,
-            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Database(_) | Self::SessionService(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (status, boxed(self.to_string())).into_response()

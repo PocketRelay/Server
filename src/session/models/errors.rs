@@ -2,10 +2,7 @@ use interlink::prelude::LinkError;
 use log::error;
 use sea_orm::DbErr;
 
-use crate::{
-    services::tokens::VerifyError,
-    session::{packet::Packet, router::IntoPacketResponse},
-};
+use crate::session::{packet::Packet, router::IntoPacketResponse};
 
 use super::{auth::AuthenticationError, game_manager::GameManagerError, util::UtilError};
 
@@ -70,15 +67,6 @@ impl From<DbErr> for BlazeError {
     }
 }
 
-impl From<VerifyError> for BlazeError {
-    fn from(value: VerifyError) -> Self {
-        match value {
-            VerifyError::Expired => AuthenticationError::ExpiredToken.into(),
-            VerifyError::Invalid => AuthenticationError::InvalidToken.into(),
-            VerifyError::Server => GlobalError::System.into(),
-        }
-    }
-}
 impl From<GameManagerError> for BlazeError {
     fn from(value: GameManagerError) -> Self {
         BlazeError(value as u16)

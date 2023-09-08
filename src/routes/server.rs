@@ -5,7 +5,7 @@ use crate::{
     config::{RuntimeConfig, VERSION},
     database::entities::players::PlayerRole,
     middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade, ip_address::IpAddress},
-    services::{game::manager::GameManager, sessions::AuthedSessions},
+    services::{game::manager::GameManager, sessions::Sessions},
     session::{packet::PacketCodec, router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
 };
@@ -78,7 +78,7 @@ pub async fn upgrade(
     IpAddress(socket_addr): IpAddress,
     Extension(router): Extension<Arc<BlazeRouter>>,
     Extension(game_manager): Extension<Link<GameManager>>,
-    Extension(sessions): Extension<Link<AuthedSessions>>,
+    Extension(sessions): Extension<Link<Sessions>>,
     upgrade: BlazeUpgrade,
 ) -> Response {
     // TODO: Socket address extraction for forwarded reverse proxy

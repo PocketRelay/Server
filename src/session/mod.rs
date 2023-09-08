@@ -11,7 +11,7 @@ use crate::{
             models::RemoveReason,
             GamePlayer, RemovePlayerMessage,
         },
-        sessions::{AddMessage, AuthedSessions, RemoveMessage},
+        sessions::{AddMessage, RemoveMessage, Sessions},
     },
     utils::{
         components::{self, game_manager::GAME_TYPE, user_sessions},
@@ -57,7 +57,7 @@ pub struct Session {
     router: Arc<BlazeRouter>,
 
     game_manager: Link<GameManager>,
-    sessions: Link<AuthedSessions>,
+    sessions: Link<Sessions>,
 }
 
 #[derive(Default, Clone)]
@@ -448,7 +448,7 @@ impl Session {
         addr: SocketAddr,
         router: Arc<BlazeRouter>,
         game_manager: Link<GameManager>,
-        sessions: Link<AuthedSessions>,
+        sessions: Link<Sessions>,
     ) -> Self {
         Self {
             id,
