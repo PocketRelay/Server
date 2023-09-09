@@ -40,7 +40,7 @@ where
             let ip = match extract_ip_header(&parts.headers) {
                 Ok(ip) => ip,
                 Err(err) => {
-                    warn!("Failed to extract X-Real-IP header from connecting client. If you are NOT using a reverse proxy\n\
+                    warn!("Failed to extract X-Real-IP header from incoming request. If you are NOT using a reverse proxy\n\
                     disable the `reverse_proxy` config property, otherwise check that your reverse proxy is configured\n\
                     correctly according the guide. (Closing connection with error) cause: {}", err);
                     return Err(err);
@@ -62,7 +62,7 @@ where
 fn extract_ip_header(headers: &HeaderMap) -> Result<Ipv4Addr, IpAddressError> {
     let header = headers
         .get(REAL_IP_HEADER)
-        .ok_or(IpAddressError::InvalidHeader)?;
+        .ok_or(IpAddressError::MissingHeader)?;
     let value = header.to_str().map_err(|_| IpAddressError::InvalidHeader)?;
     if let Ok(addr) = value.parse::<Ipv4Addr>() {
         return Ok(addr);
