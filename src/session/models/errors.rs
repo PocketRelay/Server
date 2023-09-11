@@ -4,19 +4,22 @@ use sea_orm::DbErr;
 
 use crate::session::{packet::Packet, router::IntoPacketResponse};
 
-use super::{auth::AuthenticationError, game_manager::GameManagerError, util::UtilError};
+use super::{
+    auth::AuthenticationError, game_manager::GameManagerError, user_sessions::UserSessionsError,
+    util::UtilError,
+};
 
 pub type ServerResult<T> = Result<T, BlazeError>;
 
-// #[test]
-// fn decode_error() {
-//     let value: i32 = 19791881;
-//     let bytes = value.to_le_bytes();
-//     let mut out = [0u8; 2];
-//     out.copy_from_slice(&bytes[2..]);
-//     let out = u16::from_le_bytes(out);
-//     println!("{:#00x}", out);
-// }
+#[test]
+fn decode_error() {
+    let value: i32 = 96258;
+    let bytes = value.to_le_bytes();
+    let mut out = [0u8; 2];
+    out.copy_from_slice(&bytes[2..]);
+    let out = u16::from_le_bytes(out);
+    println!("{:#00x}", out);
+}
 
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -69,6 +72,12 @@ impl From<DbErr> for BlazeError {
 
 impl From<GameManagerError> for BlazeError {
     fn from(value: GameManagerError) -> Self {
+        BlazeError(value as u16)
+    }
+}
+
+impl From<UserSessionsError> for BlazeError {
+    fn from(value: UserSessionsError) -> Self {
         BlazeError(value as u16)
     }
 }

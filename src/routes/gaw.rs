@@ -11,7 +11,7 @@ use crate::{
         DatabaseConnection, DbErr, DbResult,
     },
     middleware::xml::Xml,
-    services::sessions::{Sessions, VerifyTokenMessage},
+    services::sessions::Sessions,
     utils::parsing::PlayerClass,
 };
 use axum::{
@@ -20,7 +20,6 @@ use axum::{
     response::{IntoResponse, Response},
     Extension,
 };
-use interlink::prelude::Link;
 use serde::Deserialize;
 use std::{fmt::Display, sync::Arc};
 use tokio::try_join;
@@ -99,7 +98,7 @@ pub async fn get_ratings(
     Path(id): Path<String>,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
 ) -> Result<Xml, GAWError> {
     let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
     Ok(ratings_response(gaw_data, promotions))
@@ -139,7 +138,7 @@ pub async fn increase_ratings(
     Query(query): Query<IncreaseQuery>,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
 ) -> Result<Xml, GAWError> {
     let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
     let gaw_data = gaw_data
@@ -155,14 +154,12 @@ pub async fn increase_ratings(
 /// `id` The hex ID of the player
 async fn get_player_gaw_data(
     db: &DatabaseConnection,
-    sessions: Link<Sessions>,
+    sessions: Arc<Sessions>,
     token: &str,
     config: &RuntimeConfig,
 ) -> Result<(GalaxyAtWar, u32), GAWError> {
     let player_id = sessions
-        .send(VerifyTokenMessage(token.to_string()))
-        .await
-        .map_err(|_| GAWError::ServerError)?
+        .verify_token(token)
         .map_err(|_| GAWError::InvalidToken)?;
 
     let player = Player::by_id(db, player_id)

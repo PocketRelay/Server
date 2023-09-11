@@ -4,6 +4,13 @@ use crate::utils::{
 };
 use tdf::TdfDeserialize;
 
+#[derive(Debug, Clone)]
+#[repr(u16)]
+#[allow(unused)]
+pub enum UserSessionsError {
+    UserNotFound = 0xb,
+}
+
 /// Structure for a request to resume a session using a session token
 #[derive(TdfDeserialize)]
 pub struct ResumeSessionRequest {

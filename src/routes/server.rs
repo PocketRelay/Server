@@ -15,7 +15,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::{prelude::Link, service::Service};
+use interlink::service::Service;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::sync::{
@@ -78,7 +78,7 @@ pub async fn upgrade(
     IpAddress(addr): IpAddress,
     Extension(router): Extension<Arc<BlazeRouter>>,
     Extension(game_manager): Extension<Arc<GameManager>>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
     upgrade: BlazeUpgrade,
 ) -> Response {
     // TODO: Socket address extraction for forwarded reverse proxy

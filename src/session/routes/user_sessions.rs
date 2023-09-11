@@ -1,9 +1,6 @@
-use interlink::prelude::Link;
-use sea_orm::DatabaseConnection;
-
 use crate::{
     database::entities::Player,
-    services::sessions::{LookupMessage, Sessions, VerifyError, VerifyTokenMessage},
+    services::sessions::{Sessions, VerifyError},
     session::{
         models::{
             auth::{AuthResponse, AuthenticationError},
@@ -16,6 +13,8 @@ use crate::{
     },
     utils::models::NetworkAddress,
 };
+use sea_orm::DatabaseConnection;
+use std::sync::Arc;
 
 /// Attempts to lookup another authenticated session details
 ///
@@ -34,20 +33,14 @@ use crate::{
 /// ```
 pub async fn handle_lookup_user(
     Blaze(req): Blaze<LookupRequest>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
 ) -> ServerResult<Blaze<LookupResponse>> {
     // Lookup the session
-    let session = sessions
-        .send(LookupMessage {
-            player_id: req.player_id,
-        })
-        .await;
 
-    // Ensure there wasn't an error
-    let session = match session {
-        Ok(Some(value)) => value,
-        _ => return Err(GlobalError::System.into()),
-    };
+    let session = sessions
+        .lookup_session(req.player_id)
+        .await
+        .ok_or(UserSessionsError::UserNotFound)?;
 
     // Get the lookup response from the session
     let response = session.send(GetLookupMessage {}).await;
@@ -72,15 +65,14 @@ pub async fn handle_lookup_user(
 pub async fn handle_resume_session(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
     Blaze(req): Blaze<ResumeSessionRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     let session_token = req.session_token;
 
     // Verify the authentication token
     let player_id = sessions
-        .send(VerifyTokenMessage(session_token.clone()))
-        .await?
+        .verify_token(&session_token)
         .map_err(|err| match err {
             VerifyError::Expired => AuthenticationError::ExpiredToken,
             VerifyError::Invalid => AuthenticationError::InvalidToken,

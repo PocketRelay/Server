@@ -3,7 +3,7 @@ use crate::{
     database::{entities::Player, DatabaseConnection},
     services::{
         retriever::{GetOriginFlow, Retriever},
-        sessions::{CreateTokenMessage, Sessions, VerifyError, VerifyTokenMessage},
+        sessions::{Sessions, VerifyError},
     },
     session::{
         models::{
@@ -24,7 +24,7 @@ use tokio::fs::read_to_string;
 pub async fn handle_login(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
     Blaze(req): Blaze<LoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     let LoginRequest { email, password } = &req;
@@ -53,7 +53,7 @@ pub async fn handle_login(
     // Update the session stored player
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token: String = sessions.send(CreateTokenMessage(player.id)).await?;
+    let session_token: String = sessions.create_token(player.id);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -65,17 +65,14 @@ pub async fn handle_login(
 pub async fn handle_silent_login(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
     Blaze(req): Blaze<SilentLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     // Verify the authentication token
-    let player_id = sessions
-        .send(VerifyTokenMessage(req.token.clone()))
-        .await?
-        .map_err(|err| match err {
-            VerifyError::Expired => AuthenticationError::ExpiredToken,
-            VerifyError::Invalid => AuthenticationError::InvalidToken,
-        })?;
+    let player_id = sessions.verify_token(&req.token).map_err(|err| match err {
+        VerifyError::Expired => AuthenticationError::ExpiredToken,
+        VerifyError::Invalid => AuthenticationError::InvalidToken,
+    })?;
 
     let player = Player::by_id(&db, player_id)
         .await?
@@ -95,7 +92,7 @@ pub async fn handle_origin_login(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
     Extension(retriever): Extension<Link<Retriever>>,
     Blaze(req): Blaze<OriginLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
@@ -123,7 +120,7 @@ pub async fn handle_origin_login(
     // Update the session stored player
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token: String = sessions.send(CreateTokenMessage(player.id)).await?;
+    let session_token: String = sessions.create_token(player.id);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -297,7 +294,7 @@ pub async fn handle_create_account(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
     Blaze(req): Blaze<CreateAccountRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     let email = req.email;
@@ -332,7 +329,7 @@ pub async fn handle_create_account(
     // the server is shutting down
     session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token = sessions.send(CreateTokenMessage(player.id)).await?;
+    let session_token = sessions.create_token(player.id);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -412,13 +409,13 @@ pub async fn handle_privacy_policy() -> Blaze<LegalContent> {
 /// ```
 pub async fn handle_get_auth_token(
     session: SessionLink,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
 ) -> ServerResult<Blaze<GetTokenResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
         .await?
         .ok_or(GlobalError::AuthenticationRequired)?;
     // Create a new token claim for the player to use with the API
-    let token = sessions.send(CreateTokenMessage(player_id)).await?;
+    let token = sessions.create_token(player_id);
     Ok(Blaze(GetTokenResponse { token }))
 }

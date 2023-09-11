@@ -52,11 +52,12 @@ async fn main() {
     let (db, retriever, sessions) = join!(
         database::init(&runtime_config),
         Retriever::start(config.retriever),
-        Sessions::start()
+        Sessions::new()
     );
     let game_manager = Arc::new(GameManager::new());
     let leaderboard = Arc::new(Leaderboard::new());
     let config = Arc::new(runtime_config);
+    let sessions = Arc::new(sessions);
 
     // Initialize session router
     let mut router = session::routes::router();

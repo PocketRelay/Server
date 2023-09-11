@@ -7,7 +7,7 @@ use crate::{
             GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage, SetSettingMessage,
             SetStateMessage, UpdateMeshMessage,
         },
-        sessions::{LookupMessage, Sessions},
+        sessions::Sessions,
     },
     session::{
         models::{
@@ -18,13 +18,12 @@ use crate::{
         GetGamePlayerMessage, GetPlayerGameMessage, GetPlayerIdMessage, SessionLink,
     },
 };
-use interlink::prelude::Link;
 use log::{debug, info};
 use std::sync::Arc;
 
 pub async fn handle_join_game(
     session: SessionLink,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<JoinGameRequest>,
 ) -> ServerResult<Blaze<JoinGameResponse>> {
@@ -36,28 +35,20 @@ pub async fn handle_join_game(
 
     // Lookup the session join target
     let session = sessions
-        .send(LookupMessage {
-            player_id: req.user.id,
-        })
-        .await;
-
-    // Ensure there wasn't an error
-    let session = match session {
-        Ok(Some(value)) => value,
-        _ => return Err(GlobalError::System.into()),
-    };
+        .lookup_session(req.user.id)
+        .await
+        .ok_or(GameManagerError::JoinPlayerFailed)?;
 
     // Find the game ID for the target session
-    let game_id = session.send(GetPlayerGameMessage {}).await;
-    let game_id = match game_id {
-        Ok(Some(value)) => value,
-        _ => return Err(GlobalError::System.into()),
-    };
+    let game_id = session
+        .send(GetPlayerGameMessage {})
+        .await?
+        .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = match game_manager.get_game(game_id).await {
-        Some(value) => value,
-        None => return Err(GameManagerError::InvalidGameId.into()),
-    };
+    let game = game_manager
+        .get_game(game_id)
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
 
     // Check the game is joinable
     let join_state = game.send(CheckJoinableMessage { rule_set: None }).await?;

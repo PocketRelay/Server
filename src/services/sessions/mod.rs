@@ -5,7 +5,6 @@ use crate::{session::Session, utils::types::PlayerID};
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use interlink::prelude::*;
-use interlink::service::ServiceContext;
 use log::error;
 use ring::hmac::{self, Key, HMAC_SHA256};
 use std::collections::HashMap;
@@ -14,6 +13,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
+use tokio::sync::RwLock;
 use tokio::{
     fs::{write, File},
     io::{self, AsyncReadExt},
@@ -21,36 +21,25 @@ use tokio::{
 
 /// Service for storing links to authenticated sessions and
 /// functionality for authenticating sessions
-#[derive(Service)]
 pub struct Sessions {
     /// Map of the authenticated players to their session links
-    values: HashMap<PlayerID, Link<Session>>,
+    sessions: RwLock<HashMap<PlayerID, Link<Session>>>,
 
     /// HMAC key used for computing signatures
     key: Key,
 }
 
-/// Message for creating a new authentication token for the provided
-/// [PlayerID]
-#[derive(Message)]
-#[msg(rtype = "String")]
-pub struct CreateTokenMessage(pub PlayerID);
+impl Sessions {
+    /// Starts a new service returning its link
+    pub async fn new() -> Self {
+        let key = Self::create_key().await;
+        Self {
+            sessions: Default::default(),
+            key,
+        }
+    }
 
-/// Message for verifying the provided token
-#[derive(Message)]
-#[msg(rtype = "Result<PlayerID, VerifyError>")]
-pub struct VerifyTokenMessage(pub String);
-
-impl Handler<CreateTokenMessage> for Sessions {
-    type Response = Mr<CreateTokenMessage>;
-
-    fn handle(
-        &mut self,
-        msg: CreateTokenMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        let id = msg.0;
-
+    pub fn create_token(&self, player_id: PlayerID) -> String {
         // Compute expiry timestamp
         let exp = SystemTime::now()
             .checked_add(Self::EXPIRY_TIME)
@@ -61,7 +50,7 @@ impl Handler<CreateTokenMessage> for Sessions {
 
         // Create encoded token value
         let mut data = [0u8; 12];
-        data[..4].copy_from_slice(&id.to_be_bytes());
+        data[..4].copy_from_slice(&player_id.to_be_bytes());
         data[4..].copy_from_slice(&exp.to_be_bytes());
         let data = &data;
 
@@ -73,33 +62,7 @@ impl Handler<CreateTokenMessage> for Sessions {
         let sig = Base64UrlUnpadded::encode_string(sig.as_ref());
 
         // Join the message and signature to create the token
-        let token = [msg, sig].join(".");
-
-        Mr(token)
-    }
-}
-
-impl Handler<VerifyTokenMessage> for Sessions {
-    type Response = Mr<VerifyTokenMessage>;
-
-    fn handle(
-        &mut self,
-        msg: VerifyTokenMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        Mr(self.verify(&msg.0))
-    }
-}
-
-impl Sessions {
-    /// Starts a new service returning its link
-    pub async fn start() -> Link<Self> {
-        let key = Self::create_key().await;
-        let this = Self {
-            values: Default::default(),
-            key,
-        };
-        this.start()
+        [msg, sig].join(".")
     }
 
     /// Expiry time for tokens
@@ -144,7 +107,7 @@ impl Sessions {
         Ok(())
     }
 
-    fn verify(&self, token: &str) -> Result<u32, VerifyError> {
+    pub fn verify_token(&self, token: &str) -> Result<u32, VerifyError> {
         // Split the token parts
         let (msg_raw, sig_raw) = match token.split_once('.') {
             Some(value) => value,
@@ -185,60 +148,20 @@ impl Sessions {
 
         Ok(id)
     }
-}
 
-/// Message for removing players from the authenticated
-/// sessions list
-#[derive(Message)]
-pub struct RemoveMessage {
-    /// The ID of the player to remove
-    pub player_id: PlayerID,
-}
-
-/// Message for adding a player to the authenticated
-/// sessions list
-#[derive(Message)]
-pub struct AddMessage {
-    /// The ID of the player the link belongs to
-    pub player_id: PlayerID,
-    /// The link to the player session
-    pub link: Link<Session>,
-}
-
-/// Message for finding a session by a player ID returning
-/// a link to the player if one is found
-#[derive(Message)]
-#[msg(rtype = "Option<Link<Session>>")]
-pub struct LookupMessage {
-    /// The ID of the player to lookup
-    pub player_id: PlayerID,
-}
-
-/// Handle messages to add authenticated sessions
-impl Handler<AddMessage> for Sessions {
-    type Response = ();
-
-    fn handle(&mut self, msg: AddMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        self.values.insert(msg.player_id, msg.link);
+    pub async fn remove_session(&self, player_id: PlayerID) {
+        let sessions = &mut *self.sessions.write().await;
+        sessions.remove(&player_id);
     }
-}
 
-/// Handle messages to remove authenticated sessions
-impl Handler<RemoveMessage> for Sessions {
-    type Response = ();
-
-    fn handle(&mut self, msg: RemoveMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        self.values.remove(&msg.player_id);
+    pub async fn add_session(&self, player_id: PlayerID, link: Link<Session>) {
+        let sessions = &mut *self.sessions.write().await;
+        sessions.insert(player_id, link);
     }
-}
 
-/// Handle messages to lookup authenticated sessions
-impl Handler<LookupMessage> for Sessions {
-    type Response = Mr<LookupMessage>;
-
-    fn handle(&mut self, msg: LookupMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        let value = self.values.get(&msg.player_id).cloned();
-        Mr(value)
+    pub async fn lookup_session(&self, player_id: PlayerID) -> Option<Link<Session>> {
+        let sessions = &*self.sessions.read().await;
+        sessions.get(&player_id).cloned()
     }
 }
 

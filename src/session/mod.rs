@@ -7,7 +7,7 @@ use crate::{
     middleware::blaze_upgrade::BlazeScheme,
     services::{
         game::{manager::GameManager, models::RemoveReason, GamePlayer, RemovePlayerMessage},
-        sessions::{AddMessage, RemoveMessage, Sessions},
+        sessions::Sessions,
     },
     utils::{
         components::{self, game_manager::GAME_TYPE, user_sessions},
@@ -53,7 +53,7 @@ pub struct Session {
     router: Arc<BlazeRouter>,
 
     game_manager: Arc<GameManager>,
-    sessions: Link<Sessions>,
+    sessions: Arc<Sessions>,
 }
 
 #[derive(Default, Clone)]
@@ -162,11 +162,14 @@ impl Handler<SetPlayerMessage> for Session {
 
         // If we are setting a new player
         if let Some(player) = msg.0 {
+            let sessions = self.sessions.clone();
+            let player_id = player.id;
+            let link = ctx.link();
             // Add the session to authenticated sessions
-            let _ = self.sessions.do_send(AddMessage {
-                player_id: player.id,
-                link: ctx.link(),
+            tokio::spawn(async move {
+                sessions.add_session(player_id, link).await;
             });
+
             self.data.player = Some(player);
         }
     }
@@ -444,7 +447,7 @@ impl Session {
         addr: Ipv4Addr,
         router: Arc<BlazeRouter>,
         game_manager: Arc<GameManager>,
-        sessions: Link<Sessions>,
+        sessions: Arc<Sessions>,
     ) -> Self {
         Self {
             id,
@@ -546,9 +549,10 @@ impl Session {
             None => return,
         };
 
-        // Send the remove session message
-        let _ = self.sessions.do_send(RemoveMessage {
-            player_id: player.id,
+        // Remove the session from the sessions service
+        let sessions = self.sessions.clone();
+        tokio::spawn(async move {
+            sessions.remove_session(player.id).await;
         });
     }
 }
