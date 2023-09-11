@@ -77,7 +77,7 @@ pub async fn dashboard_details(
 pub async fn upgrade(
     IpAddress(addr): IpAddress,
     Extension(router): Extension<Arc<BlazeRouter>>,
-    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Extension(sessions): Extension<Link<Sessions>>,
     upgrade: BlazeUpgrade,
 ) -> Response {

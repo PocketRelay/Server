@@ -6,11 +6,7 @@ use crate::{
     database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
     services::{
-        game::{
-            manager::{GameManager, GetGameMessage, RemoveQueueMessage},
-            models::RemoveReason,
-            GamePlayer, RemovePlayerMessage,
-        },
+        game::{manager::GameManager, models::RemoveReason, GamePlayer, RemovePlayerMessage},
         sessions::{AddMessage, RemoveMessage, Sessions},
     },
     utils::{
@@ -56,7 +52,7 @@ pub struct Session {
 
     router: Arc<BlazeRouter>,
 
-    game_manager: Link<GameManager>,
+    game_manager: Arc<GameManager>,
     sessions: Link<Sessions>,
 }
 
@@ -447,7 +443,7 @@ impl Session {
         writer: SinkLink<Packet>,
         addr: Ipv4Addr,
         router: Arc<BlazeRouter>,
-        game_manager: Link<GameManager>,
+        game_manager: Arc<GameManager>,
         sessions: Link<Sessions>,
     ) -> Self {
         Self {
@@ -512,14 +508,15 @@ impl Session {
             None => return,
         };
 
+        let game_manager = self.game_manager.clone();
+
         if let Some(game_id) = self.data.game.take() {
-            let game_manager = self.game_manager.clone();
             // Remove the player from the game
             tokio::spawn(async move {
                 // Obtain the current game
-                let game = match game_manager.send(GetGameMessage { game_id }).await {
-                    Ok(Some(value)) => value,
-                    _ => return,
+                let game = match game_manager.get_game(game_id).await {
+                    Some(value) => value,
+                    None => return,
                 };
 
                 // Send the remove message
@@ -532,7 +529,9 @@ impl Session {
             });
         } else {
             // Remove the player from matchmaking if present
-            let _ = self.game_manager.do_send(RemoveQueueMessage { player_id });
+            tokio::spawn(async move {
+                game_manager.remove_queue(player_id).await;
+            });
         }
     }
 

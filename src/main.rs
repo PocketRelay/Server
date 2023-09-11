@@ -54,7 +54,7 @@ async fn main() {
         Retriever::start(config.retriever),
         Sessions::start()
     );
-    let game_manager = GameManager::start();
+    let game_manager = Arc::new(GameManager::new());
     let leaderboard = Leaderboard::start();
     let config = Arc::new(runtime_config);
 

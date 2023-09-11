@@ -1,10 +1,9 @@
+use std::sync::Arc;
+
 use crate::{
     database::entities::players::PlayerRole,
     middleware::auth::Auth,
-    services::game::{
-        manager::{GameManager, GetGameMessage, SnapshotQueryMessage},
-        GameSnapshot, SnapshotMessage,
-    },
+    services::game::{manager::GameManager, GameSnapshot, SnapshotMessage},
     utils::types::GameID,
 };
 use axum::{
@@ -13,7 +12,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::prelude::{Link, LinkError};
+use interlink::prelude::LinkError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -63,22 +62,19 @@ pub struct GamesResponse {
 /// players with admin level or greater access.
 pub async fn get_games(
     Query(query): Query<GamesRequest>,
-    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Auth(auth): Auth,
 ) -> GamesRes<GamesResponse> {
     let GamesRequest { offset, count } = query;
 
     let count: usize = count.unwrap_or(20) as usize;
     let offset: usize = offset * count;
+    let include_net = auth.role >= PlayerRole::Admin;
 
     // Retrieve the game snapshots
     let (games, more) = game_manager
-        .send(SnapshotQueryMessage {
-            offset,
-            count,
-            include_net: auth.role >= PlayerRole::Admin,
-        })
-        .await?;
+        .create_snapshot(offset, count, include_net)
+        .await;
 
     Ok(Json(GamesResponse { games, more }))
 }
@@ -92,12 +88,12 @@ pub async fn get_games(
 /// players with admin level or greater access.
 pub async fn get_game(
     Path(game_id): Path<GameID>,
-    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Auth(auth): Auth,
 ) -> GamesRes<GameSnapshot> {
     let game = game_manager
-        .send(GetGameMessage { game_id })
-        .await?
+        .get_game(game_id)
+        .await
         .ok_or(GamesError::NotFound)?;
 
     let snapshot = game

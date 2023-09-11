@@ -1,7 +1,6 @@
 use self::{manager::GameManager, rules::RuleSet};
 use crate::{
     database::entities::Player,
-    services::game::manager::{ProcessQueueMessage, RemoveGameMessage},
     session::{
         packet::Packet, router::RawBlaze, DetailsMessage, InformSessions, PushExt, Session,
         SetGameMessage,
@@ -36,16 +35,19 @@ pub struct Game {
     /// The list of players in this game
     pub players: Vec<GamePlayer>,
     /// Services access
-    pub game_manager: Link<GameManager>,
+    pub game_manager: Arc<GameManager>,
 }
 
 impl Service for Game {
     fn stopping(&mut self) {
         debug!("Game is stopping (GID: {})", self.id);
+
         // Remove the stopping game
-        let _ = self
-            .game_manager
-            .do_send(RemoveGameMessage { game_id: self.id });
+        let game_manager = self.game_manager.clone();
+        let game_id = self.id;
+        tokio::spawn(async move {
+            game_manager.remove_game(game_id).await;
+        });
     }
 }
 
@@ -59,7 +61,7 @@ impl Game {
         id: GameID,
         attributes: AttrMap,
         setting: GameSettings,
-        game_manager: Link<GameManager>,
+        game_manager: Arc<GameManager>,
     ) -> Link<Game> {
         let this = Game {
             id,
@@ -310,9 +312,11 @@ impl Handler<SetAttributesMessage> for Game {
 
         // Don't update matchmaking for full games
         if self.players.len() < Self::MAX_PLAYERS {
-            let _ = self.game_manager.do_send(ProcessQueueMessage {
-                link: ctx.link(),
-                game_id: self.id,
+            let game_manager = self.game_manager.clone();
+            let game_link = ctx.link();
+            let game_id = self.id;
+            tokio::spawn(async move {
+                game_manager.process_queue(game_link, game_id).await;
             });
         }
     }
