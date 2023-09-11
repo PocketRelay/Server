@@ -1,8 +1,7 @@
 use crate::{
-    session::{models::other::*, PushExt, SessionLink},
-    utils::components::{Components as C, GameReporting as G},
+    session::{models::other::*, packet::Packet, router::Blaze, PushExt, SessionLink},
+    utils::components::game_reporting,
 };
-use blaze_pk::packet::Packet;
 
 /// Handles submission of offline game reports from clients.
 ///
@@ -29,9 +28,10 @@ use blaze_pk::packet::Packet;
 ///     "GTYP": "massEffectReport"
 /// }
 /// ```
-pub async fn handle_submit_offline(session: &mut SessionLink) {
+pub async fn handle_submit_offline(session: SessionLink) {
     session.push(Packet::notify(
-        C::GameReporting(G::GameReportSubmitted),
+        game_reporting::COMPONENT,
+        game_reporting::GAME_REPORT_SUBMITTED,
         GameReportResponse,
     ));
 }
@@ -58,6 +58,6 @@ pub async fn handle_submit_offline(session: &mut SessionLink) {
 ///     "OFRC": 0
 /// }
 /// ```
-pub async fn handle_get_lists() -> AssocListResponse {
-    AssocListResponse
+pub async fn handle_get_lists() -> Blaze<AssocListResponse> {
+    Blaze(AssocListResponse)
 }

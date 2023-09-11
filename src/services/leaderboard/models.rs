@@ -6,7 +6,7 @@ use std::{
 };
 
 /// Structure for an entry in a leaderboard group
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct LeaderboardEntry {
     /// The ID of the player this entry is for
     pub player_id: PlayerID,

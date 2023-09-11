@@ -2,19 +2,18 @@ use crate::{
     database::entities::players::PlayerRole,
     middleware::auth::Auth,
     services::game::{
-        manager::{GetGameMessage, SnapshotQueryMessage},
+        manager::{GameManager, GetGameMessage, SnapshotQueryMessage},
         GameSnapshot, SnapshotMessage,
     },
-    state::App,
     utils::types::GameID,
 };
 use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
+    Extension, Json,
 };
-use interlink::prelude::LinkError;
+use interlink::prelude::{Link, LinkError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -62,18 +61,18 @@ pub struct GamesResponse {
 ///
 /// Player networking information is included for requesting
 /// players with admin level or greater access.
-pub async fn get_games(Query(query): Query<GamesRequest>, auth: Auth) -> GamesRes<GamesResponse> {
+pub async fn get_games(
+    Query(query): Query<GamesRequest>,
+    Extension(game_manager): Extension<Link<GameManager>>,
+    Auth(auth): Auth,
+) -> GamesRes<GamesResponse> {
     let GamesRequest { offset, count } = query;
-    let auth = auth.into_inner();
 
     let count: usize = count.unwrap_or(20) as usize;
     let offset: usize = offset * count;
 
-    let services = App::services();
-
     // Retrieve the game snapshots
-    let (games, more) = services
-        .game_manager
+    let (games, more) = game_manager
         .send(SnapshotQueryMessage {
             offset,
             count,
@@ -91,12 +90,12 @@ pub async fn get_games(Query(query): Query<GamesRequest>, auth: Auth) -> GamesRe
 ///
 /// Player networking information is included for requesting
 /// players with admin level or greater access.
-pub async fn get_game(Path(game_id): Path<GameID>, auth: Auth) -> GamesRes<GameSnapshot> {
-    let auth = auth.into_inner();
-    let services = App::services();
-
-    let game = services
-        .game_manager
+pub async fn get_game(
+    Path(game_id): Path<GameID>,
+    Extension(game_manager): Extension<Link<GameManager>>,
+    Auth(auth): Auth,
+) -> GamesRes<GameSnapshot> {
+    let game = game_manager
         .send(GetGameMessage { game_id })
         .await?
         .ok_or(GamesError::NotFound)?;

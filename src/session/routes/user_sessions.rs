@@ -1,20 +1,21 @@
+use interlink::prelude::Link;
+use sea_orm::DatabaseConnection;
+
 use crate::{
     database::entities::Player,
-    services::{sessions::LookupMessage, tokens::Tokens},
+    services::sessions::{LookupMessage, Sessions, VerifyError, VerifyTokenMessage},
     session::{
         models::{
-            auth::AuthResponse,
-            errors::{ServerError, ServerResult},
+            auth::{AuthResponse, AuthenticationError},
+            errors::{GlobalError, ServerResult},
             user_sessions::*,
         },
+        router::{Blaze, Extension},
         GetLookupMessage, GetSocketAddrMessage, HardwareFlagMessage, LookupResponse,
         NetworkInfoMessage, SessionLink, SetPlayerMessage,
     },
-    state::App,
-    utils::models::NetAddress,
+    utils::models::NetworkAddress,
 };
-use log::error;
-use std::net::SocketAddr;
 
 /// Attempts to lookup another authenticated session details
 ///
@@ -31,12 +32,12 @@ use std::net::SocketAddr;
 ///     "NAME": "",
 /// }
 /// ```
-pub async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupResponse> {
-    let services = App::services();
-
+pub async fn handle_lookup_user(
+    Blaze(req): Blaze<LookupRequest>,
+    Extension(sessions): Extension<Link<Sessions>>,
+) -> ServerResult<Blaze<LookupResponse>> {
     // Lookup the session
-    let session = services
-        .sessions
+    let session = sessions
         .send(LookupMessage {
             player_id: req.player_id,
         })
@@ -45,17 +46,17 @@ pub async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupRespon
     // Ensure there wasn't an error
     let session = match session {
         Ok(Some(value)) => value,
-        _ => return Err(ServerError::InvalidInformation),
+        _ => return Err(GlobalError::System.into()),
     };
 
     // Get the lookup response from the session
     let response = session.send(GetLookupMessage {}).await;
     let response = match response {
         Ok(Some(value)) => value,
-        _ => return Err(ServerError::InvalidInformation),
+        _ => return Err(GlobalError::System.into()),
     };
 
-    Ok(response)
+    Ok(Blaze(response))
 }
 
 /// Attempts to resume an existing session for a player that has the
@@ -69,36 +70,35 @@ pub async fn handle_lookup_user(req: LookupRequest) -> ServerResult<LookupRespon
 /// }
 /// ```
 pub async fn handle_resume_session(
-    session: &mut SessionLink,
-    req: ResumeSessionRequest,
-) -> ServerResult<AuthResponse> {
-    let db = App::database();
-
+    session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(sessions): Extension<Link<Sessions>>,
+    Blaze(req): Blaze<ResumeSessionRequest>,
+) -> ServerResult<Blaze<AuthResponse>> {
     let session_token = req.session_token;
 
-    let player: Player = match Tokens::service_verify(db, &session_token).await {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Error while attempt to resume session: {err:?}");
-            return Err(ServerError::InvalidSession);
-        }
-    };
+    // Verify the authentication token
+    let player_id = sessions
+        .send(VerifyTokenMessage(session_token.clone()))
+        .await?
+        .map_err(|err| match err {
+            VerifyError::Expired => AuthenticationError::ExpiredToken,
+            VerifyError::Invalid => AuthenticationError::InvalidToken,
+        })?;
+
+    let player = Player::by_id(&db, player_id)
+        .await?
+        .ok_or(AuthenticationError::InvalidToken)?;
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down
-    if session
-        .send(SetPlayerMessage(Some(player.clone())))
-        .await
-        .is_err()
-    {
-        return Err(ServerError::ServerUnavailable);
-    }
+    session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    Ok(AuthResponse {
+    Ok(Blaze(AuthResponse {
         player,
         session_token,
         silent: true,
-    })
+    }))
 }
 
 /// Handles updating the stored networking information for the current session
@@ -130,23 +130,27 @@ pub async fn handle_resume_session(
 ///     }
 /// }
 /// ```
-pub async fn handle_update_network(session: &mut SessionLink, mut req: UpdateNetworkRequest) {
-    let ext = &mut req.address.external;
+pub async fn handle_update_network(
+    session: SessionLink,
+    Blaze(mut req): Blaze<UpdateNetworkRequest>,
+) {
+    if let NetworkAddress::AddressPair(pair) = &mut req.address {
+        let ext = &mut pair.external;
 
-    // If address is missing
-    if ext.0 .0.is_unspecified() {
-        // Obtain socket address from session
-        if let Ok(SocketAddr::V4(addr)) = session.send(GetSocketAddrMessage).await {
-            let ip = addr.ip();
-            // Replace address with new address and port with same as local port
-            ext.0 = NetAddress(*ip);
-            ext.1 = req.address.internal.1;
+        // If address is missing
+        if ext.addr.is_unspecified() {
+            // Obtain socket address from session
+            if let Ok(addr) = session.send(GetSocketAddrMessage).await {
+                // Replace address with new address and port with same as local port
+                ext.addr = addr;
+                ext.port = pair.internal.port;
+            }
         }
     }
 
     let _ = session
         .send(NetworkInfoMessage {
-            groups: req.address,
+            address: req.address,
             qos: req.qos,
         })
         .await;
@@ -161,7 +165,10 @@ pub async fn handle_update_network(session: &mut SessionLink, mut req: UpdateNet
 ///     "HWFG": 0
 /// }
 /// ```
-pub async fn handle_update_hardware_flag(session: &mut SessionLink, req: HardwareFlagRequest) {
+pub async fn handle_update_hardware_flag(
+    session: SessionLink,
+    Blaze(req): Blaze<HardwareFlagRequest>,
+) {
     let _ = session
         .send(HardwareFlagMessage {
             value: req.hardware_flag,

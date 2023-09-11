@@ -8,7 +8,7 @@ RUN apk add curl
 WORKDIR /app
 
 # Download server executable
-RUN curl -LJ -o pocket-relay-linux https://github.com/PocketRelay/Server/releases/download/v0.5.8/pocket-relay-linux
+RUN curl -LJ -o pocket-relay-linux https://github.com/PocketRelay/Server/releases/download/v0.5.9/pocket-relay-linux
 
 # Make the server executable
 RUN chmod +x ./pocket-relay-linux

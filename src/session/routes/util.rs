@@ -1,25 +1,27 @@
 use crate::{
+    config::VERSION,
     database::entities::PlayerData,
     session::{
         models::{
-            errors::{ServerError, ServerResult},
+            errors::{GlobalError, ServerResult},
             util::*,
         },
+        router::{Blaze, Extension},
         DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
     },
-    state::{self, App},
 };
 use base64ct::{Base64, Encoding};
-use blaze_pk::types::TdfMap;
 use embeddy::Embedded;
 use flate2::{write::ZlibEncoder, Compression};
 use interlink::prelude::Link;
-use log::{error, warn};
+use log::error;
+use sea_orm::DatabaseConnection;
 use std::{
     io::Write,
     path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tdf::TdfMap;
 use tokio::fs::read;
 
 /// Handles retrieving the details about the telemetry server
@@ -30,8 +32,8 @@ use tokio::fs::read;
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_telemetry_server() -> TelemetryServer {
-    TelemetryServer
+pub async fn handle_get_telemetry_server() -> Blaze<TelemetryServer> {
+    Blaze(TelemetryServer)
 }
 
 /// Handles retrieving the details about the ticker server
@@ -42,8 +44,8 @@ pub async fn handle_get_telemetry_server() -> TelemetryServer {
 /// Content: {}
 /// ```
 ///
-pub async fn handle_get_ticker_server() -> TickerServer {
-    TickerServer
+pub async fn handle_get_ticker_server() -> Blaze<TickerServer> {
+    Blaze(TickerServer)
 }
 
 /// Handles responding to pre-auth requests which is the first request
@@ -77,13 +79,9 @@ pub async fn handle_get_ticker_server() -> TickerServer {
 ///     }
 /// }
 /// ```
-pub async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthResponse> {
-    let host_target = match session.send(GetHostTarget {}).await {
-        Ok(value) => value,
-        Err(_) => return Err(ServerError::InvalidInformation),
-    };
-
-    Ok(PreAuthResponse { host_target })
+pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Blaze<PreAuthResponse>> {
+    let host_target = session.send(GetHostTarget {}).await?;
+    Ok(Blaze(PreAuthResponse { host_target }))
 }
 
 /// Handles post authentication requests. This provides information about other
@@ -94,23 +92,22 @@ pub async fn handle_pre_auth(session: &mut SessionLink) -> ServerResult<PreAuthR
 /// ID: 27
 /// Content: {}
 /// ```
-pub async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAuthResponse> {
+pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Blaze<PostAuthResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
 
     // Queue the session details to be sent to this client
     let _ = session.do_send(DetailsMessage {
-        link: Link::clone(&*session),
+        link: Link::clone(&session),
     });
 
-    Ok(PostAuthResponse {
+    Ok(Blaze(PostAuthResponse {
         telemetry: TelemetryServer,
         ticker: TickerServer,
         player_id,
-    })
+    }))
 }
 
 /// Handles ping update requests. These are sent by the client at the interval
@@ -123,13 +120,13 @@ pub async fn handle_post_auth(session: &mut SessionLink) -> ServerResult<PostAut
 /// Content: {}
 /// ```
 ///
-pub async fn handle_ping() -> PingResponse {
+pub async fn handle_ping() -> Blaze<PingResponse> {
     let now = SystemTime::now();
     let server_time = now
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_secs();
-    PingResponse { server_time }
+    Blaze(PingResponse { server_time })
 }
 
 /// Contents of the entitlements dmap file
@@ -154,22 +151,22 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 /// }
 /// ```
 pub async fn handle_fetch_client_config(
-    session: &mut SessionLink,
-    req: FetchConfigRequest,
-) -> ServerResult<FetchConfigResponse> {
+    session: SessionLink,
+    Blaze(req): Blaze<FetchConfigRequest>,
+) -> ServerResult<Blaze<FetchConfigResponse>> {
     let config = match req.id.as_ref() {
-        "ME3_DATA" => data_config(session).await,
+        "ME3_DATA" => data_config(&session).await,
         "ME3_MSG" => messages(),
         "ME3_ENT" => load_entitlements(),
         "ME3_DIME" => {
             let mut map = TdfMap::with_capacity(1);
-            map.insert("Config", ME3_DIME);
+            map.insert("Config".to_string(), ME3_DIME.to_string());
             map
         }
         "ME3_BINI_VERSION" => {
             let mut map = TdfMap::with_capacity(2);
-            map.insert("SECTION", "BINI_PC_COMPRESSED");
-            map.insert("VERSION", "40128");
+            map.insert("SECTION".to_string(), "BINI_PC_COMPRESSED".to_string());
+            map.insert("VERSION".to_string(), "40128".to_string());
             map
         }
         "ME3_BINI_PC_COMPRESSED" => load_coalesced().await?,
@@ -182,7 +179,7 @@ pub async fn handle_fetch_client_config(
         }
     };
 
-    Ok(FetchConfigResponse { config })
+    Ok(Blaze(FetchConfigResponse { config }))
 }
 
 /// Loads the entitlements from the entitlements file and parses
@@ -190,7 +187,7 @@ pub async fn handle_fetch_client_config(
 fn load_entitlements() -> TdfMap<String, String> {
     let mut map = TdfMap::<String, String>::new();
     for (key, value) in ME3_ENT.lines().filter_map(|line| line.split_once('=')) {
-        map.insert(key, value)
+        map.insert(key.to_string(), value.to_string());
     }
     map
 }
@@ -224,11 +221,11 @@ fn generate_coalesced(bytes: &[u8]) -> ServerResult<ChunkMap> {
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::new(6));
         encoder.write_all(bytes).map_err(|_| {
             error!("Failed to encode coalesced with ZLib (write stage)");
-            ServerError::ServerUnavailable
+            GlobalError::System
         })?;
         encoder.finish().map_err(|_| {
             error!("Failed to encode coalesced with ZLib (finish stage)");
-            ServerError::ServerUnavailable
+            GlobalError::System
         })?
     };
 
@@ -272,13 +269,12 @@ fn create_base64_map(bytes: &[u8]) -> ChunkMap {
             &encoded[o1..]
         };
 
-        output.insert(format!("CHUNK_{}", index), slice);
+        output.insert(format!("CHUNK_{}", index), slice.to_string());
         index += 1;
     }
 
-    output.insert("CHUNK_SIZE", CHUNK_LENGTH.to_string());
-    output.insert("DATA_SIZE", length.to_string());
-    output.order();
+    output.insert("CHUNK_SIZE".to_string(), CHUNK_LENGTH.to_string());
+    output.insert("DATA_SIZE".to_string(), length.to_string());
     output
 }
 
@@ -321,7 +317,7 @@ fn messages() -> TdfMap<String, String> {
         title: Some("Pocket Relay".to_owned()),
         message: format!(
             "You are connected to Pocket Relay <font color='#FFFF66'>(v{})</font>",
-            state::VERSION,
+            VERSION,
         ),
         priority: 1,
         tracking_id: Some(1),
@@ -332,7 +328,6 @@ fn messages() -> TdfMap<String, String> {
 
     intro.append(1, &mut config);
 
-    config.order();
     config
 }
 
@@ -396,17 +391,17 @@ impl Message {
             map.insert(format!("{prefix}image"), image);
         }
 
-        map.insert(format!("{prefix}message"), &self.message);
+        map.insert(format!("{prefix}message"), self.message.to_string());
         for lang in &langs {
-            map.insert(format!("{prefix}message_{lang}"), &self.message);
+            map.insert(format!("{prefix}message_{lang}"), self.message.to_string());
         }
 
         map.insert(format!("{prefix}priority"), self.priority.to_string());
 
         if let Some(title) = &self.title {
-            map.insert(format!("{prefix}title"), title);
+            map.insert(format!("{prefix}title"), title.to_string());
             for lang in &langs {
-                map.insert(format!("{prefix}title_{lang}"), title);
+                map.insert(format!("{prefix}title_{lang}"), title.to_string());
             }
         }
 
@@ -451,22 +446,28 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
     let tele_port = TELEMETRY_PORT;
 
     let mut config = TdfMap::with_capacity(15);
-    config.insert("GAW_SERVER_BASE_URL", format!("{prefix}/"));
-    config.insert("IMG_MNGR_BASE_URL", format!("{prefix}/content/"));
-    config.insert("IMG_MNGR_MAX_BYTES", "1048576");
-    config.insert("IMG_MNGR_MAX_IMAGES", "5");
-    config.insert("JOB_THROTTLE_0", "10000");
-    config.insert("JOB_THROTTLE_1", "5000");
-    config.insert("JOB_THROTTLE_2", "1000");
-    config.insert("MATCH_MAKING_RULES_VERSION", "5");
-    config.insert("MULTIPLAYER_PROTOCOL_VERSION", "3");
-    config.insert("TEL_DISABLE", TELEMTRY_DISA);
-    config.insert("TEL_DOMAIN", "pc/masseffect-3-pc-anon");
-    config.insert("TEL_FILTER", "-UION/****");
-    config.insert("TEL_PORT", tele_port.to_string());
-    config.insert("TEL_SEND_DELAY", "15000");
-    config.insert("TEL_SEND_PCT", "75");
-    config.insert("TEL_SERVER", "127.0.0.1");
+    config.insert("GAW_SERVER_BASE_URL".to_string(), format!("{prefix}/"));
+    config.insert(
+        "IMG_MNGR_BASE_URL".to_string(),
+        format!("{prefix}/content/"),
+    );
+    config.insert("IMG_MNGR_MAX_BYTES".to_string(), "1048576".to_string());
+    config.insert("IMG_MNGR_MAX_IMAGES".to_string(), "5".to_string());
+    config.insert("JOB_THROTTLE_0".to_string(), "10000".to_string());
+    config.insert("JOB_THROTTLE_1".to_string(), "5000".to_string());
+    config.insert("JOB_THROTTLE_2".to_string(), "1000".to_string());
+    config.insert("MATCH_MAKING_RULES_VERSION".to_string(), "5".to_string());
+    config.insert("MULTIPLAYER_PROTOCOL_VERSION".to_string(), "3".to_string());
+    config.insert("TEL_DISABLE".to_string(), TELEMTRY_DISA.to_string());
+    config.insert(
+        "TEL_DOMAIN".to_string(),
+        "pc/masseffect-3-pc-anon".to_string(),
+    );
+    config.insert("TEL_FILTER".to_string(), "-UION/****".to_string());
+    config.insert("TEL_PORT".to_string(), tele_port.to_string());
+    config.insert("TEL_SEND_DELAY".to_string(), "15000".to_string());
+    config.insert("TEL_SEND_PCT".to_string(), "75".to_string());
+    config.insert("TEL_SERVER".to_string(), "127.0.0.1".to_string());
     config
 }
 
@@ -480,10 +481,10 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
 ///     "TVAL": 90000000
 /// }
 /// ```
-pub async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<()> {
+pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> ServerResult<()> {
     match req.value {
-        20000000 => Err(ServerError::Suspend12D),
-        90000000 => Err(ServerError::Suspend12E),
+        20000000 => Err(UtilError::SuspendPingTimeTooSmall.into()),
+        90000000 => Err(UtilError::PingSuspended.into()),
         _ => Ok(()),
     }
 }
@@ -500,22 +501,17 @@ pub async fn handle_suspend_user_ping(req: SuspendPingRequest) -> ServerResult<(
 /// }
 /// ```
 pub async fn handle_user_settings_save(
-    session: &mut SessionLink,
-    req: SettingsSaveRequest,
+    session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Blaze(req): Blaze<SettingsSaveRequest>,
 ) -> ServerResult<()> {
     let player = session
         .send(GetPlayerIdMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
 
-    let db = App::database();
-    if let Err(err) = PlayerData::set(db, player, req.key, req.value).await {
-        warn!("Failed to update player data: {err:?}");
-        Err(ServerError::ServerUnavailable)
-    } else {
-        Ok(())
-    }
+    PlayerData::set(&db, player, req.key, req.value).await?;
+    Ok(())
 }
 
 /// Handles loading all the user details for the current account and sending them to the
@@ -526,29 +522,22 @@ pub async fn handle_user_settings_save(
 /// ID: 23
 /// Content: {}
 /// ```
-pub async fn handle_load_settings(session: &mut SessionLink) -> ServerResult<SettingsResponse> {
+pub async fn handle_load_settings(
+    session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+) -> ServerResult<Blaze<SettingsResponse>> {
     let player = session
         .send(GetPlayerIdMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
-
-    let db = App::database();
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
 
     // Load the player data from the database
-    let data: Vec<PlayerData> = match PlayerData::all(db, player).await {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Failed to load player data: {err:?}");
-            return Err(ServerError::ServerUnavailable);
-        }
-    };
+    let data: Vec<PlayerData> = PlayerData::all(&db, player).await?;
 
     // Encode the player data into a settings map and order it
     let mut settings = TdfMap::<String, String>::with_capacity(data.len());
     for value in data {
-        settings.insert(value.key, value.value)
+        settings.insert(value.key, value.value);
     }
-    settings.order();
-    Ok(SettingsResponse { settings })
+    Ok(Blaze(SettingsResponse { settings }))
 }

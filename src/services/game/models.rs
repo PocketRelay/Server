@@ -1,25 +1,24 @@
 use super::{AttrMap, Game, GamePlayer};
 use crate::utils::{
-    components::{Components, GameManager},
+    models::NetworkAddress,
     types::{GameID, GameSlot, PlayerID},
 };
 use bitflags::bitflags;
-use blaze_pk::{
-    codec::{Decodable, Encodable},
-    error::DecodeResult,
-    packet::Packet,
-    reader::TdfReader,
-    tag::TdfType,
-    value_type,
-    writer::TdfWriter,
-};
+
 use serde::Serialize;
+use tdf::{
+    TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfType, TdfTyped,
+};
 
 /// Different states the game can be in
-#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[derive(
+    Default, Debug, Serialize, Clone, Copy, PartialEq, Eq, TdfSerialize, TdfDeserialize, TdfTyped,
+)]
 #[repr(u8)]
 pub enum GameState {
     NewState = 0x0,
+    #[tdf(default)]
+    #[default]
     Initializing = 0x1,
     Virtual = 0x2,
     PreGame = 0x82,
@@ -30,43 +29,6 @@ pub enum GameState {
     Resetable = 0x7,
     ReplaySetup = 0x8,
 }
-
-impl GameState {
-    /// Gets the state from the provided value
-    ///
-    /// `value` The value to get the state of
-    pub fn from_value(value: u8) -> Self {
-        match value {
-            0x0 => Self::NewState,
-            0x1 => Self::Initializing,
-            0x2 => Self::Virtual,
-            0x82 => Self::PreGame,
-            0x83 => Self::InGame,
-            0x4 => Self::PostGame,
-            0x5 => Self::Migrating,
-            0x6 => Self::Destructing,
-            0x7 => Self::Resetable,
-            0x8 => Self::ReplaySetup,
-            // Default to initializing state
-            _ => Self::Initializing,
-        }
-    }
-}
-
-impl Encodable for GameState {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.write_u8((*self) as u8);
-    }
-}
-
-impl Decodable for GameState {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let value = reader.read_u8()?;
-        Ok(Self::from_value(value))
-    }
-}
-
-value_type!(GameState, TdfType::VarInt);
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -91,24 +53,37 @@ bitflags! {
     }
 }
 
-impl Encodable for GameSettings {
-    fn encode(&self, output: &mut TdfWriter) {
-        output.write_u16(self.bits())
+impl From<GameSettings> for u16 {
+    fn from(value: GameSettings) -> Self {
+        value.bits()
     }
 }
 
-impl Decodable for GameSettings {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        Ok(GameSettings::from_bits_retain(reader.read_u16()?))
+impl TdfSerialize for GameSettings {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        <u16 as TdfSerializeOwned>::serialize_owned(self.bits(), w)
     }
 }
 
-value_type!(GameSettings, TdfType::VarInt);
+impl TdfDeserializeOwned for GameSettings {
+    fn deserialize_owned(r: &mut tdf::TdfDeserializer<'_>) -> tdf::DecodeResult<Self> {
+        let value = u16::deserialize_owned(r)?;
+        Ok(GameSettings::from_bits_retain(value))
+    }
+}
 
-#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+impl TdfTyped for GameSettings {
+    const TYPE: TdfType = TdfType::VarInt;
+}
+
+#[derive(
+    Default, Debug, Serialize, Clone, Copy, PartialEq, Eq, TdfDeserialize, TdfSerialize, TdfTyped,
+)]
 #[repr(u8)]
 pub enum PlayerState {
     /// Link between the mesh points is not connected
+    #[default]
+    #[tdf(default)]
     Reserved = 0x0,
     Queued = 0x1,
     /// Link is being formed between two mesh points
@@ -119,79 +94,40 @@ pub enum PlayerState {
     ActiveKickPending = 0x5,
 }
 
-impl PlayerState {
-    /// Gets the mesh state from the provided value
-    ///
-    /// `value` The value of the mesh state
-    pub fn from_value(value: u8) -> Self {
-        match value {
-            0x0 => Self::Reserved,
-            0x1 => Self::Queued,
-            0x2 => Self::ActiveConnecting,
-            0x3 => Self::ActiveMigrating,
-            0x4 => Self::ActiveConnected,
-            0x5 => Self::ActiveKickPending,
-            _ => Self::Reserved,
-        }
-    }
-}
-
-impl Encodable for PlayerState {
-    fn encode(&self, output: &mut TdfWriter) {
-        output.write_u8((*self) as u8)
-    }
-}
-
-impl Decodable for PlayerState {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        Ok(PlayerState::from_value(reader.read_u8()?))
-    }
-}
-
-value_type!(PlayerState, TdfType::VarInt);
-
 /// Message for a game state changing
+#[derive(TdfSerialize)]
 pub struct StateChange {
     /// The ID of the game
+    #[tdf(tag = "GID")]
     pub id: GameID,
     /// The game state
+    #[tdf(tag = "GSTA")]
     pub state: GameState,
 }
 
-impl Encodable for StateChange {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"GID", self.id);
-        writer.tag_value(b"GSTA", &self.state);
-    }
-}
-
 /// Message for a game setting changing
+#[derive(TdfSerialize)]
 pub struct SettingChange {
     /// The game setting
+    #[tdf(tag = "ATTR", into = u16)]
     pub setting: GameSettings,
     /// The ID of the game
+    #[tdf(tag = "GID")]
     pub id: GameID,
-}
-
-impl Encodable for SettingChange {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u16(b"ATTR", self.setting.bits());
-        writer.tag_u32(b"GID", self.id);
-    }
 }
 
 /// Packet for game attribute changes
 pub struct AttributesChange<'a> {
-    /// The id of the game the attributes have changed for
-    pub id: GameID,
     /// Borrowed game attributes map
     pub attributes: &'a AttrMap,
+    /// The id of the game the attributes have changed for
+    pub id: GameID,
 }
 
-impl Encodable for AttributesChange<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_value(b"ATTR", self.attributes);
-        writer.tag_u32(b"GID", self.id);
+impl TdfSerialize for AttributesChange<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_ref(b"ATTR", self.attributes);
+        w.tag_owned(b"GID", self.id)
     }
 }
 
@@ -205,19 +141,12 @@ pub struct PlayerJoining<'a> {
     pub player: &'a GamePlayer,
 }
 
-impl Encodable for PlayerJoining<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"GID", self.game_id);
+impl TdfSerialize for PlayerJoining<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_u32(b"GID", self.game_id);
 
-        writer.tag_group(b"PDAT");
-        self.player.encode(self.game_id, self.slot, writer);
-    }
-}
-
-fn write_admin_list(writer: &mut TdfWriter, game: &Game) {
-    writer.tag_list_start(b"ADMN", TdfType::VarInt, game.players.len());
-    for player in &game.players {
-        writer.write_u32(player.player.id);
+        w.tag_group(b"PDAT");
+        self.player.encode(self.game_id, self.slot, w);
     }
 }
 
@@ -247,8 +176,8 @@ pub struct GameDetails<'a> {
     pub context: GameSetupContext,
 }
 
-impl Encodable for GameDetails<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
+impl TdfSerialize for GameDetails<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         let game = self.game;
         let host_player = match game.players.first() {
             Some(value) => value,
@@ -256,80 +185,77 @@ impl Encodable for GameDetails<'_> {
         };
 
         // Game details
-        writer.group(b"GAME", |writer| {
-            write_admin_list(writer, game);
-            writer.tag_value(b"ATTR", &game.attributes);
+        w.group(b"GAME", |w| {
+            w.tag_list_iter_owned(b"ADMN", game.players.iter().map(|player| player.player.id));
+            w.tag_ref(b"ATTR", &game.attributes);
+
+            w.tag_list_slice(b"CAP", &[4u8, 0u8]);
+
+            w.tag_u32(b"GID", game.id);
+            w.tag_str(b"GNAM", &host_player.player.display_name);
+
+            w.tag_u64(b"GPVH", 0x5a4f2b378b715c6);
+            w.tag_u16(b"GSET", game.setting.bits());
+            w.tag_u64(b"GSID", 0x4000000a76b645);
+            w.tag_ref(b"GSTA", &game.state);
+
+            w.tag_str_empty(b"GTYP");
             {
-                writer.tag_list_start(b"CAP", TdfType::VarInt, 2);
-                writer.write_u8(4);
-                writer.write_u8(0);
-            }
-
-            writer.tag_u32(b"GID", game.id);
-            writer.tag_str(b"GNAM", &host_player.player.display_name);
-
-            writer.tag_u64(b"GPVH", 0x5a4f2b378b715c6);
-            writer.tag_u16(b"GSET", game.setting.bits());
-            writer.tag_u64(b"GSID", 0x4000000a76b645);
-            writer.tag_value(b"GSTA", &game.state);
-
-            writer.tag_str_empty(b"GTYP");
-            {
-                writer.tag_list_start(b"HNET", TdfType::Group, 1);
-                writer.write_byte(2);
-                if let Some(groups) = &host_player.net.groups {
-                    groups.encode(writer);
+                w.tag_list_start(b"HNET", TdfType::Group, 1);
+                w.write_byte(2);
+                if let NetworkAddress::AddressPair(pair) = &host_player.net.addr {
+                    TdfSerialize::serialize(pair, w)
                 }
             }
 
-            writer.tag_u32(b"HSES", host_player.player.id);
-            writer.tag_zero(b"IGNO");
-            writer.tag_u8(b"MCAP", 4);
-            writer.tag_value(b"NQOS", &host_player.net.qos);
-            writer.tag_zero(b"NRES");
-            writer.tag_zero(b"NTOP");
-            writer.tag_str_empty(b"PGID");
-            writer.tag_empty_blob(b"PGSR");
+            w.tag_u32(b"HSES", host_player.player.id);
+            w.tag_zero(b"IGNO");
+            w.tag_u8(b"MCAP", 4);
+            w.tag_ref(b"NQOS", &host_player.net.qos);
+            w.tag_zero(b"NRES");
+            w.tag_zero(b"NTOP");
+            w.tag_str_empty(b"PGID");
+            w.tag_blob_empty(b"PGSR");
 
-            writer.group(b"PHST", |writer| {
-                writer.tag_u32(b"HPID", host_player.player.id);
-                writer.tag_zero(b"HSLT");
+            w.group(b"PHST", |w| {
+                w.tag_u32(b"HPID", host_player.player.id);
+                w.tag_zero(b"HSLT");
             });
 
-            writer.tag_u8(b"PRES", 0x1);
-            writer.tag_str_empty(b"PSAS");
-            writer.tag_u8(b"QCAP", 0x0);
-            writer.tag_u32(b"SEED", 0x4cbc8585);
-            writer.tag_u8(b"TCAP", 0x0);
+            w.tag_u8(b"PRES", 0x1);
+            w.tag_str_empty(b"PSAS");
+            w.tag_u8(b"QCAP", 0x0);
+            w.tag_u32(b"SEED", 0x4cbc8585);
+            w.tag_u8(b"TCAP", 0x0);
 
-            writer.group(b"THST", |writer| {
-                writer.tag_u32(b"HPID", host_player.player.id);
-                writer.tag_u8(b"HSLT", 0x0);
+            w.group(b"THST", |w| {
+                w.tag_u32(b"HPID", host_player.player.id);
+                w.tag_u8(b"HSLT", 0x0);
             });
 
-            writer.tag_str(b"UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
-            writer.tag_u8(b"VOIP", 0x2);
-            writer.tag_str(b"VSTR", VSTR);
-            writer.tag_empty_blob(b"XNNC");
-            writer.tag_empty_blob(b"XSES");
+            w.tag_str(b"UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
+            w.tag_u8(b"VOIP", 0x2);
+            w.tag_str(b"VSTR", VSTR);
+            w.tag_blob_empty(b"XNNC");
+            w.tag_blob_empty(b"XSES");
         });
 
         // Player list
-        writer.tag_list_start(b"PROS", TdfType::Group, game.players.len());
+        w.tag_list_start(b"PROS", TdfType::Group, game.players.len());
         for (slot, player) in game.players.iter().enumerate() {
-            player.encode(game.id, slot, writer);
+            player.encode(game.id, slot, w);
         }
 
         match &self.context {
             GameSetupContext::Dataless(context) => {
-                writer.tag_union_start(b"REAS", 0x0);
-                writer.group(b"VALU", |writer| {
+                w.tag_union_start(b"REAS", 0x0);
+                w.group(b"VALU", |writer| {
                     writer.tag_u8(b"DCTX", (*context) as u8);
                 });
             }
             GameSetupContext::Matchmaking(id) => {
-                writer.tag_union_start(b"REAS", 0x3);
-                writer.group(b"VALU", |writer| {
+                w.tag_union_start(b"REAS", 0x3);
+                w.group(b"VALU", |writer| {
                     const FIT: u16 = 21600;
 
                     writer.tag_u16(b"FIT", FIT);
@@ -355,113 +281,101 @@ pub struct GetGameDetails<'a> {
     pub game: &'a Game,
 }
 
-impl Encodable for GetGameDetails<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_list_start(b"GDAT", TdfType::Group, 1);
+impl TdfSerialize for GetGameDetails<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         let game = self.game;
         let host_player = match game.players.first() {
             Some(value) => value,
             None => return,
         };
 
-        write_admin_list(writer, game);
-        writer.tag_value(b"ATTR", &game.attributes);
-        {
-            writer.tag_list_start(b"CAP", TdfType::VarInt, 2);
-            writer.write_u8(4);
-            writer.write_u8(0);
-        }
-        writer.tag_u32(b"GID", game.id);
-        writer.tag_str(b"GNAM", &host_player.player.display_name);
-        writer.tag_u16(b"GSET", game.setting.bits());
-        writer.tag_value(b"GSTA", &game.state);
-        {
-            writer.tag_list_start(b"HNET", TdfType::Group, 1);
-            writer.write_byte(2);
-            if let Some(groups) = &host_player.net.groups {
-                groups.encode(writer);
+        w.tag_list_start(b"GDAT", TdfType::Group, 1);
+        w.group_body(|w| {
+            w.tag_list_iter_owned(b"ADMN", game.players.iter().map(|player| player.player.id));
+            w.tag_ref(b"ATTR", &game.attributes);
+            w.tag_list_slice(b"CAP", &[4u8, 0u8]);
+
+            w.tag_u32(b"GID", game.id);
+            w.tag_str(b"GNAM", &host_player.player.display_name);
+            w.tag_u16(b"GSET", game.setting.bits());
+            w.tag_ref(b"GSTA", &game.state);
+            {
+                w.tag_list_start(b"HNET", TdfType::Group, 1);
+                w.write_byte(2);
+                if let NetworkAddress::AddressPair(pair) = &host_player.net.addr {
+                    TdfSerialize::serialize(pair, w)
+                }
             }
-        }
-        writer.tag_u32(b"HOST", host_player.player.id);
-        writer.tag_zero(b"NTOP");
+            w.tag_u32(b"HOST", host_player.player.id);
+            w.tag_zero(b"NTOP");
 
-        {
-            writer.tag_list_start(b"PCNT", TdfType::VarInt, 2);
-            writer.write_u8(1);
-            writer.write_u8(0);
-        }
+            w.tag_list_slice(b"PCNT", &[1u8, 0u8]);
 
-        writer.tag_u8(b"PRES", 0x2);
-        writer.tag_str(b"PSAS", "ea-sjc");
-        writer.tag_str_empty(b"PSID");
-        writer.tag_zero(b"QCAP");
-        writer.tag_zero(b"QCNT");
-        writer.tag_zero(b"SID");
-        writer.tag_zero(b"TCAP");
-        writer.tag_u8(b"VOIP", 0x2);
-        writer.tag_str(b"VSTR", VSTR);
-        writer.tag_group_end();
+            w.tag_u8(b"PRES", 0x2);
+            w.tag_str(b"PSAS", "ea-sjc");
+            w.tag_str_empty(b"PSID");
+            w.tag_zero(b"QCAP");
+            w.tag_zero(b"QCNT");
+            w.tag_zero(b"SID");
+            w.tag_zero(b"TCAP");
+            w.tag_u8(b"VOIP", 0x2);
+            w.tag_str(b"VSTR", VSTR);
+        });
     }
 }
 
+#[derive(TdfSerialize)]
 pub struct PlayerStateChange {
+    #[tdf(tag = "GID")]
     pub gid: GameID,
+    #[tdf(tag = "PID")]
     pub pid: PlayerID,
+    #[tdf(tag = "STAT")]
     pub state: PlayerState,
 }
 
-impl Encodable for PlayerStateChange {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"GID", self.gid);
-        writer.tag_u32(b"PID", self.pid);
-        writer.tag_value(b"STAT", &self.state);
-    }
-}
-
+#[derive(TdfSerialize)]
 pub struct JoinComplete {
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
+    #[tdf(tag = "PID")]
     pub player_id: PlayerID,
 }
 
-impl Encodable for JoinComplete {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"GID", self.game_id);
-        writer.tag_u32(b"PID", self.player_id);
-    }
-}
-
+#[derive(TdfSerialize)]
 pub struct AdminListChange {
+    #[tdf(tag = "ALST")]
     pub player_id: PlayerID,
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
+    #[tdf(tag = "OPER")]
     pub operation: AdminListOperation,
+    #[tdf(tag = "UID")]
     pub host_id: PlayerID,
 }
 
 /// Different operations that can be performed on
 /// the admin list
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, TdfSerialize, TdfTyped)]
 #[repr(u8)]
 pub enum AdminListOperation {
     Add = 0,
     Remove = 1,
 }
 
-impl Encodable for AdminListChange {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"ALST", self.player_id);
-        writer.tag_u32(b"GID", self.game_id);
-        writer.tag_u8(b"OPER", self.operation as u8);
-        writer.tag_u32(b"UID", self.host_id);
-    }
-}
-
+#[derive(TdfSerialize)]
 pub struct PlayerRemoved {
+    #[tdf(tag = "CNTX")]
+    pub cntx: u8,
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
+    #[tdf(tag = "PID")]
     pub player_id: PlayerID,
+    #[tdf(tag = "REAS")]
     pub reason: RemoveReason,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, TdfSerialize, TdfDeserialize, TdfTyped)]
 #[repr(u8)]
 pub enum RemoveReason {
     /// Hit timeout while joining
@@ -475,6 +389,8 @@ pub enum RemoveReason {
     GameDestroyed = 0x4,
     GameEnded = 0x5,
     /// Generic player left the game reason
+    #[tdf(default)]
+    #[default]
     PlayerLeft = 0x6,
     GroupLeft = 0x7,
     /// Player kicked
@@ -487,102 +403,28 @@ pub enum RemoveReason {
     HostEjected = 0xC,
 }
 
-impl RemoveReason {
-    pub fn from_value(value: u8) -> Self {
-        match value {
-            0x0 => Self::JoinTimeout,
-            0x1 => Self::PlayerConnectionLost,
-            0x2 => Self::ServerConnectionLost,
-            0x3 => Self::MigrationFailed,
-            0x4 => Self::GameDestroyed,
-            0x5 => Self::GameEnded,
-            0x6 => Self::PlayerLeft,
-            0x7 => Self::GroupLeft,
-            0x8 => Self::PlayerKicked,
-            0x9 => Self::PlayerKickedWithBan,
-            0xA => Self::PlayerJoinFromQueueFailed,
-            0xB => Self::PlayerReservationTimeout,
-            0xC => Self::HostEjected,
-            // Default to generic reason for unknown
-            _ => Self::PlayerLeft,
-        }
-    }
-}
-
-impl Encodable for RemoveReason {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.write_u8((*self) as u8);
-    }
-}
-
-impl Decodable for RemoveReason {
-    fn decode(reader: &mut TdfReader) -> DecodeResult<Self> {
-        let value: u8 = reader.read_u8()?;
-        Ok(Self::from_value(value))
-    }
-}
-
-value_type!(RemoveReason, TdfType::VarInt);
-
-impl Encodable for PlayerRemoved {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u8(b"CNTX", 0);
-        writer.tag_u32(b"GID", self.game_id);
-        writer.tag_u32(b"PID", self.player_id);
-        writer.tag_value(b"REAS", &self.reason);
-    }
-}
-
+#[derive(TdfSerialize)]
 pub struct FetchExtendedData {
+    #[tdf(tag = "BUID")]
     pub player_id: PlayerID,
 }
 
-impl Encodable for FetchExtendedData {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"BUID", self.player_id);
-    }
-}
-
+#[derive(TdfSerialize)]
 pub struct HostMigrateStart {
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
+    #[tdf(tag = "HOST")]
     pub host_id: PlayerID,
+    #[tdf(tag = "PMIG")]
+    pub pmig: u32,
+    #[tdf(tag = "SLOT")]
+    pub slot: u8,
 }
 
-impl Encodable for HostMigrateStart {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"GID", self.game_id);
-        writer.tag_u32(b"HOST", self.host_id);
-        writer.tag_u8(b"PMIG", 0x2);
-        writer.tag_u8(b"SLOT", 0x0);
-    }
-}
-
-impl From<HostMigrateStart> for Packet {
-    fn from(value: HostMigrateStart) -> Self {
-        Packet::notify(
-            Components::GameManager(GameManager::HostMigrationStart),
-            value,
-        )
-    }
-}
-
+#[derive(TdfSerialize)]
 pub struct HostMigrateFinished {
+    #[tdf(tag = "GID")]
     pub game_id: GameID,
-}
-
-impl Encodable for HostMigrateFinished {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_u32(b"GID", self.game_id)
-    }
-}
-
-impl From<HostMigrateFinished> for Packet {
-    fn from(value: HostMigrateFinished) -> Self {
-        Packet::notify(
-            Components::GameManager(GameManager::HostMigrationFinished),
-            value,
-        )
-    }
 }
 
 ///
@@ -686,103 +528,102 @@ pub struct AsyncMatchmakingStatus {
     pub player_id: PlayerID,
 }
 
-impl Encodable for AsyncMatchmakingStatus {
-    fn encode(&self, writer: &mut TdfWriter) {
-        {
-            writer.tag_list_start(b"ASIL", TdfType::Group, 1);
+impl TdfSerialize for AsyncMatchmakingStatus {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_list_start(b"ASIL", TdfType::Group, 1);
+        w.group_body(|w| {
             // Create game status
-            writer.group(b"CGS", |writer| {
+            w.group(b"CGS", |w| {
                 // Evaluate status
                 // PlayerCountSufficient = 1,
                 // AcceptableHostFound = 2,
                 // TeamSizesSufficient = 4
-                writer.tag_u8(b"EVST", 2 | 4);
+                w.tag_u8(b"EVST", 2 | 4);
                 // Number of matchmaking sessions
-                writer.tag_u8(b"MMSN", 1);
+                w.tag_u8(b"MMSN", 1);
                 // Number of matched players
-                writer.tag_u8(b"NOMP", 0);
+                w.tag_u8(b"NOMP", 0);
             });
 
             // Custom async status
-            writer.group(b"CUST", |_| {});
+            w.tag_group_empty(b"CUST");
 
             // DNF rule status
-            writer.group(b"DNFS", |writer| {
+            w.group(b"DNFS", |w| {
                 // My DNF value
-                writer.tag_zero(b"MDNF");
+                w.tag_zero(b"MDNF");
                 // Max DNF value
-                writer.tag_zero(b"XDNF");
+                w.tag_zero(b"XDNF");
             });
 
             // Find game status
-            writer.group(b"FGS", |writer| {
+            w.group(b"FGS", |w| {
                 // Number of games
-                writer.tag_zero(b"GNUM");
+                w.tag_zero(b"GNUM");
             });
 
             // Geo location rule status
-            writer.group(b"GEOS", |writer| {
+            w.group(b"GEOS", |w| {
                 // Max distance
-                writer.tag_zero(b"DIST");
+                w.tag_zero(b"DIST");
             });
 
             // Generic rule status dictionary (TODO: RULES HERE)
-            writer.tag_map_start(b"GRDA", TdfType::String, TdfType::Group, 0);
+            w.tag_map_start(b"GRDA", TdfType::String, TdfType::Group, 0);
 
             // Game size rule status
-            writer.group(b"GSRD", |writer| {
+            w.group(b"GSRD", |w| {
                 // Max player count accepted
-                writer.tag_u8(b"PMAX", 4);
+                w.tag_u8(b"PMAX", 4);
                 // Min player count accepted
-                writer.tag_u8(b"PMIN", 2);
+                w.tag_u8(b"PMIN", 2);
             });
 
             // Host balance rule status
-            writer.group(b"HBRD", |writer| {
+            w.group(b"HBRD", |w| {
                 // Host balance values
                 // HOSTS_STRICTLY_BALANCED = 0,
                 // HOSTS_BALANCED = 1,
                 // HOSTS_UNBALANCED = 2,
 
-                writer.tag_u8(b"BVAL", 1);
+                w.tag_u8(b"BVAL", 1);
             });
 
             // Host viability rule status
-            writer.group(b"HVRD", |writer| {
+            w.group(b"HVRD", |w| {
                 // Host viability values
                 // CONNECTION_ASSURED = 0,
                 // CONNECTION_LIKELY = 1,
                 // CONNECTION_FEASIBLE = 2,
                 // CONNECTION_UNLIKELY = 3,
 
-                writer.tag_zero(b"VVAL");
+                w.tag_zero(b"VVAL");
             });
 
             // Ping site rule status
-            writer.group(b"PSRS", |_| {});
+            w.group(b"PSRS", |_| {});
 
             // Rank rule status
-            writer.group(b"RRDA", |writer| {
+            w.group(b"RRDA", |w| {
                 // Matched rank flags
-                writer.tag_zero(b"RVAL");
+                w.tag_zero(b"RVAL");
             });
 
             // Team size rule status
-            writer.group(b"TSRS", |writer| {
+            w.group(b"TSRS", |w| {
                 // Max team size accepted
-                writer.tag_zero(b"TMAX");
+                w.tag_zero(b"TMAX");
                 // Min team size accepted
-                writer.tag_zero(b"TMIN");
+                w.tag_zero(b"TMIN");
             });
 
             // UED rule status
-            writer.tag_map_start(b"GRDA", TdfType::String, TdfType::Group, 0);
+            w.tag_map_empty(b"GRDA", TdfType::String, TdfType::Group);
             // Virtual game rule status
-            writer.group(b"VGRS", |writer| writer.tag_zero(b"VVAL"));
-            writer.tag_group_end();
-        }
+            w.group(b"VGRS", |w| w.tag_zero(b"VVAL"));
+        });
 
-        writer.tag_u32(b"MSID", self.player_id);
-        writer.tag_u32(b"USID", self.player_id);
+        w.tag_owned(b"MSID", self.player_id);
+        w.tag_owned(b"USID", self.player_id);
     }
 }

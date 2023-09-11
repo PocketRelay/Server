@@ -3,6 +3,9 @@ use log::LevelFilter;
 use serde::Deserialize;
 use std::{env, fs::read_to_string, path::Path};
 
+/// The server version extracted from the Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub struct RuntimeConfig {
     pub reverse_proxy: bool,
     pub galaxy_at_war: GalaxyAtWarConfig,
@@ -49,10 +52,6 @@ pub fn load_config() -> Option<Config> {
     };
 
     Some(config)
-}
-
-pub struct ServicesConfig {
-    pub retriever: RetrieverConfig,
 }
 
 #[derive(Deserialize)]

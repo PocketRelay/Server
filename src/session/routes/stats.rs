@@ -1,17 +1,22 @@
 use crate::{
-    services::leaderboard::{models::*, QueryMessage},
-    session::models::{
-        errors::{ServerError, ServerResult},
-        stats::*,
+    services::leaderboard::{models::*, Leaderboard, QueryMessage},
+    session::{
+        models::{errors::ServerResult, stats::*},
+        packet::Packet,
+        router::{Blaze, BlazeWithHeader, Extension},
     },
-    state::App,
 };
-use blaze_pk::packet::{Request, Response};
+use interlink::prelude::Link;
+use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
-pub async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> ServerResult<Response> {
-    let query = &*req;
-    let group = get_group(&query.name).await?;
+pub async fn handle_normal_leaderboard(
+    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(db): Extension<DatabaseConnection>,
+    req: BlazeWithHeader<LeaderboardRequest>,
+) -> ServerResult<Packet> {
+    let query = &req.req;
+    let group = get_group(db, leaderboard, &query.name).await?;
     let response = match group.get_normal(query.start, query.count) {
         Some((values, _)) => LeaderboardResponse::Many(values),
         None => LeaderboardResponse::Empty,
@@ -20,10 +25,12 @@ pub async fn handle_normal_leaderboard(req: Request<LeaderboardRequest>) -> Serv
 }
 
 pub async fn handle_centered_leaderboard(
-    req: Request<CenteredLeaderboardRequest>,
-) -> ServerResult<Response> {
-    let query = &*req;
-    let group = get_group(&query.name).await?;
+    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(db): Extension<DatabaseConnection>,
+    req: BlazeWithHeader<CenteredLeaderboardRequest>,
+) -> ServerResult<Packet> {
+    let query = &req.req;
+    let group = get_group(db, leaderboard, &query.name).await?;
     let response = match group.get_centered(query.center, query.count) {
         Some(values) => LeaderboardResponse::Many(values),
         None => LeaderboardResponse::Empty,
@@ -32,10 +39,12 @@ pub async fn handle_centered_leaderboard(
 }
 
 pub async fn handle_filtered_leaderboard(
-    req: Request<FilteredLeaderboardRequest>,
-) -> ServerResult<Response> {
-    let query = &*req;
-    let group = get_group(&query.name).await?;
+    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(db): Extension<DatabaseConnection>,
+    req: BlazeWithHeader<FilteredLeaderboardRequest>,
+) -> ServerResult<Packet> {
+    let query = &req.req;
+    let group = get_group(db, leaderboard, &query.name).await?;
     let response = match group.get_entry(query.id) {
         Some(value) => LeaderboardResponse::One(value),
         None => LeaderboardResponse::Empty,
@@ -59,21 +68,23 @@ pub async fn handle_filtered_leaderboard(
 /// }
 /// ```
 pub async fn handle_leaderboard_entity_count(
-    req: EntityCountRequest,
-) -> ServerResult<EntityCountResponse> {
-    let group = get_group(&req.name).await?;
+    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(db): Extension<DatabaseConnection>,
+    Blaze(req): Blaze<EntityCountRequest>,
+) -> ServerResult<Blaze<EntityCountResponse>> {
+    let group = get_group(db, leaderboard, &req.name).await?;
     let count = group.values.len();
-    Ok(EntityCountResponse { count })
+    Ok(Blaze(EntityCountResponse { count }))
 }
 
-async fn get_group(name: &str) -> ServerResult<Arc<LeaderboardGroup>> {
-    let services = App::services();
-    let leaderboard = &services.leaderboard;
+async fn get_group(
+    db: DatabaseConnection,
+    leaderboard: Link<Leaderboard>,
+    name: &str,
+) -> ServerResult<Arc<LeaderboardGroup>> {
     let ty = LeaderboardType::from_value(name);
-    leaderboard
-        .send(QueryMessage(ty))
-        .await
-        .map_err(|_| ServerError::ServerUnavailableFinal)
+    let result = leaderboard.send(QueryMessage(ty, db)).await?;
+    Ok(result)
 }
 
 fn get_locale_name(code: &str) -> &str {
@@ -103,8 +114,8 @@ fn get_locale_name(code: &str) -> &str {
 /// }
 /// ```
 pub async fn handle_leaderboard_group(
-    req: LeaderboardGroupRequest,
-) -> Option<LeaderboardGroupResponse<'static>> {
+    Blaze(req): Blaze<LeaderboardGroupRequest>,
+) -> Option<Blaze<LeaderboardGroupResponse<'static>>> {
     let name = req.name;
     let is_n7 = name.starts_with("N7Rating");
     if !is_n7 && !name.starts_with("ChallengePoints") {
@@ -132,5 +143,5 @@ pub async fn handle_leaderboard_group(
             gname: "ME3ChallengePoints",
         }
     };
-    Some(group)
+    Some(Blaze(group))
 }

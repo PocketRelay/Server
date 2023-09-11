@@ -5,22 +5,24 @@
 //! other than the Mass Effect 3 client itself.
 
 use crate::{
+    config::RuntimeConfig,
     database::{
         entities::{GalaxyAtWar, Player, PlayerData},
         DatabaseConnection, DbErr, DbResult,
     },
     middleware::xml::Xml,
-    services::tokens::Tokens,
-    state::App,
+    services::sessions::{Sessions, VerifyTokenMessage},
     utils::parsing::PlayerClass,
 };
 use axum::{
     extract::{Path, Query},
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
+    Extension,
 };
+use interlink::prelude::Link;
 use serde::Deserialize;
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 use tokio::try_join;
 
 /// Error type used in gaw routes to handle errors such
@@ -93,9 +95,13 @@ pub async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
 /// with the provied ID
 ///
 /// `id` The hex encoded ID of the player
-pub async fn get_ratings(Path(id): Path<String>) -> Result<Xml, GAWError> {
-    let db = App::database();
-    let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
+pub async fn get_ratings(
+    Path(id): Path<String>,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(sessions): Extension<Link<Sessions>>,
+) -> Result<Xml, GAWError> {
+    let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
     Ok(ratings_response(gaw_data, promotions))
 }
 
@@ -131,11 +137,13 @@ pub struct IncreaseQuery {
 pub async fn increase_ratings(
     Path(id): Path<String>,
     Query(query): Query<IncreaseQuery>,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(sessions): Extension<Link<Sessions>>,
 ) -> Result<Xml, GAWError> {
-    let db = App::database();
-    let (gaw_data, promotions) = get_player_gaw_data(db, &id).await?;
+    let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
     let gaw_data = gaw_data
-        .increase(db, (query.a, query.b, query.c, query.d, query.e))
+        .increase(&db, (query.a, query.b, query.c, query.d, query.e))
         .await?;
     Ok(ratings_response(gaw_data, promotions))
 }
@@ -147,22 +155,32 @@ pub async fn increase_ratings(
 /// `id` The hex ID of the player
 async fn get_player_gaw_data(
     db: &DatabaseConnection,
+    sessions: Link<Sessions>,
     token: &str,
+    config: &RuntimeConfig,
 ) -> Result<(GalaxyAtWar, u32), GAWError> {
-    let player: Player = Tokens::service_verify(db, token)
+    let player_id = sessions
+        .send(VerifyTokenMessage(token.to_string()))
         .await
+        .map_err(|_| GAWError::ServerError)?
         .map_err(|_| GAWError::InvalidToken)?;
-    let config = App::config();
+
+    let player = Player::by_id(db, player_id)
+        .await?
+        .ok_or(GAWError::InvalidToken)?;
 
     let (gaw_data, promotions) = try_join!(
         GalaxyAtWar::find_or_create(db, player.id, config.galaxy_at_war.decay),
-        get_promotions(db, &player)
+        get_promotions(db, &player, config)
     )?;
     Ok((gaw_data, promotions))
 }
 
-async fn get_promotions(db: &DatabaseConnection, player: &Player) -> DbResult<u32> {
-    let config = App::config();
+async fn get_promotions(
+    db: &DatabaseConnection,
+    player: &Player,
+    config: &RuntimeConfig,
+) -> DbResult<u32> {
     if !config.galaxy_at_war.promotions {
         return Ok(0);
     }

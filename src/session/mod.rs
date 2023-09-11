@@ -6,31 +6,33 @@ use crate::{
     database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
     services::{
-        game::{manager::GetGameMessage, models::RemoveReason, GamePlayer, RemovePlayerMessage},
-        matchmaking::RemoveQueueMessage,
-        sessions::{AddMessage, RemoveMessage},
-        Services,
+        game::{
+            manager::{GameManager, GetGameMessage, RemoveQueueMessage},
+            models::RemoveReason,
+            GamePlayer, RemovePlayerMessage,
+        },
+        sessions::{AddMessage, RemoveMessage, Sessions},
     },
-    state::App,
     utils::{
-        components::{self, Components, UserSessions},
-        models::{NetData, NetGroups, Port, QosNetworkData, UpdateExtDataAttr},
+        components::{self, game_manager::GAME_TYPE, user_sessions},
+        models::{NetData, NetworkAddress, Port, QosNetworkData, UpdateExtDataAttr},
         types::{GameID, PlayerID, SessionID},
     },
 };
-use blaze_pk::{
-    codec::Encodable,
-    packet::{Packet, PacketComponents, PacketDebug},
-    router::HandleError,
-    tag::TdfType,
-    value_type,
-    writer::TdfWriter,
-};
+
 use interlink::prelude::*;
-use log::{debug, error, log_enabled};
-use std::{fmt::Debug, io, net::SocketAddr};
+use log::{debug, log_enabled};
+use std::{fmt::Debug, io, net::Ipv4Addr, sync::Arc};
+use tdf::{ObjectId, TdfSerialize, TdfType, TdfTyped};
+
+use self::{
+    packet::{Packet, PacketDebug},
+    router::BlazeRouter,
+};
 
 pub mod models;
+pub mod packet;
+pub mod router;
 pub mod routes;
 
 /// Structure for storing a client session. This includes the
@@ -41,7 +43,7 @@ pub struct Session {
     id: SessionID,
 
     /// Connection socket addr
-    addr: SocketAddr,
+    addr: Ipv4Addr,
 
     /// Packet writer sink for the session
     writer: SinkLink<Packet>,
@@ -51,6 +53,11 @@ pub struct Session {
 
     /// Data associated with this session
     data: SessionData,
+
+    router: Arc<BlazeRouter>,
+
+    game_manager: Link<GameManager>,
+    sessions: Link<Sessions>,
 }
 
 #[derive(Default, Clone)]
@@ -66,8 +73,7 @@ pub struct SessionData {
 
 impl Service for Session {
     fn stopping(&mut self) {
-        let services = App::services();
-        self.clear_auth(services);
+        self.clear_auth();
         debug!("Session stopped (SID: {})", self.id);
     }
 }
@@ -155,15 +161,13 @@ pub struct SetPlayerMessage(pub Option<Player>);
 impl Handler<SetPlayerMessage> for Session {
     type Response = ();
     fn handle(&mut self, msg: SetPlayerMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
-        let services = App::services();
-
         // Clear the current authentication
-        self.clear_auth(services);
+        self.clear_auth();
 
         // If we are setting a new player
         if let Some(player) = msg.0 {
             // Add the session to authenticated sessions
-            let _ = services.sessions.do_send(AddMessage {
+            let _ = self.sessions.do_send(AddMessage {
                 player_id: player.id,
                 link: ctx.link(),
             });
@@ -242,23 +246,17 @@ impl StreamHandler<io::Result<Packet>> for Session {
     fn handle(&mut self, msg: io::Result<Packet>, ctx: &mut ServiceContext<Self>) {
         if let Ok(packet) = msg {
             self.debug_log_packet("Read", &packet);
-            let mut addr = ctx.link();
+            let addr = ctx.link();
+            let router = self.router.clone();
             tokio::spawn(async move {
-                let router = App::router();
-                let response = match router.handle(&mut addr, packet) {
+                let response = match router.handle(addr.clone(), packet) {
                     // Await the handler response future
                     Ok(fut) => fut.await,
 
-                    // Handle any errors that occur
-                    Err(err) => {
-                        match err {
-                            // No handler set-up just respond with a default empty response
-                            HandleError::MissingHandler(packet) => packet.respond_empty(),
-                            HandleError::Decoding(err) => {
-                                error!("Error while decoding packet: {:?}", err);
-                                return;
-                            }
-                        }
+                    // Handle no handler for packet
+                    Err(packet) => {
+                        debug!("Missing packet handler");
+                        Packet::response_empty(&packet)
                     }
                 };
                 // Push the response to the client
@@ -287,10 +285,11 @@ impl Handler<UpdateClientMessage> for Session {
     fn handle(&mut self, _msg: UpdateClientMessage, _ctx: &mut ServiceContext<Self>) {
         if let Some(player) = &self.data.player {
             let packet = Packet::notify(
-                Components::UserSessions(UserSessions::SetSession),
+                user_sessions::COMPONENT,
+                user_sessions::SET_SESSION,
                 SetSession {
                     player_id: player.id,
-                    session: self,
+                    session: &self.data,
                 },
             );
             self.push(packet);
@@ -299,7 +298,7 @@ impl Handler<UpdateClientMessage> for Session {
 }
 
 #[derive(Message)]
-#[msg(rtype = "SocketAddr")]
+#[msg(rtype = "Ipv4Addr")]
 pub struct GetSocketAddrMessage;
 
 impl Handler<GetSocketAddrMessage> for Session {
@@ -328,10 +327,11 @@ impl Handler<InformSessions> for Session {
     fn handle(&mut self, msg: InformSessions, _ctx: &mut ServiceContext<Self>) -> Self::Response {
         if let Some(player) = &self.data.player {
             let packet = Packet::notify(
-                Components::UserSessions(UserSessions::SetSession),
+                user_sessions::COMPONENT,
+                user_sessions::SET_SESSION,
                 SetSession {
                     player_id: player.id,
-                    session: self,
+                    session: &self.data,
                 },
             );
 
@@ -363,7 +363,7 @@ impl Handler<HardwareFlagMessage> for Session {
 
 #[derive(Message)]
 pub struct NetworkInfoMessage {
-    pub groups: NetGroups,
+    pub address: NetworkAddress,
     pub qos: QosNetworkData,
 }
 
@@ -373,7 +373,7 @@ impl Handler<NetworkInfoMessage> for Session {
     fn handle(&mut self, msg: NetworkInfoMessage, ctx: &mut ServiceContext<Self>) {
         let net = &mut &mut self.data.net;
         net.qos = msg.qos;
-        net.groups = Some(msg.groups);
+        net.addr = msg.address;
 
         // Notify the client of the change via a message rather than
         // directly so its sent after the response
@@ -416,7 +416,8 @@ impl Handler<DetailsMessage> for Session {
 
         // Create the details packets
         let a = Packet::notify(
-            Components::UserSessions(UserSessions::SessionDetails),
+            user_sessions::COMPONENT,
+            user_sessions::SESSION_DETAILS,
             SessionUpdate {
                 session: self,
                 player_id: player.id,
@@ -425,7 +426,8 @@ impl Handler<DetailsMessage> for Session {
         );
 
         let b = Packet::notify(
-            Components::UserSessions(UserSessions::UpdateExtendedDataAttribute),
+            user_sessions::COMPONENT,
+            user_sessions::UPDATE_EXTENDED_DATA_ATTRIBUTE,
             UpdateExtDataAttr {
                 flags: 0x3,
                 player_id: player.id,
@@ -439,16 +441,14 @@ impl Handler<DetailsMessage> for Session {
 }
 
 impl Session {
-    /// Creates a new session with the provided values.
-    ///
-    /// `id`             The unique session ID
-    /// `values`         The networking TcpStream and address
-    /// `message_sender` The message sender for session messages
     pub fn new(
         id: SessionID,
         host_target: SessionHostTarget,
         writer: SinkLink<Packet>,
-        addr: SocketAddr,
+        addr: Ipv4Addr,
+        router: Arc<BlazeRouter>,
+        game_manager: Link<GameManager>,
+        sessions: Link<Sessions>,
     ) -> Self {
         Self {
             id,
@@ -456,6 +456,9 @@ impl Session {
             data: SessionData::default(),
             host_target,
             addr,
+            router,
+            game_manager,
+            sessions,
         }
     }
 
@@ -482,18 +485,10 @@ impl Session {
             return;
         }
 
-        let component = Components::from_header(&packet.header);
-
         // Ping messages are ignored from debug logging as they are very frequent
-        let ignored = if let Some(component) = &component {
-            matches!(
-                component,
-                Components::Util(components::Util::Ping)
-                    | Components::Util(components::Util::SuspendUserPing)
-            )
-        } else {
-            false
-        };
+        let ignored = packet.header.component == components::util::COMPONENT
+            && (packet.header.command == components::util::PING
+                || packet.header.command == components::util::SUSPEND_USER_PING);
 
         if ignored {
             return;
@@ -502,7 +497,6 @@ impl Session {
         let debug = SessionPacketDebug {
             action,
             packet,
-            component,
             session: self,
         };
 
@@ -511,7 +505,7 @@ impl Session {
 
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    pub fn remove_games(&mut self, services: &'static Services) {
+    pub fn remove_games(&mut self) {
         // Don't attempt to remove if theres no active player
         let player_id = match &self.data.player {
             Some(value) => value.id,
@@ -519,10 +513,11 @@ impl Session {
         };
 
         if let Some(game_id) = self.data.game.take() {
+            let game_manager = self.game_manager.clone();
             // Remove the player from the game
             tokio::spawn(async move {
                 // Obtain the current game
-                let game = match services.game_manager.send(GetGameMessage { game_id }).await {
+                let game = match game_manager.send(GetGameMessage { game_id }).await {
                     Ok(Some(value)) => value,
                     _ => return,
                 };
@@ -537,16 +532,14 @@ impl Session {
             });
         } else {
             // Remove the player from matchmaking if present
-            let _ = services
-                .matchmaking
-                .do_send(RemoveQueueMessage { player_id });
+            let _ = self.game_manager.do_send(RemoveQueueMessage { player_id });
         }
     }
 
     /// Removes the player from the authenticated sessions list
     /// if the player is authenticated
-    pub fn clear_auth(&mut self, services: &'static Services) {
-        self.remove_games(services);
+    pub fn clear_auth(&mut self) {
+        self.remove_games();
 
         // Check that theres authentication
         let player = match self.data.player.take() {
@@ -555,7 +548,7 @@ impl Session {
         };
 
         // Send the remove session message
-        let _ = services.sessions.do_send(RemoveMessage {
+        let _ = self.sessions.do_send(RemoveMessage {
             player_id: player.id,
         });
     }
@@ -566,15 +559,12 @@ impl Session {
 struct SessionPacketDebug<'a> {
     action: &'static str,
     packet: &'a Packet,
-    component: Option<Components>,
     session: &'a Session,
 }
 
 impl Debug for SessionPacketDebug<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Session {} Packet", self.action)?;
-
-        let component = &self.component;
 
         if let Some(player) = &self.session.data.player {
             writeln!(
@@ -586,54 +576,49 @@ impl Debug for SessionPacketDebug<'_> {
             writeln!(f, "Info: ( SID: {})", &self.session.id)?;
         }
 
-        let minified = if let Some(component) = &self.component {
-            matches!(
-                component,
-                Components::Authentication(components::Authentication::ListUserEntitlements2)
-                    | Components::Util(components::Util::FetchClientConfig)
-                    | Components::Util(components::Util::UserSettingsLoadAll)
-            )
-        } else {
-            false
-        };
+        let header = &self.packet.header;
+
+        let minified = (header.component == components::authentication::COMPONENT
+            && header.command == components::authentication::LIST_USER_ENTITLEMENTS_2)
+            || (header.component == components::util::COMPONENT
+                && (header.command == components::util::FETCH_CLIENT_CONFIG
+                    || header.command == components::util::USER_SETTINGS_LOAD_ALL));
 
         PacketDebug {
             packet: self.packet,
-            component: component.as_ref(),
             minified,
         }
         .fmt(f)
     }
 }
 
-impl Encodable for SessionData {
-    fn encode(&self, writer: &mut TdfWriter) {
-        self.net.tag_groups(b"ADDR", writer);
-        writer.tag_str(b"BPS", "ea-sjc");
-        writer.tag_str_empty(b"CTY");
-        writer.tag_var_int_list_empty(b"CVAR");
-        {
-            writer.tag_map_start(b"DMAP", TdfType::VarInt, TdfType::VarInt, 1);
-            writer.write_u32(0x70001);
-            writer.write_u16(0x409a);
-        }
-        writer.tag_u16(b"HWFG", self.net.hardware_flags);
-        {
+impl TdfSerialize for SessionData {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.group_body(|w| {
+            w.tag_ref(b"ADDR", &self.net.addr);
+            w.tag_str(b"BPS", "ea-sjc");
+            w.tag_str_empty(b"CTY");
+            w.tag_var_int_list_empty(b"CVAR");
+
+            w.tag_map_tuples(b"DMAP", &[(0x70001, 0x409a)]);
+
+            w.tag_u16(b"HWFG", self.net.hardware_flags);
+
             // Ping latency to the Quality of service servers
-            writer.tag_list_start(b"PSLM", TdfType::VarInt, 1);
-            0xfff0fff.encode(writer);
-        }
-        writer.tag_value(b"QDAT", &self.net.qos);
-        writer.tag_u8(b"UATT", 0);
-        if let Some(game_id) = &self.game {
-            writer.tag_list_start(b"ULST", TdfType::Triple, 1);
-            (4, 1, *game_id).encode(writer);
-        }
-        writer.tag_group_end();
+            w.tag_list_slice(b"PSLM", &[0xfff0fff]);
+
+            w.tag_ref(b"QDAT", &self.net.qos);
+            w.tag_u8(b"UATT", 0);
+            if let Some(game_id) = &self.game {
+                w.tag_list_slice(b"ULST", &[ObjectId::new(GAME_TYPE, *game_id as u64)]);
+            }
+        });
     }
 }
 
-value_type!(SessionData, TdfType::Group);
+impl TdfTyped for SessionData {
+    const TYPE: TdfType = TdfType::Group;
+}
 
 /// Session update for a session other than ourselves
 /// which contains the details for that session
@@ -646,16 +631,16 @@ struct SessionUpdate<'a> {
     display_name: &'a str,
 }
 
-impl Encodable for SessionUpdate<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_value(b"DATA", &self.session.data);
+impl TdfSerialize for SessionUpdate<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_ref(b"DATA", &self.session.data);
 
-        writer.group(b"USER", |writer| {
-            writer.tag_u32(b"AID", self.player_id);
+        w.group(b"USER", |writer| {
+            writer.tag_owned(b"AID", self.player_id);
             writer.tag_u32(b"ALOC", 0x64654445);
-            writer.tag_empty_blob(b"EXBB");
+            writer.tag_blob_empty(b"EXBB");
             writer.tag_u8(b"EXID", 0);
-            writer.tag_u32(b"ID", self.player_id);
+            writer.tag_owned(b"ID", self.player_id);
             writer.tag_str(b"NAME", self.display_name);
         });
     }
@@ -667,34 +652,34 @@ pub struct LookupResponse {
     display_name: String,
 }
 
-impl Encodable for LookupResponse {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_value(b"EDAT", &self.session_data);
+impl TdfSerialize for LookupResponse {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_ref(b"EDAT", &self.session_data);
 
-        writer.tag_u8(b"FLGS", 2);
+        w.tag_u8(b"FLGS", 2);
 
-        writer.group(b"USER", |writer| {
-            writer.tag_u32(b"AID", self.player_id);
-            writer.tag_u32(b"ALOC", 0x64654445);
-            writer.tag_empty_blob(b"EXBB");
-            writer.tag_u8(b"EXID", 0);
-            writer.tag_u32(b"ID", self.player_id);
-            writer.tag_str(b"NAME", &self.display_name);
+        w.group(b"USER", |w| {
+            w.tag_owned(b"AID", self.player_id);
+            w.tag_u32(b"ALOC", 0x64654445);
+            w.tag_blob_empty(b"EXBB");
+            w.tag_u8(b"EXID", 0);
+            w.tag_owned(b"ID", self.player_id);
+            w.tag_str(b"NAME", &self.display_name);
         });
     }
 }
 
 /// Session update for ourselves
 struct SetSession<'a> {
+    /// The session this update is for
+    session: &'a SessionData,
     /// The player ID the update is for
     player_id: PlayerID,
-    /// The session this update is for
-    session: &'a Session,
 }
 
-impl Encodable for SetSession<'_> {
-    fn encode(&self, writer: &mut TdfWriter) {
-        writer.tag_value(b"DATA", &self.session.data);
-        writer.tag_u32(b"USID", self.player_id);
+impl TdfSerialize for SetSession<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.tag_ref(b"DATA", self.session);
+        w.tag_owned(b"USID", self.player_id)
     }
 }

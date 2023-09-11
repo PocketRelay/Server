@@ -1,132 +1,135 @@
 use crate::{
+    config::RuntimeConfig,
     database::{entities::Player, DatabaseConnection},
-    services::{retriever::GetOriginFlow, tokens::Tokens, Services},
+    services::{
+        retriever::{GetOriginFlow, Retriever},
+        sessions::{CreateTokenMessage, Sessions, VerifyError, VerifyTokenMessage},
+    },
     session::{
         models::{
             auth::*,
-            errors::{ServerError, ServerResult},
+            errors::{GlobalError, ServerResult},
         },
+        router::{Blaze, Extension},
         GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage,
     },
-    state::App,
     utils::hashing::{hash_password, verify_password},
 };
 use email_address::EmailAddress;
+use interlink::prelude::Link;
 use log::{debug, error};
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 use tokio::fs::read_to_string;
 
 pub async fn handle_login(
-    session: &mut SessionLink,
-    req: LoginRequest,
-) -> ServerResult<AuthResponse> {
-    let db: &DatabaseConnection = App::database();
-
+    session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(sessions): Extension<Link<Sessions>>,
+    Blaze(req): Blaze<LoginRequest>,
+) -> ServerResult<Blaze<AuthResponse>> {
     let LoginRequest { email, password } = &req;
 
     // Ensure the email is actually valid
     if !EmailAddress::is_valid(email) {
-        return Err(ServerError::InvalidEmail);
+        return Err(AuthenticationError::InvalidEmail.into());
     }
 
     // Find a non origin player with that email
-    let player: Player = Player::by_email(db, email)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::EmailNotFound)?;
+    let player: Player = Player::by_email(&db, email)
+        .await?
+        .ok_or(AuthenticationError::InvalidUser)?;
 
     // Get the attached password (Passwordless accounts fail as invalid)
     let player_password: &str = player
         .password
         .as_ref()
-        .ok_or(ServerError::InvalidAccount)?;
+        .ok_or(AuthenticationError::InvalidUser)?;
 
     // Ensure passwords match
     if !verify_password(password, player_password) {
-        return Err(ServerError::WrongPassword);
+        return Err(AuthenticationError::InvalidPassword.into());
     }
 
     // Update the session stored player
-    session
-        .send(SetPlayerMessage(Some(player.clone())))
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?;
+    session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token: String = Tokens::service_claim(player.id);
+    let session_token: String = sessions.send(CreateTokenMessage(player.id)).await?;
 
-    Ok(AuthResponse {
+    Ok(Blaze(AuthResponse {
         player,
         session_token,
         silent: false,
-    })
+    }))
 }
 
 pub async fn handle_silent_login(
-    session: &mut SessionLink,
-    req: SilentLoginRequest,
-) -> ServerResult<AuthResponse> {
-    let db: &DatabaseConnection = App::database();
-
+    session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(sessions): Extension<Link<Sessions>>,
+    Blaze(req): Blaze<SilentLoginRequest>,
+) -> ServerResult<Blaze<AuthResponse>> {
     // Verify the authentication token
-    let player: Player = Tokens::service_verify(db, &req.token)
-        .await
-        .map_err(|_| ServerError::InvalidSession)?;
+    let player_id = sessions
+        .send(VerifyTokenMessage(req.token.clone()))
+        .await?
+        .map_err(|err| match err {
+            VerifyError::Expired => AuthenticationError::ExpiredToken,
+            VerifyError::Invalid => AuthenticationError::InvalidToken,
+        })?;
+
+    let player = Player::by_id(&db, player_id)
+        .await?
+        .ok_or(AuthenticationError::InvalidToken)?;
 
     // Update the session stored player
-    session
-        .send(SetPlayerMessage(Some(player.clone())))
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?;
+    session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    Ok(AuthResponse {
+    Ok(Blaze(AuthResponse {
         player,
         session_token: req.token,
         silent: true,
-    })
+    }))
 }
 
 pub async fn handle_origin_login(
-    session: &mut SessionLink,
-    req: OriginLoginRequest,
-) -> ServerResult<AuthResponse> {
-    let db: &DatabaseConnection = App::database();
-
-    let services: &Services = App::services();
-
+    session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(retriever): Extension<Link<Retriever>>,
+    Blaze(req): Blaze<OriginLoginRequest>,
+) -> ServerResult<Blaze<AuthResponse>> {
     // Obtain an origin flow
-    let mut flow = match services.retriever.send(GetOriginFlow).await {
+    let mut flow = match retriever.send(GetOriginFlow).await {
         Ok(Ok(value)) => value,
         Ok(Err(err)) => {
             error!("Failed to obtain origin flow: {}", err);
-            return Err(ServerError::ServerUnavailable);
+            return Err(GlobalError::System.into());
         }
         Err(err) => {
             error!("Unable to access retriever service: {}", err);
-            return Err(ServerError::ServerUnavailable);
+            return Err(GlobalError::System.into());
         }
     };
 
-    let player: Player = match flow.login(db, req.token).await {
+    let player: Player = match flow.login(&db, req.token, &config).await {
         Ok(value) => value,
         Err(err) => {
             error!("Failed to login with origin: {}", err);
-            return Err(ServerError::ServerUnavailable);
+            return Err(GlobalError::System.into());
         }
     };
 
     // Update the session stored player
-    session
-        .send(SetPlayerMessage(Some(player.clone())))
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?;
+    session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token: String = Tokens::service_claim(player.id);
+    let session_token: String = sessions.send(CreateTokenMessage(player.id)).await?;
 
-    Ok(AuthResponse {
+    Ok(Blaze(AuthResponse {
         player,
         session_token,
         silent: true,
-    })
+    }))
 }
 
 /// Handles logging out by the client this removes any current player data from the
@@ -137,7 +140,7 @@ pub async fn handle_origin_login(
 /// ID: 8
 /// Content: {}
 /// ```
-pub async fn handle_logout(session: &mut SessionLink) {
+pub async fn handle_logout(session: SessionLink) {
     let _ = session.send(SetPlayerMessage(None)).await;
 }
 
@@ -213,14 +216,14 @@ static ENTITLEMENTS: &[Entitlement; 34] = &[
 /// }
 /// ```
 pub async fn handle_list_entitlements(
-    req: ListEntitlementsRequest,
-) -> Option<ListEntitlementsResponse> {
+    Blaze(req): Blaze<ListEntitlementsRequest>,
+) -> Option<Blaze<ListEntitlementsResponse>> {
     let tag: String = req.tag;
     if !tag.is_empty() {
         return None;
     }
 
-    Some(ListEntitlementsResponse { list: ENTITLEMENTS })
+    Some(Blaze(ListEntitlementsResponse { list: ENTITLEMENTS }))
 }
 
 /// Handles logging into a persona. This system doesn't implement the persona system so
@@ -233,13 +236,12 @@ pub async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-pub async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<PersonaResponse> {
+pub async fn handle_login_persona(session: SessionLink) -> ServerResult<Blaze<PersonaResponse>> {
     let player: Player = session
         .send(GetPlayerMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
-    Ok(PersonaResponse { player })
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
+    Ok(Blaze(PersonaResponse { player }))
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -253,7 +255,7 @@ pub async fn handle_login_persona(session: &mut SessionLink) -> ServerResult<Per
 ///     "MAIL": "ACCOUNT_EMAIL"
 /// }
 /// ```
-pub async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<()> {
+pub async fn handle_forgot_password(Blaze(req): Blaze<ForgotPasswordRequest>) -> ServerResult<()> {
     debug!("Password reset request (Email: {})", req.email);
     Ok(())
 }
@@ -292,26 +294,22 @@ pub async fn handle_forgot_password(req: ForgotPasswordRequest) -> ServerResult<
 /// ```
 ///
 pub async fn handle_create_account(
-    session: &mut SessionLink,
-    req: CreateAccountRequest,
-) -> ServerResult<AuthResponse> {
+    session: SessionLink,
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(sessions): Extension<Link<Sessions>>,
+    Blaze(req): Blaze<CreateAccountRequest>,
+) -> ServerResult<Blaze<AuthResponse>> {
     let email = req.email;
     if !EmailAddress::is_valid(&email) {
-        return Err(ServerError::InvalidEmail);
+        return Err(AuthenticationError::InvalidEmail.into());
     }
 
-    let db = App::database();
-
-    match Player::by_email(db, &email).await {
+    match Player::by_email(&db, &email).await? {
         // Continue normally for non taken emails
-        Ok(None) => {}
+        None => {}
         // Handle email address is already in use
-        Ok(Some(_)) => return Err(ServerError::EmailAlreadyInUse),
-        // Handle database error while checking taken
-        Err(err) => {
-            error!("Unable to check if email '{email}' is already taken: {err:?}");
-            return Err(ServerError::ServerUnavailable);
-        }
+        Some(_) => return Err(AuthenticationError::Exists.into()),
     }
 
     // Hash the proivded plain text password using Argon2
@@ -319,7 +317,7 @@ pub async fn handle_create_account(
         Ok(value) => value,
         Err(err) => {
             error!("Failed to hash password for creating account: {err:?}");
-            return Err(ServerError::ServerUnavailable);
+            return Err(GlobalError::System.into());
         }
     };
 
@@ -327,32 +325,20 @@ pub async fn handle_create_account(
     let display_name: String = email.chars().take(99).collect::<String>();
 
     // Create a new player
-    let player: Player = match Player::create(db, email, display_name, Some(hashed_password)).await
-    {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Failed to create player: {err:?}");
-            return Err(ServerError::ServerUnavailable);
-        }
-    };
+    let player: Player =
+        Player::create(&db, email, display_name, Some(hashed_password), &config).await?;
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down
-    if session
-        .send(SetPlayerMessage(Some(player.clone())))
-        .await
-        .is_err()
-    {
-        return Err(ServerError::ServerUnavailable);
-    }
+    session.send(SetPlayerMessage(Some(player.clone()))).await?;
 
-    let session_token = Tokens::service_claim(player.id);
+    let session_token = sessions.send(CreateTokenMessage(player.id)).await?;
 
-    Ok(AuthResponse {
+    Ok(Blaze(AuthResponse {
         player,
         session_token,
         silent: false,
-    })
+    }))
 }
 
 /// Expected to be getting information about the legal docs however the exact meaning
@@ -366,8 +352,8 @@ pub async fn handle_create_account(
 ///     "PTFM": "pc" // Platform
 /// }
 /// ```
-pub async fn handle_get_legal_docs_info() -> LegalDocsInfo {
-    LegalDocsInfo
+pub async fn handle_get_legal_docs_info() -> Blaze<LegalDocsInfo> {
+    Blaze(LegalDocsInfo)
 }
 
 /// ```
@@ -380,17 +366,17 @@ pub async fn handle_get_legal_docs_info() -> LegalDocsInfo {
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_tos() -> LegalContent {
+pub async fn handle_tos() -> Blaze<LegalContent> {
     let content = match read_to_string("data/terms_of_service.html").await {
         Ok(value) => Cow::Owned(value),
         Err(_) => Cow::Borrowed("<h1>This is a terms of service placeholder</h1>"),
     };
 
-    LegalContent {
+    Blaze(LegalContent {
         col: 0xdaed,
         content,
         path: "webterms/au/en/pc/default/09082020/02042022",
-    }
+    })
 }
 
 /// ```
@@ -403,17 +389,17 @@ pub async fn handle_tos() -> LegalContent {
 ///     "TEXT": 1
 /// }
 /// ```
-pub async fn handle_privacy_policy() -> LegalContent {
+pub async fn handle_privacy_policy() -> Blaze<LegalContent> {
     let content = match read_to_string("data/privacy_policy.html").await {
         Ok(value) => Cow::Owned(value),
         Err(_) => Cow::Borrowed("<h1>This is a privacy policy placeholder</h1>"),
     };
 
-    LegalContent {
+    Blaze(LegalContent {
         col: 0xc99c,
         content,
         path: "webprivacy/au/en/pc/default/08202020/02042022",
-    }
+    })
 }
 
 /// Handles retrieving an authentication token for use with the Galaxy At War HTTP service.
@@ -424,13 +410,15 @@ pub async fn handle_privacy_policy() -> LegalContent {
 /// ID: 35
 /// Content: {}
 /// ```
-pub async fn handle_get_auth_token(session: &mut SessionLink) -> ServerResult<GetTokenResponse> {
+pub async fn handle_get_auth_token(
+    session: SessionLink,
+    Extension(sessions): Extension<Link<Sessions>>,
+) -> ServerResult<Blaze<GetTokenResponse>> {
     let player_id = session
         .send(GetPlayerIdMessage)
-        .await
-        .map_err(|_| ServerError::ServerUnavailable)?
-        .ok_or(ServerError::FailedNoLoginAction)?;
+        .await?
+        .ok_or(GlobalError::AuthenticationRequired)?;
     // Create a new token claim for the player to use with the API
-    let token = Tokens::service_claim(player_id);
-    Ok(GetTokenResponse { token })
+    let token = sessions.send(CreateTokenMessage(player_id)).await?;
+    Ok(Blaze(GetTokenResponse { token }))
 }
