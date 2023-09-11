@@ -2437,6 +2437,8 @@ checksum = "2047c6ded9c721764247e62cd3b03c09ffc529b2ba5b10ec482ae507a4a70160"
 [[package]]
 name = "tdf"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a033ec7f181af10c095d38db6ed55e5ecd31e06cd5a3842c4884ff7ce484f44"
 dependencies = [
  "serde",
  "tdf-derive",
@@ -2445,6 +2447,8 @@ dependencies = [
 [[package]]
 name = "tdf-derive"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f312e2b4ca289722dbdac182878247ee4c0111ca468871eaeaf3c208282ab04c"
 dependencies = [
  "darling",
  "proc-macro2",

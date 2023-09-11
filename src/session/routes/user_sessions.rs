@@ -16,7 +16,6 @@ use crate::{
     },
     utils::models::NetworkAddress,
 };
-use std::net::SocketAddr;
 
 /// Attempts to lookup another authenticated session details
 ///

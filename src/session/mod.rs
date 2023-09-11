@@ -22,12 +22,7 @@ use crate::{
 
 use interlink::prelude::*;
 use log::{debug, log_enabled};
-use std::{
-    fmt::Debug,
-    io,
-    net::{Ipv4Addr, SocketAddr},
-    sync::Arc,
-};
+use std::{fmt::Debug, io, net::Ipv4Addr, sync::Arc};
 use tdf::{ObjectId, TdfSerialize, TdfType, TdfTyped};
 
 use self::{
