@@ -6,6 +6,7 @@ use std::{env, fs::read_to_string, path::Path};
 /// The server version extracted from the Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[derive(Default)]
 pub struct RuntimeConfig {
     pub reverse_proxy: bool,
     pub galaxy_at_war: GalaxyAtWarConfig,
