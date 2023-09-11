@@ -1,8 +1,4 @@
-use std::{
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    sync::Arc,
-};
-
+use crate::config::RuntimeConfig;
 use axum::{
     async_trait,
     body::boxed,
@@ -13,9 +9,11 @@ use axum::{
 };
 use hyper::{HeaderMap, StatusCode};
 use log::warn;
+use std::{
+    net::{Ipv4Addr, SocketAddr},
+    sync::Arc,
+};
 use thiserror::Error;
-
-use crate::config::RuntimeConfig;
 
 /// Middleware for extracting the server public address
 pub struct IpAddress(pub Ipv4Addr);
