@@ -11,14 +11,13 @@ use interlink::prelude::*;
 use log::{debug, error};
 use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use std::{collections::HashMap, sync::Arc, time::Instant};
-use tokio::task::JoinSet;
+use tokio::{sync::RwLock, task::JoinSet};
 
 pub mod models;
 
-#[derive(Service)]
 pub struct Leaderboard {
     /// Map between the group types and the actual leaderboard group content
-    groups: HashMap<LeaderboardType, GroupState>,
+    groups: RwLock<HashMap<LeaderboardType, GroupState>>,
 }
 
 /// Extra state wrapper around a leaderboard group which
@@ -31,89 +30,60 @@ struct GroupState {
     group: Arc<LeaderboardGroup>,
 }
 
-/// Message for requesting access to a leaderborad
-/// of the specific leaderboard type
-#[derive(Message)]
-#[msg(rtype = "Arc<LeaderboardGroup>")]
-pub struct QueryMessage(pub LeaderboardType, pub DatabaseConnection);
-
-impl Handler<QueryMessage> for Leaderboard {
-    type Response = Fr<QueryMessage>;
-
-    fn handle(&mut self, msg: QueryMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
-        let ty = msg.0;
-
-        // If the group already exists and is not expired we can respond with it
-        if let Some(group) = self.groups.get_mut(&ty) {
-            let inner = &group.group;
-
-            // Response with current values if the group isn't expired or is computing
-            if group.computing || !inner.is_expired() {
-                // Value is not expired respond immediately
-                return Fr::ready(inner.clone());
-            }
-
-            // Mark the group as currently being computed
-            group.computing = true;
-        } else {
-            // Create dummy empty group to hand out while computing
-            let dummy = GroupState {
-                computing: true,
-                group: Arc::new(LeaderboardGroup::dummy()),
-            };
-            self.groups.insert(ty, dummy);
-        }
-
-        let link = ctx.link();
-
-        Fr::new(Box::pin(async move {
-            // Compute new leaderboard values
-            let values = Self::compute(&ty, msg.1).await;
-            let group = Arc::new(LeaderboardGroup::new(values));
-
-            // Store the group and respond to the request
-            let _ = link.do_send(SetGroupMessage {
-                group: group.clone(),
-                ty,
-            });
-
-            group
-        }))
-    }
-}
-
-/// Message used internally to update group state with
-/// a new group value once a leaderboard has been
-/// computed
-#[derive(Message)]
-struct SetGroupMessage {
-    /// The leaderboard type to set
-    ty: LeaderboardType,
-    /// The new leaderboard value
-    group: Arc<LeaderboardGroup>,
-}
-
-impl Handler<SetGroupMessage> for Leaderboard {
-    type Response = ();
-
-    fn handle(&mut self, msg: SetGroupMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        self.groups.insert(
-            msg.ty,
-            GroupState {
-                computing: false,
-                group: msg.group,
-            },
-        );
-    }
-}
-
 impl Leaderboard {
     /// Starts a new leaderboard service
-    pub fn start() -> Link<Leaderboard> {
-        let this = Leaderboard {
+    pub fn new() -> Leaderboard {
+        Leaderboard {
             groups: Default::default(),
-        };
-        this.start()
+        }
+    }
+
+    pub async fn query(
+        &self,
+        ty: LeaderboardType,
+        db: &DatabaseConnection,
+    ) -> Arc<LeaderboardGroup> {
+        {
+            let groups = &mut *self.groups.write().await;
+            // If the group already exists and is not expired we can respond with it
+            if let Some(group) = groups.get_mut(&ty) {
+                let inner = &group.group;
+
+                // Response with current values if the group isn't expired or is computing
+                if group.computing || !inner.is_expired() {
+                    // Value is not expired respond immediately
+                    return inner.clone();
+                }
+
+                // Mark the group as currently being computed
+                group.computing = true;
+            } else {
+                // Create dummy empty group to hand out while computing
+                let dummy = GroupState {
+                    computing: true,
+                    group: Arc::new(LeaderboardGroup::dummy()),
+                };
+                groups.insert(ty, dummy);
+            }
+        }
+
+        // Compute new leaderboard values
+        let values = Self::compute(&ty, db).await;
+        let group = Arc::new(LeaderboardGroup::new(values));
+
+        // Store the updated group
+        {
+            let groups = &mut *self.groups.write().await;
+            groups.insert(
+                ty,
+                GroupState {
+                    computing: false,
+                    group: group.clone(),
+                },
+            );
+        }
+
+        group
     }
 
     /// Computes the ranking values for the provided `ty` this consists of
@@ -122,7 +92,7 @@ impl Leaderboard {
     /// on their value.
     ///
     /// `ty` The leaderboard type
-    async fn compute(ty: &LeaderboardType, db: DatabaseConnection) -> Box<[LeaderboardEntry]> {
+    async fn compute(ty: &LeaderboardType, db: &DatabaseConnection) -> Box<[LeaderboardEntry]> {
         let start_time = Instant::now();
 
         // The amount of players to process in each database request
@@ -134,7 +104,7 @@ impl Leaderboard {
 
         let mut paginator = players::Entity::find()
             .order_by_asc(players::Column::Id)
-            .paginate(&db, BATCH_COUNT);
+            .paginate(db, BATCH_COUNT);
 
         // Function pointer to the computing function for the desired type
         let fun: fn(DatabaseConnection, Player) -> Lf = match ty {

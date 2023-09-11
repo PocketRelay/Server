@@ -1,55 +1,63 @@
 use crate::{
-    services::leaderboard::{models::*, Leaderboard, QueryMessage},
+    services::leaderboard::{models::*, Leaderboard},
     session::{
-        models::{errors::ServerResult, stats::*},
+        models::stats::*,
         packet::Packet,
         router::{Blaze, BlazeWithHeader, Extension},
     },
 };
-use interlink::prelude::Link;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
 pub async fn handle_normal_leaderboard(
-    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Extension(db): Extension<DatabaseConnection>,
     req: BlazeWithHeader<LeaderboardRequest>,
-) -> ServerResult<Packet> {
+) -> Packet {
     let query = &req.req;
-    let group = get_group(db, leaderboard, &query.name).await?;
+
+    let ty = LeaderboardType::from_value(&query.name);
+    let group = leaderboard.query(ty, &db).await;
+
     let response = match group.get_normal(query.start, query.count) {
         Some((values, _)) => LeaderboardResponse::Many(values),
         None => LeaderboardResponse::Empty,
     };
-    Ok(req.response(response))
+    req.response(response)
 }
 
 pub async fn handle_centered_leaderboard(
-    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Extension(db): Extension<DatabaseConnection>,
     req: BlazeWithHeader<CenteredLeaderboardRequest>,
-) -> ServerResult<Packet> {
+) -> Packet {
     let query = &req.req;
-    let group = get_group(db, leaderboard, &query.name).await?;
+
+    let ty = LeaderboardType::from_value(&query.name);
+    let group = leaderboard.query(ty, &db).await;
+
     let response = match group.get_centered(query.center, query.count) {
         Some(values) => LeaderboardResponse::Many(values),
         None => LeaderboardResponse::Empty,
     };
-    Ok(req.response(response))
+    req.response(response)
 }
 
 pub async fn handle_filtered_leaderboard(
-    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Extension(db): Extension<DatabaseConnection>,
     req: BlazeWithHeader<FilteredLeaderboardRequest>,
-) -> ServerResult<Packet> {
+) -> Packet {
     let query = &req.req;
-    let group = get_group(db, leaderboard, &query.name).await?;
+
+    let ty = LeaderboardType::from_value(&query.name);
+    let group = leaderboard.query(ty, &db).await;
+
     let response = match group.get_entry(query.id) {
         Some(value) => LeaderboardResponse::One(value),
         None => LeaderboardResponse::Empty,
     };
-    Ok(req.response(response))
+    req.response(response)
 }
 
 /// Handles returning the number of leaderboard objects present.
@@ -68,23 +76,15 @@ pub async fn handle_filtered_leaderboard(
 /// }
 /// ```
 pub async fn handle_leaderboard_entity_count(
-    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Extension(db): Extension<DatabaseConnection>,
     Blaze(req): Blaze<EntityCountRequest>,
-) -> ServerResult<Blaze<EntityCountResponse>> {
-    let group = get_group(db, leaderboard, &req.name).await?;
-    let count = group.values.len();
-    Ok(Blaze(EntityCountResponse { count }))
-}
+) -> Blaze<EntityCountResponse> {
+    let ty = LeaderboardType::from_value(&req.name);
+    let group = leaderboard.query(ty, &db).await;
 
-async fn get_group(
-    db: DatabaseConnection,
-    leaderboard: Link<Leaderboard>,
-    name: &str,
-) -> ServerResult<Arc<LeaderboardGroup>> {
-    let ty = LeaderboardType::from_value(name);
-    let result = leaderboard.send(QueryMessage(ty, db)).await?;
-    Ok(result)
+    let count = group.values.len();
+    Blaze(EntityCountResponse { count })
 }
 
 fn get_locale_name(code: &str) -> &str {

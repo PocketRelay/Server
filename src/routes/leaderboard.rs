@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use crate::{
-    services::leaderboard::{models::*, Leaderboard, QueryMessage},
+    services::leaderboard::{models::*, Leaderboard},
     utils::types::PlayerID,
 };
 use axum::{
@@ -8,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::prelude::{Link, LinkError};
+use interlink::prelude::LinkError;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -68,7 +70,7 @@ pub struct LeaderboardResponse<'a> {
 pub async fn get_leaderboard(
     Path(name): Path<String>,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Query(query): Query<LeaderboardQuery>,
 ) -> Result<Response, LeaderboardError> {
     let LeaderboardQuery { offset, count } = query;
@@ -84,7 +86,7 @@ pub async fn get_leaderboard(
     // Calculate the start and ending indexes
     let start: usize = offset * count;
 
-    let group = leaderboard.send(QueryMessage(ty, db)).await?;
+    let group = leaderboard.query(ty, &db).await;
 
     let (entries, more) = group
         .get_normal(start, count)
@@ -108,12 +110,12 @@ pub async fn get_leaderboard(
 /// `player_id` The ID of the player to find the leaderboard ranking of
 pub async fn get_player_ranking(
     Extension(db): Extension<DatabaseConnection>,
-    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Path((name, player_id)): Path<(String, PlayerID)>,
 ) -> Result<Response, LeaderboardError> {
     let ty: LeaderboardType =
         LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-    let group = leaderboard.send(QueryMessage(ty, db)).await?;
+    let group = leaderboard.query(ty, &db).await;
 
     let entry = match group.get_entry(player_id) {
         Some(value) => value,

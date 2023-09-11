@@ -55,7 +55,7 @@ async fn main() {
         Sessions::start()
     );
     let game_manager = Arc::new(GameManager::new());
-    let leaderboard = Leaderboard::start();
+    let leaderboard = Arc::new(Leaderboard::new());
     let config = Arc::new(runtime_config);
 
     // Initialize session router
