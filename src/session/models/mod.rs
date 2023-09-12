@@ -120,14 +120,6 @@ pub enum InstanceNet {
     // XboxServer = 0x1,
 }
 
-#[derive(TdfSerialize)]
-pub struct UpdateExtDataAttr {
-    #[tdf(tag = "FLGS")]
-    pub flags: u8,
-    #[tdf(tag = "ID")]
-    pub player_id: PlayerID,
-}
-
 /// Structure for storing extended network data
 #[derive(Debug, Copy, Clone, Default, Serialize, TdfSerialize, TdfDeserialize, TdfTyped)]
 #[tdf(group)]

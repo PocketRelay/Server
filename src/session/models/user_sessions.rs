@@ -51,12 +51,14 @@ bitflags! {
 }
 
 impl From<HardwareFlags> for u8 {
+    #[inline]
     fn from(value: HardwareFlags) -> Self {
         value.bits()
     }
 }
 
 impl From<u8> for HardwareFlags {
+    #[inline]
     fn from(value: u8) -> Self {
         HardwareFlags::from_bits_retain(value)
     }
@@ -147,6 +149,36 @@ pub struct NotifyUserRemoved {
     pub player_id: PlayerID,
 }
 
+#[derive(TdfSerialize)]
+pub struct NotifyUserUpdated {
+    #[tdf(tag = "FLGS", into = u8)]
+    pub flags: UserDataFlags,
+    /// The ID of the updated user
+    #[tdf(tag = "ID")]
+    pub player_id: PlayerID,
+}
+
+bitflags! {
+    #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
+    pub struct UserDataFlags: u8 {
+        const NONE = 0;
+        const SUBSCRIBED = 1;
+        const ONLINE = 2;
+    }
+}
+
+impl From<UserDataFlags> for u8 {
+    fn from(value: UserDataFlags) -> Self {
+        value.bits()
+    }
+}
+
+impl From<u8> for UserDataFlags {
+    fn from(value: u8) -> Self {
+        UserDataFlags::from_bits_retain(value)
+    }
+}
+
 /// Request to lookup the session details of a user, see [UserIdentification]
 /// for the full structure that this uses
 #[derive(TdfDeserialize)]
@@ -169,7 +201,7 @@ impl TdfSerialize for LookupResponse {
                 session_data: &self.session_data,
             },
         );
-        w.tag_owned(b"FLGS", 2u8);
+        w.tag_owned(b"FLGS", UserDataFlags::ONLINE.bits());
 
         let player = match &self.session_data.player {
             Some(value) => value,

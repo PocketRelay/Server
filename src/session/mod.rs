@@ -4,8 +4,8 @@
 
 use self::{
     models::user_sessions::{
-        HardwareFlags, LookupResponse, NotifyUserAdded, UserIdentification,
-        UserSessionExtendedData, UserSessionExtendedDataUpdate,
+        HardwareFlags, LookupResponse, NotifyUserAdded, NotifyUserUpdated, UserDataFlags,
+        UserIdentification, UserSessionExtendedData, UserSessionExtendedDataUpdate,
     },
     packet::{Packet, PacketDebug},
     router::BlazeRouter,
@@ -17,7 +17,7 @@ use crate::{
         game::{manager::GameManager, GamePlayer},
         sessions::Sessions,
     },
-    session::models::{NetworkAddress, Port, QosNetworkData, UpdateExtDataAttr},
+    session::models::{NetworkAddress, Port, QosNetworkData},
     utils::{
         components::{self, user_sessions},
         types::{GameID, SessionID},
@@ -406,7 +406,7 @@ impl Handler<DetailsMessage> for Session {
         };
 
         // Create the details packets
-        let a = Packet::notify(
+        let added_notify = Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_ADDED,
             NotifyUserAdded {
@@ -420,18 +420,18 @@ impl Handler<DetailsMessage> for Session {
             },
         );
 
-        let b = Packet::notify(
+        let update_notify = Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_UPDATED,
-            UpdateExtDataAttr {
-                flags: 0x3,
+            NotifyUserUpdated {
+                flags: UserDataFlags::SUBSCRIBED | UserDataFlags::ONLINE,
                 player_id: player.id,
             },
         );
 
         // Push the message to the session link
-        msg.link.push(a);
-        msg.link.push(b);
+        msg.link.push(added_notify);
+        msg.link.push(update_notify);
     }
 }
 
