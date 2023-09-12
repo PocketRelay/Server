@@ -7,13 +7,12 @@ use crate::{
             util::*,
         },
         router::{Blaze, Extension, SessionAuth},
-        GetHostTarget, NotifyOtherUserMessage, SessionLink,
+        GetHostTarget, SessionLink, SubscriberMessage,
     },
 };
 use base64ct::{Base64, Encoding};
 use embeddy::Embedded;
 use flate2::{write::ZlibEncoder, Compression};
-use interlink::prelude::Link;
 use log::error;
 use sea_orm::DatabaseConnection;
 use std::{
@@ -96,10 +95,11 @@ pub async fn handle_post_auth(
     session: SessionLink,
     SessionAuth(player): SessionAuth,
 ) -> ServerResult<Blaze<PostAuthResponse>> {
-    // Queue the session details to be sent to this client
-    let _ = session.do_send(NotifyOtherUserMessage {
-        link: Link::clone(&session),
-    });
+    // Subscribe to the session with itself
+    session
+        .send(SubscriberMessage::Sub(player.id, session.clone()))
+        .await?;
+    // let _ = session.do_send(SubscriberMessage::Publish);
 
     Ok(Blaze(PostAuthResponse {
         telemetry: TelemetryServer,

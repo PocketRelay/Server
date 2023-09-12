@@ -132,18 +132,20 @@ impl<'a> UserIdentification<'a> {
 
 impl TdfSerialize for UserIdentification<'_> {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        // Account ID
-        w.tag_owned(b"AID", self.id);
-        // Account locale
-        w.tag_owned(b"ALOC", 0x64654445u32);
-        // External blob
-        w.tag_blob_empty(b"EXBB");
-        // External ID
-        w.tag_zero(b"EXID");
-        // Blaze ID
-        w.tag_owned(b"ID", self.id);
-        // Account name
-        w.tag_str(b"NAME", self.name);
+        w.group_body(|w| {
+            // Account ID
+            w.tag_owned(b"AID", self.id);
+            // Account locale
+            w.tag_owned(b"ALOC", 0x64654445u32);
+            // External blob
+            w.tag_blob_empty(b"EXBB");
+            // External ID
+            w.tag_zero(b"EXID");
+            // Blaze ID
+            w.tag_owned(b"ID", self.id);
+            // Account name
+            w.tag_str(b"NAME", self.name);
+        });
     }
 }
 

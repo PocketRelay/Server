@@ -2,11 +2,11 @@ use self::{manager::GameManager, rules::RuleSet};
 use crate::{
     database::entities::Player,
     session::{
-        models::user_sessions::NotifyUserRemoved, packet::Packet, router::RawBlaze, NetData,
-        NotifyOtherUserMessage, PushExt, Session, SetGameMessage, UpdateSessionData,
+        packet::Packet, router::RawBlaze, NetData, PushExt, Session, SetGameMessage,
+        SubscriberMessage,
     },
     utils::{
-        components::{game_manager, user_sessions},
+        components::game_manager,
         types::{GameID, PlayerID},
     },
 };
@@ -218,7 +218,7 @@ impl Handler<AddPlayerMessage> for Game {
             );
 
             // Update other players with the client details
-            self.update_clients(player);
+            self.add_user_sub(player);
         }
 
         // Notify the joiner of the game details
@@ -226,16 +226,6 @@ impl Handler<AddPlayerMessage> for Game {
 
         // Set current game of this player
         player.set_game(Some(self.id));
-
-        if is_other {
-            // Provide the new players session details to the other players
-            let links: Vec<Link<Session>> = self
-                .players
-                .iter()
-                .map(|player| player.link.clone())
-                .collect();
-            let _ = player.link.do_send(UpdateSessionData { links });
-        }
     }
 }
 
@@ -433,7 +423,7 @@ impl Handler<RemovePlayerMessage> for Game {
 
         // Update the other players
         self.notify_player_removed(&player, msg.reason);
-        self.notify_user_removed(&player);
+        self.rem_user_sub(&player);
         self.modify_admin_list(player.player.id, AdminListOperation::Remove);
 
         debug!(
@@ -588,17 +578,37 @@ impl Game {
     /// and the session to send them as well.
     ///
     /// `session` The session to update for
-    fn update_clients(&self, player: &GamePlayer) {
-        debug!("Updating clients with new session details");
-        self.players.iter().for_each(|value| {
-            if value.player.id != player.player.id {
-                let addr1 = player.link.clone();
-                let addr2 = value.link.clone();
+    fn add_user_sub(&self, player: &GamePlayer) {
+        debug!("Adding user subscriptions");
 
-                // Queue the session details to be sent to this client
-                let _ = player.link.do_send(NotifyOtherUserMessage { link: addr2 });
-                let _ = value.link.do_send(NotifyOtherUserMessage { link: addr1 });
-            }
+        // Subscribe all the clients to eachother
+        self.players.iter().for_each(|other| {
+            _ = player
+                .link
+                .do_send(SubscriberMessage::Sub(other.player.id, other.link.clone()));
+
+            _ = other.link.do_send(SubscriberMessage::Sub(
+                player.player.id,
+                player.link.clone(),
+            ));
+        });
+    }
+
+    /// Notifies the provided player and all other players
+    /// in the game that they should remove eachother from
+    /// their player data list
+    fn rem_user_sub(&self, player: &GamePlayer) {
+        debug!("Removing user subscriptions");
+
+        // Unsubscribe all the clients from eachother
+        self.players.iter().for_each(|other| {
+            _ = player
+                .link
+                .do_send(SubscriberMessage::Remove(other.player.id));
+
+            _ = other
+                .link
+                .do_send(SubscriberMessage::Remove(player.player.id));
         });
     }
 
@@ -663,33 +673,6 @@ impl Game {
         player.link.push(packet);
     }
 
-    /// Notifies the provided player and all other players
-    /// in the game that they should remove eachother from
-    /// their player data list
-    fn notify_user_removed(&self, player: &GamePlayer) {
-        // Tell all the game players to remove the player
-        self.notify_all(
-            user_sessions::COMPONENT,
-            user_sessions::USER_REMOVED,
-            NotifyUserRemoved {
-                player_id: player.player.id,
-            },
-        );
-
-        // Tell the removed player to remove all the players from the game
-        self.players
-            .iter()
-            .map(|player| player.player.id)
-            .map(|player_id| {
-                Packet::notify(
-                    user_sessions::COMPONENT,
-                    user_sessions::USER_REMOVED,
-                    NotifyUserRemoved { player_id },
-                )
-            })
-            .for_each(|packet| player.link.push(packet));
-    }
-
     /// Attempts to migrate the host of this game if there are still players
     /// left in the game.
     fn try_migrate_host(&mut self) {
@@ -726,7 +709,7 @@ impl Game {
             HostMigrateFinished { game_id: self.id },
         );
 
-        self.update_clients(new_host);
+        self.add_user_sub(new_host);
 
         debug!("Finished host migration (GID: {})", self.id);
     }

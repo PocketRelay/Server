@@ -47,7 +47,7 @@ pub struct Session {
     host_target: SessionHostTarget,
 
     /// Data associated with this session
-    data: SessionData,
+    data: Option<SessionExtData>,
 
     router: Arc<BlazeRouter>,
 
@@ -55,21 +55,56 @@ pub struct Session {
     sessions: Arc<Sessions>,
 }
 
-#[derive(Default, Clone)]
-pub struct SessionData {
-    /// If the session is authenticated it will have a linked
-    /// player model from the database
-    player: Option<Arc<Player>>,
+pub struct SessionExtData {
+    /// The authenticated player
+    player: Arc<Player>,
     /// Networking information
     net: Arc<NetData>,
     /// The id of the game if connected to one
     game: Option<GameID>,
-
     /// Sessions that are subscribed to changes for this session data
     subscribers: Vec<(PlayerID, SessionLink)>,
 }
 
-impl SessionData {
+#[derive(Message)]
+pub enum SubscriberMessage {
+    Sub(PlayerID, SessionLink),
+    Remove(PlayerID),
+}
+
+impl Handler<SubscriberMessage> for Session {
+    type Response = ();
+
+    fn handle(
+        &mut self,
+        msg: SubscriberMessage,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let data = match &mut self.data {
+            Some(value) => value,
+            // TODO: Handle this as an error for unauthenticated
+            None => return,
+        };
+
+        match msg {
+            SubscriberMessage::Sub(player_id, subscriber) => {
+                data.add_subscriber(player_id, subscriber)
+            }
+            SubscriberMessage::Remove(player_id) => data.remove_subscriber(player_id),
+        }
+    }
+}
+
+impl SessionExtData {
+    pub fn new(player: Player) -> Self {
+        Self {
+            player: Arc::new(player),
+            net: Default::default(),
+            game: Default::default(),
+            subscribers: Default::default(),
+        }
+    }
+
     fn ext(&self) -> UserSessionExtendedData {
         UserSessionExtendedData {
             net: self.net.clone(),
@@ -78,19 +113,13 @@ impl SessionData {
     }
 
     fn add_subscriber(&mut self, player_id: PlayerID, subscriber: SessionLink) {
-        // Cannot add subscribers if theres no player data
-        let player = match &self.player {
-            Some(value) => value,
-            None => return,
-        };
-
         // Create the details packets
         let added_notify = Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_ADDED,
             NotifyUserAdded {
                 session_data: self.ext(),
-                user: UserIdentification::from_player(player),
+                user: UserIdentification::from_player(&self.player),
             },
         );
 
@@ -100,7 +129,7 @@ impl SessionData {
             user_sessions::USER_UPDATED,
             NotifyUserUpdated {
                 flags: UserDataFlags::SUBSCRIBED | UserDataFlags::ONLINE,
-                player_id: player.id,
+                player_id: self.player.id,
             },
         );
 
@@ -110,7 +139,7 @@ impl SessionData {
     }
 
     fn remove_subscriber(&mut self, player_id: PlayerID) {
-        let index = match self.subscribers.iter().position(|(id, _)| id == player_id) {
+        let index = match self.subscribers.iter().position(|(id, _)| player_id.eq(id)) {
             Some(value) => value,
             None => return,
         };
@@ -130,22 +159,17 @@ impl SessionData {
     /// Publishes changes of the session data to all the
     /// subscribed session links
     fn publish_update(&self) {
-        let player = match &self.player {
-            Some(player) => player,
-            None => return,
-        };
-
         let packet = Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_SESSION_EXTENDED_DATA_UPDATE,
             UserSessionExtendedDataUpdate {
-                user_id: player.id,
+                user_id: self.player.id,
                 data: self.ext(),
             },
         );
 
-        for (_, subscriber) in self.subscribers {
-            subscriber.push(packet);
+        for (_, subscriber) in &self.subscribers {
+            subscriber.push(packet.clone());
         }
     }
 }
@@ -198,7 +222,7 @@ impl Handler<GetPlayerMessage> for Session {
         _msg: GetPlayerMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        Mr(self.data.player.clone())
+        Mr(self.data.as_ref().map(|data| data.player.clone()))
     }
 }
 
@@ -233,13 +257,13 @@ impl Handler<GetGamePlayerMessage> for Session {
         _msg: GetGamePlayerMessage,
         ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        let player = match self.data.player.clone() {
+        let data = match &self.data {
             Some(value) => value,
             None => return Mr(None),
         };
         Mr(Some(GamePlayer::new(
-            player,
-            self.data.net.clone(),
+            data.player.clone(),
+            data.net.clone(),
             ctx.link(),
         )))
     }
@@ -252,6 +276,8 @@ impl Handler<SetPlayerMessage> for Session {
     type Response = ();
     fn handle(&mut self, msg: SetPlayerMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
         // Clear the current authentication
+        // TODO: Handle already authenticated as error and close session
+        // rather than re-resuming it
         self.clear_auth();
 
         // If we are setting a new player
@@ -264,7 +290,8 @@ impl Handler<SetPlayerMessage> for Session {
                 sessions.add_session(player_id, link).await;
             });
 
-            self.data.player = Some(Arc::new(player));
+            let data = SessionExtData::new(player);
+            self.data = Some(data);
         }
     }
 }
@@ -293,7 +320,7 @@ impl Handler<GetPlayerGameMessage> for Session {
         _msg: GetPlayerGameMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        Mr(self.data.game)
+        Mr(self.data.as_ref().and_then(|data| data.game))
     }
 }
 
@@ -309,14 +336,13 @@ impl Handler<GetLookupMessage> for Session {
         _msg: GetLookupMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        let data = &self.data;
-        let player = match &data.player {
-            Some(value) => value.clone(),
+        let data = match &self.data {
+            Some(value) => value,
             None => return Mr(None),
         };
 
         let response = LookupResponse {
-            player,
+            player: data.player.clone(),
             extended_data: UserSessionExtendedData {
                 net: data.net.clone(),
                 game: data.game,
@@ -370,37 +396,6 @@ impl ErrorHandler<io::Error> for Session {
     }
 }
 
-/// Message for creating a session update packet for the
-/// current session
-#[derive(Message)]
-#[msg(rtype = "Option<Packet>")]
-pub struct CreateUserSessionUpdate;
-
-impl Handler<CreateUserSessionUpdate> for Session {
-    type Response = Mr<CreateUserSessionUpdate>;
-    fn handle(
-        &mut self,
-        msg: CreateUserSessionUpdate,
-        ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        let player = match &self.data.player {
-            Some(value) => value,
-            None => return Mr(None),
-        };
-
-        let packet = Packet::notify(
-            user_sessions::COMPONENT,
-            user_sessions::USER_SESSION_EXTENDED_DATA_UPDATE,
-            UserSessionExtendedDataUpdate {
-                user_id: player.id,
-                data: self.data.ext(),
-            },
-        );
-
-        Mr(Some(packet))
-    }
-}
-
 #[derive(Message)]
 #[msg(rtype = "Ipv4Addr")]
 pub struct GetSocketAddrMessage;
@@ -417,39 +412,6 @@ impl Handler<GetSocketAddrMessage> for Session {
     }
 }
 
-/// Creates a set session packet and sends it to all the
-/// provided session links
-#[derive(Message)]
-pub struct UpdateSessionData {
-    /// The link to send the set session to
-    pub links: Vec<Link<Session>>,
-}
-
-impl Handler<UpdateSessionData> for Session {
-    type Response = ();
-
-    fn handle(
-        &mut self,
-        msg: UpdateSessionData,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        if let Some(player) = &self.data.player {
-            let packet = Packet::notify(
-                user_sessions::COMPONENT,
-                user_sessions::USER_SESSION_EXTENDED_DATA_UPDATE,
-                UserSessionExtendedDataUpdate {
-                    user_id: player.id,
-                    data: self.data.ext(),
-                },
-            );
-
-            for link in msg.links {
-                link.push(packet.clone());
-            }
-        }
-    }
-}
-
 /// Message to update the hardware flag of a session
 #[derive(Message)]
 pub struct HardwareFlagMessage {
@@ -461,8 +423,14 @@ impl Handler<HardwareFlagMessage> for Session {
     type Response = ();
 
     fn handle(&mut self, msg: HardwareFlagMessage, _ctx: &mut ServiceContext<Self>) {
-        self.data.net = Arc::new(self.data.net.with_hardware_flags(msg.value));
-        self.data.publish_update();
+        let data = match &mut self.data {
+            Some(value) => value,
+            // TODO: Handle this as an error for unauthenticated
+            None => return,
+        };
+
+        data.net = Arc::new(data.net.with_hardware_flags(msg.value));
+        data.publish_update();
     }
 }
 
@@ -476,8 +444,14 @@ impl Handler<NetworkInfoMessage> for Session {
     type Response = ();
 
     fn handle(&mut self, msg: NetworkInfoMessage, _ctx: &mut ServiceContext<Self>) {
-        self.data.net = Arc::new(self.data.net.with_basic(msg.address, msg.qos));
-        self.data.publish_update();
+        let data = match &mut self.data {
+            Some(value) => value,
+            // TODO: Handle this as an error for unauthenticated
+            None => return,
+        };
+
+        data.net = Arc::new(data.net.with_basic(msg.address, msg.qos));
+        data.publish_update();
     }
 }
 
@@ -490,52 +464,14 @@ impl Handler<SetGameMessage> for Session {
     type Response = ();
 
     fn handle(&mut self, msg: SetGameMessage, _ctx: &mut ServiceContext<Self>) {
-        self.data.game = msg.game;
-        self.data.publish_update();
-    }
-}
-
-/// Message to send the details of this session to
-/// the provided session link
-#[derive(Message)]
-pub struct NotifyOtherUserMessage {
-    pub link: Link<Session>,
-}
-
-impl Handler<NotifyOtherUserMessage> for Session {
-    type Response = ();
-
-    fn handle(&mut self, msg: NotifyOtherUserMessage, _ctx: &mut ServiceContext<Self>) {
-        let player = match self.data.player.as_ref() {
+        let data = match &mut self.data {
             Some(value) => value,
+            // TODO: Handle this as an error for unauthenticated
             None => return,
         };
 
-        // Create the details packets
-        let added_notify = Packet::notify(
-            user_sessions::COMPONENT,
-            user_sessions::USER_ADDED,
-            NotifyUserAdded {
-                session_data: UserSessionExtendedData {
-                    net: self.data.net.clone(),
-                    game: self.data.game.clone(),
-                },
-                user: UserIdentification::from_player(player),
-            },
-        );
-
-        let update_notify = Packet::notify(
-            user_sessions::COMPONENT,
-            user_sessions::USER_UPDATED,
-            NotifyUserUpdated {
-                flags: UserDataFlags::SUBSCRIBED | UserDataFlags::ONLINE,
-                player_id: player.id,
-            },
-        );
-
-        // Push the message to the session link
-        msg.link.push(added_notify);
-        msg.link.push(update_notify);
+        data.game = msg.game;
+        data.publish_update();
     }
 }
 
@@ -552,7 +488,7 @@ impl Session {
         Self {
             id,
             writer,
-            data: SessionData::default(),
+            data: None,
             host_target,
             addr,
             router,
@@ -606,13 +542,14 @@ impl Session {
     /// matchmaking queue
     pub fn remove_games(&mut self) {
         // Don't attempt to remove if theres no active player
-        let player_id = match &self.data.player {
-            Some(value) => value.id,
+        let data = match &mut self.data {
+            Some(value) => value,
             None => return,
         };
 
         let game_manager = self.game_manager.clone();
-        let game = self.data.game.take();
+        let game = data.game.take();
+        let player_id = data.player.id;
         tokio::spawn(async move {
             game_manager.remove_session(game, player_id).await;
         });
@@ -624,15 +561,16 @@ impl Session {
         self.remove_games();
 
         // Check that theres authentication
-        let player = match self.data.player.take() {
+        let data = match &self.data {
             Some(value) => value,
             None => return,
         };
+        let player_id = data.player.id;
 
         // Remove the session from the sessions service
         let sessions = self.sessions.clone();
         tokio::spawn(async move {
-            sessions.remove_session(player.id).await;
+            sessions.remove_session(player_id).await;
         });
     }
 }
@@ -649,14 +587,14 @@ impl Debug for SessionPacketDebug<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Session {} Packet", self.action)?;
 
-        if let Some(player) = &self.session.data.player {
+        if let Some(data) = &self.session.data {
             writeln!(
                 f,
                 "Info: (Name: {}, ID: {}, SID: {})",
-                &player.display_name, &player.id, &self.session.id
+                &data.player.display_name, data.player.id, &self.session.id
             )?;
         } else {
-            writeln!(f, "Info: ( SID: {})", &self.session.id)?;
+            writeln!(f, "Info: (SID: {})", &self.session.id)?;
         }
 
         let header = &self.packet.header;
