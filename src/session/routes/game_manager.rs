@@ -294,7 +294,6 @@ pub async fn handle_remove_player(
 /// }
 /// ```
 pub async fn handle_update_mesh_connection(
-    session: SessionLink,
     SessionAuth(player): SessionAuth,
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(mut req): Blaze<UpdateMeshRequest>,
