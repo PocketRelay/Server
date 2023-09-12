@@ -2,6 +2,10 @@
 //! data such as player data for when they become authenticated and
 //! networking data.
 
+use self::{
+    packet::{Packet, PacketDebug},
+    router::BlazeRouter,
+};
 use crate::{
     database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
@@ -11,20 +15,15 @@ use crate::{
     },
     utils::{
         components::{self, game_manager::GAME_TYPE, user_sessions},
-        models::{NetData, NetworkAddress, Port, QosNetworkData, UpdateExtDataAttr},
+        models::{NetworkAddress, Port, QosNetworkData, UpdateExtDataAttr},
         types::{GameID, PlayerID, SessionID},
     },
 };
-
 use interlink::prelude::*;
 use log::{debug, log_enabled};
+use serde::Serialize;
 use std::{fmt::Debug, io, net::Ipv4Addr, sync::Arc};
 use tdf::{ObjectId, TdfSerialize, TdfType, TdfTyped};
-
-use self::{
-    packet::{Packet, PacketDebug},
-    router::BlazeRouter,
-};
 
 pub mod models;
 pub mod packet;
@@ -65,6 +64,13 @@ pub struct SessionData {
     net: NetData,
     /// The id of the game if connected to one
     game: Option<GameID>,
+}
+
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct NetData {
+    pub addr: NetworkAddress,
+    pub qos: QosNetworkData,
+    pub hardware_flags: u16,
 }
 
 impl Service for Session {

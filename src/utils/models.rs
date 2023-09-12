@@ -1,20 +1,15 @@
 use crate::utils::types::PlayerID;
 use serde::Serialize;
 use std::{fmt::Debug, net::Ipv4Addr};
-use tdf::{GroupSlice, TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped};
+use tdf::{GroupSlice, TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped};
 
 /// Networking information for an instance. Contains the
 /// host address and the port
+#[derive(TdfTyped)]
+#[tdf(group)]
 pub struct InstanceAddress {
     pub host: InstanceHost,
     pub port: Port,
-}
-
-impl From<(String, Port)> for InstanceAddress {
-    fn from((host, port): (String, Port)) -> Self {
-        let host = InstanceHost::from(host);
-        Self { host, port }
-    }
 }
 
 impl TdfSerialize for InstanceAddress {
@@ -33,10 +28,6 @@ impl TdfDeserializeOwned for InstanceAddress {
         GroupSlice::deserialize_content_skip(r)?;
         Ok(Self { host, port })
     }
-}
-
-impl TdfTyped for InstanceAddress {
-    const TYPE: TdfType = TdfType::Group;
 }
 
 /// Type of instance details provided either hostname
@@ -172,13 +163,6 @@ pub enum NetworkAddress {
 
 /// Type alias for ports which are always u16
 pub type Port = u16;
-
-#[derive(Debug, Default, Clone, Serialize)]
-pub struct NetData {
-    pub addr: NetworkAddress,
-    pub qos: QosNetworkData,
-    pub hardware_flags: u16,
-}
 
 /// Pair of socket addresses
 #[derive(Debug, Clone, TdfDeserialize, TdfSerialize, TdfTyped, Serialize)]

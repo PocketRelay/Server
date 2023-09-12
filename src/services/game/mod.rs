@@ -2,12 +2,11 @@ use self::{manager::GameManager, rules::RuleSet};
 use crate::{
     database::entities::Player,
     session::{
-        packet::Packet, router::RawBlaze, DetailsMessage, InformSessions, PushExt, Session,
-        SetGameMessage,
+        packet::Packet, router::RawBlaze, DetailsMessage, InformSessions, NetData, PushExt,
+        Session, SetGameMessage,
     },
     utils::{
         components::{game_manager, user_sessions},
-        models::NetData,
         types::{GameID, PlayerID},
     },
 };
