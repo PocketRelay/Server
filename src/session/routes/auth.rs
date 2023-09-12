@@ -10,8 +10,8 @@ use crate::{
             auth::*,
             errors::{GlobalError, ServerResult},
         },
-        router::{Blaze, Extension},
-        GetPlayerIdMessage, GetPlayerMessage, SessionLink, SetPlayerMessage,
+        router::{Blaze, Extension, SessionAuth},
+        SessionLink, SetPlayerMessage,
     },
     utils::hashing::{hash_password, verify_password},
 };
@@ -228,11 +228,9 @@ pub async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-pub async fn handle_login_persona(session: SessionLink) -> ServerResult<Blaze<PersonaResponse>> {
-    let player: Player = session
-        .send(GetPlayerMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
+pub async fn handle_login_persona(
+    SessionAuth(player): SessionAuth,
+) -> ServerResult<Blaze<PersonaResponse>> {
     Ok(Blaze(PersonaResponse { player }))
 }
 
@@ -403,14 +401,10 @@ pub async fn handle_privacy_policy() -> Blaze<LegalContent> {
 /// Content: {}
 /// ```
 pub async fn handle_get_auth_token(
-    session: SessionLink,
+    SessionAuth(player): SessionAuth,
     Extension(sessions): Extension<Arc<Sessions>>,
 ) -> ServerResult<Blaze<GetTokenResponse>> {
-    let player_id = session
-        .send(GetPlayerIdMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
     // Create a new token claim for the player to use with the API
-    let token = sessions.create_token(player_id);
+    let token = sessions.create_token(player.id);
     Ok(Blaze(GetTokenResponse { token }))
 }

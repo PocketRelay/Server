@@ -1,7 +1,7 @@
 use tdf::{TdfDeserialize, TdfSerialize, TdfSerializer, TdfType, TdfTyped};
 
 use crate::{database::entities::Player, utils::types::PlayerID};
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -166,7 +166,7 @@ pub struct CreateAccountRequest {
 /// player details
 pub struct PersonaResponse {
     /// The player
-    pub player: Player,
+    pub player: Arc<Player>,
 }
 
 impl TdfSerialize for PersonaResponse {

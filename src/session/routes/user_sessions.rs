@@ -4,7 +4,7 @@ use crate::{
     session::{
         models::{
             auth::{AuthResponse, AuthenticationError},
-            errors::{GlobalError, ServerResult},
+            errors::ServerResult,
             user_sessions::*,
             NetworkAddress,
         },
@@ -43,11 +43,10 @@ pub async fn handle_lookup_user(
         .ok_or(UserSessionsError::UserNotFound)?;
 
     // Get the lookup response from the session
-    let response = session.send(GetLookupMessage).await;
-    let response = match response {
-        Ok(Some(value)) => value,
-        _ => return Err(GlobalError::System.into()),
-    };
+    let response = session
+        .send(GetLookupMessage)
+        .await?
+        .ok_or(UserSessionsError::UserNotFound)?;
 
     Ok(Blaze(response))
 }

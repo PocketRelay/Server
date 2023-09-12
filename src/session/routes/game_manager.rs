@@ -14,8 +14,8 @@ use crate::{
             errors::{GlobalError, ServerResult},
             game_manager::*,
         },
-        router::{Blaze, Extension, RawBlaze},
-        GetGamePlayerMessage, GetPlayerGameMessage, GetPlayerIdMessage, SessionLink,
+        router::{Blaze, Extension, RawBlaze, SessionAuth},
+        GetGamePlayerMessage, GetPlayerGameMessage, SessionLink,
     },
 };
 use log::{debug, info};
@@ -295,14 +295,10 @@ pub async fn handle_remove_player(
 /// ```
 pub async fn handle_update_mesh_connection(
     session: SessionLink,
+    SessionAuth(player): SessionAuth,
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(mut req): Blaze<UpdateMeshRequest>,
 ) -> ServerResult<()> {
-    let id = match session.send(GetPlayerIdMessage).await? {
-        Some(value) => value,
-        None => return Err(GlobalError::AuthenticationRequired.into()),
-    };
-
     let target = match req.targets.pop() {
         Some(value) => value,
         None => return Ok(()),
@@ -317,7 +313,7 @@ pub async fn handle_update_mesh_connection(
 
     let _ = link
         .send(UpdateMeshMessage {
-            id,
+            id: player.id,
             target: target.player_id,
             state: target.state,
         })

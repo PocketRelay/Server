@@ -6,8 +6,8 @@ use crate::{
             errors::{GlobalError, ServerResult},
             util::*,
         },
-        router::{Blaze, Extension},
-        DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
+        router::{Blaze, Extension, SessionAuth},
+        DetailsMessage, GetHostTarget, SessionLink,
     },
 };
 use base64ct::{Base64, Encoding};
@@ -80,7 +80,7 @@ pub async fn handle_get_ticker_server() -> Blaze<TickerServer> {
 /// }
 /// ```
 pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Blaze<PreAuthResponse>> {
-    let host_target = session.send(GetHostTarget {}).await?;
+    let host_target = session.send(GetHostTarget).await?;
     Ok(Blaze(PreAuthResponse { host_target }))
 }
 
@@ -92,12 +92,10 @@ pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Blaze<PreAuth
 /// ID: 27
 /// Content: {}
 /// ```
-pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Blaze<PostAuthResponse>> {
-    let player_id = session
-        .send(GetPlayerIdMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
+pub async fn handle_post_auth(
+    session: SessionLink,
+    SessionAuth(player): SessionAuth,
+) -> ServerResult<Blaze<PostAuthResponse>> {
     // Queue the session details to be sent to this client
     let _ = session.do_send(DetailsMessage {
         link: Link::clone(&session),
@@ -106,7 +104,7 @@ pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Blaze<PostAu
     Ok(Blaze(PostAuthResponse {
         telemetry: TelemetryServer,
         ticker: TickerServer,
-        player_id,
+        player_id: player.id,
     }))
 }
 
@@ -501,16 +499,11 @@ pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> 
 /// }
 /// ```
 pub async fn handle_user_settings_save(
-    session: SessionLink,
+    SessionAuth(player): SessionAuth,
     Extension(db): Extension<DatabaseConnection>,
     Blaze(req): Blaze<SettingsSaveRequest>,
 ) -> ServerResult<()> {
-    let player = session
-        .send(GetPlayerIdMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
-    PlayerData::set(&db, player, req.key, req.value).await?;
+    PlayerData::set(&db, player.id, req.key, req.value).await?;
     Ok(())
 }
 
@@ -523,16 +516,11 @@ pub async fn handle_user_settings_save(
 /// Content: {}
 /// ```
 pub async fn handle_load_settings(
-    session: SessionLink,
+    SessionAuth(player): SessionAuth,
     Extension(db): Extension<DatabaseConnection>,
 ) -> ServerResult<Blaze<SettingsResponse>> {
-    let player = session
-        .send(GetPlayerIdMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
     // Load the player data from the database
-    let data: Vec<PlayerData> = PlayerData::all(&db, player).await?;
+    let data: Vec<PlayerData> = PlayerData::all(&db, player.id).await?;
 
     // Encode the player data into a settings map and order it
     let mut settings = TdfMap::<String, String>::with_capacity(data.len());

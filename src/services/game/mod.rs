@@ -97,7 +97,7 @@ pub type AttrMap = TdfMap<String, String>;
 /// within a game
 pub struct GamePlayer {
     /// Session player
-    pub player: Player,
+    pub player: Arc<Player>,
     /// Session address
     pub link: Link<Session>,
     /// Networking information for the player
@@ -125,7 +125,7 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(player: Player, net: NetData, link: Link<Session>) -> Self {
+    pub fn new(player: Arc<Player>, net: NetData, link: Link<Session>) -> Self {
         Self {
             player,
             link,

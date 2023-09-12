@@ -23,8 +23,7 @@ pub struct ResumeSessionRequest {
     pub session_token: String,
 }
 
-/// Structure for a request to update the network info of the
-/// current session
+/// Request to update the stored networking information for a session
 #[derive(TdfDeserialize)]
 pub struct UpdateNetworkRequest {
     /// The client address net groups
@@ -35,8 +34,7 @@ pub struct UpdateNetworkRequest {
     pub qos: QosNetworkData,
 }
 
-/// Structure for request to update the hardware flags of the
-/// current session
+/// Request to update the stored hardware flags for a session
 #[derive(TdfDeserialize)]
 pub struct UpdateHardwareFlagsRequest {
     /// The hardware flag value

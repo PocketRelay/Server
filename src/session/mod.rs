@@ -62,7 +62,7 @@ pub struct Session {
 pub struct SessionData {
     /// If the session is authenticated it will have a linked
     /// player model from the database
-    player: Option<Player>,
+    player: Option<Arc<Player>>,
     /// Networking information
     net: NetData,
     /// The id of the game if connected to one
@@ -86,7 +86,7 @@ impl Service for Session {
 pub type SessionLink = Link<Session>;
 
 #[derive(Message)]
-#[msg(rtype = "Option<Player>")]
+#[msg(rtype = "Option<Arc<Player>>")]
 pub struct GetPlayerMessage;
 
 impl Handler<GetPlayerMessage> for Session {
@@ -119,22 +119,6 @@ pub struct SessionHostTarget {
     pub host: Box<str>,
     pub port: Port,
     pub local_http: bool,
-}
-
-#[derive(Message)]
-#[msg(rtype = "Option<u32>")]
-pub struct GetPlayerIdMessage;
-
-impl Handler<GetPlayerIdMessage> for Session {
-    type Response = Mr<GetPlayerIdMessage>;
-
-    fn handle(
-        &mut self,
-        _msg: GetPlayerIdMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        Mr(self.data.player.as_ref().map(|value| value.id))
-    }
 }
 
 #[derive(Message)]
@@ -179,7 +163,7 @@ impl Handler<SetPlayerMessage> for Session {
                 sessions.add_session(player_id, link).await;
             });
 
-            self.data.player = Some(player);
+            self.data.player = Some(Arc::new(player));
         }
     }
 }

@@ -4,9 +4,10 @@
 use super::{
     models::errors::BlazeError,
     packet::{Packet, PacketHeader},
-    SessionLink,
+    GetPlayerMessage, SessionLink,
 };
 use crate::{
+    database::entities::Player,
     session::models::errors::GlobalError,
     utils::{
         components::{component_key, ComponentKey},
@@ -179,6 +180,10 @@ pub struct BlazeWithHeader<V> {
 /// serialized ahead of time
 pub struct RawBlaze(Bytes);
 
+/// Extracts the session authenticated player if one is present,
+/// responds with [GlobalError::AuthenticationRequired] if there is none
+pub struct SessionAuth(pub Arc<Player>);
+
 pub struct Extension<T>(pub T);
 
 impl<T> FromPacketRequest for Extension<T>
@@ -205,6 +210,26 @@ where
                 .cloned()
                 .map(Extension),
         ))
+    }
+}
+
+impl FromPacketRequest for SessionAuth {
+    type Rejection = BlazeError;
+
+    fn from_packet_request<'a>(
+        req: &'a PacketRequest,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        Box::pin(async move {
+            let player = req
+                .state
+                .send(GetPlayerMessage)
+                .await?
+                .ok_or(GlobalError::AuthenticationRequired)?;
+            Ok(SessionAuth(player))
+        })
     }
 }
 
