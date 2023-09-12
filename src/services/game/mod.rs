@@ -2,8 +2,8 @@ use self::{manager::GameManager, rules::RuleSet};
 use crate::{
     database::entities::Player,
     session::{
-        packet::Packet, router::RawBlaze, DetailsMessage, InformSessions, NetData, PushExt,
-        Session, SetGameMessage,
+        models::user_sessions::NotifyUserRemoved, packet::Packet, router::RawBlaze, DetailsMessage,
+        InformSessions, NetData, PushExt, Session, SetGameMessage,
     },
     utils::{
         components::{game_manager, user_sessions},
@@ -433,7 +433,7 @@ impl Handler<RemovePlayerMessage> for Game {
 
         // Update the other players
         self.notify_player_removed(&player, msg.reason);
-        self.notify_fetch_data(&player);
+        self.notify_user_removed(&player);
         self.modify_admin_list(player.player.id, AdminListOperation::Remove);
 
         debug!(
@@ -663,32 +663,31 @@ impl Game {
         player.link.push(packet);
     }
 
-    /// Notifies all the sessions in the game to fetch the player data
-    /// for the provided session and the session to fetch the extended
-    /// data for all the other sessions. Will early return if there
-    /// are no players left.
-    ///
-    /// `session`   The session to update with the other clients
-    /// `player_id` The player id of the session to update
-    fn notify_fetch_data(&self, player: &GamePlayer) {
+    /// Notifies the provided player and all other players
+    /// in the game that they should remove eachother from
+    /// their player data list
+    fn notify_user_removed(&self, player: &GamePlayer) {
+        // Tell all the game players to remove the player
         self.notify_all(
             user_sessions::COMPONENT,
-            user_sessions::FETCH_EXTENDED_DATA,
-            FetchExtendedData {
+            user_sessions::USER_REMOVED,
+            NotifyUserRemoved {
                 player_id: player.player.id,
             },
         );
 
-        for other_player in &self.players {
-            let packet = Packet::notify(
-                user_sessions::COMPONENT,
-                user_sessions::FETCH_EXTENDED_DATA,
-                FetchExtendedData {
-                    player_id: other_player.player.id,
-                },
-            );
-            player.link.push(packet)
-        }
+        // Tell the removed player to remove all the players from the game
+        self.players
+            .iter()
+            .map(|player| player.player.id)
+            .map(|player_id| {
+                Packet::notify(
+                    user_sessions::COMPONENT,
+                    user_sessions::USER_REMOVED,
+                    NotifyUserRemoved { player_id },
+                )
+            })
+            .for_each(|packet| player.link.push(packet));
     }
 
     /// Attempts to migrate the host of this game if there are still players

@@ -6,9 +6,7 @@ use crate::{
 use bitflags::bitflags;
 
 use serde::Serialize;
-use tdf::{
-    TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfSerializeOwned, TdfType, TdfTyped,
-};
+use tdf::{TdfDeserialize, TdfSerialize, TdfType, TdfTyped};
 
 /// Different states the game can be in
 #[derive(
@@ -59,21 +57,10 @@ impl From<GameSettings> for u16 {
     }
 }
 
-impl TdfSerialize for GameSettings {
-    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        <u16 as TdfSerializeOwned>::serialize_owned(self.bits(), w)
+impl From<u16> for GameSettings {
+    fn from(value: u16) -> Self {
+        GameSettings::from_bits_retain(value)
     }
-}
-
-impl TdfDeserializeOwned for GameSettings {
-    fn deserialize_owned(r: &mut tdf::TdfDeserializer<'_>) -> tdf::DecodeResult<Self> {
-        let value = u16::deserialize_owned(r)?;
-        Ok(GameSettings::from_bits_retain(value))
-    }
-}
-
-impl TdfTyped for GameSettings {
-    const TYPE: TdfType = TdfType::VarInt;
 }
 
 #[derive(

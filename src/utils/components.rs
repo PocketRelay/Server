@@ -370,10 +370,10 @@ pub mod user_sessions {
     pub const RESUME_SESSION: u16 = 0x23;
 
     // Notifications
-    pub const SET_SESSION: u16 = 0x1;
-    pub const SESSION_DETAILS: u16 = 0x2;
-    pub const FETCH_EXTENDED_DATA: u16 = 0x3;
-    pub const UPDATE_EXTENDED_DATA_ATTRIBUTE: u16 = 0x5;
+    pub const USER_SESSION_EXTENDED_DATA_UPDATE: u16 = 0x1;
+    pub const USER_ADDED: u16 = 0x2;
+    pub const USER_REMOVED: u16 = 0x3;
+    pub const USER_UPDATED: u16 = 0x5;
 
     // Object Types
     pub const PLAYER_TYPE: ObjectType = ObjectType::new(COMPONENT, 1);
@@ -647,10 +647,10 @@ fn notifications() -> HashMap<ComponentKey, &'static str> {
         (component_key(gr::COMPONENT, gr::GAME_REPORT_SUBMITTED), "GameReportSubmitted"),
 
         // User Sessions
-        (component_key(us::COMPONENT, us::SET_SESSION), "SetSession"),
-        (component_key(us::COMPONENT, us::SESSION_DETAILS), "SessionDetails"),
-        (component_key(us::COMPONENT, us::UPDATE_EXTENDED_DATA_ATTRIBUTE), "UpdateExtendedDataAttribute"),
-        (component_key(us::COMPONENT, us::FETCH_EXTENDED_DATA), "FetchExtendedData"),
+        (component_key(us::COMPONENT, us::USER_SESSION_EXTENDED_DATA_UPDATE), "UserSessionExtendedDataUpdate"),
+        (component_key(us::COMPONENT, us::USER_ADDED), "UserAdded"),
+        (component_key(us::COMPONENT, us::USER_UPDATED), "UserUpdated"),
+        (component_key(us::COMPONENT, us::USER_REMOVED), "UserRemoved"),
     ]
     .into_iter()
     .collect()

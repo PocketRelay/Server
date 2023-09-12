@@ -53,7 +53,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 hyper = "0.14.25"
 tower = "0.4"
 
-bitflags = "2.3.1"
+bitflags = { version = "2.3.1", features = ["serde"] }
 tdf = { version = "0.1" }
 bytes = "1.4.0"
 

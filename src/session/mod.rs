@@ -3,7 +3,10 @@
 //! networking data.
 
 use self::{
-    models::{user_sessions::UserSessionExtendedData, util::PING_SITE_ALIAS},
+    models::user_sessions::{
+        HardwareFlags, LookupResponse, NotifyUserAdded, UserIdentification,
+        UserSessionExtendedData, UserSessionExtendedDataUpdate,
+    },
     packet::{Packet, PacketDebug},
     router::BlazeRouter,
 };
@@ -16,15 +19,14 @@ use crate::{
     },
     session::models::{NetworkAddress, Port, QosNetworkData, UpdateExtDataAttr},
     utils::{
-        components::{self, game_manager::GAME_TYPE, user_sessions},
-        types::{GameID, PlayerID, SessionID},
+        components::{self, user_sessions},
+        types::{GameID, SessionID},
     },
 };
 use interlink::prelude::*;
 use log::{debug, log_enabled};
 use serde::Serialize;
 use std::{fmt::Debug, io, net::Ipv4Addr, sync::Arc};
-use tdf::{ObjectId, TdfSerialize, TdfType, TdfTyped};
 
 pub mod models;
 pub mod packet;
@@ -71,7 +73,7 @@ pub struct SessionData {
 pub struct NetData {
     pub addr: NetworkAddress,
     pub qos: QosNetworkData,
-    pub hardware_flags: u16,
+    pub hardware_flags: HardwareFlags,
 }
 
 impl Service for Session {
@@ -292,10 +294,12 @@ impl Handler<UpdateClientMessage> for Session {
         if let Some(player) = &self.data.player {
             let packet = Packet::notify(
                 user_sessions::COMPONENT,
-                user_sessions::SET_SESSION,
+                user_sessions::USER_SESSION_EXTENDED_DATA_UPDATE,
                 UserSessionExtendedDataUpdate {
-                    player_id: player.id,
-                    session: &self.data,
+                    user_id: player.id,
+                    data: UserSessionExtendedData {
+                        session_data: &self.data,
+                    },
                 },
             );
             self.push(packet);
@@ -334,10 +338,12 @@ impl Handler<InformSessions> for Session {
         if let Some(player) = &self.data.player {
             let packet = Packet::notify(
                 user_sessions::COMPONENT,
-                user_sessions::SET_SESSION,
+                user_sessions::USER_SESSION_EXTENDED_DATA_UPDATE,
                 UserSessionExtendedDataUpdate {
-                    player_id: player.id,
-                    session: &self.data,
+                    user_id: player.id,
+                    data: UserSessionExtendedData {
+                        session_data: &self.data,
+                    },
                 },
             );
 
@@ -352,7 +358,7 @@ impl Handler<InformSessions> for Session {
 #[derive(Message)]
 pub struct HardwareFlagMessage {
     /// The new value for the hardware flag
-    pub value: u16,
+    pub value: HardwareFlags,
 }
 
 impl Handler<HardwareFlagMessage> for Session {
@@ -423,17 +429,21 @@ impl Handler<DetailsMessage> for Session {
         // Create the details packets
         let a = Packet::notify(
             user_sessions::COMPONENT,
-            user_sessions::SESSION_DETAILS,
-            SessionUpdate {
-                session: self,
-                player_id: player.id,
-                display_name: &player.display_name,
+            user_sessions::USER_ADDED,
+            NotifyUserAdded {
+                session_data: UserSessionExtendedData {
+                    session_data: &self.data,
+                },
+                user: UserIdentification {
+                    id: player.id,
+                    name: &player.display_name,
+                },
             },
         );
 
         let b = Packet::notify(
             user_sessions::COMPONENT,
-            user_sessions::UPDATE_EXTENDED_DATA_ATTRIBUTE,
+            user_sessions::USER_UPDATED,
             UpdateExtDataAttr {
                 flags: 0x3,
                 player_id: player.id,
@@ -599,97 +609,5 @@ impl Debug for SessionPacketDebug<'_> {
             minified,
         }
         .fmt(f)
-    }
-}
-
-impl TdfSerialize for SessionData {
-    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        w.group_body(|w| {
-            w.tag_ref(b"ADDR", &self.net.addr);
-            w.tag_str(b"BPS", PING_SITE_ALIAS);
-            w.tag_str_empty(b"CTY");
-            w.tag_var_int_list_empty(b"CVAR");
-
-            w.tag_map_tuples(b"DMAP", &[(0x70001, 0x409a)]);
-
-            w.tag_u16(b"HWFG", self.net.hardware_flags);
-
-            // Ping latency to the Quality of service servers
-            w.tag_list_slice(b"PSLM", &[0xfff0fff]);
-
-            w.tag_ref(b"QDAT", &self.net.qos);
-            w.tag_u8(b"UATT", 0);
-            if let Some(game_id) = &self.game {
-                w.tag_list_slice(b"ULST", &[ObjectId::new(GAME_TYPE, *game_id as u64)]);
-            }
-        });
-    }
-}
-
-impl TdfTyped for SessionData {
-    const TYPE: TdfType = TdfType::Group;
-}
-
-/// Session update for a session other than ourselves
-/// which contains the details for that session
-struct SessionUpdate<'a> {
-    /// The session this update is for
-    session: &'a Session,
-    /// The player ID the update is for
-    player_id: PlayerID,
-    /// The display name of the player the update is
-    display_name: &'a str,
-}
-
-impl TdfSerialize for SessionUpdate<'_> {
-    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        w.tag_ref(b"DATA", &self.session.data);
-
-        w.group(b"USER", |writer| {
-            writer.tag_owned(b"AID", self.player_id);
-            writer.tag_u32(b"ALOC", 0x64654445);
-            writer.tag_blob_empty(b"EXBB");
-            writer.tag_u8(b"EXID", 0);
-            writer.tag_owned(b"ID", self.player_id);
-            writer.tag_str(b"NAME", self.display_name);
-        });
-    }
-}
-
-pub struct LookupResponse {
-    session_data: SessionData,
-    player_id: PlayerID,
-    display_name: String,
-}
-
-impl TdfSerialize for LookupResponse {
-    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        w.tag_ref(b"EDAT", &self.session_data);
-
-        w.tag_u8(b"FLGS", 2);
-
-        w.group(b"USER", |w| {
-            w.tag_owned(b"AID", self.player_id);
-            w.tag_u32(b"ALOC", 0x64654445);
-            w.tag_blob_empty(b"EXBB");
-            w.tag_u8(b"EXID", 0);
-            w.tag_owned(b"ID", self.player_id);
-            w.tag_str(b"NAME", &self.display_name);
-        });
-    }
-}
-
-/// Session update for ourselves
-struct UserSessionExtendedDataUpdate<'a> {
-    /// The session this update is for
-    session: &'a SessionData,
-    /// The player ID the update is for
-    player_id: PlayerID,
-}
-
-impl TdfSerialize for UserSessionExtendedDataUpdate<'_> {
-    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        w.tag_ref(b"DATA", self.session);
-        w.tag_owned(b"USID", self.player_id)
     }
 }

@@ -43,7 +43,7 @@ pub async fn handle_lookup_user(
         .ok_or(UserSessionsError::UserNotFound)?;
 
     // Get the lookup response from the session
-    let response = session.send(GetLookupMessage {}).await;
+    let response = session.send(GetLookupMessage).await;
     let response = match response {
         Ok(Some(value)) => value,
         _ => return Err(GlobalError::System.into()),
@@ -159,11 +159,11 @@ pub async fn handle_update_network(
 /// ```
 pub async fn handle_update_hardware_flag(
     session: SessionLink,
-    Blaze(req): Blaze<HardwareFlagRequest>,
+    Blaze(req): Blaze<UpdateHardwareFlagsRequest>,
 ) {
     let _ = session
         .send(HardwareFlagMessage {
-            value: req.hardware_flag,
+            value: req.hardware_flags,
         })
         .await;
 }

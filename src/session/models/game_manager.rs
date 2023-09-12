@@ -31,7 +31,7 @@ pub struct CreateGameRequest {
     #[tdf(tag = "ATTR")]
     pub attributes: AttrMap,
     /// The games initial setting
-    #[tdf(tag = "GSET")]
+    #[tdf(tag = "GSET", into = u16)]
     pub setting: GameSettings,
 }
 
@@ -80,7 +80,7 @@ pub struct SetStateRequest {
 pub struct SetSettingRequest {
     #[tdf(tag = "GID")]
     pub game_id: GameID,
-    #[tdf(tag = "GSET")]
+    #[tdf(tag = "GSET", into = u16)]
     pub setting: GameSettings,
 }
 
