@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use embeddy::Embedded;
+use futures_util::future::BoxFuture;
 use hyper::{header::CONTENT_TYPE, StatusCode};
 use std::{
     convert::Infallible,
@@ -11,8 +12,6 @@ use std::{
     task::{Context, Poll},
 };
 use tower::Service;
-
-use crate::utils::types::BoxFuture;
 
 /// Resources embedded from the public data folder such as the
 /// dashboard static assets and the content for the ingame store.

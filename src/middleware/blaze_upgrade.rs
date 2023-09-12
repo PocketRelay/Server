@@ -1,12 +1,10 @@
-use crate::{
-    session::SessionHostTarget,
-    utils::{models::Port, types::BoxFuture},
-};
+use crate::{session::SessionHostTarget, utils::models::Port};
 use axum::{
     extract::FromRequestParts,
     http::{HeaderValue, Method, StatusCode},
     response::IntoResponse,
 };
+use futures_util::future::BoxFuture;
 use hyper::{
     upgrade::{OnUpgrade, Upgraded},
     HeaderMap,

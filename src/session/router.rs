@@ -11,10 +11,10 @@ use crate::{
     utils::{
         components::{component_key, ComponentKey},
         hashing::IntHashMap,
-        types::BoxFuture,
     },
 };
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
 use log::error;
 use std::{
     any::{Any, TypeId},

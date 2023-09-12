@@ -4,7 +4,6 @@ use crate::{
         DbErr,
     },
     services::sessions::{Sessions, VerifyError},
-    utils::types::BoxFuture,
 };
 use axum::{
     body::boxed,
@@ -12,6 +11,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use futures_util::future::BoxFuture;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use thiserror::Error;
