@@ -2,7 +2,7 @@ use crate::{
     config::RuntimeConfig,
     database::{entities::Player, DatabaseConnection},
     services::{
-        retriever::{GetOriginFlow, Retriever},
+        retriever::Retriever,
         sessions::{Sessions, VerifyError},
     },
     session::{
@@ -16,7 +16,6 @@ use crate::{
     utils::hashing::{hash_password, verify_password},
 };
 use email_address::EmailAddress;
-use interlink::prelude::Link;
 use log::{debug, error};
 use std::{borrow::Cow, sync::Arc};
 use tokio::fs::read_to_string;
@@ -93,18 +92,14 @@ pub async fn handle_origin_login(
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
     Extension(sessions): Extension<Arc<Sessions>>,
-    Extension(retriever): Extension<Link<Retriever>>,
+    Extension(retriever): Extension<Arc<Retriever>>,
     Blaze(req): Blaze<OriginLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     // Obtain an origin flow
-    let mut flow = match retriever.send(GetOriginFlow).await {
-        Ok(Ok(value)) => value,
-        Ok(Err(err)) => {
-            error!("Failed to obtain origin flow: {}", err);
-            return Err(GlobalError::System.into());
-        }
+    let mut flow = match retriever.origin_flow().await {
+        Ok(value) => value,
         Err(err) => {
-            error!("Unable to access retriever service: {}", err);
+            error!("Failed to obtain origin flow: {}", err);
             return Err(GlobalError::System.into());
         }
     };

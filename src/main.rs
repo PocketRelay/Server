@@ -58,13 +58,14 @@ async fn main() {
     let leaderboard = Arc::new(Leaderboard::new());
     let config = Arc::new(runtime_config);
     let sessions = Arc::new(sessions);
+    let retriever = Arc::new(retriever);
 
     // Initialize session router
     let mut router = session::routes::router();
 
     router.add_extension(db.clone());
     router.add_extension(config.clone());
-    router.add_extension(retriever.clone());
+    router.add_extension(retriever);
     router.add_extension(game_manager.clone());
     router.add_extension(leaderboard.clone());
     router.add_extension(sessions.clone());
