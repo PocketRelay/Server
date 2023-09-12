@@ -1,11 +1,9 @@
 use crate::{
     services::{
         game::{
-            manager::GameManager,
-            models::{DatalessContext, GameSetupContext},
-            AddPlayerMessage, CheckJoinableMessage, GameJoinableState, GamePlayer,
-            GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage, SetSettingMessage,
-            SetStateMessage, UpdateMeshMessage,
+            manager::GameManager, AddPlayerMessage, CheckJoinableMessage, GameJoinableState,
+            GamePlayer, GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage,
+            SetSettingMessage, SetStateMessage, UpdateMeshMessage,
         },
         sessions::Sessions,
     },
@@ -58,7 +56,9 @@ pub async fn handle_join_game(
         debug!("Joining game from invite (GID: {})", game_id);
         let _ = game.do_send(AddPlayerMessage {
             player,
-            context: GameSetupContext::Dataless(DatalessContext::JoinGameSetup),
+            context: GameSetupContext::Dataless {
+                context: DatalessContext::JoinGameSetup,
+            },
         });
         Ok(Blaze(JoinGameResponse {
             game_id,

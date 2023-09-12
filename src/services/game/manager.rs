@@ -1,12 +1,13 @@
 use super::{
-    models::{DatalessContext, GameSetupContext},
-    rules::RuleSet,
-    AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
-    GameSnapshot, RemovePlayerMessage,
+    rules::RuleSet, AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState,
+    GamePlayer, GameSnapshot, RemovePlayerMessage,
 };
 use crate::{
     session::{
-        models::game_manager::{AsyncMatchmakingStatus, GameSettings, PlayerState, RemoveReason},
+        models::game_manager::{
+            AsyncMatchmakingStatus, DatalessContext, GameSettings, GameSetupContext,
+            MatchmakingResult, PlayerState, RemoveReason,
+        },
         packet::Packet,
         PushExt,
     },
@@ -49,6 +50,8 @@ struct MatchmakingEntry {
     /// Time that the player entered matchmaking
     started: SystemTime,
 }
+
+const DEFAULT_FIT: u16 = 21600;
 
 impl GameManager {
     /// Starts a new game manager service returning its link
@@ -164,7 +167,9 @@ impl GameManager {
 
         let _ = link.do_send(AddPlayerMessage {
             player: host,
-            context: GameSetupContext::Dataless(DatalessContext::CreateGameSetup),
+            context: GameSetupContext::Dataless {
+                context: DatalessContext::CreateGameSetup,
+            },
         });
 
         (link, id)
@@ -195,7 +200,13 @@ impl GameManager {
                 let msid = player.player.id;
                 let _ = link.do_send(AddPlayerMessage {
                     player,
-                    context: GameSetupContext::Matchmaking(msid),
+                    context: GameSetupContext::Matchmaking {
+                        fit_score: DEFAULT_FIT,
+                        max_fit_score: DEFAULT_FIT,
+                        session_id: msid,
+                        result: MatchmakingResult::JoinedExistingGame,
+                        player_id: msid,
+                    },
                 });
                 return Ok(());
             }
@@ -261,7 +272,13 @@ impl GameManager {
                     if link
                         .do_send(AddPlayerMessage {
                             player: entry.player,
-                            context: GameSetupContext::Matchmaking(msid),
+                            context: GameSetupContext::Matchmaking {
+                                fit_score: DEFAULT_FIT,
+                                max_fit_score: DEFAULT_FIT,
+                                session_id: msid,
+                                result: MatchmakingResult::JoinedExistingGame,
+                                player_id: msid,
+                            },
                         })
                         .is_err()
                     {

@@ -3,9 +3,10 @@ use crate::{
     database::entities::Player,
     session::{
         models::game_manager::{
-            AdminListChange, AdminListOperation, AttributesChange, GameSettings, GameState,
-            HostMigrateFinished, HostMigrateStart, JoinComplete, PlayerJoining, PlayerRemoved,
-            PlayerState, PlayerStateChange, RemoveReason, SettingChange, StateChange,
+            AdminListChange, AdminListOperation, AttributesChange, GameSettings, GameSetupContext,
+            GameSetupResponse, GameState, GetGameDetails, HostMigrateFinished, HostMigrateStart,
+            JoinComplete, PlayerJoining, PlayerRemoved, PlayerState, PlayerStateChange,
+            RemoveReason, SettingChange, StateChange,
         },
         packet::Packet,
         router::RawBlaze,
@@ -18,13 +19,11 @@ use crate::{
 };
 use interlink::prelude::*;
 use log::debug;
-use models::*;
 use serde::Serialize;
 use std::sync::Arc;
 use tdf::{ObjectId, TdfMap, TdfSerializer};
 
 pub mod manager;
-pub mod models;
 pub mod rules;
 
 /// Game service running within the server
@@ -34,7 +33,7 @@ pub struct Game {
     /// The current game state
     pub state: GameState,
     /// The current game setting
-    pub setting: GameSettings,
+    pub settings: GameSettings,
     /// The game attributes
     pub attributes: AttrMap,
     /// The list of players in this game
@@ -65,13 +64,13 @@ impl Game {
     pub fn start(
         id: GameID,
         attributes: AttrMap,
-        setting: GameSettings,
+        settings: GameSettings,
         game_manager: Arc<GameManager>,
     ) -> Link<Game> {
         let this = Game {
             id,
             state: Default::default(),
-            setting,
+            settings,
             attributes,
             players: Default::default(),
             game_manager,
@@ -266,7 +265,7 @@ impl Handler<SetSettingMessage> for Game {
     fn handle(&mut self, msg: SetSettingMessage, _ctx: &mut ServiceContext<Self>) {
         let setting = msg.setting;
         debug!("Updating game setting (Value: {:?})", &setting);
-        self.setting = setting;
+        self.settings = setting;
         self.push_all(&Packet::notify(
             game_manager::COMPONENT,
             game_manager::GAME_SETTINGS_CHANGE,
@@ -516,7 +515,7 @@ impl Handler<SnapshotMessage> for Game {
         Mr(GameSnapshot {
             id: self.id,
             state: self.state,
-            setting: self.setting.bits(),
+            setting: self.settings.bits(),
             attributes: self.attributes.clone(),
             players,
         })
@@ -619,7 +618,7 @@ impl Game {
         let packet = Packet::notify(
             game_manager::COMPONENT,
             game_manager::GAME_SETUP,
-            GameDetails {
+            GameSetupResponse {
                 game: self,
                 context,
             },

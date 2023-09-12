@@ -3,9 +3,11 @@ use serde::Serialize;
 use tdf::{Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped};
 
 use crate::{
-    services::game::{rules::RuleSet, AttrMap, GamePlayer},
+    services::game::{rules::RuleSet, AttrMap, Game, GamePlayer},
     utils::types::{GameID, GameSlot, PlayerID, SessionID},
 };
+
+use super::NetworkAddress;
 
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -604,5 +606,176 @@ impl From<GameSettings> for u16 {
 impl From<u16> for GameSettings {
     fn from(value: u16) -> Self {
         GameSettings::from_bits_retain(value)
+    }
+}
+
+const VSTR: &str = "ME3-295976325-179181965240128";
+
+#[derive(TdfSerialize, TdfTyped)]
+pub enum GameSetupContext {
+    /// Context without additional data
+    #[tdf(key = 0x0, tag = "VALU")]
+    Dataless {
+        #[tdf(tag = "DCTX")]
+        context: DatalessContext,
+    },
+    /// Context added from matchmaking
+    #[tdf(key = 0x3, tag = "VALU")]
+    Matchmaking {
+        #[tdf(tag = "FIT")]
+        fit_score: u16,
+        #[tdf(tag = "MAXF")]
+        max_fit_score: u16,
+        #[tdf(tag = "MSID")]
+        session_id: PlayerID,
+        #[tdf(tag = "RSLT")]
+        result: MatchmakingResult,
+        #[tdf(tag = "MSID")]
+        player_id: PlayerID,
+    },
+}
+
+#[derive(Debug, Copy, Clone, TdfSerialize, TdfTyped)]
+#[repr(u8)]
+pub enum MatchmakingResult {
+    // CreatedGame = 0x0,
+    // JoinedNewGame = 0x1,
+    JoinedExistingGame = 0x2,
+    // TimedOut = 0x3,
+    // Canceled = 0x4,
+    // Terminated = 0x5,
+    // GameSetupFailed = 0x6,
+}
+
+#[derive(Debug, Copy, Clone, TdfSerialize, TdfTyped)]
+#[repr(u8)]
+pub enum DatalessContext {
+    /// Session created the game
+    CreateGameSetup = 0x0,
+    /// Session joined by ID
+    JoinGameSetup = 0x1,
+    // IndirectJoinGameFromQueueSetup = 0x2,
+    // IndirectJoinGameFromReservationContext = 0x3,
+    // HostInjectionSetupContext = 0x4,
+}
+
+pub struct GameSetupResponse<'a> {
+    pub game: &'a Game,
+    pub context: GameSetupContext,
+}
+
+impl TdfSerialize for GameSetupResponse<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        let game = self.game;
+        let host = game.players.first().expect("Missing game host for setup");
+
+        w.group(b"GAME", |w| {
+            w.tag_list_iter_owned(b"ADMN", game.players.iter().map(|player| player.player.id));
+            w.tag_ref(b"ATTR", &game.attributes);
+            w.tag_list_slice::<u8>(b"CAP", &[4, 0]);
+            w.tag_u32(b"GID", game.id);
+            w.tag_str(b"GNAM", &host.player.display_name);
+            w.tag_u64(b"GPVH", 0x5a4f2b378b715c6);
+            w.tag_owned(b"GSET", game.settings.bits());
+            w.tag_u64(b"GSID", 0x4000000a76b645);
+            w.tag_ref(b"GSTA", &game.state);
+
+            w.tag_str_empty(b"GTYP");
+            {
+                w.tag_list_start(b"HNET", TdfType::Group, 1);
+                w.write_byte(2);
+                if let NetworkAddress::AddressPair(pair) = &host.net.addr {
+                    TdfSerialize::serialize(pair, w)
+                }
+            }
+
+            w.tag_u32(b"HSES", host.player.id);
+            w.tag_zero(b"IGNO");
+            w.tag_u8(b"MCAP", 4);
+            w.tag_ref(b"NQOS", &host.net.qos);
+            w.tag_zero(b"NRES");
+            w.tag_zero(b"NTOP");
+            w.tag_str_empty(b"PGID");
+            w.tag_blob_empty(b"PGSR");
+
+            // Platform host info
+            w.group(b"PHST", |w| {
+                w.tag_u32(b"HPID", host.player.id);
+                w.tag_zero(b"HSLT");
+            });
+
+            w.tag_u8(b"PRES", 0x1);
+            w.tag_str_empty(b"PSAS");
+            // Queue capacity
+            w.tag_zero(b"QCAP");
+            // Shared game randomness seed?
+            w.tag_u32(b"SEED", 0x4cbc8585);
+            // tEAM capacity
+            w.tag_zero(b"TCAP");
+
+            // Topology host info
+            w.group(b"THST", |w| {
+                w.tag_u32(b"HPID", host.player.id);
+                w.tag_zero(b"HSLT");
+            });
+
+            w.tag_str(b"UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
+            w.tag_u8(b"VOIP", 0x2);
+            w.tag_str(b"VSTR", VSTR);
+            w.tag_blob_empty(b"XNNC");
+            w.tag_blob_empty(b"XSES");
+        });
+
+        // Player list
+        w.tag_list_start(b"PROS", TdfType::Group, game.players.len());
+        for (slot, player) in game.players.iter().enumerate() {
+            player.encode(game.id, slot, w);
+        }
+
+        w.tag_ref(b"REAS", &self.context);
+    }
+}
+
+pub struct GetGameDetails<'a> {
+    pub game: &'a Game,
+}
+
+impl TdfSerialize for GetGameDetails<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        let game = self.game;
+        let host = game.players.first().expect("Missing game host for details");
+
+        w.tag_list_start(b"GDAT", TdfType::Group, 1);
+        w.group_body(|w| {
+            w.tag_list_iter_owned(b"ADMN", game.players.iter().map(|player| player.player.id));
+            w.tag_ref(b"ATTR", &game.attributes);
+            w.tag_list_slice(b"CAP", &[4u8, 0u8]);
+
+            w.tag_u32(b"GID", game.id);
+            w.tag_str(b"GNAM", &host.player.display_name);
+            w.tag_u16(b"GSET", game.settings.bits());
+            w.tag_ref(b"GSTA", &game.state);
+            {
+                w.tag_list_start(b"HNET", TdfType::Group, 1);
+                w.write_byte(2);
+                if let NetworkAddress::AddressPair(pair) = &host.net.addr {
+                    TdfSerialize::serialize(pair, w)
+                }
+            }
+            w.tag_u32(b"HOST", host.player.id);
+            w.tag_zero(b"NTOP");
+
+            w.tag_list_slice(b"PCNT", &[1u8, 0u8]);
+
+            w.tag_u8(b"PRES", 0x2);
+            w.tag_str(b"PSAS", "ea-sjc");
+            w.tag_str_empty(b"PSID");
+            w.tag_zero(b"QCAP");
+            w.tag_zero(b"QCNT");
+            w.tag_zero(b"SID");
+            w.tag_zero(b"TCAP");
+            w.tag_u8(b"VOIP", 0x2);
+            w.tag_str(b"VSTR", VSTR);
+        });
     }
 }
