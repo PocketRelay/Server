@@ -1,5 +1,5 @@
 use crate::utils::types::PlayerID;
-use serde::{ser::SerializeStruct, Serialize};
+use serde::Serialize;
 use std::{fmt::Debug, net::Ipv4Addr};
 use tdf::{GroupSlice, TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped};
 
@@ -190,24 +190,12 @@ pub struct IpPairAddress {
     pub internal: PairAddress,
 }
 
-#[derive(Debug, Clone, TdfDeserialize, TdfSerialize, TdfTyped)]
+#[derive(Debug, Clone, TdfDeserialize, TdfSerialize, TdfTyped, Serialize)]
 #[tdf(group)]
 pub struct PairAddress {
     #[tdf(tag = "IP", into = u32)]
+    #[serde(rename = "address")]
     pub addr: Ipv4Addr,
     #[tdf(tag = "PORT")]
     pub port: u16,
-}
-
-impl Serialize for PairAddress {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // TODO: Dashboard likely incompatible now due to serialize change
-        let mut s = serializer.serialize_struct("PairAddress", 2)?;
-        s.serialize_field("address", &self.addr)?;
-        s.serialize_field("port", &self.port)?;
-        s.end()
-    }
 }
