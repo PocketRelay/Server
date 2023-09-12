@@ -14,7 +14,7 @@ use crate::{
     database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
     services::{
-        game::{manager::GameManager, models::RemoveReason, GamePlayer, RemovePlayerMessage},
+        game::{manager::GameManager, GamePlayer},
         sessions::Sessions,
     },
     session::models::{NetworkAddress, Port, QosNetworkData, UpdateExtDataAttr},
@@ -174,6 +174,7 @@ pub trait PushExt {
 }
 
 impl PushExt for Link<Session> {
+    #[inline]
     fn push(&self, packet: Packet) {
         let _ = self.do_send(WriteMessage(packet));
     }
@@ -196,7 +197,7 @@ impl Handler<GetPlayerGameMessage> for Session {
 }
 
 #[derive(Message)]
-#[msg(rtype = "Option<LookupResponse>")]
+#[msg(rtype = "LookupResponse")]
 pub struct GetLookupMessage;
 
 impl Handler<GetLookupMessage> for Session {
@@ -208,18 +209,12 @@ impl Handler<GetLookupMessage> for Session {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         let data = &self.data;
-        let player = match &data.player {
-            Some(value) => value,
-            None => return Mr(None),
-        };
 
         let response = LookupResponse {
             session_data: data.clone(),
-            player_id: player.id,
-            display_name: player.display_name.clone(),
         };
 
-        Mr(Some(response))
+        Mr(response)
     }
 }
 
@@ -513,30 +508,10 @@ impl Session {
         };
 
         let game_manager = self.game_manager.clone();
-
-        if let Some(game_id) = self.data.game.take() {
-            // Remove the player from the game
-            tokio::spawn(async move {
-                // Obtain the current game
-                let game = match game_manager.get_game(game_id).await {
-                    Some(value) => value,
-                    None => return,
-                };
-
-                // Send the remove message
-                let _ = game
-                    .send(RemovePlayerMessage {
-                        id: player_id,
-                        reason: RemoveReason::PlayerLeft,
-                    })
-                    .await;
-            });
-        } else {
-            // Remove the player from matchmaking if present
-            tokio::spawn(async move {
-                game_manager.remove_queue(player_id).await;
-            });
-        }
+        let game = self.data.game.take();
+        tokio::spawn(async move {
+            game_manager.remove_session(game, player_id).await;
+        });
     }
 
     /// Removes the player from the authenticated sessions list

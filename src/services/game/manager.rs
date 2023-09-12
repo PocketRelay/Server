@@ -1,8 +1,8 @@
 use super::{
-    models::{DatalessContext, GameSettings, GameSetupContext, PlayerState},
+    models::{DatalessContext, GameSettings, GameSetupContext, PlayerState, RemoveReason},
     rules::RuleSet,
     AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
-    GameSnapshot,
+    GameSnapshot, RemovePlayerMessage,
 };
 use crate::{
     services::game::models::AsyncMatchmakingStatus,
@@ -107,6 +107,25 @@ impl GameManager {
         }
 
         (snapshots, more)
+    }
+
+    pub async fn remove_session(&self, game: Option<u32>, player_id: PlayerID) {
+        if let Some(game) = game {
+            let game = match self.get_game(game).await {
+                Some(value) => value,
+                None => return,
+            };
+
+            // Send the remove message
+            let _ = game
+                .send(RemovePlayerMessage {
+                    id: player_id,
+                    reason: RemoveReason::PlayerLeft,
+                })
+                .await;
+        } else {
+            self.remove_queue(player_id).await;
+        }
     }
 
     pub async fn remove_queue(&self, player_id: PlayerID) {

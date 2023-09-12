@@ -43,10 +43,7 @@ pub async fn handle_lookup_user(
         .ok_or(UserSessionsError::UserNotFound)?;
 
     // Get the lookup response from the session
-    let response = session
-        .send(GetLookupMessage)
-        .await?
-        .ok_or(UserSessionsError::UserNotFound)?;
+    let response = session.send(GetLookupMessage).await?;
 
     Ok(Blaze(response))
 }

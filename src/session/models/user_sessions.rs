@@ -158,8 +158,6 @@ pub struct LookupRequest {
 /// User lookup response
 pub struct LookupResponse {
     pub session_data: SessionData,
-    pub player_id: PlayerID,
-    pub display_name: String,
 }
 
 impl TdfSerialize for LookupResponse {
@@ -172,12 +170,18 @@ impl TdfSerialize for LookupResponse {
             },
         );
         w.tag_owned(b"FLGS", 2u8);
+
+        let player = match &self.session_data.player {
+            Some(value) => value,
+            None => return,
+        };
+
         // The lookup user identification
         w.tag_alt(
             b"USER",
             UserIdentification {
-                id: self.player_id,
-                name: &self.display_name,
+                id: player.id,
+                name: &player.display_name,
             },
         );
     }
