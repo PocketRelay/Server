@@ -1,12 +1,15 @@
 use super::{
-    models::{DatalessContext, GameSettings, GameSetupContext, PlayerState, RemoveReason},
+    models::{DatalessContext, GameSetupContext},
     rules::RuleSet,
     AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
     GameSnapshot, RemovePlayerMessage,
 };
 use crate::{
-    services::game::models::AsyncMatchmakingStatus,
-    session::{packet::Packet, PushExt},
+    session::{
+        models::game_manager::{AsyncMatchmakingStatus, GameSettings, PlayerState, RemoveReason},
+        packet::Packet,
+        PushExt,
+    },
     utils::{
         components::game_manager,
         hashing::IntHashMap,

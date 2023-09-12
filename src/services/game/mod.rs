@@ -2,8 +2,14 @@ use self::{manager::GameManager, rules::RuleSet};
 use crate::{
     database::entities::Player,
     session::{
-        packet::Packet, router::RawBlaze, NetData, PushExt, Session, SessionLink, SetGameMessage,
-        SubscriberMessage,
+        models::game_manager::{
+            AdminListChange, AdminListOperation, AttributesChange, GameSettings, GameState,
+            HostMigrateFinished, HostMigrateStart, JoinComplete, PlayerJoining, PlayerRemoved,
+            PlayerState, PlayerStateChange, RemoveReason, SettingChange, StateChange,
+        },
+        packet::Packet,
+        router::RawBlaze,
+        NetData, PushExt, Session, SessionLink, SetGameMessage, SubscriberMessage,
     },
     utils::{
         components::game_manager,
@@ -153,21 +159,22 @@ impl GamePlayer {
     }
 
     pub fn encode<S: TdfSerializer>(&self, game_id: GameID, slot: usize, w: &mut S) {
-        w.tag_blob_empty(b"BLOB");
-        w.tag_u8(b"EXID", 0);
-        w.tag_owned(b"GID", game_id);
-        w.tag_u32(b"LOC", 0x64654445);
-        w.tag_str(b"NAME", &self.player.display_name);
-        w.tag_u32(b"PID", self.player.id);
-        w.tag_ref(b"PNET", &self.net.addr);
-        w.tag_owned(b"SID", slot);
-        w.tag_u8(b"SLOT", 0);
-        w.tag_ref(b"STAT", &self.state);
-        w.tag_u16(b"TIDX", 0xffff);
-        w.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
-        w.tag_alt(b"UGID", ObjectId::new_raw(0, 0, 0));
-        w.tag_u32(b"UID", self.player.id);
-        w.tag_group_end();
+        w.group_body(|w| {
+            w.tag_blob_empty(b"BLOB");
+            w.tag_u8(b"EXID", 0);
+            w.tag_owned(b"GID", game_id);
+            w.tag_u32(b"LOC", 0x64654445);
+            w.tag_str(b"NAME", &self.player.display_name);
+            w.tag_u32(b"PID", self.player.id);
+            w.tag_ref(b"PNET", &self.net.addr);
+            w.tag_owned(b"SID", slot);
+            w.tag_u8(b"SLOT", 0);
+            w.tag_ref(b"STAT", &self.state);
+            w.tag_u16(b"TIDX", 0xffff);
+            w.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
+            w.tag_alt(b"UGID", ObjectId::new_raw(0, 0, 0));
+            w.tag_u32(b"UID", self.player.id);
+        });
     }
 }
 
