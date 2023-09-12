@@ -12,12 +12,11 @@ use self::{
 };
 use crate::{
     database::entities::Player,
-    middleware::blaze_upgrade::BlazeScheme,
     services::{
         game::{manager::GameManager, GamePlayer},
         sessions::Sessions,
     },
-    session::models::{NetworkAddress, Port, QosNetworkData},
+    session::models::{NetworkAddress, QosNetworkData},
     utils::{
         components::{self, user_sessions},
         types::{GameID, PlayerID, SessionID},
@@ -43,8 +42,6 @@ pub struct Session {
     addr: Ipv4Addr,
     /// Packet writer sink for the session
     writer: SinkLink<Packet>,
-    /// The session scheme
-    host_target: SessionHostTarget,
 
     /// Data associated with this session
     data: Option<SessionExtData>,
@@ -224,27 +221,6 @@ impl Handler<GetPlayerMessage> for Session {
     ) -> Self::Response {
         Mr(self.data.as_ref().map(|data| data.player.clone()))
     }
-}
-
-#[derive(Message)]
-#[msg(rtype = "SessionHostTarget")]
-pub struct GetHostTarget;
-
-impl Handler<GetHostTarget> for Session {
-    type Response = Mr<GetHostTarget>;
-
-    fn handle(&mut self, _msg: GetHostTarget, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        Mr(self.host_target.clone())
-    }
-}
-
-#[derive(Clone)]
-pub struct SessionHostTarget {
-    pub scheme: BlazeScheme,
-    pub host: Box<str>,
-    pub port: Port,
-    // TODO: Drop support for non-local http soon
-    pub local_http: bool,
 }
 
 #[derive(Message)]
@@ -472,7 +448,6 @@ impl Handler<SetGameMessage> for Session {
 impl Session {
     pub fn new(
         id: SessionID,
-        host_target: SessionHostTarget,
         writer: SinkLink<Packet>,
         addr: Ipv4Addr,
         router: Arc<BlazeRouter>,
@@ -483,7 +458,6 @@ impl Session {
             id,
             writer,
             data: None,
-            host_target,
             addr,
             router,
             game_manager,

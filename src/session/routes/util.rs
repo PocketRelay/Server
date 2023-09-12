@@ -7,7 +7,7 @@ use crate::{
             util::*,
         },
         router::{Blaze, Extension, SessionAuth},
-        GetHostTarget, SessionLink, SubscriberMessage,
+        SessionLink, SubscriberMessage,
     },
 };
 use base64ct::{Base64, Encoding};
@@ -78,9 +78,8 @@ pub async fn handle_get_ticker_server() -> Blaze<TickerServer> {
 ///     }
 /// }
 /// ```
-pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Blaze<PreAuthResponse>> {
-    let host_target = session.send(GetHostTarget).await?;
-    Ok(Blaze(PreAuthResponse { host_target }))
+pub async fn handle_pre_auth() -> ServerResult<Blaze<PreAuthResponse>> {
+    Ok(Blaze(PreAuthResponse))
 }
 
 /// Handles post authentication requests. This provides information about other
@@ -149,11 +148,10 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 /// }
 /// ```
 pub async fn handle_fetch_client_config(
-    session: SessionLink,
     Blaze(req): Blaze<FetchConfigRequest>,
 ) -> ServerResult<Blaze<FetchConfigResponse>> {
     let config = match req.id.as_ref() {
-        "ME3_DATA" => data_config(&session).await,
+        "ME3_DATA" => data_config(),
         "ME3_MSG" => messages(),
         "ME3_ENT" => load_entitlements(),
         "ME3_DIME" => {
@@ -424,22 +422,8 @@ impl Message {
 /// Image Server: http://eaassets-a.akamaihd.net/gameplayservices/prod/MassEffect/3/
 /// Telemetry Server: 159.153.235.32:9988
 ///
-async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
-    let host_target = match session.send(GetHostTarget).await {
-        Ok(value) => value,
-        Err(_) => return TdfMap::with_capacity(0),
-    };
-
-    let prefix = if host_target.local_http {
-        format!("http://127.0.0.1:{}", LOCAL_HTTP_PORT)
-    } else {
-        format!(
-            "{}{}:{}",
-            host_target.scheme.value(),
-            host_target.host,
-            host_target.port
-        )
-    };
+fn data_config() -> TdfMap<String, String> {
+    let prefix = format!("http://127.0.0.1:{}", LOCAL_HTTP_PORT);
 
     let tele_port = TELEMETRY_PORT;
 

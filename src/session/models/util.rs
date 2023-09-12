@@ -1,5 +1,5 @@
 use super::Port;
-use crate::{session::SessionHostTarget, utils::types::PlayerID};
+use crate::utils::types::PlayerID;
 use std::borrow::Cow;
 use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType};
 
@@ -87,9 +87,7 @@ pub const PING_PERIOD: &str = "15s";
 pub const PING_SITE_ALIAS: &str = "ea-sjc";
 
 /// Structure for the response to a pre authentication request
-pub struct PreAuthResponse {
-    pub host_target: SessionHostTarget,
-}
+pub struct PreAuthResponse;
 
 impl TdfSerialize for PreAuthResponse {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
@@ -129,11 +127,8 @@ impl TdfSerialize for PreAuthResponse {
 
         // Quality Of Service Server details
         w.group(b"QOSS", |w| {
-            let (http_host, http_port) = if self.host_target.local_http {
-                ("127.0.0.1", LOCAL_HTTP_PORT)
-            } else {
-                (&self.host_target.host as &str, self.host_target.port)
-            };
+            let http_host = "127.0.0.1";
+            let http_port = LOCAL_HTTP_PORT;
 
             // Bioware Primary Server
             w.group(b"BWPS", |w| {

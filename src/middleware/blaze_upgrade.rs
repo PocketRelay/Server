@@ -1,14 +1,10 @@
-use crate::session::SessionHostTarget;
 use axum::{
     extract::FromRequestParts,
-    http::{HeaderValue, Method, StatusCode},
+    http::{Method, StatusCode},
     response::IntoResponse,
 };
 use futures_util::future::BoxFuture;
-use hyper::{
-    upgrade::{OnUpgrade, Upgraded},
-    HeaderMap,
-};
+use hyper::upgrade::{OnUpgrade, Upgraded};
 use std::future::ready;
 use thiserror::Error;
 
@@ -27,53 +23,11 @@ pub enum BlazeUpgradeError {
 pub struct BlazeUpgrade {
     /// The upgrade handle
     on_upgrade: OnUpgrade,
-    host_target: SessionHostTarget,
 }
 
 /// HTTP request upgraded into a Blaze socket along with
 /// extra information
-pub struct BlazeSocket {
-    /// The upgraded connection
-    pub upgrade: Upgraded,
-    /// The client side target for this host
-    pub host_target: SessionHostTarget,
-}
-
-#[derive(Default, Clone, Copy)]
-pub enum BlazeScheme {
-    /// HTTP Scheme (http://)
-    #[default]
-    Http,
-    /// HTTPS Scheme (https://)
-    Https,
-}
-
-impl BlazeScheme {
-    /// Provides the default port used by the scheme
-    fn default_port(&self) -> u16 {
-        match self {
-            BlazeScheme::Http => 80,
-            BlazeScheme::Https => 443,
-        }
-    }
-
-    /// Returns the scheme value
-    pub fn value(&self) -> &'static str {
-        match self {
-            BlazeScheme::Http => "http://",
-            BlazeScheme::Https => "https://",
-        }
-    }
-}
-
-impl From<&HeaderValue> for BlazeScheme {
-    fn from(value: &HeaderValue) -> Self {
-        match value.as_bytes() {
-            b"https" => BlazeScheme::Https,
-            _ => BlazeScheme::default(),
-        }
-    }
-}
+pub struct BlazeSocket(pub Upgraded);
 
 impl BlazeUpgrade {
     /// Upgrades the underlying hook returning the newly created socket
@@ -84,65 +38,9 @@ impl BlazeUpgrade {
             Err(_) => return Err(BlazeUpgradeError::FailedUpgrade),
         };
 
-        Ok(BlazeSocket {
-            upgrade,
-            host_target: self.host_target,
-        })
-    }
-
-    /// Extracts the blaze scheme header from the provided headers map
-    /// returning the scheme. On failure will return the default scheme
-    fn extract_scheme(headers: &HeaderMap) -> BlazeScheme {
-        let header = match headers.get(HEADER_SCHEME) {
-            Some(value) => value,
-            None => return BlazeScheme::default(),
-        };
-        let scheme: BlazeScheme = header.into();
-        scheme
-    }
-
-    /// Extracts the client port from the provided headers map.
-    ///
-    /// `headers` The header map
-    fn extract_port(headers: &HeaderMap) -> Option<u16> {
-        // Get the port header
-        let header = headers.get(HEADER_PORT)?;
-        // Convert the header to a string
-        let header = header.to_str().ok()?;
-        // Parse the header value
-        header.parse().ok()
-    }
-
-    /// Extracts the host address from the provided headers map
-    fn extract_host(headers: &HeaderMap) -> Option<Box<str>> {
-        // Get the port header
-        let header = headers.get(HEADER_HOST)?;
-        // Convert the header to a string
-        let header = header.to_str().ok()?;
-        Some(Box::from(header))
-    }
-
-    /// Extracts the client local http setting from the provided headers map.
-    ///
-    /// `headers` The header map
-    fn extract_local_http(headers: &HeaderMap) -> Option<bool> {
-        // Get the port header
-        let header = headers.get(HEADER_LOCAL_HTTP)?;
-        // Convert the header to a string
-        let header = header.to_str().ok()?;
-        // Parse the header value
-        header.parse().ok()
+        Ok(BlazeSocket(upgrade))
     }
 }
-
-/// Header for the Pocket Relay connection scheme used by the client
-const HEADER_SCHEME: &str = "X-Pocket-Relay-Scheme";
-/// Header for the Pocket Relay connection port used by the client
-const HEADER_PORT: &str = "X-Pocket-Relay-Port";
-/// Header for the Pocket Relay connection host used by the client
-const HEADER_HOST: &str = "X-Pocket-Relay-Host";
-/// Header to tell the server to use local HTTP
-const HEADER_LOCAL_HTTP: &str = "X-Pocket-Relay-Local-Http";
 
 impl<S> FromRequestParts<S> for BlazeUpgrade
 where
@@ -170,34 +68,7 @@ where
             None => return Box::pin(ready(Err(BlazeUpgradeError::CannotUpgrade))),
         };
 
-        let headers = &parts.headers;
-
-        // Get the client scheme header
-        let scheme: BlazeScheme = BlazeUpgrade::extract_scheme(headers);
-
-        // Get the client port header
-        let port: u16 = match BlazeUpgrade::extract_port(headers) {
-            Some(value) => value,
-            None => scheme.default_port(),
-        };
-
-        // Get the client host
-        let host: Box<str> = match BlazeUpgrade::extract_host(headers) {
-            Some(value) => value,
-            None => return Box::pin(ready(Err(BlazeUpgradeError::CannotUpgrade))),
-        };
-
-        let local_http: bool = BlazeUpgrade::extract_local_http(headers).unwrap_or_default();
-
-        Box::pin(ready(Ok(Self {
-            on_upgrade,
-            host_target: SessionHostTarget {
-                scheme,
-                host,
-                port,
-                local_http,
-            },
-        })))
+        Box::pin(ready(Ok(Self { on_upgrade })))
     }
 }
 

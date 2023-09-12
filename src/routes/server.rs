@@ -4,7 +4,11 @@
 use crate::{
     config::{RuntimeConfig, VERSION},
     database::entities::players::PlayerRole,
-    middleware::{auth::AdminAuth, blaze_upgrade::BlazeUpgrade, ip_address::IpAddress},
+    middleware::{
+        auth::AdminAuth,
+        blaze_upgrade::{BlazeSocket, BlazeUpgrade},
+        ip_address::IpAddress,
+    },
     services::{game::manager::GameManager, sessions::Sessions},
     session::{packet::PacketCodec, router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
@@ -84,7 +88,7 @@ pub async fn upgrade(
     // TODO: Socket address extraction for forwarded reverse proxy
 
     tokio::spawn(async move {
-        let socket = match upgrade.upgrade().await {
+        let BlazeSocket(upgrade) = match upgrade.upgrade().await {
             Ok(value) => value,
             Err(err) => {
                 error!("Failed to upgrade blaze socket: {}", err);
@@ -96,22 +100,14 @@ pub async fn upgrade(
             let session_id = SESSION_IDS.fetch_add(1, Ordering::AcqRel);
 
             // Attach reader and writers to the session context
-            let (read, write) = split(socket.upgrade);
+            let (read, write) = split(upgrade);
             let read = FramedRead::new(read, PacketCodec);
             let write = FramedWrite::new(write, PacketCodec);
 
             ctx.attach_stream(read, true);
             let writer = ctx.attach_sink(write);
 
-            Session::new(
-                session_id,
-                socket.host_target,
-                writer,
-                addr,
-                router,
-                game_manager,
-                sessions,
-            )
+            Session::new(session_id, writer, addr, router, game_manager, sessions)
         });
     });
 
