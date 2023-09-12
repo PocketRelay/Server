@@ -10,6 +10,7 @@ use crate::{
     session::models::errors::GlobalError,
     utils::{
         components::{component_key, ComponentKey},
+        hashing::IntHasher,
         types::BoxFuture,
     },
 };
@@ -19,8 +20,8 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     convert::Infallible,
-    future::{ready, Future},
-    hash::{BuildHasherDefault, Hasher},
+    future::ready,
+    hash::BuildHasherDefault,
     marker::PhantomData,
     sync::Arc,
 };
@@ -73,11 +74,11 @@ impl PacketRequest {
     }
 }
 
-type AnyMap = HashMap<TypeId, Box<dyn Any + Send + Sync>, BuildHasherDefault<IdHasher>>;
+type AnyMap = HashMap<TypeId, Box<dyn Any + Send + Sync>, BuildHasherDefault<IntHasher>>;
 
 pub struct BlazeRouterBuilder {
     /// Map for looking up a route based on the component key
-    routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<ComponentKeyHasher>>,
+    routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<IntHasher>>,
     extensions: AnyMap,
 }
 
@@ -124,7 +125,7 @@ impl BlazeRouterBuilder {
 
 pub struct BlazeRouter {
     /// Map for looking up a route based on the component key
-    routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<ComponentKeyHasher>>,
+    routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<IntHasher>>,
     extensions: Arc<AnyMap>,
 }
 
@@ -147,47 +148,6 @@ impl BlazeRouter {
             packet,
             extensions: self.extensions.clone(),
         }))
-    }
-}
-
-/// "Hasher" used by the router map that just directly stores the integer value
-/// from the component key as no hashing is required
-#[derive(Default)]
-pub struct ComponentKeyHasher(u32);
-
-impl Hasher for ComponentKeyHasher {
-    fn finish(&self) -> u64 {
-        self.0 as u64
-    }
-
-    fn write(&mut self, _bytes: &[u8]) {
-        panic!("Attempted to use component key hasher to hash bytes")
-    }
-
-    fn write_u32(&mut self, i: u32) {
-        self.0 = i;
-    }
-}
-
-// With TypeIds as keys, there's no need to hash them. They are already hashes
-// themselves, coming from the compiler. The IdHasher just holds the u64 of
-// the TypeId, and then returns it, instead of doing any bit fiddling.
-#[derive(Default)]
-pub struct IdHasher(u64);
-
-impl Hasher for IdHasher {
-    fn write(&mut self, _: &[u8]) {
-        panic!("Attempted to use id hasher to hash bytes")
-    }
-
-    #[inline]
-    fn write_u64(&mut self, id: u64) {
-        self.0 = id;
-    }
-
-    #[inline]
-    fn finish(&self) -> u64 {
-        self.0
     }
 }
 
