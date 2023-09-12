@@ -243,6 +243,7 @@ pub struct SessionHostTarget {
     pub scheme: BlazeScheme,
     pub host: Box<str>,
     pub port: Port,
+    // TODO: Drop support for non-local http soon
     pub local_http: bool,
 }
 
