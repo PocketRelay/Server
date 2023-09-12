@@ -4,7 +4,7 @@ use crate::{
     services::game::{
         models::{GameSettings, GameState, PlayerState, RemoveReason},
         rules::RuleSet,
-        Attributes,
+        AttrMap,
     },
     utils::types::{GameID, PlayerID, SessionID},
 };
@@ -29,7 +29,7 @@ pub enum GameManagerError {
 pub struct CreateGameRequest {
     /// The games initial attributes
     #[tdf(tag = "ATTR")]
-    pub attributes: Attributes,
+    pub attributes: AttrMap,
     /// The games initial setting
     #[tdf(tag = "GSET")]
     pub setting: GameSettings,
@@ -62,7 +62,7 @@ pub struct RemovePlayerRequest {
 pub struct SetAttributesRequest {
     /// The new game attributes
     #[tdf(tag = "ATTR")]
-    pub attributes: Attributes,
+    pub attributes: AttrMap,
     /// The ID of the game to set the attributes for
     #[tdf(tag = "GID")]
     pub game_id: GameID,
