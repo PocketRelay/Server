@@ -41,7 +41,7 @@ pub async fn handle_join_game(
 
     // Find the game ID for the target session
     let game_id = session
-        .send(GetPlayerGameMessage {})
+        .send(GetPlayerGameMessage)
         .await?
         .ok_or(GameManagerError::InvalidGameId)?;
 

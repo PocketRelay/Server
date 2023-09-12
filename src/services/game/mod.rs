@@ -101,7 +101,7 @@ pub struct GamePlayer {
     /// Session address
     pub link: Link<Session>,
     /// Networking information for the player
-    pub net: NetData,
+    pub net: Arc<NetData>,
     /// The mesh state of the player
     pub state: PlayerState,
 }
@@ -115,7 +115,7 @@ pub struct GamePlayerSnapshot {
     /// The player name of the snapshot
     pub display_name: Box<str>,
     /// The player net data of the snapshot if collected
-    pub net: Option<NetData>,
+    pub net: Option<Arc<NetData>>,
 }
 
 impl GamePlayer {
@@ -125,7 +125,7 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(player: Arc<Player>, net: NetData, link: Link<Session>) -> Self {
+    pub fn new(player: Arc<Player>, net: Arc<NetData>, link: Link<Session>) -> Self {
         Self {
             player,
             link,

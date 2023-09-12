@@ -4,8 +4,8 @@
 
 use self::{
     models::user_sessions::{
-        HardwareFlags, LookupResponse, NotifyUserAdded, NotifyUserUpdated, UserDataFlags,
-        UserIdentification, UserSessionExtendedData, UserSessionExtendedDataUpdate,
+        HardwareFlags, LookupResponse, NotifyUserAdded, NotifyUserRemoved, NotifyUserUpdated,
+        UserDataFlags, UserIdentification, UserSessionExtendedData, UserSessionExtendedDataUpdate,
     },
     packet::{Packet, PacketDebug},
     router::BlazeRouter,
@@ -20,7 +20,7 @@ use crate::{
     session::models::{NetworkAddress, Port, QosNetworkData},
     utils::{
         components::{self, user_sessions},
-        types::{GameID, SessionID},
+        types::{GameID, PlayerID, SessionID},
     },
 };
 use interlink::prelude::*;
@@ -61,9 +61,93 @@ pub struct SessionData {
     /// player model from the database
     player: Option<Arc<Player>>,
     /// Networking information
-    net: NetData,
+    net: Arc<NetData>,
     /// The id of the game if connected to one
     game: Option<GameID>,
+
+    /// Sessions that are subscribed to changes for this session data
+    subscribers: Vec<(PlayerID, SessionLink)>,
+}
+
+impl SessionData {
+    fn ext(&self) -> UserSessionExtendedData {
+        UserSessionExtendedData {
+            net: self.net.clone(),
+            game: self.game,
+        }
+    }
+
+    fn add_subscriber(&mut self, player_id: PlayerID, subscriber: SessionLink) {
+        // Cannot add subscribers if theres no player data
+        let player = match &self.player {
+            Some(value) => value,
+            None => return,
+        };
+
+        // Create the details packets
+        let added_notify = Packet::notify(
+            user_sessions::COMPONENT,
+            user_sessions::USER_ADDED,
+            NotifyUserAdded {
+                session_data: self.ext(),
+                user: UserIdentification::from_player(player),
+            },
+        );
+
+        // Create update notifying the user of the subscription
+        let update_notify = Packet::notify(
+            user_sessions::COMPONENT,
+            user_sessions::USER_UPDATED,
+            NotifyUserUpdated {
+                flags: UserDataFlags::SUBSCRIBED | UserDataFlags::ONLINE,
+                player_id: player.id,
+            },
+        );
+
+        self.subscribers.push((player_id, subscriber.clone()));
+        subscriber.push(added_notify);
+        subscriber.push(update_notify);
+    }
+
+    fn remove_subscriber(&mut self, player_id: PlayerID) {
+        let index = match self.subscribers.iter().position(|(id, _)| id == player_id) {
+            Some(value) => value,
+            None => return,
+        };
+
+        let (_, subscriber) = self.subscribers.swap_remove(index);
+
+        // Create the details packets
+        let removed_notify = Packet::notify(
+            user_sessions::COMPONENT,
+            user_sessions::USER_REMOVED,
+            NotifyUserRemoved { player_id },
+        );
+
+        subscriber.push(removed_notify)
+    }
+
+    /// Publishes changes of the session data to all the
+    /// subscribed session links
+    fn publish_update(&self) {
+        let player = match &self.player {
+            Some(player) => player,
+            None => return,
+        };
+
+        let packet = Packet::notify(
+            user_sessions::COMPONENT,
+            user_sessions::USER_SESSION_EXTENDED_DATA_UPDATE,
+            UserSessionExtendedDataUpdate {
+                user_id: player.id,
+                data: self.ext(),
+            },
+        );
+
+        for (_, subscriber) in self.subscribers {
+            subscriber.push(packet);
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -71,6 +155,26 @@ pub struct NetData {
     pub addr: NetworkAddress,
     pub qos: QosNetworkData,
     pub hardware_flags: HardwareFlags,
+}
+
+impl NetData {
+    // Re-creates the current net data using the provided address and QOS data
+    pub fn with_basic(&self, addr: NetworkAddress, qos: QosNetworkData) -> Self {
+        Self {
+            addr,
+            qos,
+            hardware_flags: self.hardware_flags,
+        }
+    }
+
+    /// Re-creates the current net data using the provided hardware flags
+    pub fn with_hardware_flags(&self, flags: HardwareFlags) -> Self {
+        Self {
+            addr: self.addr.clone(),
+            qos: self.qos,
+            hardware_flags: flags,
+        }
+    }
 }
 
 impl Service for Session {
@@ -194,7 +298,7 @@ impl Handler<GetPlayerGameMessage> for Session {
 }
 
 #[derive(Message)]
-#[msg(rtype = "LookupResponse")]
+#[msg(rtype = "Option<LookupResponse>")]
 pub struct GetLookupMessage;
 
 impl Handler<GetLookupMessage> for Session {
@@ -206,12 +310,20 @@ impl Handler<GetLookupMessage> for Session {
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
         let data = &self.data;
-
-        let response = LookupResponse {
-            session_data: data.clone(),
+        let player = match &data.player {
+            Some(value) => value.clone(),
+            None => return Mr(None),
         };
 
-        Mr(response)
+        let response = LookupResponse {
+            player,
+            extended_data: UserSessionExtendedData {
+                net: data.net.clone(),
+                game: data.game,
+            },
+        };
+
+        Mr(Some(response))
     }
 }
 
@@ -258,28 +370,34 @@ impl ErrorHandler<io::Error> for Session {
     }
 }
 
-/// Message telling the session to inform the clients of
-/// a change in session data
+/// Message for creating a session update packet for the
+/// current session
 #[derive(Message)]
-pub struct UpdateClientMessage;
+#[msg(rtype = "Option<Packet>")]
+pub struct CreateUserSessionUpdate;
 
-impl Handler<UpdateClientMessage> for Session {
-    type Response = ();
+impl Handler<CreateUserSessionUpdate> for Session {
+    type Response = Mr<CreateUserSessionUpdate>;
+    fn handle(
+        &mut self,
+        msg: CreateUserSessionUpdate,
+        ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
+        let player = match &self.data.player {
+            Some(value) => value,
+            None => return Mr(None),
+        };
 
-    fn handle(&mut self, _msg: UpdateClientMessage, _ctx: &mut ServiceContext<Self>) {
-        if let Some(player) = &self.data.player {
-            let packet = Packet::notify(
-                user_sessions::COMPONENT,
-                user_sessions::USER_SESSION_EXTENDED_DATA_UPDATE,
-                UserSessionExtendedDataUpdate {
-                    user_id: player.id,
-                    data: UserSessionExtendedData {
-                        session_data: &self.data,
-                    },
-                },
-            );
-            self.push(packet);
-        }
+        let packet = Packet::notify(
+            user_sessions::COMPONENT,
+            user_sessions::USER_SESSION_EXTENDED_DATA_UPDATE,
+            UserSessionExtendedDataUpdate {
+                user_id: player.id,
+                data: self.data.ext(),
+            },
+        );
+
+        Mr(Some(packet))
     }
 }
 
@@ -321,9 +439,7 @@ impl Handler<UpdateSessionData> for Session {
                 user_sessions::USER_SESSION_EXTENDED_DATA_UPDATE,
                 UserSessionExtendedDataUpdate {
                     user_id: player.id,
-                    data: UserSessionExtendedData {
-                        session_data: &self.data,
-                    },
+                    data: self.data.ext(),
                 },
             );
 
@@ -344,12 +460,9 @@ pub struct HardwareFlagMessage {
 impl Handler<HardwareFlagMessage> for Session {
     type Response = ();
 
-    fn handle(&mut self, msg: HardwareFlagMessage, ctx: &mut ServiceContext<Self>) {
-        self.data.net.hardware_flags = msg.value;
-
-        // Notify the client of the change via a message rather than
-        // directly so its sent after the response
-        let _ = ctx.shared_link().do_send(UpdateClientMessage);
+    fn handle(&mut self, msg: HardwareFlagMessage, _ctx: &mut ServiceContext<Self>) {
+        self.data.net = Arc::new(self.data.net.with_hardware_flags(msg.value));
+        self.data.publish_update();
     }
 }
 
@@ -362,14 +475,9 @@ pub struct NetworkInfoMessage {
 impl Handler<NetworkInfoMessage> for Session {
     type Response = ();
 
-    fn handle(&mut self, msg: NetworkInfoMessage, ctx: &mut ServiceContext<Self>) {
-        let net = &mut &mut self.data.net;
-        net.qos = msg.qos;
-        net.addr = msg.address;
-
-        // Notify the client of the change via a message rather than
-        // directly so its sent after the response
-        let _ = ctx.shared_link().do_send(UpdateClientMessage);
+    fn handle(&mut self, msg: NetworkInfoMessage, _ctx: &mut ServiceContext<Self>) {
+        self.data.net = Arc::new(self.data.net.with_basic(msg.address, msg.qos));
+        self.data.publish_update();
     }
 }
 
@@ -381,12 +489,9 @@ pub struct SetGameMessage {
 impl Handler<SetGameMessage> for Session {
     type Response = ();
 
-    fn handle(&mut self, msg: SetGameMessage, ctx: &mut ServiceContext<Self>) {
+    fn handle(&mut self, msg: SetGameMessage, _ctx: &mut ServiceContext<Self>) {
         self.data.game = msg.game;
-
-        // Notify the client of the change via a message rather than
-        // directly so its sent after the response
-        let _ = ctx.shared_link().do_send(UpdateClientMessage);
+        self.data.publish_update();
     }
 }
 
@@ -412,7 +517,8 @@ impl Handler<NotifyOtherUserMessage> for Session {
             user_sessions::USER_ADDED,
             NotifyUserAdded {
                 session_data: UserSessionExtendedData {
-                    session_data: &self.data,
+                    net: self.data.net.clone(),
+                    game: self.data.game.clone(),
                 },
                 user: UserIdentification::from_player(player),
             },
@@ -459,7 +565,7 @@ impl Session {
     /// and sends a flush notification
     ///
     /// `packet` The packet to push to the buffer
-    pub fn push(&mut self, packet: Packet) {
+    pub fn push(&self, packet: Packet) {
         self.debug_log_packet("Queued Write", &packet);
         if self.writer.sink(packet).is_err() {
             // TODO: Handle failing to send contents to writer

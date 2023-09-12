@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::{
     database::entities::Player,
-    session::SessionData,
+    session::NetData,
     utils::{components::game_manager::GAME_TYPE, types::PlayerID},
 };
 use bitflags::bitflags;
@@ -66,24 +68,27 @@ impl From<u8> for HardwareFlags {
 }
 
 #[derive(TdfSerialize)]
-pub struct UserSessionExtendedDataUpdate<'a> {
+pub struct UserSessionExtendedDataUpdate {
     #[tdf(tag = "DATA")]
-    pub data: UserSessionExtendedData<'a>,
+    pub data: UserSessionExtendedData,
     #[tdf(tag = "USID")]
     pub user_id: PlayerID,
 }
 
 #[derive(TdfTyped)]
 #[tdf(group)]
-pub struct UserSessionExtendedData<'a> {
-    pub session_data: &'a SessionData,
+pub struct UserSessionExtendedData {
+    /// Networking data for the session
+    pub net: Arc<NetData>,
+    /// ID of the game the player is in (if present)
+    pub game: Option<u32>,
 }
 
-impl TdfSerialize for UserSessionExtendedData<'_> {
+impl TdfSerialize for UserSessionExtendedData {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         w.group_body(|w| {
             // Network address
-            w.tag_ref(b"ADDR", &self.session_data.net.addr);
+            w.tag_ref(b"ADDR", &self.net.addr);
             // Best ping site alias
             w.tag_str(b"BPS", PING_SITE_ALIAS);
             // Country
@@ -93,15 +98,15 @@ impl TdfSerialize for UserSessionExtendedData<'_> {
             // Data map
             w.tag_map_tuples(b"DMAP", &[(0x70001, 0x409a)]);
             // Hardware flags
-            w.tag_owned(b"HWFG", self.session_data.net.hardware_flags.bits());
+            w.tag_owned(b"HWFG", self.net.hardware_flags.bits());
             // Ping server latency list
             w.tag_list_slice(b"PSLM", &[0xfff0fff]);
             // Quality of service data
-            w.tag_ref(b"QDAT", &self.session_data.net.qos);
+            w.tag_ref(b"QDAT", &self.net.qos);
             // User info attributes
             w.tag_owned(b"UATT", 0u8);
 
-            if let Some(game) = self.session_data.game {
+            if let Some(game) = self.game {
                 // Blaze object ID list
                 w.tag_list_slice(b"ULST", &[ObjectId::new(GAME_TYPE, game as u64)]);
             }
@@ -146,7 +151,7 @@ impl TdfSerialize for UserIdentification<'_> {
 pub struct NotifyUserAdded<'a> {
     /// The user session data
     #[tdf(tag = "DATA")]
-    pub session_data: UserSessionExtendedData<'a>,
+    pub session_data: UserSessionExtendedData,
     /// The added user identification
     #[tdf(tag = "USER")]
     pub user: UserIdentification<'a>,
@@ -199,26 +204,17 @@ pub struct LookupRequest {
 
 /// User lookup response
 pub struct LookupResponse {
-    pub session_data: SessionData,
+    pub player: Arc<Player>,
+    pub extended_data: UserSessionExtendedData,
 }
 
 impl TdfSerialize for LookupResponse {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         // The user session extended data
-        w.tag_alt(
-            b"EDAT",
-            UserSessionExtendedData {
-                session_data: &self.session_data,
-            },
-        );
+        w.tag_ref(b"EDAT", &self.extended_data);
         w.tag_owned(b"FLGS", UserDataFlags::ONLINE.bits());
 
-        let player = match &self.session_data.player {
-            Some(value) => value,
-            None => return,
-        };
-
         // The lookup user identification
-        w.tag_alt(b"USER", UserIdentification::from_player(player));
+        w.tag_alt(b"USER", UserIdentification::from_player(&self.player));
     }
 }
