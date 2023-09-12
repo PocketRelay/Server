@@ -10,7 +10,6 @@ pub mod stats;
 pub mod user_sessions;
 pub mod util;
 
-use crate::utils::types::PlayerID;
 use serde::Serialize;
 use std::{fmt::Debug, net::Ipv4Addr};
 use tdf::{GroupSlice, TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfTyped};

@@ -39,13 +39,10 @@ pub mod routes;
 pub struct Session {
     /// Unique identifier for this session.
     id: SessionID,
-
     /// Connection socket addr
     addr: Ipv4Addr,
-
     /// Packet writer sink for the session
     writer: SinkLink<Packet>,
-
     /// The session scheme
     host_target: SessionHostTarget,
 
