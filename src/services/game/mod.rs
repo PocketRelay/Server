@@ -2,7 +2,7 @@ use self::{manager::GameManager, rules::RuleSet};
 use crate::{
     database::entities::Player,
     session::{
-        packet::Packet, router::RawBlaze, NetData, PushExt, Session, SetGameMessage,
+        packet::Packet, router::RawBlaze, NetData, PushExt, Session, SessionLink, SetGameMessage,
         SubscriberMessage,
     },
     utils::{
@@ -64,10 +64,10 @@ impl Game {
     ) -> Link<Game> {
         let this = Game {
             id,
-            state: GameState::Initializing,
+            state: Default::default(),
             setting,
             attributes,
-            players: Vec::with_capacity(4),
+            players: Default::default(),
             game_manager,
         };
 
@@ -218,7 +218,7 @@ impl Handler<AddPlayerMessage> for Game {
             );
 
             // Update other players with the client details
-            self.add_user_sub(player);
+            self.add_user_sub(player.player.id, player.link.clone());
         }
 
         // Notify the joiner of the game details
@@ -241,8 +241,7 @@ impl Handler<SetStateMessage> for Game {
     type Response = ();
 
     fn handle(&mut self, msg: SetStateMessage, _ctx: &mut ServiceContext<Self>) {
-        self.state = msg.state;
-        self.notify_state();
+        self.set_state(msg.state);
     }
 }
 
@@ -561,8 +560,8 @@ impl Game {
         self.push_all(&packet);
     }
 
-    /// Notifies all players of the current game state
-    fn notify_state(&self) {
+    fn set_state(&mut self, state: GameState) {
+        self.state = state;
         self.notify_all(
             game_manager::COMPONENT,
             game_manager::GAME_STATE_CHANGE,
@@ -573,25 +572,22 @@ impl Game {
         );
     }
 
-    /// Updates all the client details for the provided session.
-    /// Tells each client to send session updates to the session
-    /// and the session to send them as well.
-    ///
-    /// `session` The session to update for
-    fn add_user_sub(&self, player: &GamePlayer) {
+    /// Creates a subscription between all the users and the the target player
+    fn add_user_sub(&self, target_id: PlayerID, target_link: SessionLink) {
         debug!("Adding user subscriptions");
 
         // Subscribe all the clients to eachother
-        self.players.iter().for_each(|other| {
-            _ = player
-                .link
-                .do_send(SubscriberMessage::Sub(other.player.id, other.link.clone()));
+        self.players
+            .iter()
+            .filter(|other| other.player.id.ne(&target_id))
+            .for_each(|other| {
+                _ = target_link
+                    .do_send(SubscriberMessage::Sub(other.player.id, other.link.clone()));
 
-            _ = other.link.do_send(SubscriberMessage::Sub(
-                player.player.id,
-                player.link.clone(),
-            ));
-        });
+                _ = other
+                    .link
+                    .do_send(SubscriberMessage::Sub(target_id, target_link.clone()));
+            });
     }
 
     /// Notifies the provided player and all other players
@@ -601,15 +597,18 @@ impl Game {
         debug!("Removing user subscriptions");
 
         // Unsubscribe all the clients from eachother
-        self.players.iter().for_each(|other| {
-            _ = player
-                .link
-                .do_send(SubscriberMessage::Remove(other.player.id));
+        self.players
+            .iter()
+            .filter(|other| other.player.id.ne(&player.player.id))
+            .for_each(|other| {
+                _ = player
+                    .link
+                    .do_send(SubscriberMessage::Remove(other.player.id));
 
-            _ = other
-                .link
-                .do_send(SubscriberMessage::Remove(player.player.id));
-        });
+                _ = other
+                    .link
+                    .do_send(SubscriberMessage::Remove(player.player.id));
+            });
     }
 
     /// Notifies the provided player that the game has been setup and
@@ -679,37 +678,35 @@ impl Game {
         // TODO: With more than one player this fails
 
         // Obtain the new player at the first index
-        let new_host = match self.players.first() {
-            Some(value) => value,
+        let (new_host_id, new_host_link) = match self.players.first() {
+            Some(value) => (value.player.id, value.link.clone()),
             None => return,
         };
 
         debug!("Starting host migration (GID: {})", self.id);
 
         // Start host migration
-        self.state = GameState::Migrating;
-        self.notify_state();
+        self.set_state(GameState::Migrating);
         self.notify_all(
             game_manager::COMPONENT,
             game_manager::HOST_MIGRATION_START,
             HostMigrateStart {
                 game_id: self.id,
-                host_id: new_host.player.id,
+                host_id: new_host_id,
                 pmig: 2,
                 slot: 0,
             },
         );
 
         // Finished host migration
-        self.state = GameState::InGame;
-        self.notify_state();
+        self.set_state(GameState::InGame);
         self.notify_all(
             game_manager::COMPONENT,
             game_manager::HOST_MIGRATION_FINISHED,
             HostMigrateFinished { game_id: self.id },
         );
 
-        self.add_user_sub(new_host);
+        self.add_user_sub(new_host_id, new_host_link);
 
         debug!("Finished host migration (GID: {})", self.id);
     }
