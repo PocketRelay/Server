@@ -2,8 +2,8 @@ use self::{manager::GameManager, rules::RuleSet};
 use crate::{
     database::entities::Player,
     session::{
-        models::user_sessions::NotifyUserRemoved, packet::Packet, router::RawBlaze, DetailsMessage,
-        InformSessions, NetData, PushExt, Session, SetGameMessage,
+        models::user_sessions::NotifyUserRemoved, packet::Packet, router::RawBlaze, NetData,
+        NotifyOtherUserMessage, PushExt, Session, SetGameMessage, UpdateSessionData,
     },
     utils::{
         components::{game_manager, user_sessions},
@@ -234,7 +234,7 @@ impl Handler<AddPlayerMessage> for Game {
                 .iter()
                 .map(|player| player.link.clone())
                 .collect();
-            let _ = player.link.do_send(InformSessions { links });
+            let _ = player.link.do_send(UpdateSessionData { links });
         }
     }
 }
@@ -596,8 +596,8 @@ impl Game {
                 let addr2 = value.link.clone();
 
                 // Queue the session details to be sent to this client
-                let _ = player.link.do_send(DetailsMessage { link: addr2 });
-                let _ = value.link.do_send(DetailsMessage { link: addr1 });
+                let _ = player.link.do_send(NotifyOtherUserMessage { link: addr2 });
+                let _ = value.link.do_send(NotifyOtherUserMessage { link: addr1 });
             }
         });
     }

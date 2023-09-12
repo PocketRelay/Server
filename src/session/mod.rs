@@ -305,15 +305,19 @@ impl Handler<GetSocketAddrMessage> for Session {
 /// Creates a set session packet and sends it to all the
 /// provided session links
 #[derive(Message)]
-pub struct InformSessions {
+pub struct UpdateSessionData {
     /// The link to send the set session to
     pub links: Vec<Link<Session>>,
 }
 
-impl Handler<InformSessions> for Session {
+impl Handler<UpdateSessionData> for Session {
     type Response = ();
 
-    fn handle(&mut self, msg: InformSessions, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+    fn handle(
+        &mut self,
+        msg: UpdateSessionData,
+        _ctx: &mut ServiceContext<Self>,
+    ) -> Self::Response {
         if let Some(player) = &self.data.player {
             let packet = Packet::notify(
                 user_sessions::COMPONENT,
@@ -392,14 +396,14 @@ impl Handler<SetGameMessage> for Session {
 /// Message to send the details of this session to
 /// the provided session link
 #[derive(Message)]
-pub struct DetailsMessage {
+pub struct NotifyOtherUserMessage {
     pub link: Link<Session>,
 }
 
-impl Handler<DetailsMessage> for Session {
+impl Handler<NotifyOtherUserMessage> for Session {
     type Response = ();
 
-    fn handle(&mut self, msg: DetailsMessage, _ctx: &mut ServiceContext<Self>) {
+    fn handle(&mut self, msg: NotifyOtherUserMessage, _ctx: &mut ServiceContext<Self>) {
         let player = match self.data.player.as_ref() {
             Some(value) => value,
             None => return,
@@ -413,10 +417,7 @@ impl Handler<DetailsMessage> for Session {
                 session_data: UserSessionExtendedData {
                     session_data: &self.data,
                 },
-                user: UserIdentification {
-                    id: player.id,
-                    name: &player.display_name,
-                },
+                user: UserIdentification::from_player(player),
             },
         );
 

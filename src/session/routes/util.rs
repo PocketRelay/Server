@@ -7,7 +7,7 @@ use crate::{
             util::*,
         },
         router::{Blaze, Extension, SessionAuth},
-        DetailsMessage, GetHostTarget, SessionLink,
+        GetHostTarget, NotifyOtherUserMessage, SessionLink,
     },
 };
 use base64ct::{Base64, Encoding};
@@ -97,7 +97,7 @@ pub async fn handle_post_auth(
     SessionAuth(player): SessionAuth,
 ) -> ServerResult<Blaze<PostAuthResponse>> {
     // Queue the session details to be sent to this client
-    let _ = session.do_send(DetailsMessage {
+    let _ = session.do_send(NotifyOtherUserMessage {
         link: Link::clone(&session),
     });
 

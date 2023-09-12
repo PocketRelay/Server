@@ -1,4 +1,5 @@
 use crate::{
+    database::entities::Player,
     session::SessionData,
     utils::{components::game_manager::GAME_TYPE, types::PlayerID},
 };
@@ -115,6 +116,15 @@ pub struct UserIdentification<'a> {
     pub name: &'a str,
 }
 
+impl<'a> UserIdentification<'a> {
+    pub fn from_player(player: &'a Player) -> Self {
+        Self {
+            id: player.id,
+            name: &player.display_name,
+        }
+    }
+}
+
 impl TdfSerialize for UserIdentification<'_> {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         // Account ID
@@ -209,12 +219,6 @@ impl TdfSerialize for LookupResponse {
         };
 
         // The lookup user identification
-        w.tag_alt(
-            b"USER",
-            UserIdentification {
-                id: player.id,
-                name: &player.display_name,
-            },
-        );
+        w.tag_alt(b"USER", UserIdentification::from_player(player));
     }
 }
