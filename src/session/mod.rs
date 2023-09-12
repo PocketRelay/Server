@@ -257,15 +257,10 @@ impl Handler<GetGamePlayerMessage> for Session {
         _msg: GetGamePlayerMessage,
         ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        let data = match &self.data {
-            Some(value) => value,
-            None => return Mr(None),
-        };
-        Mr(Some(GamePlayer::new(
-            data.player.clone(),
-            data.net.clone(),
-            ctx.link(),
-        )))
+        Mr(self
+            .data
+            .as_ref()
+            .map(|data| GamePlayer::new(data.player.clone(), data.net.clone(), ctx.link())))
     }
 }
 
@@ -275,6 +270,11 @@ pub struct SetPlayerMessage(pub Option<Player>);
 impl Handler<SetPlayerMessage> for Session {
     type Response = ();
     fn handle(&mut self, msg: SetPlayerMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
+        debug_assert!(
+            self.data.is_none(),
+            "Attempted to set player on session that already has a player"
+        );
+
         // Clear the current authentication
         // TODO: Handle already authenticated as error and close session
         // rather than re-resuming it
@@ -336,20 +336,13 @@ impl Handler<GetLookupMessage> for Session {
         _msg: GetLookupMessage,
         _ctx: &mut ServiceContext<Self>,
     ) -> Self::Response {
-        let data = match &self.data {
-            Some(value) => value,
-            None => return Mr(None),
-        };
-
-        let response = LookupResponse {
+        Mr(self.data.as_ref().map(|data| LookupResponse {
             player: data.player.clone(),
             extended_data: UserSessionExtendedData {
                 net: data.net.clone(),
                 game: data.game,
             },
-        };
-
-        Mr(Some(response))
+        }))
     }
 }
 
