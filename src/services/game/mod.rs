@@ -15,7 +15,7 @@ use log::debug;
 use models::*;
 use serde::Serialize;
 use std::sync::Arc;
-use tdf::{ObjectId, TdfMap, TdfSerialize, TdfSerializer};
+use tdf::{ObjectId, TdfMap, TdfSerializer};
 
 pub mod manager;
 pub mod models;
@@ -207,7 +207,7 @@ impl Handler<AddPlayerMessage> for Game {
 
         if is_other {
             // Notify other players of the joined player
-            self.notify_all(
+            self.push_all(&Packet::notify(
                 game_manager::COMPONENT,
                 game_manager::PLAYER_JOINING,
                 PlayerJoining {
@@ -215,7 +215,7 @@ impl Handler<AddPlayerMessage> for Game {
                     player,
                     game_id: self.id,
                 },
-            );
+            ));
 
             // Update other players with the client details
             self.add_user_sub(player.player.id, player.link.clone());
@@ -260,14 +260,14 @@ impl Handler<SetSettingMessage> for Game {
         let setting = msg.setting;
         debug!("Updating game setting (Value: {:?})", &setting);
         self.setting = setting;
-        self.notify_all(
+        self.push_all(&Packet::notify(
             game_manager::COMPONENT,
             game_manager::GAME_SETTINGS_CHANGE,
             SettingChange {
                 id: self.id,
                 setting,
             },
-        );
+        ));
     }
 }
 
@@ -359,22 +359,24 @@ impl Handler<UpdateMeshMessage> for Game {
                 state: session.state,
             };
 
+            // TODO: Move into a "connection complete" function
+
             // Notify players of the player state change
-            self.notify_all(
+            self.push_all(&Packet::notify(
                 game_manager::COMPONENT,
                 game_manager::GAME_PLAYER_STATE_CHANGE,
                 state_change,
-            );
+            ));
 
             // Notify players of the completed connection
-            self.notify_all(
+            self.push_all(&Packet::notify(
                 game_manager::COMPONENT,
                 game_manager::PLAYER_JOIN_COMPLETED,
                 JoinComplete {
                     game_id: self.id,
                     player_id,
                 },
-            );
+            ));
 
             // Add the player to the admin list
             self.modify_admin_list(player_id, AdminListOperation::Add);
@@ -550,26 +552,16 @@ impl Game {
             .for_each(|value| value.link.push(packet.clone()));
     }
 
-    /// Sends a notification packet to all the connected session
-    /// with the provided component and contents
-    ///
-    /// `component` The packet component
-    /// `contents`  The packet contents
-    fn notify_all<C: TdfSerialize>(&self, component: u16, command: u16, contents: C) {
-        let packet = Packet::notify(component, command, contents);
-        self.push_all(&packet);
-    }
-
     fn set_state(&mut self, state: GameState) {
         self.state = state;
-        self.notify_all(
+        self.push_all(&Packet::notify(
             game_manager::COMPONENT,
             game_manager::GAME_STATE_CHANGE,
             StateChange {
                 id: self.id,
                 state: self.state,
             },
-        );
+        ));
     }
 
     /// Creates a subscription between all the users and the the target player
@@ -640,7 +632,7 @@ impl Game {
             None => return,
         };
 
-        self.notify_all(
+        self.push_all(&Packet::notify(
             game_manager::COMPONENT,
             game_manager::ADMIN_LIST_CHANGE,
             AdminListChange {
@@ -649,7 +641,7 @@ impl Game {
                 operation,
                 host_id: host.player.id,
             },
-        );
+        ));
     }
 
     /// Notifies all the session and the removed session that a
@@ -687,7 +679,7 @@ impl Game {
 
         // Start host migration
         self.set_state(GameState::Migrating);
-        self.notify_all(
+        self.push_all(&Packet::notify(
             game_manager::COMPONENT,
             game_manager::HOST_MIGRATION_START,
             HostMigrateStart {
@@ -696,15 +688,15 @@ impl Game {
                 pmig: 2,
                 slot: 0,
             },
-        );
+        ));
 
         // Finished host migration
         self.set_state(GameState::InGame);
-        self.notify_all(
+        self.push_all(&Packet::notify(
             game_manager::COMPONENT,
             game_manager::HOST_MIGRATION_FINISHED,
             HostMigrateFinished { game_id: self.id },
-        );
+        ));
 
         self.add_user_sub(new_host_id, new_host_link);
 
