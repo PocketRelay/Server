@@ -266,8 +266,8 @@ pub async fn handle_forgot_password(Blaze(req): Blaze<ForgotPasswordRequest>) ->
 ///     "GEST": 0,
 ///     "LANG": "en", // Language
 ///     "MAIL": "ACCOUNT_EMAIL",
-///     "OPT": 0,
-///     "OPT": 0,
+///     "OPT1": 0,
+///     "OPT3": 0,
 ///     "PASS": "ACCOUNT_PASSWORD",
 ///     "PNAM": "",
 ///     "PRIV": "webprivacy/au/en/pc/default/08202020/02042022", // Privacy policy path

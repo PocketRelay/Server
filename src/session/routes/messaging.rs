@@ -23,13 +23,12 @@ use std::sync::Arc;
 ///     "PSIZ": 0,
 ///     "SMSK": 0,
 ///     "SORT": 0,
-///     " (0, 0, 0),
+///     "SRCE": (0, 0, 0),
 ///     "STAT": 0,
 ///     "TARG": (0, 0, 0),
 ///     "TYPE": 0
 /// }
 /// ```
-///
 pub async fn handle_fetch_messages(
     session: SessionLink,
     Extension(config): Extension<Arc<RuntimeConfig>>,
