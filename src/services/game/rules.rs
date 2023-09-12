@@ -1,4 +1,4 @@
-use crate::services::game::AttrMap;
+use crate::services::game::Attributes;
 
 /// Rulesets are fairly cheap to clone. Rule values are not usually
 /// very long.
@@ -63,7 +63,7 @@ impl RuleSet {
     /// the attributes map.
     ///
     /// `attributes` The attributes map to check for matches
-    pub fn matches(&self, attributes: &AttrMap) -> bool {
+    pub fn matches(&self, attributes: &Attributes) -> bool {
         // Non public matches are unable to be matched
         if let Some(privacy) = attributes.get(Self::PRIVACY_ATTR) {
             if privacy != "PUBLIC" {

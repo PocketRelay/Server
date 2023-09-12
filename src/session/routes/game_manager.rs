@@ -3,9 +3,7 @@ use crate::{
         game::{
             manager::GameManager,
             models::{DatalessContext, GameSetupContext},
-            AddPlayerMessage, CheckJoinableMessage, GameJoinableState, GamePlayer,
-            GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage, SetSettingMessage,
-            SetStateMessage, UpdateMeshMessage,
+            GameJoinableState, GamePlayer,
         },
         sessions::Sessions,
     },
@@ -45,21 +43,32 @@ pub async fn handle_join_game(
         .await?
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = game_manager
+    let game_ref = game_manager
         .get_game(game_id)
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
+    let game = &*game_ref.read().await;
+
     // Check the game is joinable
-    let join_state = game.send(CheckJoinableMessage { rule_set: None }).await?;
+    let join_state = game.check_joinable(None).await;
 
     // Join the game
     if let GameJoinableState::Joinable = join_state {
         debug!("Joining game from invite (GID: {})", game_id);
-        let _ = game.do_send(AddPlayerMessage {
-            player,
-            context: GameSetupContext::Dataless(DatalessContext::JoinGameSetup),
+
+        let target = game_ref.clone();
+
+        tokio::spawn(async move {
+            let game = &mut *target.write().await;
+
+            game.add_player(
+                player,
+                GameSetupContext::Dataless(DatalessContext::JoinGameSetup),
+            )
+            .await;
         });
+
         Ok(Blaze(JoinGameResponse {
             game_id,
             state: JoinGameState::JoinedGame,
@@ -83,8 +92,9 @@ pub async fn handle_get_game_data(
         .get_game(game_id)
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
+    let game = &*game.read().await;
 
-    let body = game.send(GetGameDataMessage).await?;
+    let body = game.game_data().await;
 
     Ok(body)
 }
@@ -150,14 +160,9 @@ pub async fn handle_create_game(
         .await?
         .ok_or(GlobalError::AuthenticationRequired)?;
 
-    let (link, game_id) = game_manager
+    let game_id = game_manager
         .create_game(req.attributes, req.setting, player)
         .await;
-
-    // Notify matchmaking of the new game
-    tokio::spawn(async move {
-        game_manager.process_queue(link, game_id).await;
-    });
 
     Ok(Blaze(CreateGameResponse { game_id }))
 }
@@ -186,14 +191,12 @@ pub async fn handle_set_attributes(
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<SetAttributesRequest>,
 ) -> ServerResult<()> {
-    let link = game_manager.get_game(req.game_id).await;
-
-    if let Some(link) = link {
-        link.send(SetAttributesMessage {
-            attributes: req.attributes,
-        })
-        .await?;
-    }
+    let game = game_manager
+        .get_game(req.game_id)
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
+    let game = &mut *game.write().await;
+    game.set_attributes(req.attributes).await;
 
     Ok(())
 }
@@ -212,11 +215,12 @@ pub async fn handle_set_state(
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<SetStateRequest>,
 ) -> ServerResult<()> {
-    let link = game_manager.get_game(req.game_id).await;
-
-    if let Some(link) = link {
-        link.send(SetStateMessage { state: req.state }).await?;
-    }
+    let game = game_manager
+        .get_game(req.game_id)
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
+    let game = &mut *game.write().await;
+    game.set_state(req.state).await;
 
     Ok(())
 }
@@ -235,14 +239,12 @@ pub async fn handle_set_setting(
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<SetSettingRequest>,
 ) -> ServerResult<()> {
-    let link = game_manager.get_game(req.game_id).await;
-
-    if let Some(link) = link {
-        link.send(SetSettingMessage {
-            setting: req.setting,
-        })
-        .await?;
-    }
+    let game = game_manager
+        .get_game(req.game_id)
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
+    let game = &mut *game.write().await;
+    game.set_settings(req.setting).await;
 
     Ok(())
 }
@@ -263,18 +265,15 @@ pub async fn handle_set_setting(
 pub async fn handle_remove_player(
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<RemovePlayerRequest>,
-) {
-    let game = match game_manager.get_game(req.game_id).await {
-        Some(value) => value,
-        None => return,
-    };
+) -> ServerResult<()> {
+    let game = game_manager
+        .get_game(req.game_id)
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
+    let game = &mut *game.write().await;
+    game.remove_player(req.player_id, req.reason).await;
 
-    let _ = game
-        .send(RemovePlayerMessage {
-            reason: req.reason,
-            id: req.player_id,
-        })
-        .await;
+    Ok(())
 }
 
 /// Handles updating mesh connections
@@ -310,18 +309,14 @@ pub async fn handle_update_mesh_connection(
 
     let link = game_manager.get_game(req.game_id).await;
 
-    let link = match link {
+    let game = match link {
         Some(value) => value,
         None => return Ok(()),
     };
 
-    let _ = link
-        .send(UpdateMeshMessage {
-            id,
-            target: target.player_id,
-            state: target.state,
-        })
-        .await;
+    let game = &mut *game.write().await;
+
+    game.update_mesh(id, target.player_id, target.state).await;
 
     Ok(())
 }

@@ -6,7 +6,7 @@ use crate::{
     database::entities::Player,
     middleware::blaze_upgrade::BlazeScheme,
     services::{
-        game::{manager::GameManager, models::RemoveReason, GamePlayer, RemovePlayerMessage},
+        game::{manager::GameManager, models::RemoveReason, GamePlayer},
         sessions::Sessions,
     },
     utils::{
@@ -522,12 +522,10 @@ impl Session {
                     None => return,
                 };
 
+                let game = &mut *game.write().await;
+
                 // Send the remove message
-                let _ = game
-                    .send(RemovePlayerMessage {
-                        id: player_id,
-                        reason: RemoveReason::PlayerLeft,
-                    })
+                game.remove_player(player_id, RemoveReason::PlayerLeft)
                     .await;
             });
         } else {

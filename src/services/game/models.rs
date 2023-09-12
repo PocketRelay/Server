@@ -1,4 +1,4 @@
-use super::{AttrMap, Game, GamePlayer};
+use super::{Attributes, Game, GamePlayer};
 use crate::utils::{
     models::NetworkAddress,
     types::{GameID, GameSlot, PlayerID},
@@ -107,10 +107,10 @@ pub struct StateChange {
 
 /// Message for a game setting changing
 #[derive(TdfSerialize)]
-pub struct SettingChange {
+pub struct SettingsChange {
     /// The game setting
     #[tdf(tag = "ATTR", into = u16)]
-    pub setting: GameSettings,
+    pub settings: GameSettings,
     /// The ID of the game
     #[tdf(tag = "GID")]
     pub id: GameID,
@@ -119,7 +119,7 @@ pub struct SettingChange {
 /// Packet for game attribute changes
 pub struct AttributesChange<'a> {
     /// Borrowed game attributes map
-    pub attributes: &'a AttrMap,
+    pub attributes: &'a Attributes,
     /// The id of the game the attributes have changed for
     pub id: GameID,
 }
@@ -173,6 +173,7 @@ pub enum DatalessContext {
 
 pub struct GameDetails<'a> {
     pub game: &'a Game,
+
     pub context: GameSetupContext,
 }
 
@@ -195,7 +196,7 @@ impl TdfSerialize for GameDetails<'_> {
             w.tag_str(b"GNAM", &host_player.player.display_name);
 
             w.tag_u64(b"GPVH", 0x5a4f2b378b715c6);
-            w.tag_u16(b"GSET", game.setting.bits());
+            w.tag_u16(b"GSET", game.settings.bits());
             w.tag_u64(b"GSID", 0x4000000a76b645);
             w.tag_ref(b"GSTA", &game.state);
 
@@ -297,7 +298,7 @@ impl TdfSerialize for GetGameDetails<'_> {
 
             w.tag_u32(b"GID", game.id);
             w.tag_str(b"GNAM", &host_player.player.display_name);
-            w.tag_u16(b"GSET", game.setting.bits());
+            w.tag_u16(b"GSET", game.settings.bits());
             w.tag_ref(b"GSTA", &game.state);
             {
                 w.tag_list_start(b"HNET", TdfType::Group, 1);

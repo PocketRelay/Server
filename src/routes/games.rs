@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     database::entities::players::PlayerRole,
     middleware::auth::Auth,
-    services::game::{manager::GameManager, GameSnapshot, SnapshotMessage},
+    services::game::{manager::GameManager, GameSnapshot},
     utils::types::GameID,
 };
 use axum::{
@@ -95,12 +95,9 @@ pub async fn get_game(
         .get_game(game_id)
         .await
         .ok_or(GamesError::NotFound)?;
-
-    let snapshot = game
-        .send(SnapshotMessage {
-            include_net: auth.role >= PlayerRole::Admin,
-        })
-        .await?;
+    let include_net = auth.role >= PlayerRole::Admin;
+    let game = &*game.read().await;
+    let snapshot = game.snapshot(include_net).await;
 
     Ok(Json(snapshot))
 }

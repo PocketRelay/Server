@@ -1,8 +1,7 @@
 use super::{
     models::{DatalessContext, GameSettings, GameSetupContext, PlayerState},
     rules::RuleSet,
-    AddPlayerMessage, AttrMap, CheckJoinableMessage, Game, GameJoinableState, GamePlayer,
-    GameSnapshot,
+    Attributes, Game, GameJoinableState, GamePlayer, GameRef, GameSnapshot,
 };
 use crate::{
     services::game::models::AsyncMatchmakingStatus,
@@ -12,7 +11,6 @@ use crate::{
         types::{GameID, PlayerID},
     },
 };
-use interlink::prelude::*;
 use log::debug;
 use std::{
     collections::{HashMap, VecDeque},
@@ -29,7 +27,7 @@ use tokio::{sync::RwLock, task::JoinSet};
 /// once they are no longer used
 pub struct GameManager {
     /// The map of games to the actual game address
-    games: RwLock<HashMap<GameID, Link<Game>>>,
+    games: RwLock<HashMap<GameID, GameRef>>,
     /// Stored value for the ID to give the next game
     next_id: AtomicU32,
     /// Matchmaking entry queue
@@ -70,7 +68,7 @@ impl GameManager {
             let games = &*self.games.read().await;
 
             // Create an ordered set
-            let mut items: Vec<(&GameID, &Link<Game>)> = games.iter().collect();
+            let mut items: Vec<(&GameID, &GameRef)> = games.iter().collect();
             items.sort_by_key(|(key, _)| *key);
 
             // Whether there is more keys that what was requested
@@ -88,7 +86,8 @@ impl GameManager {
                 // Spawn the snapshot tasks
                 .for_each(|game| {
                     join_set.spawn(async move {
-                        game.send(super::SnapshotMessage { include_net }).await
+                        let game = &*game.read().await;
+                        game.snapshot(include_net).await
                     });
                 });
 
@@ -100,7 +99,7 @@ impl GameManager {
 
         // Recieve all the snapshots from their tasks
         while let Some(result) = join_set.join_next().await {
-            if let Ok(Ok(snapshot)) = result {
+            if let Ok(snapshot) = result {
                 snapshots.push(snapshot);
             }
         }
@@ -125,29 +124,42 @@ impl GameManager {
 
     pub async fn create_game(
         self: &Arc<Self>,
-        attributes: AttrMap,
+        attributes: Attributes,
         setting: GameSettings,
         mut host: GamePlayer,
-    ) -> (Link<Game>, GameID) {
+    ) -> GameID {
         let id = self.next_id.fetch_add(1, Ordering::AcqRel);
 
         host.state = PlayerState::ActiveConnected;
 
-        let link = Game::start(id, attributes, setting, self.clone());
+        let game = Game::new(id, setting, attributes, self.clone());
+        let game = Arc::new(RwLock::new(game));
+
         {
             let games = &mut *self.games.write().await;
-            games.insert(id, link.clone());
+            games.insert(id, game.clone());
         }
 
-        let _ = link.do_send(AddPlayerMessage {
-            player: host,
-            context: GameSetupContext::Dataless(DatalessContext::CreateGameSetup),
+        tokio::spawn(async move {
+            let game = &mut *game.write().await;
+            game.add_player(
+                host,
+                GameSetupContext::Dataless(DatalessContext::CreateGameSetup),
+            )
+            .await;
         });
 
-        (link, id)
+        let game_manager = self.clone();
+
+        // Notify matchmaking of the new game
+        tokio::spawn(async move {
+            game_manager.process_queue(id).await;
+        });
+
+        id
     }
 
-    pub async fn get_game(&self, game_id: GameID) -> Option<Link<Game>> {
+    pub async fn get_game(&self, game_id: GameID) -> Option<GameRef> {
         let games = &*self.games.read().await;
         games.get(&game_id).cloned()
     }
@@ -159,21 +171,23 @@ impl GameManager {
     ) -> Result<(), GamePlayer> {
         let games = &*self.games.read().await;
 
-        // Message asking for the game joinable state
-        let msg = CheckJoinableMessage {
-            rule_set: Some(rule_set),
-        };
-
         // Attempt to find a game thats joinable
-        for (id, link) in games {
+        for (id, game_ref) in games {
+            let game = &*game_ref.read().await;
+
             // Check if the game is joinable
-            if let Ok(GameJoinableState::Joinable) = link.send(msg.clone()).await {
+            if let GameJoinableState::Joinable = game.check_joinable(Some(rule_set.clone())).await {
                 debug!("Found matching game (GID: {})", id);
                 let msid = player.player.id;
-                let _ = link.do_send(AddPlayerMessage {
-                    player,
-                    context: GameSetupContext::Matchmaking(msid),
+
+                let game = game_ref.clone();
+
+                tokio::spawn(async move {
+                    let game = &mut *game.write().await;
+                    game.add_player(player, GameSetupContext::Matchmaking(msid))
+                        .await;
                 });
+
                 return Ok(());
             }
         }
@@ -184,28 +198,30 @@ impl GameManager {
     pub async fn remove_game(&self, game_id: GameID) {
         let games = &mut *self.games.write().await;
         if let Some(game) = games.remove(&game_id) {
-            game.stop();
+            tokio::spawn(async move {
+                let game = &mut *game.write().await;
+                game.on_stopped().await;
+            });
         }
     }
 
-    pub async fn process_queue(&self, link: Link<Game>, game_id: GameID) {
+    pub async fn process_queue(&self, game_id: GameID) {
+        let game_ref = match self.get_game(game_id).await {
+            Some(value) => value,
+            // Game doesn't exist anymore
+            None => return,
+        };
+
         let queue = &mut *self.queue.write().await;
         if queue.is_empty() {
             return;
         }
 
         while let Some(entry) = queue.front() {
-            let join_state = match link
-                .send(CheckJoinableMessage {
-                    rule_set: Some(entry.rule_set.clone()),
-                })
-                .await
-            {
-                Ok(value) => value,
-                // Game is no longer available stop checking
-                Err(_) => break,
+            let join_state = {
+                let game = &*game_ref.read().await;
+                game.check_joinable(Some(entry.rule_set.clone())).await
             };
-
             // TODO: If player has been in queue long enough create
             // a game matching their specifics
 
@@ -234,16 +250,10 @@ impl GameManager {
                         AsyncMatchmakingStatus { player_id: msid },
                     ));
 
+                    let game = &mut *game_ref.write().await;
                     // Add the player to the game
-                    if link
-                        .do_send(AddPlayerMessage {
-                            player: entry.player,
-                            context: GameSetupContext::Matchmaking(msid),
-                        })
-                        .is_err()
-                    {
-                        break;
-                    }
+                    game.add_player(entry.player, GameSetupContext::Matchmaking(msid))
+                        .await;
                 }
                 GameJoinableState::Full => {
                     // If the game is not joinable push the entry back to the
