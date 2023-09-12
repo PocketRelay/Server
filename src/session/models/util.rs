@@ -1,8 +1,5 @@
-use crate::{
-    session::SessionHostTarget,
-    utils::{models::Port, types::PlayerID},
-};
-
+use super::Port;
+use crate::{session::SessionHostTarget, utils::types::PlayerID};
 use std::borrow::Cow;
 use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType};
 
@@ -86,6 +83,9 @@ pub const SRC_VERSION: &str = "303107";
 pub const BLAZE_VERSION: &str = "Blaze 3.15.08.0 (CL# 1629389)";
 pub const PING_PERIOD: &str = "15s";
 
+/// Alias used for ping sites
+pub const PING_SITE_ALIAS: &str = "ea-sjc";
+
 /// Structure for the response to a pre authentication request
 pub struct PreAuthResponse {
     pub host_target: SessionHostTarget,
@@ -150,7 +150,7 @@ impl TdfSerialize for PreAuthResponse {
                 w.tag_map_start(b"LTPS", TdfType::String, TdfType::Group, 1);
 
                 // Key for the server
-                "ea-sjc".serialize(w);
+                PING_SITE_ALIAS.serialize(w);
 
                 w.group_body(|w| {
                     // Same as the Bioware primary server

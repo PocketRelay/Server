@@ -3,6 +3,7 @@
 //! networking data.
 
 use self::{
+    models::{user_sessions::UserSessionExtendedData, util::PING_SITE_ALIAS},
     packet::{Packet, PacketDebug},
     router::BlazeRouter,
 };
@@ -13,9 +14,9 @@ use crate::{
         game::{manager::GameManager, models::RemoveReason, GamePlayer, RemovePlayerMessage},
         sessions::Sessions,
     },
+    session::models::{NetworkAddress, Port, QosNetworkData, UpdateExtDataAttr},
     utils::{
         components::{self, game_manager::GAME_TYPE, user_sessions},
-        models::{NetworkAddress, Port, QosNetworkData, UpdateExtDataAttr},
         types::{GameID, PlayerID, SessionID},
     },
 };
@@ -292,7 +293,7 @@ impl Handler<UpdateClientMessage> for Session {
             let packet = Packet::notify(
                 user_sessions::COMPONENT,
                 user_sessions::SET_SESSION,
-                SetSession {
+                UserSessionExtendedDataUpdate {
                     player_id: player.id,
                     session: &self.data,
                 },
@@ -334,7 +335,7 @@ impl Handler<InformSessions> for Session {
             let packet = Packet::notify(
                 user_sessions::COMPONENT,
                 user_sessions::SET_SESSION,
-                SetSession {
+                UserSessionExtendedDataUpdate {
                     player_id: player.id,
                     session: &self.data,
                 },
@@ -605,7 +606,7 @@ impl TdfSerialize for SessionData {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         w.group_body(|w| {
             w.tag_ref(b"ADDR", &self.net.addr);
-            w.tag_str(b"BPS", "ea-sjc");
+            w.tag_str(b"BPS", PING_SITE_ALIAS);
             w.tag_str_empty(b"CTY");
             w.tag_var_int_list_empty(b"CVAR");
 
@@ -679,14 +680,14 @@ impl TdfSerialize for LookupResponse {
 }
 
 /// Session update for ourselves
-struct SetSession<'a> {
+struct UserSessionExtendedDataUpdate<'a> {
     /// The session this update is for
     session: &'a SessionData,
     /// The player ID the update is for
     player_id: PlayerID,
 }
 
-impl TdfSerialize for SetSession<'_> {
+impl TdfSerialize for UserSessionExtendedDataUpdate<'_> {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         w.tag_ref(b"DATA", self.session);
         w.tag_owned(b"USID", self.player_id)

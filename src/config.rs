@@ -1,7 +1,8 @@
-use crate::utils::models::Port;
 use log::LevelFilter;
 use serde::Deserialize;
 use std::{env, fs::read_to_string, path::Path};
+
+use crate::session::models::Port;
 
 /// The server version extracted from the Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

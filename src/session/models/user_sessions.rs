@@ -1,8 +1,7 @@
-use crate::utils::{
-    models::{NetworkAddress, QosNetworkData},
-    types::PlayerID,
-};
-use tdf::TdfDeserialize;
+use crate::{session::SessionData, utils::types::PlayerID};
+use tdf::{TdfDeserialize, TdfSerialize, TdfTyped};
+
+use super::{util::PING_SITE_ALIAS, NetworkAddress, QosNetworkData};
 
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -44,4 +43,23 @@ pub struct HardwareFlagRequest {
 pub struct LookupRequest {
     #[tdf(tag = "ID")]
     pub player_id: PlayerID,
+}
+
+#[derive(TdfTyped)]
+#[tdf(group)]
+pub struct UserSessionExtendedData<'a> {
+    session_data: &'a SessionData,
+}
+
+impl TdfSerialize for UserSessionExtendedData<'_> {
+    fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        w.group_body(|w| {
+            w.tag_ref(b"ADDR", &self.session_data.net.addr); // Network address
+            w.tag_str(b"BPS", PING_SITE_ALIAS); // Best ping site alias
+            w.tag_str_empty(b"CTY"); // Country
+            w.tag_var_int_list_empty(b"CVAR"); // Client data
+            w.tag_map_tuples(b"DMAP", &[(0x70001, 0x409a)]); // Data map
+            w.tag_owned(b"HWFG", self.session_data.net.hardware_flags) // Hardware flags
+        })
+    }
 }

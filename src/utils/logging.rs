@@ -1,4 +1,3 @@
-use super::models::Port;
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -58,7 +57,7 @@ pub fn setup(logging_level: LevelFilter) {
 
 /// Prints a list of possible urls that can be used to connect to
 /// this Pocket relay server
-pub async fn log_connection_urls(http_port: Port) {
+pub async fn log_connection_urls(http_port: u16) {
     let mut output = String::new();
     if let Ok(local_address) = local_ip_address::local_ip() {
         output.push_str("LAN: ");

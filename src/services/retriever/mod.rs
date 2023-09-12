@@ -4,11 +4,11 @@
 use self::origin::OriginFlowService;
 use crate::{
     config::RetrieverConfig,
-    session::packet::{Packet, PacketCodec, PacketDebug, PacketHeader, PacketType},
-    utils::{
-        components::redirector,
+    session::{
         models::{InstanceDetails, InstanceNet, Port},
+        packet::{Packet, PacketCodec, PacketDebug, PacketHeader, PacketType},
     },
+    utils::components::redirector,
 };
 use blaze_ssl_async::{stream::BlazeStream, BlazeError};
 use futures_util::{SinkExt, StreamExt};

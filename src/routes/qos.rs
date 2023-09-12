@@ -1,7 +1,7 @@
 //! Routes for the Quality of Service server. Unknown whether any of the
 //! response address and ports are correct however this request must succeed
 //! or the client doesn't seem to know its external IP
-use crate::{middleware::xml::Xml, utils::models::Port};
+use crate::middleware::xml::Xml;
 use axum::extract::Query;
 use log::debug;
 use serde::Deserialize;
@@ -37,7 +37,7 @@ pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
     debug!("Recieved QOS query: (Port: {})", query.port);
 
     /// Port for the local Quality of Service server
-    const QOS_PORT: Port = 42130;
+    const QOS_PORT: u16 = 42130;
     const IP: u32 = u32::from_be_bytes([127, 0, 0, 1]);
 
     let response = format!(

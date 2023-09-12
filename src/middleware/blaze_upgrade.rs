@@ -1,4 +1,4 @@
-use crate::{session::SessionHostTarget, utils::models::Port};
+use crate::session::SessionHostTarget;
 use axum::{
     extract::FromRequestParts,
     http::{HeaderValue, Method, StatusCode},
@@ -104,7 +104,7 @@ impl BlazeUpgrade {
     /// Extracts the client port from the provided headers map.
     ///
     /// `headers` The header map
-    fn extract_port(headers: &HeaderMap) -> Option<Port> {
+    fn extract_port(headers: &HeaderMap) -> Option<u16> {
         // Get the port header
         let header = headers.get(HEADER_PORT)?;
         // Convert the header to a string
@@ -176,7 +176,7 @@ where
         let scheme: BlazeScheme = BlazeUpgrade::extract_scheme(headers);
 
         // Get the client port header
-        let port: Port = match BlazeUpgrade::extract_port(headers) {
+        let port: u16 = match BlazeUpgrade::extract_port(headers) {
             Some(value) => value,
             None => scheme.default_port(),
         };

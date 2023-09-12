@@ -6,12 +6,12 @@ use crate::{
             auth::{AuthResponse, AuthenticationError},
             errors::{GlobalError, ServerResult},
             user_sessions::*,
+            NetworkAddress,
         },
         router::{Blaze, Extension},
         GetLookupMessage, GetSocketAddrMessage, HardwareFlagMessage, LookupResponse,
         NetworkInfoMessage, SessionLink, SetPlayerMessage,
     },
-    utils::models::NetworkAddress,
 };
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;

@@ -1,7 +1,7 @@
 use super::{AttrMap, Game, GamePlayer};
-use crate::utils::{
-    models::NetworkAddress,
-    types::{GameID, GameSlot, PlayerID},
+use crate::{
+    session::models::NetworkAddress,
+    utils::types::{GameID, GameSlot, PlayerID},
 };
 use bitflags::bitflags;
 
