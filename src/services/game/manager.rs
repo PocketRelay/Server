@@ -9,13 +9,14 @@ use crate::{
     session::{packet::Packet, PushExt},
     utils::{
         components::game_manager,
+        hashing::IntHashMap,
         types::{GameID, PlayerID},
     },
 };
 use interlink::prelude::*;
 use log::debug;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
@@ -29,7 +30,7 @@ use tokio::{sync::RwLock, task::JoinSet};
 /// once they are no longer used
 pub struct GameManager {
     /// The map of games to the actual game address
-    games: RwLock<HashMap<GameID, Link<Game>>>,
+    games: RwLock<IntHashMap<GameID, Link<Game>>>,
     /// Stored value for the ID to give the next game
     next_id: AtomicU32,
     /// Matchmaking entry queue

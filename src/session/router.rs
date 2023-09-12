@@ -10,7 +10,7 @@ use crate::{
     session::models::errors::GlobalError,
     utils::{
         components::{component_key, ComponentKey},
-        hashing::IntHasher,
+        hashing::IntHashMap,
         types::BoxFuture,
     },
 };
@@ -18,10 +18,9 @@ use bytes::Bytes;
 use log::error;
 use std::{
     any::{Any, TypeId},
-    collections::HashMap,
     convert::Infallible,
     future::ready,
-    hash::BuildHasherDefault,
+    future::Future,
     marker::PhantomData,
     sync::Arc,
 };
@@ -74,11 +73,12 @@ impl PacketRequest {
     }
 }
 
-type AnyMap = HashMap<TypeId, Box<dyn Any + Send + Sync>, BuildHasherDefault<IntHasher>>;
+type AnyMap = IntHashMap<TypeId, Box<dyn Any + Send + Sync>>;
+type RouteMap = IntHashMap<ComponentKey, Box<dyn ErasedHandler>>;
 
 pub struct BlazeRouterBuilder {
     /// Map for looking up a route based on the component key
-    routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<IntHasher>>,
+    routes: RouteMap,
     extensions: AnyMap,
 }
 
@@ -125,7 +125,7 @@ impl BlazeRouterBuilder {
 
 pub struct BlazeRouter {
     /// Map for looking up a route based on the component key
-    routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<IntHasher>>,
+    routes: RouteMap,
     extensions: Arc<AnyMap>,
 }
 

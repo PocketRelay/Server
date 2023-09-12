@@ -1,13 +1,13 @@
 //! Service for storing links to all the currenly active
 //! authenticated sessions on the server
 
+use crate::utils::hashing::IntHashMap;
 use crate::{session::Session, utils::types::PlayerID};
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use interlink::prelude::*;
 use log::error;
 use ring::hmac::{self, Key, HMAC_SHA256};
-use std::collections::HashMap;
 use std::{
     path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -23,7 +23,7 @@ use tokio::{
 /// functionality for authenticating sessions
 pub struct Sessions {
     /// Map of the authenticated players to their session links
-    sessions: RwLock<HashMap<PlayerID, Link<Session>>>,
+    sessions: RwLock<IntHashMap<PlayerID, Link<Session>>>,
 
     /// HMAC key used for computing signatures
     key: Key,

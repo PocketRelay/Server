@@ -1,6 +1,9 @@
 //! Hashing utility for hashing and verifying passwords
 
-use std::hash::Hasher;
+use std::{
+    collections::HashMap,
+    hash::{BuildHasherDefault, Hasher},
+};
 
 use argon2::{
     password_hash::{self, rand_core::OsRng, PasswordVerifier, SaltString},
@@ -32,6 +35,8 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
     let argon2 = Argon2::default();
     argon2.verify_password(password.as_bytes(), &hash).is_ok()
 }
+
+pub type IntHashMap<K, V> = HashMap<K, V, BuildHasherDefault<IntHasher>>;
 
 /// Hasher implementation that directly uses an integer value
 /// instead of any specific hashing algorithm
