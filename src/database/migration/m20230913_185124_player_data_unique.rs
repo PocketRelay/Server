@@ -34,8 +34,6 @@ impl MigrationTrait for Migration {
 #[derive(Iden)]
 enum PlayerData {
     Table,
-    Id,
     PlayerId,
     Key,
-    Value,
 }
