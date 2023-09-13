@@ -3,13 +3,14 @@
 use crate::config::RuntimeConfig;
 use crate::database::DbResult;
 use crate::utils::hashing::hash_password;
+use futures_util::future::BoxFuture;
 use sea_orm::prelude::*;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DeleteResult, EntityTrait,
     IntoActiveModel, QueryFilter,
 };
 use serde::{Deserialize, Serialize};
-use std::{future::Future, iter::Iterator, pin::Pin};
+use std::future::Future;
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "players")]
@@ -57,8 +58,6 @@ pub enum PlayerRole {
     SuperAdmin = 2,
 }
 
-type DbFuture<'a, T> = Pin<Box<dyn Future<Output = DbResult<T>> + Send + 'a>>;
-
 impl Model {
     /// Creates a new player with the proivded details and inserts
     /// it into the database
@@ -74,7 +73,7 @@ impl Model {
         display_name: String,
         mut password: Option<String>,
         config: &RuntimeConfig,
-    ) -> DbFuture<'db, Self> {
+    ) -> BoxFuture<'db, DbResult<Self>> {
         let mut role = PlayerRole::Default;
 
         if config
@@ -109,7 +108,7 @@ impl Model {
     /// Deletes the provided player
     ///
     /// `db` The database connection
-    pub fn delete(self, db: &DatabaseConnection) -> DbFuture<DeleteResult> {
+    pub fn delete(self, db: &DatabaseConnection) -> BoxFuture<DbResult<DeleteResult>> {
         // Delete player itself
         let model = self.into_active_model();
         model.delete(db)
@@ -163,7 +162,11 @@ impl Model {
     ///
     /// `db`       The database connection
     /// `password` The new hashed password
-    pub fn set_password(self, db: &DatabaseConnection, password: String) -> DbFuture<'_, Self> {
+    pub fn set_password(
+        self,
+        db: &DatabaseConnection,
+        password: String,
+    ) -> BoxFuture<'_, DbResult<Self>> {
         let mut model = self.into_active_model();
         model.password = Set(Some(password));
         model.update(db)
@@ -173,7 +176,11 @@ impl Model {
     ///
     /// `db`   The database connection
     /// `role` The new role for the player
-    pub fn set_role(self, db: &DatabaseConnection, role: PlayerRole) -> DbFuture<'_, Self> {
+    pub fn set_role(
+        self,
+        db: &DatabaseConnection,
+        role: PlayerRole,
+    ) -> BoxFuture<'_, DbResult<Self>> {
         let mut model = self.into_active_model();
         model.role = Set(role);
         model.update(db)
@@ -190,7 +197,7 @@ impl Model {
         db: &DatabaseConnection,
         username: Option<String>,
         email: Option<String>,
-    ) -> DbFuture<'_, Self> {
+    ) -> BoxFuture<'_, DbResult<Self>> {
         let mut model = self.into_active_model();
 
         if let Some(username) = username {

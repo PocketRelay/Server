@@ -1,5 +1,8 @@
 use sea_orm::{
-    entity::prelude::*, ActiveValue::NotSet, DeleteResult, InsertResult, IntoActiveModel, Set,
+    entity::prelude::*,
+    sea_query::OnConflict,
+    ActiveValue::{NotSet, Set},
+    DeleteResult, InsertResult,
 };
 use serde::Serialize;
 use std::future::Future;
@@ -51,36 +54,25 @@ impl Model {
     /// `db`        The database connection
     /// `key`       The data key
     /// `value`     The data value
-    pub async fn set(
+    pub fn set(
         db: &DatabaseConnection,
         player_id: PlayerID,
         key: String,
         value: String,
-    ) -> DbResult<Self> {
-        let existing = Entity::find()
-            .filter(
-                Column::PlayerId
-                    .eq(player_id)
-                    .and(Column::Key.eq(&key as &str)),
-            )
-            .one(db)
-            .await?;
-
-        if let Some(player_data) = existing {
-            let mut model = player_data.into_active_model();
-            model.key = Set(key);
-            model.value = Set(value);
-            model.update(db).await
-        } else {
-            ActiveModel {
-                player_id: Set(player_id),
-                key: Set(key),
-                value: Set(value),
-                ..Default::default()
-            }
-            .insert(db)
-            .await
-        }
+    ) -> impl Future<Output = DbResult<InsertResult<ActiveModel>>> + Send + '_ {
+        Entity::insert(ActiveModel {
+            id: NotSet,
+            player_id: Set(player_id),
+            key: Set(key),
+            value: Set(value),
+        })
+        .on_conflict(
+            // Update the valume column if a key already exists
+            OnConflict::columns([Column::PlayerId, Column::Key])
+                .update_column(Column::Value)
+                .to_owned(),
+        )
+        .exec(db)
     }
 
     /// Bulk inserts a collection of player data for the provided player. Will not handle
@@ -95,15 +87,23 @@ impl Model {
         player_id: PlayerID,
         data: impl Iterator<Item = (String, String)>,
     ) -> impl Future<Output = DbResult<InsertResult<ActiveModel>>> + Send + '_ {
-        // Transform the provided key values into active models
-        let models_iter = data.map(|(key, value)| ActiveModel {
-            id: NotSet,
-            player_id: Set(player_id),
-            key: Set(key),
-            value: Set(value),
-        });
         // Insert all the models
-        Entity::insert_many(models_iter).exec(db)
+        Entity::insert_many(
+            // Transform the key value pairs into insertable models
+            data.map(|(key, value)| ActiveModel {
+                id: NotSet,
+                player_id: Set(player_id),
+                key: Set(key),
+                value: Set(value),
+            }),
+        )
+        .on_conflict(
+            // Update the valume column if a key already exists
+            OnConflict::columns([Column::PlayerId, Column::Key])
+                .update_column(Column::Value)
+                .to_owned(),
+        )
+        .exec(db)
     }
 
     /// Deletes the player data with the provided key for the

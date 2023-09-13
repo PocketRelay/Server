@@ -494,15 +494,16 @@ pub async fn set_data(
     Path((player_id, key)): Path<(PlayerID, String)>,
     Extension(db): Extension<DatabaseConnection>,
     Json(req): Json<SetDataRequest>,
-) -> PlayersRes<PlayerData> {
+) -> PlayersResult<()> {
     let player: Player = find_player(&db, player_id).await?;
 
     if !auth.has_permission_over(&player) {
         return Err(PlayersError::InvalidPermission);
     }
 
-    let data = PlayerData::set(&db, player.id, key, req.value).await?;
-    Ok(Json(data))
+    PlayerData::set(&db, player.id, key.clone(), req.value).await?;
+
+    Ok(())
 }
 
 /// DELETE /api/players/:id/data/:key
