@@ -99,6 +99,7 @@ impl Default for GalaxyAtWarConfig {
 }
 
 #[derive(Default, Deserialize)]
+#[serde(default)]
 pub struct DashboardConfig {
     pub super_email: Option<String>,
     pub super_password: Option<String>,
