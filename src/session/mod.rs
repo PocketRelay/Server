@@ -27,7 +27,10 @@ use hyper::upgrade::Upgraded;
 use log::{debug, log_enabled, warn};
 use serde::Serialize;
 use std::{fmt::Debug, net::Ipv4Addr, sync::Arc};
-use tokio::sync::{mpsc, RwLock};
+use tokio::{
+    sync::{mpsc, RwLock},
+    task::JoinSet,
+};
 use tokio_util::codec::Framed;
 
 pub mod models;
@@ -208,9 +211,11 @@ struct SessionReader {
 
 impl SessionReader {
     pub async fn process(mut self) {
+        let mut tasks = JoinSet::new();
+
         while let Some(Ok(packet)) = self.inner.next().await {
             let link = self.link.clone();
-            tokio::spawn(async move {
+            tasks.spawn(async move {
                 link.debug_log_packet("Read", &packet).await;
                 let response = match link.router.handle(link.clone(), packet) {
                     // Await the handler response future
@@ -226,6 +231,8 @@ impl SessionReader {
                 link.push(response);
             });
         }
+
+        tasks.shutdown().await;
 
         self.link.stop().await;
     }
