@@ -476,6 +476,11 @@ pub async fn handle_start_matchmaking(
 ///     "MSID": 1
 /// }
 /// ```
-pub async fn handle_cancel_matchmaking(session: SessionLink) {
-    session.remove_games().await;
+pub async fn handle_cancel_matchmaking(
+    session: SessionLink,
+    SessionAuth(player): SessionAuth,
+    Extension(game_manager): Extension<Arc<GameManager>>,
+) {
+    let game = session.take_game().await;
+    game_manager.remove_session(game, player.id).await;
 }

@@ -333,6 +333,11 @@ impl Session {
         data.as_ref().and_then(|value| value.game)
     }
 
+    pub async fn take_game(&self) -> Option<GameID> {
+        let data = &mut *self.data.write().await;
+        data.as_mut().and_then(|value| value.game.take())
+    }
+
     pub async fn get_lookup(&self) -> Option<LookupResponse> {
         let data = &*self.data.read().await;
         data.as_ref().map(|data| LookupResponse {
@@ -421,26 +426,9 @@ impl Session {
         debug!("\n{:?}", debug);
     }
 
-    /// Removes the session from any connected games and the
-    /// matchmaking queue
-    pub async fn remove_games(&self) {
-        // Don't attempt to remove if theres no active player
-        let data = &mut *self.data.write().await;
-        let data = match data {
-            Some(value) => value,
-            None => return,
-        };
-
-        self.game_manager
-            .remove_session(data.game.take(), data.player.id)
-            .await;
-    }
-
     /// Removes the player from the authenticated sessions list
     /// if the player is authenticated
-    pub async fn clear_auth(&self) {
-        self.remove_games().await;
-
+    async fn clear_auth(&self) {
         // Check that theres authentication
         let data = &mut *self.data.write().await;
         let data = match data {
@@ -448,6 +436,11 @@ impl Session {
             None => return,
         };
         let player_id = data.player.id;
+
+        // Remove session from games service
+        self.game_manager
+            .remove_session(data.game.take(), data.player.id)
+            .await;
 
         // Remove the session from the sessions service
         self.sessions.remove_session(player_id).await;
