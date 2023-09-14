@@ -198,8 +198,6 @@ impl SessionWriter {
                 break;
             }
         }
-
-        debug!("Stopping writer for {}", self.link.id);
     }
 }
 
@@ -228,8 +226,6 @@ impl SessionReader {
                 link.push(response);
             });
         }
-
-        debug!("Stopping reader for {}", self.link.id);
 
         self.link.stop().await;
     }
