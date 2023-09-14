@@ -7,25 +7,28 @@ use self::{
         HardwareFlags, LookupResponse, NotifyUserAdded, NotifyUserRemoved, NotifyUserUpdated,
         UserDataFlags, UserIdentification, UserSessionExtendedData, UserSessionExtendedDataUpdate,
     },
-    packet::{Packet, PacketDebug},
+    packet::{Packet, PacketCodec, PacketDebug},
     router::BlazeRouter,
 };
 use crate::{
     database::entities::Player,
-    services::{
-        game::{manager::GameManager, GamePlayer},
-        sessions::Sessions,
-    },
+    services::{game::manager::GameManager, sessions::Sessions},
     session::models::{NetworkAddress, QosNetworkData},
     utils::{
         components::{self, user_sessions},
         types::{GameID, PlayerID, SessionID},
     },
 };
-use interlink::prelude::*;
+use futures_util::{SinkExt, StreamExt};
+use hyper::upgrade::Upgraded;
 use log::{debug, log_enabled};
 use serde::Serialize;
-use std::{fmt::Debug, io, net::Ipv4Addr, sync::Arc};
+use std::{fmt::Debug, net::Ipv4Addr, sync::Arc};
+use tokio::{
+    io::{split, ReadHalf, WriteHalf},
+    sync::{mpsc, RwLock},
+};
+use tokio_util::codec::{FramedRead, FramedWrite};
 
 pub mod models;
 pub mod packet;
@@ -41,13 +44,12 @@ pub struct Session {
     /// Connection socket addr
     addr: Ipv4Addr,
     /// Packet writer sink for the session
-    writer: SinkLink<Packet>,
+    writer: mpsc::UnboundedSender<WriteMessage>,
 
     /// Data associated with this session
-    data: Option<SessionExtData>,
+    data: RwLock<Option<SessionExtData>>,
 
     router: Arc<BlazeRouter>,
-
     game_manager: Arc<GameManager>,
     sessions: Arc<Sessions>,
 }
@@ -61,35 +63,6 @@ pub struct SessionExtData {
     game: Option<GameID>,
     /// Sessions that are subscribed to changes for this session data
     subscribers: Vec<(PlayerID, SessionLink)>,
-}
-
-#[derive(Message)]
-pub enum SubscriberMessage {
-    Sub(PlayerID, SessionLink),
-    Remove(PlayerID),
-}
-
-impl Handler<SubscriberMessage> for Session {
-    type Response = ();
-
-    fn handle(
-        &mut self,
-        msg: SubscriberMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        let data = match &mut self.data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-
-        match msg {
-            SubscriberMessage::Sub(player_id, subscriber) => {
-                data.add_subscriber(player_id, subscriber)
-            }
-            SubscriberMessage::Remove(player_id) => data.remove_subscriber(player_id),
-        }
-    }
 }
 
 impl SessionExtData {
@@ -198,150 +171,50 @@ impl NetData {
     }
 }
 
-impl Service for Session {
-    fn stopping(&mut self) {
-        self.clear_auth();
-        debug!("Session stopped (SID: {})", self.id);
-    }
+pub type SessionLink = Arc<Session>;
+
+// Writer for writing packets
+struct SessionWriter {
+    inner: FramedWrite<WriteHalf<Upgraded>, PacketCodec>,
+    rx: mpsc::UnboundedReceiver<WriteMessage>,
+    link: SessionLink,
 }
 
-pub type SessionLink = Link<Session>;
-
-#[derive(Message)]
-#[msg(rtype = "Option<Arc<Player>>")]
-pub struct GetPlayerMessage;
-
-impl Handler<GetPlayerMessage> for Session {
-    type Response = Mr<GetPlayerMessage>;
-
-    fn handle(
-        &mut self,
-        _msg: GetPlayerMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        Mr(self.data.as_ref().map(|data| data.player.clone()))
-    }
+pub enum WriteMessage {
+    Write(Packet),
+    Close,
 }
 
-#[derive(Message)]
-#[msg(rtype = "Option<GamePlayer>")]
-pub struct GetGamePlayerMessage;
+impl SessionWriter {
+    pub async fn process(mut self) {
+        while let Some(msg) = self.rx.recv().await {
+            let packet = match msg {
+                WriteMessage::Write(packet) => packet,
+                WriteMessage::Close => break,
+            };
 
-impl Handler<GetGamePlayerMessage> for Session {
-    type Response = Mr<GetGamePlayerMessage>;
-    fn handle(
-        &mut self,
-        _msg: GetGamePlayerMessage,
-        ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        Mr(self
-            .data
-            .as_ref()
-            .map(|data| GamePlayer::new(data.player.clone(), data.net.clone(), ctx.link())))
-    }
-}
-
-#[derive(Message)]
-pub struct SetPlayerMessage(pub Option<Player>);
-
-impl Handler<SetPlayerMessage> for Session {
-    type Response = ();
-    fn handle(&mut self, msg: SetPlayerMessage, ctx: &mut ServiceContext<Self>) -> Self::Response {
-        debug_assert!(
-            self.data.is_none(),
-            "Attempted to set player on session that already has a player"
-        );
-
-        // Clear the current authentication
-        // TODO: Handle already authenticated as error and close session
-        // rather than re-resuming it
-        self.clear_auth();
-
-        // If we are setting a new player
-        if let Some(player) = msg.0 {
-            let sessions = self.sessions.clone();
-            let player_id = player.id;
-            let link = ctx.link();
-            // Add the session to authenticated sessions
-            tokio::spawn(async move {
-                sessions.add_session(player_id, link).await;
-            });
-
-            let data = SessionExtData::new(player);
-            self.data = Some(data);
+            self.link.debug_log_packet("Queued Write", &packet).await;
+            if self.inner.send(packet).await.is_err() {
+                break;
+            }
         }
+
+        debug!("Stopping writer for {}", self.link.id);
     }
 }
 
-/// Extension for links to push packets for session links
-pub trait PushExt {
-    fn push(&self, packet: Packet);
+struct SessionReader {
+    inner: FramedRead<ReadHalf<Upgraded>, PacketCodec>,
+    link: SessionLink,
 }
 
-impl PushExt for Link<Session> {
-    #[inline]
-    fn push(&self, packet: Packet) {
-        let _ = self.do_send(WriteMessage(packet));
-    }
-}
-
-#[derive(Message)]
-#[msg(rtype = "Option<GameID>")]
-pub struct GetPlayerGameMessage;
-
-impl Handler<GetPlayerGameMessage> for Session {
-    type Response = Mr<GetPlayerGameMessage>;
-
-    fn handle(
-        &mut self,
-        _msg: GetPlayerGameMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        Mr(self.data.as_ref().and_then(|data| data.game))
-    }
-}
-
-#[derive(Message)]
-#[msg(rtype = "Option<LookupResponse>")]
-pub struct GetLookupMessage;
-
-impl Handler<GetLookupMessage> for Session {
-    type Response = Mr<GetLookupMessage>;
-
-    fn handle(
-        &mut self,
-        _msg: GetLookupMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        Mr(self.data.as_ref().map(|data| LookupResponse {
-            player: data.player.clone(),
-            extended_data: UserSessionExtendedData {
-                net: data.net.clone(),
-                game: data.game,
-            },
-        }))
-    }
-}
-
-#[derive(Message)]
-pub struct WriteMessage(pub Packet);
-
-impl Handler<WriteMessage> for Session {
-    type Response = ();
-
-    fn handle(&mut self, msg: WriteMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
-        self.push(msg.0);
-    }
-}
-
-impl StreamHandler<io::Result<Packet>> for Session {
-    fn handle(&mut self, msg: io::Result<Packet>, ctx: &mut ServiceContext<Self>) {
-        if let Ok(packet) = msg {
-            self.debug_log_packet("Read", &packet);
-            let addr = ctx.link();
-            let router = self.router.clone();
+impl SessionReader {
+    pub async fn process(mut self) {
+        while let Some(Ok(packet)) = self.inner.next().await {
+            let link = self.link.clone();
             tokio::spawn(async move {
-                let response = match router.handle(addr.clone(), packet) {
+                link.debug_log_packet("Read", &packet).await;
+                let response = match link.router.handle(link.clone(), packet) {
                     // Await the handler response future
                     Ok(fut) => fut.await,
 
@@ -352,117 +225,159 @@ impl StreamHandler<io::Result<Packet>> for Session {
                     }
                 };
                 // Push the response to the client
-                addr.push(response);
+                link.push(response);
             });
-        } else {
-            ctx.stop();
         }
-    }
-}
 
-impl ErrorHandler<io::Error> for Session {
-    fn handle(&mut self, _err: io::Error, _ctx: &mut ServiceContext<Self>) -> ErrorAction {
-        ErrorAction::Continue
-    }
-}
+        debug!("Stopping reader for {}", self.link.id);
 
-#[derive(Message)]
-#[msg(rtype = "Ipv4Addr")]
-pub struct GetSocketAddrMessage;
-
-impl Handler<GetSocketAddrMessage> for Session {
-    type Response = Mr<GetSocketAddrMessage>;
-
-    fn handle(
-        &mut self,
-        _msg: GetSocketAddrMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        Mr(self.addr)
-    }
-}
-
-/// Message to update the hardware flag of a session
-#[derive(Message)]
-pub struct HardwareFlagMessage {
-    /// The new value for the hardware flag
-    pub value: HardwareFlags,
-}
-
-impl Handler<HardwareFlagMessage> for Session {
-    type Response = ();
-
-    fn handle(&mut self, msg: HardwareFlagMessage, _ctx: &mut ServiceContext<Self>) {
-        let data = match &mut self.data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-
-        data.net = Arc::new(data.net.with_hardware_flags(msg.value));
-        data.publish_update();
-    }
-}
-
-#[derive(Message)]
-pub struct NetworkInfoMessage {
-    pub address: NetworkAddress,
-    pub qos: QosNetworkData,
-}
-
-impl Handler<NetworkInfoMessage> for Session {
-    type Response = ();
-
-    fn handle(&mut self, msg: NetworkInfoMessage, _ctx: &mut ServiceContext<Self>) {
-        let data = match &mut self.data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-
-        data.net = Arc::new(data.net.with_basic(msg.address, msg.qos));
-        data.publish_update();
-    }
-}
-
-#[derive(Message)]
-pub struct SetGameMessage {
-    pub game: Option<GameID>,
-}
-
-impl Handler<SetGameMessage> for Session {
-    type Response = ();
-
-    fn handle(&mut self, msg: SetGameMessage, _ctx: &mut ServiceContext<Self>) {
-        let data = match &mut self.data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-
-        data.game = msg.game;
-        data.publish_update();
+        self.link.stop().await;
     }
 }
 
 impl Session {
-    pub fn new(
+    pub fn start(
         id: SessionID,
-        writer: SinkLink<Packet>,
+        io: Upgraded,
         addr: Ipv4Addr,
         router: Arc<BlazeRouter>,
         game_manager: Arc<GameManager>,
         sessions: Arc<Sessions>,
-    ) -> Self {
-        Self {
+    ) {
+        // Attach reader and writers to the session context
+        let (read, write) = split(io);
+        let read = FramedRead::new(read, PacketCodec);
+        let write = FramedWrite::new(write, PacketCodec);
+
+        let (tx, rx) = mpsc::unbounded_channel();
+
+        let session = Arc::new(Self {
             id,
-            writer,
-            data: None,
+            writer: tx,
+            data: Default::default(),
             addr,
             router,
             game_manager,
             sessions,
+        });
+
+        let reader = SessionReader {
+            link: session.clone(),
+            inner: read,
+        };
+
+        let writer = SessionWriter {
+            link: session.clone(),
+            rx,
+            inner: write,
+        };
+
+        tokio::spawn(reader.process());
+        tokio::spawn(writer.process());
+    }
+
+    async fn stop(&self) {
+        // Close the write half
+        _ = self.writer.send(WriteMessage::Close);
+
+        // Clear authentication
+        self.clear_auth().await;
+        debug!("Session stopped (SID: {})", self.id);
+    }
+
+    pub async fn add_subscriber(&self, player_id: PlayerID, subscriber: SessionLink) {
+        let data = &mut *self.data.write().await;
+        let data = match data {
+            Some(value) => value,
+            // TODO: Handle this as an error for unauthenticated
+            None => return,
+        };
+        data.add_subscriber(player_id, subscriber);
+    }
+
+    pub async fn remove_subscriber(&self, player_id: PlayerID) {
+        let data = &mut *self.data.write().await;
+        let data = match data {
+            Some(value) => value,
+            // TODO: Handle this as an error for unauthenticated
+            None => return,
+        };
+        data.remove_subscriber(player_id);
+    }
+
+    pub async fn set_player(self: Arc<Self>, player: Option<Player>) {
+        // Clear the current authentication
+        // TODO: Handle already authenticated as error and close session
+        // rather than re-resuming it
+        self.clear_auth().await;
+
+        let data = &mut *self.data.write().await;
+
+        // If we are setting a new player
+        if let Some(player) = player {
+            let sessions = self.sessions.clone();
+            let player_id = player.id;
+            let link = self.clone();
+
+            // Add the session to authenticated sessions
+            tokio::spawn(async move {
+                sessions.add_session(player_id, link).await;
+            });
+
+            *data = Some(SessionExtData::new(player));
         }
+    }
+
+    pub async fn get_game(&self) -> Option<GameID> {
+        let data = &*self.data.read().await;
+        data.as_ref().and_then(|value| value.game)
+    }
+
+    pub async fn get_lookup(&self) -> Option<LookupResponse> {
+        let data = &*self.data.read().await;
+        data.as_ref().map(|data| LookupResponse {
+            player: data.player.clone(),
+            extended_data: UserSessionExtendedData {
+                net: data.net.clone(),
+                game: data.game,
+            },
+        })
+    }
+
+    pub async fn set_game(&self, game: Option<GameID>) {
+        let data = &mut *self.data.write().await;
+        let data = match data {
+            Some(value) => value,
+            // TODO: Handle this as an error for unauthenticated
+            None => return,
+        };
+
+        data.game = game;
+        data.publish_update();
+    }
+
+    pub async fn set_hardware_flags(&self, value: HardwareFlags) {
+        let data = &mut *self.data.write().await;
+        let data = match data {
+            Some(value) => value,
+            // TODO: Handle this as an error for unauthenticated
+            None => return,
+        };
+
+        data.net = Arc::new(data.net.with_hardware_flags(value));
+        data.publish_update();
+    }
+
+    pub async fn set_network_info(&self, address: NetworkAddress, qos: QosNetworkData) {
+        let data = &mut *self.data.write().await;
+        let data = match data {
+            Some(value) => value,
+            // TODO: Handle this as an error for unauthenticated
+            None => return,
+        };
+
+        data.net = Arc::new(data.net.with_basic(address, qos));
+        data.publish_update();
     }
 
     /// Pushes a new packet to the back of the packet buffer
@@ -470,10 +385,8 @@ impl Session {
     ///
     /// `packet` The packet to push to the buffer
     pub fn push(&self, packet: Packet) {
-        self.debug_log_packet("Queued Write", &packet);
-        if self.writer.sink(packet).is_err() {
-            // TODO: Handle failing to send contents to writer
-        }
+        _ = self.writer.send(WriteMessage::Write(packet))
+        // TODO: Handle failing to send contents to writer
     }
 
     /// Logs the contents of the provided packet to the debug output along with
@@ -482,7 +395,7 @@ impl Session {
     /// `action` The name of the action this packet is undergoing.
     ///          (e.g. Writing or Reading)
     /// `packet` The packet that is being logged
-    fn debug_log_packet(&self, action: &'static str, packet: &Packet) {
+    async fn debug_log_packet(&self, action: &'static str, packet: &Packet) {
         // Skip if debug logging is disabled
         if !log_enabled!(log::Level::Debug) {
             return;
@@ -496,11 +409,13 @@ impl Session {
         if ignored {
             return;
         }
-
+        // TODO: Blocking read is currently the only known solution
+        let data = &*self.data.read().await;
         let debug = SessionPacketDebug {
             action,
             packet,
-            session: self,
+            session_id: self.id,
+            session_data: data,
         };
 
         debug!("\n{:?}", debug);
@@ -508,38 +423,34 @@ impl Session {
 
     /// Removes the session from any connected games and the
     /// matchmaking queue
-    pub fn remove_games(&mut self) {
+    pub async fn remove_games(&self) {
         // Don't attempt to remove if theres no active player
-        let data = match &mut self.data {
+        let data = &mut *self.data.write().await;
+        let data = match data {
             Some(value) => value,
             None => return,
         };
 
-        let game_manager = self.game_manager.clone();
-        let game = data.game.take();
-        let player_id = data.player.id;
-        tokio::spawn(async move {
-            game_manager.remove_session(game, player_id).await;
-        });
+        self.game_manager
+            .remove_session(data.game.take(), data.player.id)
+            .await;
     }
 
     /// Removes the player from the authenticated sessions list
     /// if the player is authenticated
-    pub fn clear_auth(&mut self) {
-        self.remove_games();
+    pub async fn clear_auth(&self) {
+        self.remove_games().await;
 
         // Check that theres authentication
-        let data = match &self.data {
+        let data = &mut *self.data.write().await;
+        let data = match data {
             Some(value) => value,
             None => return,
         };
         let player_id = data.player.id;
 
         // Remove the session from the sessions service
-        let sessions = self.sessions.clone();
-        tokio::spawn(async move {
-            sessions.remove_session(player_id).await;
-        });
+        self.sessions.remove_session(player_id).await;
     }
 }
 
@@ -548,21 +459,22 @@ impl Session {
 struct SessionPacketDebug<'a> {
     action: &'static str,
     packet: &'a Packet,
-    session: &'a Session,
+    session_id: SessionID,
+    session_data: &'a Option<SessionExtData>,
 }
 
 impl Debug for SessionPacketDebug<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Session {} Packet", self.action)?;
 
-        if let Some(data) = &self.session.data {
+        if let Some(data) = &self.session_data {
             writeln!(
                 f,
                 "Info: (Name: {}, ID: {}, SID: {})",
-                &data.player.display_name, data.player.id, &self.session.id
+                &data.player.display_name, data.player.id, &self.session_id
             )?;
         } else {
-            writeln!(f, "Info: (SID: {})", &self.session.id)?;
+            writeln!(f, "Info: (SID: {})", &self.session_id)?;
         }
 
         let header = &self.packet.header;

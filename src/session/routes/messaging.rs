@@ -4,7 +4,7 @@ use crate::{
         models::messaging::*,
         packet::Packet,
         router::{Blaze, Extension, SessionAuth},
-        PushExt, SessionLink,
+        SessionLink,
     },
     utils::components::messaging,
 };

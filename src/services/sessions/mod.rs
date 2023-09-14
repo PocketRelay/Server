@@ -1,11 +1,11 @@
 //! Service for storing links to all the currenly active
 //! authenticated sessions on the server
 
+use crate::session::SessionLink;
 use crate::utils::hashing::IntHashMap;
-use crate::{session::Session, utils::types::PlayerID};
+use crate::utils::types::PlayerID;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use base64ct::{Base64UrlUnpadded, Encoding};
-use interlink::prelude::*;
 use log::error;
 use ring::hmac::{self, Key, HMAC_SHA256};
 use std::{
@@ -23,7 +23,7 @@ use tokio::{
 /// functionality for authenticating sessions
 pub struct Sessions {
     /// Map of the authenticated players to their session links
-    sessions: RwLock<IntHashMap<PlayerID, Link<Session>>>,
+    sessions: RwLock<IntHashMap<PlayerID, SessionLink>>,
 
     /// HMAC key used for computing signatures
     key: Key,
@@ -154,12 +154,12 @@ impl Sessions {
         sessions.remove(&player_id);
     }
 
-    pub async fn add_session(&self, player_id: PlayerID, link: Link<Session>) {
+    pub async fn add_session(&self, player_id: PlayerID, link: SessionLink) {
         let sessions = &mut *self.sessions.write().await;
         sessions.insert(player_id, link);
     }
 
-    pub async fn lookup_session(&self, player_id: PlayerID) -> Option<Link<Session>> {
+    pub async fn lookup_session(&self, player_id: PlayerID) -> Option<SessionLink> {
         let sessions = &*self.sessions.read().await;
         sessions.get(&player_id).cloned()
     }

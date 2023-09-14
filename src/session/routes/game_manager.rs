@@ -13,24 +13,18 @@ use crate::{
             game_manager::*,
         },
         router::{Blaze, Extension, RawBlaze, SessionAuth},
-        GetGamePlayerMessage, GetPlayerGameMessage, SessionLink,
+        SessionLink,
     },
 };
 use log::{debug, info};
 use std::sync::Arc;
 
 pub async fn handle_join_game(
-    session: SessionLink,
+    player: GamePlayer,
     Extension(sessions): Extension<Arc<Sessions>>,
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<JoinGameRequest>,
 ) -> ServerResult<Blaze<JoinGameResponse>> {
-    // Load the session
-    let player: GamePlayer = session
-        .send(GetGamePlayerMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
     // Lookup the session join target
     let session = sessions
         .lookup_session(req.user.id)
@@ -39,8 +33,8 @@ pub async fn handle_join_game(
 
     // Find the game ID for the target session
     let game_id = session
-        .send(GetPlayerGameMessage)
-        .await?
+        .get_game()
+        .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
     let game = game_manager
@@ -141,15 +135,10 @@ pub async fn handle_get_game_data(
 /// }
 /// ```
 pub async fn handle_create_game(
-    session: SessionLink,
+    player: GamePlayer,
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<CreateGameRequest>,
 ) -> ServerResult<Blaze<CreateGameResponse>> {
-    let player: GamePlayer = session
-        .send(GetGamePlayerMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
     let (link, game_id) = game_manager
         .create_game(req.attributes, req.setting, player)
         .await;
@@ -443,15 +432,10 @@ pub async fn handle_update_mesh_connection(
 /// }
 /// ```
 pub async fn handle_start_matchmaking(
-    session: SessionLink,
+    player: GamePlayer,
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<MatchmakingRequest>,
 ) -> ServerResult<Blaze<MatchmakingResponse>> {
-    let player: GamePlayer = session
-        .send(GetGamePlayerMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
     let session_id = player.player.id;
 
     info!("Player {} started matchmaking", player.player.display_name);
@@ -477,10 +461,5 @@ pub async fn handle_start_matchmaking(
 /// }
 /// ```
 pub async fn handle_cancel_matchmaking(session: SessionLink) {
-    session
-        .exec(|session, _| {
-            session.remove_games();
-        })
-        .await
-        .ok();
+    session.remove_games().await;
 }

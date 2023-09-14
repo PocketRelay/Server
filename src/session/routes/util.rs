@@ -7,7 +7,7 @@ use crate::{
             util::*,
         },
         router::{Blaze, Extension, SessionAuth},
-        SessionLink, SubscriberMessage,
+        SessionLink,
     },
 };
 use base64ct::{Base64, Encoding};
@@ -95,9 +95,9 @@ pub async fn handle_post_auth(
     SessionAuth(player): SessionAuth,
 ) -> ServerResult<Blaze<PostAuthResponse>> {
     // Subscribe to the session with itself
-    session
-        .send(SubscriberMessage::Sub(player.id, session.clone()))
-        .await?;
+
+    session.add_subscriber(player.id, session.clone()).await;
+
     // let _ = session.do_send(SubscriberMessage::Publish);
 
     Ok(Blaze(PostAuthResponse {

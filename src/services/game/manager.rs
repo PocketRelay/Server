@@ -9,7 +9,6 @@ use crate::{
             MatchmakingResult, PlayerState, RemoveReason,
         },
         packet::Packet,
-        PushExt,
     },
     utils::{
         components::game_manager,

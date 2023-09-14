@@ -4,10 +4,11 @@
 use super::{
     models::errors::BlazeError,
     packet::{Packet, PacketHeader},
-    GetPlayerMessage, SessionLink,
+    SessionLink,
 };
 use crate::{
     database::entities::Player,
+    services::game::GamePlayer,
     session::models::errors::GlobalError,
     utils::{
         components::{component_key, ComponentKey},
@@ -213,6 +214,27 @@ where
     }
 }
 
+impl FromPacketRequest for GamePlayer {
+    type Rejection = BlazeError;
+
+    fn from_packet_request<'a>(
+        req: &'a PacketRequest,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        Box::pin(async move {
+            let data = &*req.state.data.read().await;
+            let data = data.as_ref().ok_or(GlobalError::AuthenticationRequired)?;
+            Ok(GamePlayer::new(
+                data.player.clone(),
+                data.net.clone(),
+                req.state.clone(),
+            ))
+        })
+    }
+}
+
 impl FromPacketRequest for SessionAuth {
     type Rejection = BlazeError;
 
@@ -223,11 +245,9 @@ impl FromPacketRequest for SessionAuth {
         Self: 'a,
     {
         Box::pin(async move {
-            let player = req
-                .state
-                .send(GetPlayerMessage)
-                .await?
-                .ok_or(GlobalError::AuthenticationRequired)?;
+            let data = &*req.state.data.read().await;
+            let data = data.as_ref().ok_or(GlobalError::AuthenticationRequired)?;
+            let player = data.player.clone();
             Ok(SessionAuth(player))
         })
     }

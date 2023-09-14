@@ -9,8 +9,7 @@ use crate::{
             NetworkAddress,
         },
         router::{Blaze, Extension},
-        GetLookupMessage, GetSocketAddrMessage, HardwareFlagMessage, LookupResponse,
-        NetworkInfoMessage, SessionLink, SetPlayerMessage,
+        LookupResponse, SessionLink,
     },
 };
 use sea_orm::DatabaseConnection;
@@ -44,8 +43,8 @@ pub async fn handle_lookup_user(
 
     // Get the lookup response from the session
     let response = session
-        .send(GetLookupMessage)
-        .await?
+        .get_lookup()
+        .await
         .ok_or(UserSessionsError::UserNotFound)?;
 
     Ok(Blaze(response))
@@ -83,7 +82,7 @@ pub async fn handle_resume_session(
 
     // Failing to set the player likely the player disconnected or
     // the server is shutting down
-    session.send(SetPlayerMessage(Some(player.clone()))).await?;
+    session.set_player(Some(player.clone())).await;
 
     Ok(Blaze(AuthResponse {
         player,
@@ -130,21 +129,15 @@ pub async fn handle_update_network(
 
         // If address is missing
         if ext.addr.is_unspecified() {
-            // Obtain socket address from session
-            if let Ok(addr) = session.send(GetSocketAddrMessage).await {
-                // Replace address with new address and port with same as local port
-                ext.addr = addr;
-                ext.port = pair.internal.port;
-            }
+            // Replace address with new address and port with same as local port
+            ext.addr = session.addr;
+            ext.port = pair.internal.port;
         }
     }
 
-    let _ = session
-        .send(NetworkInfoMessage {
-            address: req.address,
-            qos: req.qos,
-        })
-        .await;
+    tokio::spawn(async move {
+        session.set_network_info(req.address, req.qos).await;
+    });
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
@@ -160,9 +153,7 @@ pub async fn handle_update_hardware_flag(
     session: SessionLink,
     Blaze(req): Blaze<UpdateHardwareFlagsRequest>,
 ) {
-    let _ = session
-        .send(HardwareFlagMessage {
-            value: req.hardware_flags,
-        })
-        .await;
+    tokio::spawn(async move {
+        session.set_hardware_flags(req.hardware_flags).await;
+    });
 }

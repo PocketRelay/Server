@@ -10,7 +10,7 @@ use crate::{
         ip_address::IpAddress,
     },
     services::{game::manager::GameManager, sessions::Sessions},
-    session::{packet::PacketCodec, router::BlazeRouter, Session},
+    session::{router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
 };
 use axum::{
@@ -19,15 +19,13 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::service::Service;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::sync::{
     atomic::{AtomicU32, Ordering},
     Arc,
 };
-use tokio::{fs::read_to_string, io::split};
-use tokio_util::codec::{FramedRead, FramedWrite};
+use tokio::fs::read_to_string;
 
 static SESSION_IDS: AtomicU32 = AtomicU32::new(1);
 
@@ -95,20 +93,11 @@ pub async fn upgrade(
                 return;
             }
         };
-        Session::create(|ctx| {
-            // Obtain a session ID
-            let session_id = SESSION_IDS.fetch_add(1, Ordering::AcqRel);
 
-            // Attach reader and writers to the session context
-            let (read, write) = split(upgrade);
-            let read = FramedRead::new(read, PacketCodec);
-            let write = FramedWrite::new(write, PacketCodec);
+        // Obtain a session ID
+        let session_id = SESSION_IDS.fetch_add(1, Ordering::AcqRel);
 
-            ctx.attach_stream(read, true);
-            let writer = ctx.attach_sink(write);
-
-            Session::new(session_id, writer, addr, router, game_manager, sessions)
-        });
+        Session::start(session_id, upgrade, addr, router, game_manager, sessions);
     });
 
     let mut response = Empty::new().into_response();

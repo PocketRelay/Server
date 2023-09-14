@@ -10,7 +10,7 @@ use crate::{
         },
         packet::Packet,
         router::RawBlaze,
-        NetData, PushExt, Session, SessionLink, SetGameMessage, SubscriberMessage,
+        NetData, SessionLink,
     },
     utils::{
         components::game_manager,
@@ -104,7 +104,7 @@ pub struct GamePlayer {
     /// Session player
     pub player: Arc<Player>,
     /// Session address
-    pub link: Link<Session>,
+    pub link: SessionLink,
     /// Networking information for the player
     pub net: Arc<NetData>,
     /// The mesh state of the player
@@ -130,7 +130,7 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(player: Arc<Player>, net: Arc<NetData>, link: Link<Session>) -> Self {
+    pub fn new(player: Arc<Player>, net: Arc<NetData>, link: SessionLink) -> Self {
         Self {
             player,
             link,
@@ -140,7 +140,10 @@ impl GamePlayer {
     }
 
     pub fn set_game(&self, game: Option<GameID>) {
-        let _ = self.link.do_send(SetGameMessage { game });
+        let link = self.link.clone();
+        tokio::spawn(async move {
+            link.set_game(game).await;
+        });
     }
 
     /// Takes a snapshot of the current player state
@@ -430,7 +433,7 @@ impl Handler<RemovePlayerMessage> for Game {
 
         // Update the other players
         self.notify_player_removed(&player, msg.reason);
-        self.rem_user_sub(&player);
+        self.rem_user_sub(player.player.id, player.link.clone());
         self.modify_admin_list(player.player.id, AdminListOperation::Remove);
 
         debug!(
@@ -579,33 +582,40 @@ impl Game {
             .iter()
             .filter(|other| other.player.id.ne(&target_id))
             .for_each(|other| {
-                _ = target_link
-                    .do_send(SubscriberMessage::Sub(other.player.id, other.link.clone()));
+                let other_id = other.player.id;
+                let other_link = other.link.clone();
+                let target_link = target_link.clone();
 
-                _ = other
-                    .link
-                    .do_send(SubscriberMessage::Sub(target_id, target_link.clone()));
+                tokio::spawn(async move {
+                    target_link
+                        .add_subscriber(other_id, other_link.clone())
+                        .await;
+                    other_link
+                        .add_subscriber(target_id, target_link.clone())
+                        .await;
+                });
             });
     }
 
     /// Notifies the provided player and all other players
     /// in the game that they should remove eachother from
     /// their player data list
-    fn rem_user_sub(&self, player: &GamePlayer) {
+    fn rem_user_sub(&self, target_id: PlayerID, target_link: SessionLink) {
         debug!("Removing user subscriptions");
 
         // Unsubscribe all the clients from eachother
         self.players
             .iter()
-            .filter(|other| other.player.id.ne(&player.player.id))
+            .filter(|other| other.player.id.ne(&target_id))
             .for_each(|other| {
-                _ = player
-                    .link
-                    .do_send(SubscriberMessage::Remove(other.player.id));
+                let other_id = other.player.id;
+                let other_link = other.link.clone();
+                let target_link = target_link.clone();
 
-                _ = other
-                    .link
-                    .do_send(SubscriberMessage::Remove(player.player.id));
+                tokio::spawn(async move {
+                    target_link.remove_subscriber(other_id).await;
+                    other_link.remove_subscriber(target_id).await;
+                });
             });
     }
 
