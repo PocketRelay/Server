@@ -301,24 +301,15 @@ impl Session {
         data.remove_subscriber(player_id);
     }
 
-    pub async fn set_player(self: Arc<Self>, player: Option<Player>) {
+    pub async fn set_player(&self, player: Option<Player>) {
         // Clear the current authentication
         // TODO: Handle already authenticated as error and close session
         // rather than re-resuming it
         self.clear_auth().await;
 
-        let data = &mut *self.data.write().await;
-
         // If we are setting a new player
         if let Some(player) = player {
-            let sessions = self.sessions.clone();
-            let player_id = player.id;
-            let link = self.clone();
-
-            // Add the session to authenticated sessions
-            tokio::spawn(async move {
-                sessions.add_session(player_id, link).await;
-            });
+            let data = &mut *self.data.write().await;
 
             *data = Some(SessionExtData::new(player));
         }
@@ -431,7 +422,6 @@ impl Session {
             Some(value) => value,
             None => return,
         };
-        let player_id = data.player.id;
 
         // Remove session from games service
         self.game_manager
@@ -439,7 +429,7 @@ impl Session {
             .await;
 
         // Remove the session from the sessions service
-        self.sessions.remove_session(player_id).await;
+        self.sessions.remove_session(data.player.id).await;
     }
 }
 

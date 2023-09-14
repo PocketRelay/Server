@@ -51,7 +51,8 @@ pub async fn handle_login(
 
     // Update the session stored player
 
-    session.clone().set_player(Some(player.clone())).await;
+    session.set_player(Some(player.clone())).await;
+    sessions.add_session(player.id, session).await;
 
     let session_token: String = sessions.create_token(player.id);
 
@@ -79,7 +80,8 @@ pub async fn handle_silent_login(
         .ok_or(AuthenticationError::InvalidToken)?;
 
     // Update the session stored player
-    session.clone().set_player(Some(player.clone())).await;
+    session.set_player(Some(player.clone())).await;
+    sessions.add_session(player.id, session).await;
 
     Ok(Blaze(AuthResponse {
         player,
@@ -114,7 +116,8 @@ pub async fn handle_origin_login(
     };
 
     // Update the session stored player
-    session.clone().set_player(Some(player.clone())).await;
+    session.set_player(Some(player.clone())).await;
+    sessions.add_session(player.id, session).await;
 
     let session_token: String = sessions.create_token(player.id);
 
@@ -133,8 +136,13 @@ pub async fn handle_origin_login(
 /// ID: 8
 /// Content: {}
 /// ```
-pub async fn handle_logout(session: SessionLink) {
+pub async fn handle_logout(
+    session: SessionLink,
+    SessionAuth(player): SessionAuth,
+    Extension(sessions): Extension<Arc<Sessions>>,
+) {
     session.set_player(None).await;
+    sessions.remove_session(player.id).await;
 }
 
 // Skip formatting these entitlement creations
@@ -319,9 +327,8 @@ pub async fn handle_create_account(
     let player: Player =
         Player::create(&db, email, display_name, Some(hashed_password), &config).await?;
 
-    // Failing to set the player likely the player disconnected or
-    // the server is shutting down
-    session.clone().set_player(Some(player.clone())).await;
+    session.set_player(Some(player.clone())).await;
+    sessions.add_session(player.id, session).await;
 
     let session_token = sessions.create_token(player.id);
 

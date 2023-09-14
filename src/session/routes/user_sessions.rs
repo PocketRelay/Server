@@ -80,9 +80,8 @@ pub async fn handle_resume_session(
         .await?
         .ok_or(AuthenticationError::InvalidToken)?;
 
-    // Failing to set the player likely the player disconnected or
-    // the server is shutting down
     session.set_player(Some(player.clone())).await;
+    sessions.add_session(player.id, session).await;
 
     Ok(Blaze(AuthResponse {
         player,
