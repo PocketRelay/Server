@@ -292,8 +292,8 @@ impl Session {
             Err(arc) => {
                 let references = Arc::strong_count(&arc);
                 warn!(
-                    "Session was stopped but {} references to it still exist",
-                    references
+                    "Session {} was stopped but {} references to it still exist",
+                    arc.id, references
                 );
                 return;
             }
