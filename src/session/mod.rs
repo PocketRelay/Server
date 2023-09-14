@@ -19,16 +19,16 @@ use crate::{
         types::{GameID, PlayerID, SessionID},
     },
 };
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{
+    stream::{SplitSink, SplitStream},
+    SinkExt, StreamExt,
+};
 use hyper::upgrade::Upgraded;
-use log::{debug, log_enabled};
+use log::{debug, log_enabled, warn};
 use serde::Serialize;
 use std::{fmt::Debug, net::Ipv4Addr, sync::Arc};
-use tokio::{
-    io::{split, ReadHalf, WriteHalf},
-    sync::{mpsc, RwLock},
-};
-use tokio_util::codec::{FramedRead, FramedWrite};
+use tokio::sync::{mpsc, RwLock};
+use tokio_util::codec::Framed;
 
 pub mod models;
 pub mod packet;
@@ -175,7 +175,7 @@ pub type SessionLink = Arc<Session>;
 
 // Writer for writing packets
 struct SessionWriter {
-    inner: FramedWrite<WriteHalf<Upgraded>, PacketCodec>,
+    inner: SplitSink<Framed<Upgraded, PacketCodec>, Packet>,
     rx: mpsc::UnboundedReceiver<WriteMessage>,
     link: SessionLink,
 }
@@ -202,7 +202,7 @@ impl SessionWriter {
 }
 
 struct SessionReader {
-    inner: FramedRead<ReadHalf<Upgraded>, PacketCodec>,
+    inner: SplitStream<Framed<Upgraded, PacketCodec>>,
     link: SessionLink,
 }
 
@@ -240,11 +240,8 @@ impl Session {
         game_manager: Arc<GameManager>,
         sessions: Arc<Sessions>,
     ) {
-        // Attach reader and writers to the session context
-        let (read, write) = split(io);
-        let read = FramedRead::new(read, PacketCodec);
-        let write = FramedWrite::new(write, PacketCodec);
-
+        let framed = Framed::new(io, PacketCodec);
+        let (write, read) = framed.split();
         let (tx, rx) = mpsc::unbounded_channel();
 
         let session = Arc::new(Self {
@@ -272,13 +269,29 @@ impl Session {
         tokio::spawn(writer.process());
     }
 
-    async fn stop(&self) {
+    /// Internal session stopped function called by the reader when
+    /// the connection is terminated, cleans up any references and
+    /// asserts only 1 strong reference exists
+    async fn stop(self: Arc<Self>) {
         // Close the write half
         _ = self.writer.send(WriteMessage::Close);
 
         // Clear authentication
-        self.clear_auth().await;
-        debug!("Session stopped (SID: {})", self.id);
+        self.clear_player().await;
+
+        let session: Self = match Arc::try_unwrap(self) {
+            Ok(value) => value,
+            Err(arc) => {
+                let references = Arc::strong_count(&arc);
+                warn!(
+                    "Session was stopped but {} references to it still exist",
+                    references
+                );
+                return;
+            }
+        };
+
+        debug!("Session stopped (SID: {})", session.id);
     }
 
     pub async fn add_subscriber(&self, player_id: PlayerID, subscriber: SessionLink) {
@@ -303,9 +316,7 @@ impl Session {
 
     pub async fn set_player(&self, player: Player) -> Arc<Player> {
         // Clear the current authentication
-        // TODO: Handle already authenticated as error and close session
-        // rather than re-resuming it
-        self.clear_auth().await;
+        self.clear_player().await;
 
         let data = &mut *self.data.write().await;
         let data = data.insert(SessionExtData::new(player));
@@ -314,7 +325,20 @@ impl Session {
     }
 
     pub async fn clear_player(&self) {
-        self.clear_auth().await;
+        // Check that theres authentication
+        let data = &mut *self.data.write().await;
+        let data = match data {
+            Some(value) => value,
+            None => return,
+        };
+
+        // Remove session from games service
+        self.game_manager
+            .remove_session(data.game.take(), data.player.id)
+            .await;
+
+        // Remove the session from the sessions service
+        self.sessions.remove_session(data.player.id).await;
     }
 
     pub async fn get_game(&self) -> Option<GameID> {
@@ -413,25 +437,6 @@ impl Session {
         };
 
         debug!("\n{:?}", debug);
-    }
-
-    /// Removes the player from the authenticated sessions list
-    /// if the player is authenticated
-    async fn clear_auth(&self) {
-        // Check that theres authentication
-        let data = &mut *self.data.write().await;
-        let data = match data {
-            Some(value) => value,
-            None => return,
-        };
-
-        // Remove session from games service
-        self.game_manager
-            .remove_session(data.game.take(), data.player.id)
-            .await;
-
-        // Remove the session from the sessions service
-        self.sessions.remove_session(data.player.id).await;
     }
 }
 
