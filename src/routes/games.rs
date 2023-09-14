@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
 use crate::{
     database::entities::players::PlayerRole,
     middleware::auth::Auth,
-    services::game::{manager::GameManager, GameSnapshot, SnapshotMessage},
+    services::game::{manager::GameManager, GameSnapshot},
     utils::types::GameID,
 };
 use axum::{
@@ -12,8 +10,8 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::prelude::LinkError;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use thiserror::Error;
 
 /// Errors that could occur while working with game endpoints
@@ -22,9 +20,6 @@ pub enum GamesError {
     /// The requested game could not be found (For specific game lookup)
     #[error("Game not found")]
     NotFound,
-    /// Something went wrong with the link to the games service
-    #[error("Failed to access games service")]
-    Link(#[from] LinkError),
 }
 
 /// Response type alias for JSON responses with GamesError
@@ -95,12 +90,8 @@ pub async fn get_game(
         .get_game(game_id)
         .await
         .ok_or(GamesError::NotFound)?;
-
-    let snapshot = game
-        .send(SnapshotMessage {
-            include_net: auth.role >= PlayerRole::Admin,
-        })
-        .await?;
+    let game = &*game.read().await;
+    let snapshot = game.snapshot(auth.role >= PlayerRole::Admin);
 
     Ok(Json(snapshot))
 }
@@ -110,7 +101,6 @@ impl IntoResponse for GamesError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             Self::NotFound => StatusCode::NOT_FOUND,
-            Self::Link(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (status_code, self.to_string()).into_response()

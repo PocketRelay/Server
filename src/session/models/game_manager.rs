@@ -514,7 +514,7 @@ pub struct StateChange {
 pub struct SettingChange {
     /// The game setting
     #[tdf(tag = "ATTR", into = u16)]
-    pub setting: GameSettings,
+    pub settings: GameSettings,
     /// The ID of the game
     #[tdf(tag = "GID")]
     pub id: GameID,

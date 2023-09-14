@@ -43,9 +43,6 @@ thiserror = "1"
 # Email validation
 email_address = "0.2.4"
 
-# Async services framework
-interlink = "0.1"
-
 # Codec utils for encoding and decoding packets
 tokio-util = { version = "0.7", features = ["codec"] }
 

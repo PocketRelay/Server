@@ -989,29 +989,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "interlink"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d6a90f4b1a13663a9bfb6c75a66c4379870218d5b667910eb47df5d136bc67a"
-dependencies = [
- "futures-core",
- "futures-sink",
- "interlink-derive",
- "tokio",
-]
-
-[[package]]
-name = "interlink-derive"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f00e8918e7eb15347ee01e4423d19be3ec30b4d9fec32b76cdbed1adff8ee73"
-dependencies = [
- "darling",
- "quote",
- "syn 2.0.31",
-]
-
-[[package]]
 name = "ipnet"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1522,7 +1499,6 @@ dependencies = [
  "futures",
  "futures-util",
  "hyper",
- "interlink",
  "local-ip-address",
  "log",
  "log-panics",

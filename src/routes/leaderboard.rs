@@ -10,7 +10,6 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::prelude::LinkError;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -23,9 +22,6 @@ pub enum LeaderboardError {
     /// The provided query range was out of bounds on the underlying query
     #[error("Unacceptable query range")]
     InvalidRange,
-    /// Something went wrong with the link to the leaderboard service
-    #[error("Failed to access leaderboard service")]
-    Link(#[from] LinkError),
     /// The requested player was not found in the leaderboard
     #[error("Player not found")]
     PlayerNotFound,
@@ -134,7 +130,6 @@ impl IntoResponse for LeaderboardError {
         let status = match &self {
             Self::PlayerNotFound | Self::UnknownLeaderboard => StatusCode::NOT_FOUND,
             Self::InvalidRange => StatusCode::BAD_REQUEST,
-            Self::Link(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, self.to_string()).into_response()
     }

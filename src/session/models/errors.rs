@@ -1,4 +1,3 @@
-use interlink::prelude::LinkError;
 use log::error;
 use sea_orm::DbErr;
 
@@ -51,12 +50,6 @@ pub enum DatabaseError {
 
 /// Response type for some blaze error code
 pub struct BlazeError(u16);
-
-impl From<LinkError> for BlazeError {
-    fn from(_: LinkError) -> Self {
-        GlobalError::System.into()
-    }
-}
 
 impl From<DbErr> for BlazeError {
     fn from(value: DbErr) -> Self {

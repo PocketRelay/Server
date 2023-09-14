@@ -7,7 +7,7 @@ use crate::{
     },
     utils::parsing::{KitNameDeployed, PlayerClass},
 };
-use interlink::prelude::*;
+use futures_util::future::BoxFuture;
 use log::{debug, error};
 use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use std::{collections::HashMap, sync::Arc, time::Instant};
