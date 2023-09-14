@@ -280,8 +280,9 @@ impl Session {
     /// the connection is terminated, cleans up any references and
     /// asserts only 1 strong reference exists
     async fn stop(self: Arc<Self>) {
-        // Close the write half
+        // Tell the write half to close and wait until its closed
         _ = self.writer.send(WriteMessage::Close);
+        self.writer.closed().await;
 
         // Clear authentication
         self.clear_player().await;
@@ -338,6 +339,9 @@ impl Session {
             Some(value) => value,
             None => return,
         };
+
+        // Existing sessions must be unsubscribed
+        data.subscribers.clear();
 
         // Remove session from games service
         self.game_manager
