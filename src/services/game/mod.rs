@@ -112,6 +112,11 @@ impl GamePlayer {
         });
     }
 
+    #[inline]
+    pub fn push(&self, packet: Packet) {
+        self.link.push(packet)
+    }
+
     /// Takes a snapshot of the current player state
     /// for serialization
     pub fn snapshot(&self, include_net: bool) -> GamePlayerSnapshot {
@@ -383,7 +388,7 @@ impl Game {
     fn push_all(&self, packet: &Packet) {
         self.players
             .iter()
-            .for_each(|value| value.link.push(packet.clone()));
+            .for_each(|value| value.push(packet.clone()));
     }
 
     pub fn set_state(&mut self, state: GameState) {
@@ -490,7 +495,7 @@ impl Game {
                 context,
             },
         );
-        player.link.push(packet);
+        player.push(packet);
     }
 
     /// Modifies the psudo admin list this list doesn't actually exist in
@@ -534,7 +539,7 @@ impl Game {
             },
         );
         self.push_all(&packet);
-        player.link.push(packet);
+        player.push(packet);
     }
 
     /// Attempts to migrate the host of this game if there are still players
@@ -542,9 +547,9 @@ impl Game {
     fn try_migrate_host(&mut self) {
         // TODO: With more than one player this fails
 
-        // Obtain the new player at the first index
-        let (new_host_id, new_host_link) = match self.players.first() {
-            Some(value) => (value.player.id, value.link.clone()),
+        // Obtain the new host player
+        let host_id = match self.players.first().map(|player| player.player.id) {
+            Some(value) => value,
             None => return,
         };
 
@@ -557,7 +562,7 @@ impl Game {
             game_manager::HOST_MIGRATION_START,
             HostMigrateStart {
                 game_id: self.id,
-                host_id: new_host_id,
+                host_id,
                 pmig: 2,
                 slot: 0,
             },
@@ -570,8 +575,6 @@ impl Game {
             game_manager::HOST_MIGRATION_FINISHED,
             HostMigrateFinished { game_id: self.id },
         ));
-
-        self.add_user_sub(new_host_id, new_host_link);
 
         debug!("Finished host migration (GID: {})", self.id);
     }
