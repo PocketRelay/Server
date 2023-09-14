@@ -4,7 +4,7 @@ use tdf::{Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned, TdfSerialize, T
 
 use crate::{
     services::game::{rules::RuleSet, AttrMap, Game, GamePlayer},
-    utils::types::{GameID, GameSlot, PlayerID, SessionID},
+    utils::types::{GameID, PlayerID, SessionID},
 };
 
 use super::NetworkAddress;
@@ -540,7 +540,7 @@ pub struct PlayerJoining<'a> {
     /// The ID of the game
     pub game_id: GameID,
     /// The slot the player is joining into
-    pub slot: GameSlot,
+    pub slot: usize,
     /// The player that is joining
     pub player: &'a GamePlayer,
 }
