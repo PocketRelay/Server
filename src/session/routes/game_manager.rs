@@ -456,12 +456,13 @@ pub async fn handle_start_matchmaking(
 
     info!("Player {} started matchmaking", player.player.display_name);
 
-    let rule_set = Arc::new(req.rules);
-
-    // If adding failed attempt to queue instead
-    if let Err(player) = game_manager.try_add(player, &rule_set).await {
-        game_manager.queue(player, rule_set).await;
-    }
+    tokio::spawn(async move {
+        let rule_set = Arc::new(req.rules);
+        // If adding failed attempt to queue instead
+        if let Err(player) = game_manager.try_add(player, &rule_set).await {
+            game_manager.queue(player, rule_set).await;
+        }
+    });
 
     Ok(Blaze(MatchmakingResponse { id: session_id }))
 }
