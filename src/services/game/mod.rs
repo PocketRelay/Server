@@ -330,12 +330,14 @@ impl Game {
 
     /// Called by the game manager service once this game has been stopped and
     /// removed from the game list
-    fn stopped(&mut self) {
-        self.state = GameState::Destructing;
+    fn stopped(self) {
         debug!("Game is stopped (GID: {})", self.id);
     }
 
-    fn stop(&self) {
+    fn stop(&mut self) {
+        // Mark the game as stopping
+        self.state = GameState::Destructing;
+
         // Remove the stopping game
         let game_manager = self.game_manager.clone();
         let game_id = self.id;
