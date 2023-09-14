@@ -51,7 +51,7 @@ pub async fn handle_login(
 
     // Update the session stored player
 
-    session.set_player(Some(player.clone())).await;
+    let player = session.set_player(player).await;
     sessions.add_session(player.id, session).await;
 
     let session_token: String = sessions.create_token(player.id);
@@ -80,7 +80,7 @@ pub async fn handle_silent_login(
         .ok_or(AuthenticationError::InvalidToken)?;
 
     // Update the session stored player
-    session.set_player(Some(player.clone())).await;
+    let player = session.set_player(player).await;
     sessions.add_session(player.id, session).await;
 
     Ok(Blaze(AuthResponse {
@@ -116,7 +116,7 @@ pub async fn handle_origin_login(
     };
 
     // Update the session stored player
-    session.set_player(Some(player.clone())).await;
+    let player = session.set_player(player).await;
     sessions.add_session(player.id, session).await;
 
     let session_token: String = sessions.create_token(player.id);
@@ -141,7 +141,7 @@ pub async fn handle_logout(
     SessionAuth(player): SessionAuth,
     Extension(sessions): Extension<Arc<Sessions>>,
 ) {
-    session.set_player(None).await;
+    session.clear_player().await;
     sessions.remove_session(player.id).await;
 }
 
@@ -327,7 +327,7 @@ pub async fn handle_create_account(
     let player: Player =
         Player::create(&db, email, display_name, Some(hashed_password), &config).await?;
 
-    session.set_player(Some(player.clone())).await;
+    let player = session.set_player(player).await;
     sessions.add_session(player.id, session).await;
 
     let session_token = sessions.create_token(player.id);

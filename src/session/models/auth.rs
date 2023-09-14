@@ -101,7 +101,7 @@ fn encode_persona<S: TdfSerializer>(w: &mut S, id: PlayerID, display_name: &str)
 /// Structure for the response to an authentication request.
 pub struct AuthResponse {
     /// The authenticated player
-    pub player: Player,
+    pub player: Arc<Player>,
     /// The session token for the completed authentication
     pub session_token: String,
     /// Whether the authentication proccess was silent

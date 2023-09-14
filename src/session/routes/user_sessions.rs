@@ -80,7 +80,7 @@ pub async fn handle_resume_session(
         .await?
         .ok_or(AuthenticationError::InvalidToken)?;
 
-    session.set_player(Some(player.clone())).await;
+    let player = session.set_player(player).await;
     sessions.add_session(player.id, session).await;
 
     Ok(Blaze(AuthResponse {

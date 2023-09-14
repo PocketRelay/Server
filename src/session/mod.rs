@@ -301,18 +301,20 @@ impl Session {
         data.remove_subscriber(player_id);
     }
 
-    pub async fn set_player(&self, player: Option<Player>) {
+    pub async fn set_player(&self, player: Player) -> Arc<Player> {
         // Clear the current authentication
         // TODO: Handle already authenticated as error and close session
         // rather than re-resuming it
         self.clear_auth().await;
 
-        // If we are setting a new player
-        if let Some(player) = player {
-            let data = &mut *self.data.write().await;
+        let data = &mut *self.data.write().await;
+        let data = data.insert(SessionExtData::new(player));
 
-            *data = Some(SessionExtData::new(player));
-        }
+        data.player.clone()
+    }
+
+    pub async fn clear_player(&self) {
+        self.clear_auth().await;
     }
 
     pub async fn get_game(&self) -> Option<GameID> {
