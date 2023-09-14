@@ -38,33 +38,22 @@ pub mod packet;
 pub mod router;
 pub mod routes;
 
-/// Structure for storing a client session. This includes the
-/// network stream for the client along with global state and
-/// other session state.
+pub type SessionLink = Arc<Session>;
+
 pub struct Session {
-    /// Unique identifier for this session.
     id: SessionID,
-    /// Connection socket addr
     addr: Ipv4Addr,
-    /// Packet writer sink for the session
     writer: mpsc::UnboundedSender<WriteMessage>,
-
-    /// Data associated with this session
     data: RwLock<Option<SessionExtData>>,
-
     router: Arc<BlazeRouter>,
     game_manager: Arc<GameManager>,
     sessions: Arc<Sessions>,
 }
 
 pub struct SessionExtData {
-    /// The authenticated player
     player: Arc<Player>,
-    /// Networking information
     net: Arc<NetData>,
-    /// The id of the game if connected to one
     game: Option<GameID>,
-    /// Sessions that are subscribed to changes for this session data
     subscribers: Vec<(PlayerID, SessionLink)>,
 }
 
@@ -173,8 +162,6 @@ impl NetData {
         }
     }
 }
-
-pub type SessionLink = Arc<Session>;
 
 // Writer for writing packets
 struct SessionWriter {
