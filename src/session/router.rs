@@ -157,7 +157,7 @@ pub trait FromPacketRequest: Sized {
     type Rejection: IntoPacketResponse;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a;
@@ -194,7 +194,7 @@ where
     type Rejection = BlazeError;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -218,7 +218,7 @@ impl FromPacketRequest for GamePlayer {
     type Rejection = BlazeError;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -239,7 +239,7 @@ impl FromPacketRequest for SessionAuth {
     type Rejection = BlazeError;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -271,7 +271,7 @@ where
     type Rejection = BlazeError;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -307,7 +307,7 @@ where
     type Rejection = BlazeError;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -332,7 +332,7 @@ impl FromPacketRequest for SessionLink {
     type Rejection = Infallible;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -445,10 +445,10 @@ macro_rules! impl_handler {
             fn handle(&self, req: PacketRequest) -> BoxFuture<'_, Packet>
             {
                 Box::pin(async move {
-                    let req = req;
+                    let mut req = req;
                     $(
 
-                        let $ty = match $ty::from_packet_request(&req).await {
+                        let $ty = match $ty::from_packet_request(&mut req).await {
                             Ok(value) => value,
                             Err(rejection) => return rejection.into_response(&req.packet),
                         };
