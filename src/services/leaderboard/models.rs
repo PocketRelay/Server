@@ -1,5 +1,5 @@
 use crate::utils::types::PlayerID;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
     time::{Duration, SystemTime},
@@ -113,11 +113,13 @@ impl LeaderboardGroup {
 }
 
 /// Type of leaderboard entity
-#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum LeaderboardType {
     /// Leaderboard based on the player N7 ratings
+    #[serde(rename = "n7")]
     N7Rating,
     /// Leaderboard based on the player challenge point number
+    #[serde(rename = "cp")]
     ChallengePoints,
 }
 
@@ -136,21 +138,6 @@ impl From<&str> for LeaderboardType {
             Self::N7Rating
         } else {
             Self::ChallengePoints
-        }
-    }
-}
-
-impl LeaderboardType {
-    /// Attempts to parse the leaderboard type from the provided value
-    ///
-    /// `value` The value to attempt to parse from
-    pub fn try_parse(value: &str) -> Option<LeaderboardType> {
-        if value.eq_ignore_ascii_case("n7") {
-            Some(LeaderboardType::N7Rating)
-        } else if value.eq_ignore_ascii_case("cp") {
-            Some(LeaderboardType::ChallengePoints)
-        } else {
-            None
         }
     }
 }

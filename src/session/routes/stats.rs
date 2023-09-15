@@ -1,5 +1,5 @@
 use crate::{
-    services::leaderboard::{models::*, Leaderboard},
+    services::leaderboard::Leaderboard,
     session::{
         models::stats::*,
         packet::Packet,

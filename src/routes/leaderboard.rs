@@ -25,9 +25,6 @@ pub enum LeaderboardError {
     /// The requested player was not found in the leaderboard
     #[error("Player not found")]
     PlayerNotFound,
-    /// Error for when a unknown leaderboard is requested
-    #[error("Unknown leaderboard")]
-    UnknownLeaderboard,
 }
 
 /// Structure of a query requesting a specific leaderboard contains
@@ -64,15 +61,12 @@ pub struct LeaderboardResponse<'a> {
 /// `name`  The name of the leaderboard type to query
 /// `query` The leaderboard query
 pub async fn get_leaderboard(
-    Path(name): Path<String>,
+    Path(ty): Path<LeaderboardType>,
     Extension(db): Extension<DatabaseConnection>,
     Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Query(query): Query<LeaderboardQuery>,
 ) -> Result<Response, LeaderboardError> {
     let LeaderboardQuery { offset, count } = query;
-
-    let ty: LeaderboardType =
-        LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
 
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
@@ -105,12 +99,10 @@ pub async fn get_leaderboard(
 /// `name`      The name of the leaderboard type to query
 /// `player_id` The ID of the player to find the leaderboard ranking of
 pub async fn get_player_ranking(
+    Path((ty, player_id)): Path<(LeaderboardType, PlayerID)>,
     Extension(db): Extension<DatabaseConnection>,
     Extension(leaderboard): Extension<Arc<Leaderboard>>,
-    Path((name, player_id)): Path<(String, PlayerID)>,
 ) -> Result<Response, LeaderboardError> {
-    let ty: LeaderboardType =
-        LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
     let group = leaderboard.query(ty, &db).await;
 
     let entry = match group.get_entry(player_id) {
@@ -128,7 +120,7 @@ impl IntoResponse for LeaderboardError {
     #[inline]
     fn into_response(self) -> Response {
         let status = match &self {
-            Self::PlayerNotFound | Self::UnknownLeaderboard => StatusCode::NOT_FOUND,
+            Self::PlayerNotFound => StatusCode::NOT_FOUND,
             Self::InvalidRange => StatusCode::BAD_REQUEST,
         };
         (status, self.to_string()).into_response()
