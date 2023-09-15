@@ -510,12 +510,11 @@ pub async fn handle_load_settings(
     Extension(db): Extension<DatabaseConnection>,
 ) -> ServerResult<Blaze<SettingsResponse>> {
     // Load the player data from the database
-    let data: Vec<PlayerData> = PlayerData::all(&db, player.id).await?;
+    let settings: TdfMap<String, String> = PlayerData::all(&db, player.id)
+        .await?
+        .into_iter()
+        .map(|entry| (entry.key, entry.value))
+        .collect();
 
-    // Encode the player data into a settings map and order it
-    let mut settings = TdfMap::<String, String>::with_capacity(data.len());
-    for value in data {
-        settings.insert(value.key, value.value);
-    }
     Ok(Blaze(SettingsResponse { settings }))
 }
