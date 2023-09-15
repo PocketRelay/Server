@@ -286,6 +286,7 @@ pub async fn handle_remove_player(
 
     let game = &mut *link.write().await;
     game.remove_player(req.player_id, req.reason);
+
     Ok(())
 }
 

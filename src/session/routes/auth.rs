@@ -24,17 +24,15 @@ pub async fn handle_login(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
     Extension(sessions): Extension<Arc<Sessions>>,
-    Blaze(req): Blaze<LoginRequest>,
+    Blaze(LoginRequest { email, password }): Blaze<LoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
-    let LoginRequest { email, password } = &req;
-
     // Ensure the email is actually valid
-    if !EmailAddress::is_valid(email) {
+    if !EmailAddress::is_valid(&email) {
         return Err(AuthenticationError::InvalidEmail.into());
     }
 
     // Find a non origin player with that email
-    let player: Player = Player::by_email(&db, email)
+    let player: Player = Player::by_email(&db, &email)
         .await?
         .ok_or(AuthenticationError::InvalidUser)?;
 
@@ -45,7 +43,7 @@ pub async fn handle_login(
         .ok_or(AuthenticationError::InvalidUser)?;
 
     // Ensure passwords match
-    if !verify_password(password, player_password) {
+    if !verify_password(&password, player_password) {
         return Err(AuthenticationError::InvalidPassword.into());
     }
 
@@ -99,21 +97,15 @@ pub async fn handle_origin_login(
     Blaze(req): Blaze<OriginLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     // Obtain an origin flow
-    let mut flow = match retriever.origin_flow().await {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Failed to obtain origin flow: {}", err);
-            return Err(GlobalError::System.into());
-        }
-    };
+    let mut flow = retriever.origin_flow().await.map_err(|err| {
+        error!("Failed to obtain origin flow: {}", err);
+        GlobalError::System
+    })?;
 
-    let player: Player = match flow.login(&db, req.token, &config).await {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Failed to login with origin: {}", err);
-            return Err(GlobalError::System.into());
-        }
-    };
+    let player: Player = flow.login(&db, req.token, &config).await.map_err(|err| {
+        error!("Failed to login with origin: {}", err);
+        GlobalError::System
+    })?;
 
     // Update the session stored player
     let player = session.set_player(player).await;
@@ -237,10 +229,8 @@ pub async fn handle_list_entitlements(
 ///     "PMAM": "Jacobtread"
 /// }
 /// ```
-pub async fn handle_login_persona(
-    SessionAuth(player): SessionAuth,
-) -> ServerResult<Blaze<PersonaResponse>> {
-    Ok(Blaze(PersonaResponse { player }))
+pub async fn handle_login_persona(SessionAuth(player): SessionAuth) -> Blaze<PersonaResponse> {
+    Blaze(PersonaResponse { player })
 }
 
 /// Handles forgot password requests. This normally would send a forgot password
@@ -254,9 +244,8 @@ pub async fn handle_login_persona(
 ///     "MAIL": "ACCOUNT_EMAIL"
 /// }
 /// ```
-pub async fn handle_forgot_password(Blaze(req): Blaze<ForgotPasswordRequest>) -> ServerResult<()> {
+pub async fn handle_forgot_password(Blaze(req): Blaze<ForgotPasswordRequest>) {
     debug!("Password reset request (Email: {})", req.email);
-    Ok(())
 }
 
 /// Handles creating accounts
@@ -304,21 +293,16 @@ pub async fn handle_create_account(
         return Err(AuthenticationError::InvalidEmail.into());
     }
 
-    match Player::by_email(&db, &email).await? {
-        // Continue normally for non taken emails
-        None => {}
+    if Player::by_email(&db, &email).await?.is_some() {
         // Handle email address is already in use
-        Some(_) => return Err(AuthenticationError::Exists.into()),
+        return Err(AuthenticationError::Exists.into());
     }
 
     // Hash the proivded plain text password using Argon2
-    let hashed_password: String = match hash_password(&req.password) {
-        Ok(value) => value,
-        Err(err) => {
-            error!("Failed to hash password for creating account: {err:?}");
-            return Err(GlobalError::System.into());
-        }
-    };
+    let hashed_password: String = hash_password(&req.password).map_err(|err| {
+        error!("Failed to hash password for creating account: {}", err);
+        GlobalError::System
+    })?;
 
     // Create a default display name from the first 99 chars of the email
     let display_name: String = email.chars().take(99).collect::<String>();
@@ -365,10 +349,12 @@ pub async fn handle_get_legal_docs_info() -> Blaze<LegalDocsInfo> {
 /// }
 /// ```
 pub async fn handle_tos() -> Blaze<LegalContent> {
-    let content = match read_to_string("data/terms_of_service.html").await {
-        Ok(value) => Cow::Owned(value),
-        Err(_) => Cow::Borrowed("<h1>This is a terms of service placeholder</h1>"),
-    };
+    let content = read_to_string("data/terms_of_service.html")
+        .await
+        .map(Cow::Owned)
+        .unwrap_or(Cow::Borrowed(
+            "<h1>This is a terms of service placeholder</h1>",
+        ));
 
     Blaze(LegalContent {
         col: 0xdaed,
@@ -388,10 +374,12 @@ pub async fn handle_tos() -> Blaze<LegalContent> {
 /// }
 /// ```
 pub async fn handle_privacy_policy() -> Blaze<LegalContent> {
-    let content = match read_to_string("data/privacy_policy.html").await {
-        Ok(value) => Cow::Owned(value),
-        Err(_) => Cow::Borrowed("<h1>This is a privacy policy placeholder</h1>"),
-    };
+    let content = read_to_string("data/privacy_policy.html")
+        .await
+        .map(Cow::Owned)
+        .unwrap_or(Cow::Borrowed(
+            "<h1>This is a privacy policy placeholder</h1>",
+        ));
 
     Blaze(LegalContent {
         col: 0xc99c,
@@ -411,8 +399,8 @@ pub async fn handle_privacy_policy() -> Blaze<LegalContent> {
 pub async fn handle_get_auth_token(
     SessionAuth(player): SessionAuth,
     Extension(sessions): Extension<Arc<Sessions>>,
-) -> ServerResult<Blaze<GetTokenResponse>> {
+) -> Blaze<GetTokenResponse> {
     // Create a new token claim for the player to use with the API
     let token = sessions.create_token(player.id);
-    Ok(Blaze(GetTokenResponse { token }))
+    Blaze(GetTokenResponse { token })
 }
