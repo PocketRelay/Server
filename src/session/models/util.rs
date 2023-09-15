@@ -227,9 +227,9 @@ pub struct FetchConfigResponse {
 /// Structure for the suspend user ping request
 #[derive(TdfDeserialize)]
 pub struct SuspendPingRequest {
-    /// The suspend ping value
+    /// The suspend ping value (Suspend time in microseconds)
     #[tdf(tag = "TVAL")]
-    pub value: u32,
+    pub time_value: u32,
 }
 
 /// Structure for the request to update the settings for

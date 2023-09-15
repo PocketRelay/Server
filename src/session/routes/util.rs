@@ -3,7 +3,7 @@ use crate::{
     database::entities::PlayerData,
     session::{
         models::{
-            errors::{GlobalError, ServerResult},
+            errors::{BlazeError, GlobalError, ServerResult},
             util::*,
         },
         router::{Blaze, Extension, SessionAuth},
@@ -16,6 +16,7 @@ use flate2::{write::ZlibEncoder, Compression};
 use log::error;
 use sea_orm::DatabaseConnection;
 use std::{
+    cmp::Ordering,
     io::Write,
     path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -453,6 +454,13 @@ fn data_config() -> TdfMap<String, String> {
 /// Handles suspend user ping packets. The usage of this is unknown and needs
 /// further research
 ///
+/// Handles suspending user ping timeout for a specific period of time. The client
+/// provides a time in microseconds and the server responds with whether it will
+/// allow the time
+///
+/// [UtilError::]
+///
+///
 /// ```
 /// Route: Util(SuspendUserPing)
 /// ID: 31
@@ -460,12 +468,13 @@ fn data_config() -> TdfMap<String, String> {
 ///     "TVAL": 90000000
 /// }
 /// ```
-pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> ServerResult<()> {
-    match req.value {
-        20000000 => Err(UtilError::SuspendPingTimeTooSmall.into()),
-        90000000 => Err(UtilError::PingSuspended.into()),
-        _ => Ok(()),
-    }
+pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> BlazeError {
+    let res = match req.time_value.cmp(&90000000) {
+        Ordering::Less => UtilError::SuspendPingTimeTooSmall,
+        Ordering::Greater => UtilError::SuspendPingTimeTooLarge,
+        Ordering::Equal => UtilError::PingSuspended,
+    };
+    res.into()
 }
 
 /// Handles updating the stored data for this account
