@@ -521,6 +521,7 @@ pub struct SettingChange {
 }
 
 /// Packet for game attribute changes
+#[derive(TdfSerialize)]
 pub struct AttributesChange<'a> {
     /// Borrowed game attributes map
     pub attributes: &'a AttrMap,
@@ -531,7 +532,7 @@ pub struct AttributesChange<'a> {
 impl TdfSerialize for AttributesChange<'_> {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         w.tag_ref(b"ATTR", self.attributes);
-        w.tag_owned(b"GID", self.id)
+        w.tag_owned(b"GID", self.id);
     }
 }
 
