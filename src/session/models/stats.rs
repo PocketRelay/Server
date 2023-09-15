@@ -1,7 +1,4 @@
-use tdf::{
-    types::var_int::skip_var_int, DecodeError, TdfDeserialize, TdfDeserializeOwned, TdfSerialize,
-    TdfType, TdfTyped,
-};
+use tdf::{TdfDeserialize, TdfSerialize, TdfType, TdfTyped};
 
 use crate::{
     services::leaderboard::models::{LeaderboardEntry, LeaderboardType},
@@ -61,12 +58,8 @@ pub struct CenteredLeaderboardRequest {
 }
 
 pub enum LeaderboardResponse<'a> {
-    /// Empty response where there is no content
-    Empty,
-    /// Response with one entry
-    One(&'a LeaderboardEntry),
-    /// Response with many leaderboard entires
-    Many(&'a [LeaderboardEntry]),
+    Owned(Vec<&'a LeaderboardEntry>),
+    Borrowed(&'a [LeaderboardEntry]),
 }
 
 impl TdfSerialize for LeaderboardEntry {
@@ -95,15 +88,11 @@ impl TdfTyped for LeaderboardEntry {
 impl TdfSerialize for LeaderboardResponse<'_> {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         match self {
-            Self::Empty => {
-                w.tag_list_empty(b"LDLS", TdfType::Group);
+            LeaderboardResponse::Owned(value) => {
+                w.tag_list_slice_ref(b"LDLS", value);
             }
-            Self::One(value) => {
-                w.tag_list_start(b"LDLS", TdfType::Group, 1);
-                value.serialize(w);
-            }
-            Self::Many(values) => {
-                w.tag_list_slice(b"LDLS", values);
+            LeaderboardResponse::Borrowed(value) => {
+                w.tag_list_slice(b"LDLS", value);
             }
         }
     }
@@ -162,26 +151,14 @@ pub struct LeaderboardRequest {
 ///     "USET": (0, 0, 0)
 /// }
 /// ```
+#[derive(TdfDeserialize)]
 pub struct FilteredLeaderboardRequest {
     /// The player ID
-    pub id: PlayerID,
+    #[tdf(tag = "IDLS")]
+    pub ids: Vec<PlayerID>,
     /// The leaderboard name
+    #[tdf(tag = "NAME", into = &str)]
     pub name: LeaderboardType,
-}
-
-impl TdfDeserializeOwned for FilteredLeaderboardRequest {
-    fn deserialize_owned(r: &mut tdf::TdfDeserializer<'_>) -> tdf::DecodeResult<Self> {
-        let count: usize = r.until_list_typed(b"IDLS", TdfType::VarInt)?;
-        if count < 1 {
-            return Err(DecodeError::Other("Missing player ID for filter"));
-        }
-        let id: PlayerID = PlayerID::deserialize_owned(r)?;
-        for _ in 1..count {
-            skip_var_int(r)?;
-        }
-        let name: LeaderboardType = r.tag::<&str>(b"NAME")?.into();
-        Ok(Self { id, name })
-    }
 }
 
 /// Structure for a request for a leaderboard group

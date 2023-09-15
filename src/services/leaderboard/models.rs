@@ -1,9 +1,6 @@
 use crate::utils::types::PlayerID;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Display,
-    time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
 /// Structure for an entry in a leaderboard group
 #[derive(Serialize, Clone)]
@@ -76,8 +73,16 @@ impl LeaderboardGroup {
     ///
     /// `player_id` The ID of the player to find the entry for
     pub fn get_entry(&self, player_id: PlayerID) -> Option<&LeaderboardEntry> {
-        let values = &self.values;
-        values.iter().find(|value| value.player_id == player_id)
+        self.values
+            .iter()
+            .find(|value| value.player_id == player_id)
+    }
+
+    pub fn get_filtered(&self, players: &[PlayerID]) -> Vec<&LeaderboardEntry> {
+        self.values
+            .iter()
+            .filter(move |entry| players.contains(&entry.player_id))
+            .collect()
     }
 
     /// Gets a collection of leaderboard entries centered on the provided player with
@@ -86,28 +91,32 @@ impl LeaderboardGroup {
     /// `player_id` The ID of the player to center on
     /// `count`     The total number of players to center on
     pub fn get_centered(&self, player_id: PlayerID, count: usize) -> Option<&[LeaderboardEntry]> {
-        let values = &self.values;
-        let values_len = values.len();
+        if count == 0 {
+            return None;
+        }
+
         // The number of items before the center index
         let before = if count % 2 == 0 {
-            count / 2 + 1
+            (count / 2).saturating_add(1)
         } else {
             count / 2
         };
+
         // The number of items after the center index
         let after = count / 2;
 
         // The index of the centered player
-        let player_index = values
+        let player_index = self
+            .values
             .iter()
             .position(|value| value.player_id == player_id)?;
 
         // The index of the first item
-        let start_index = player_index - before.min(player_index);
+        let start_index = player_index.saturating_sub(before).min(player_index);
         // The index of the last item
-        let end_index = (player_index + after).min(values_len);
+        let end_index = player_index.saturating_add(after).min(self.values.len());
 
-        values.get(start_index..end_index)
+        self.values.get(start_index..end_index)
     }
 }
 
@@ -120,15 +129,6 @@ pub enum LeaderboardType {
     /// Leaderboard based on the player challenge point number
     #[serde(rename = "cp")]
     ChallengePoints,
-}
-
-impl Display for LeaderboardType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::N7Rating => "N7 Rating",
-            Self::ChallengePoints => "Challenge Points",
-        })
-    }
 }
 
 impl From<&str> for LeaderboardType {

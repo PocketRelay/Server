@@ -16,12 +16,10 @@ pub async fn handle_normal_leaderboard(
 ) -> Packet {
     let query = &req.req;
     let group = leaderboard.query(query.name, &db).await;
-
-    let response = match group.get_normal(query.start, query.count) {
-        Some(values) => LeaderboardResponse::Many(values),
-        None => LeaderboardResponse::Empty,
-    };
-    req.response(response)
+    let slice = group
+        .get_normal(query.start, query.count)
+        .unwrap_or_default();
+    req.response(LeaderboardResponse::Borrowed(slice))
 }
 
 pub async fn handle_centered_leaderboard(
@@ -30,14 +28,11 @@ pub async fn handle_centered_leaderboard(
     req: BlazeWithHeader<CenteredLeaderboardRequest>,
 ) -> Packet {
     let query = &req.req;
-
     let group = leaderboard.query(query.name, &db).await;
-
-    let response = match group.get_centered(query.center, query.count) {
-        Some(values) => LeaderboardResponse::Many(values),
-        None => LeaderboardResponse::Empty,
-    };
-    req.response(response)
+    let slice = group
+        .get_centered(query.center, query.count)
+        .unwrap_or_default();
+    req.response(LeaderboardResponse::Borrowed(slice))
 }
 
 pub async fn handle_filtered_leaderboard(
@@ -46,14 +41,9 @@ pub async fn handle_filtered_leaderboard(
     req: BlazeWithHeader<FilteredLeaderboardRequest>,
 ) -> Packet {
     let query = &req.req;
-
     let group = leaderboard.query(query.name, &db).await;
-
-    let response = match group.get_entry(query.id) {
-        Some(value) => LeaderboardResponse::One(value),
-        None => LeaderboardResponse::Empty,
-    };
-    req.response(response)
+    let response = group.get_filtered(&query.ids);
+    req.response(LeaderboardResponse::Owned(response))
 }
 
 /// Handles returning the number of leaderboard objects present.
@@ -77,7 +67,6 @@ pub async fn handle_leaderboard_entity_count(
     Blaze(req): Blaze<EntityCountRequest>,
 ) -> Blaze<EntityCountResponse> {
     let group = leaderboard.query(req.name, &db).await;
-
     let count = group.values.len();
     Blaze(EntityCountResponse { count })
 }
