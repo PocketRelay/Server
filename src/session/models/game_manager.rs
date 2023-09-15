@@ -630,7 +630,7 @@ pub enum GameSetupContext {
         session_id: PlayerID,
         #[tdf(tag = "RSLT")]
         result: MatchmakingResult,
-        #[tdf(tag = "MSID")]
+        #[tdf(tag = "USID")]
         player_id: PlayerID,
     },
 }
