@@ -4,7 +4,7 @@ use tdf::{
 };
 
 use crate::{
-    services::leaderboard::models::LeaderboardEntry,
+    services::leaderboard::models::{LeaderboardEntry, LeaderboardType},
     utils::{components::user_sessions::PLAYER_TYPE, types::PlayerID},
 };
 
@@ -13,8 +13,8 @@ use crate::{
 #[derive(TdfDeserialize)]
 pub struct EntityCountRequest {
     /// The leaderboard name
-    #[tdf(tag = "NAME")]
-    pub name: String,
+    #[tdf(tag = "NAME", into = &str)]
+    pub name: LeaderboardType,
 }
 
 /// Structure for the entity count response for finding the
@@ -56,8 +56,8 @@ pub struct CenteredLeaderboardRequest {
     #[tdf(tag = "COUN")]
     pub count: usize,
     /// The leaderboard name
-    #[tdf(tag = "NAME")]
-    pub name: String,
+    #[tdf(tag = "NAME", into = &str)]
+    pub name: LeaderboardType,
 }
 
 pub enum LeaderboardResponse<'a> {
@@ -135,8 +135,8 @@ pub struct LeaderboardRequest {
     #[tdf(tag = "COUN")]
     pub count: usize,
     /// The leaderboard name
-    #[tdf(tag = "NAME")]
-    pub name: String,
+    #[tdf(tag = "NAME", into = &str)]
+    pub name: LeaderboardType,
     /// The rank offset to start at
     #[tdf(tag = "STRT")]
     pub start: usize,
@@ -166,7 +166,7 @@ pub struct FilteredLeaderboardRequest {
     /// The player ID
     pub id: PlayerID,
     /// The leaderboard name
-    pub name: String,
+    pub name: LeaderboardType,
 }
 
 impl TdfDeserializeOwned for FilteredLeaderboardRequest {
@@ -179,7 +179,7 @@ impl TdfDeserializeOwned for FilteredLeaderboardRequest {
         for _ in 1..count {
             skip_var_int(r)?;
         }
-        let name: String = r.tag(b"NAME")?;
+        let name: LeaderboardType = r.tag::<&str>(b"NAME")?.into();
         Ok(Self { id, name })
     }
 }

@@ -15,9 +15,7 @@ pub async fn handle_normal_leaderboard(
     req: BlazeWithHeader<LeaderboardRequest>,
 ) -> Packet {
     let query = &req.req;
-
-    let ty = LeaderboardType::from_value(&query.name);
-    let group = leaderboard.query(ty, &db).await;
+    let group = leaderboard.query(query.name, &db).await;
 
     let response = match group.get_normal(query.start, query.count) {
         Some((values, _)) => LeaderboardResponse::Many(values),
@@ -33,8 +31,7 @@ pub async fn handle_centered_leaderboard(
 ) -> Packet {
     let query = &req.req;
 
-    let ty = LeaderboardType::from_value(&query.name);
-    let group = leaderboard.query(ty, &db).await;
+    let group = leaderboard.query(query.name, &db).await;
 
     let response = match group.get_centered(query.center, query.count) {
         Some(values) => LeaderboardResponse::Many(values),
@@ -50,8 +47,7 @@ pub async fn handle_filtered_leaderboard(
 ) -> Packet {
     let query = &req.req;
 
-    let ty = LeaderboardType::from_value(&query.name);
-    let group = leaderboard.query(ty, &db).await;
+    let group = leaderboard.query(query.name, &db).await;
 
     let response = match group.get_entry(query.id) {
         Some(value) => LeaderboardResponse::One(value),
@@ -80,8 +76,7 @@ pub async fn handle_leaderboard_entity_count(
     Extension(db): Extension<DatabaseConnection>,
     Blaze(req): Blaze<EntityCountRequest>,
 ) -> Blaze<EntityCountResponse> {
-    let ty = LeaderboardType::from_value(&req.name);
-    let group = leaderboard.query(ty, &db).await;
+    let group = leaderboard.query(req.name, &db).await;
 
     let count = group.values.len();
     Blaze(EntityCountResponse { count })

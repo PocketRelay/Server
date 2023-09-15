@@ -130,6 +130,16 @@ impl Display for LeaderboardType {
     }
 }
 
+impl From<&str> for LeaderboardType {
+    fn from(value: &str) -> Self {
+        if value.starts_with("N7Rating") {
+            Self::N7Rating
+        } else {
+            Self::ChallengePoints
+        }
+    }
+}
+
 impl LeaderboardType {
     /// Attempts to parse the leaderboard type from the provided value
     ///
@@ -141,20 +151,6 @@ impl LeaderboardType {
             Some(LeaderboardType::ChallengePoints)
         } else {
             None
-        }
-    }
-
-    /// Gets the leaderboard type from the value provided
-    /// by a Mass Effect client this would be either N7Rating
-    /// or ChallangePoints along with the locale which in this
-    /// case is ignored
-    ///
-    /// `value` The value to parse from
-    pub fn from_value(value: &str) -> Self {
-        if value.starts_with("N7Rating") {
-            Self::N7Rating
-        } else {
-            Self::ChallengePoints
         }
     }
 }
