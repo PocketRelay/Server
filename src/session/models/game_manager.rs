@@ -521,7 +521,6 @@ pub struct SettingChange {
 }
 
 /// Packet for game attribute changes
-#[derive(TdfSerialize)]
 pub struct AttributesChange<'a> {
     /// Borrowed game attributes map
     pub attributes: &'a AttrMap,
