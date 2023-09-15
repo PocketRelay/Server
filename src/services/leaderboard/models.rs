@@ -55,22 +55,21 @@ impl LeaderboardGroup {
         now.ge(&self.expires)
     }
 
+    /// Checks whether there are more items after the provided offset and size
+    pub fn has_more(&self, start: usize, count: usize) -> bool {
+        let length = self.values.len();
+        start + count < length
+    }
+
     /// Gets a normal collection of leaderboard entries at the start offset of the
     /// provided count. Will return the slice of entires as well as whether there are
     /// more entries after the desired offset
     ///
     /// `start` The start offset index
     /// `count` The number of leaderboard entries
-    pub fn get_normal(&self, start: usize, count: usize) -> Option<(&[LeaderboardEntry], bool)> {
-        let values = &self.values;
-        let values_len = values.len();
-
-        // The index to stop at
-        let end_index = (start + count).min(values_len);
-
-        values
-            .get(start..end_index)
-            .map(|value| (value, values_len > end_index))
+    pub fn get_normal(&self, start: usize, count: usize) -> Option<&[LeaderboardEntry]> {
+        let end_index = (start + count).min(self.values.len());
+        self.values.get(start..end_index)
     }
 
     /// Gets a leaderboard entry for the provided player ID if one is present

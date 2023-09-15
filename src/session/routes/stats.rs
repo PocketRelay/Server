@@ -18,7 +18,7 @@ pub async fn handle_normal_leaderboard(
     let group = leaderboard.query(query.name, &db).await;
 
     let response = match group.get_normal(query.start, query.count) {
-        Some((values, _)) => LeaderboardResponse::Many(values),
+        Some(values) => LeaderboardResponse::Many(values),
         None => LeaderboardResponse::Empty,
     };
     req.response(response)

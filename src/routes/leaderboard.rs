@@ -78,9 +78,11 @@ pub async fn get_leaderboard(
 
     let group = leaderboard.query(ty, &db).await;
 
-    let (entries, more) = group
+    let entries = group
         .get_normal(start, count)
         .ok_or(LeaderboardError::InvalidRange)?;
+
+    let more = group.has_more(start, count);
 
     let response = Json(LeaderboardResponse {
         total: group.values.len(),
