@@ -116,8 +116,7 @@ pub async fn handle_post_auth(
 /// ```
 ///
 pub async fn handle_ping() -> Blaze<PingResponse> {
-    let now = SystemTime::now();
-    let server_time = now
+    let server_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_secs();
@@ -148,7 +147,7 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 pub async fn handle_fetch_client_config(
     Blaze(req): Blaze<FetchConfigRequest>,
 ) -> ServerResult<Blaze<FetchConfigResponse>> {
-    let config = match req.id.as_ref() {
+    let config = match req.id.as_str() {
         "ME3_DATA" => data_config(),
         "ME3_MSG" => messages(),
         "ME3_ENT" => load_entitlements(),
@@ -163,10 +162,16 @@ pub async fn handle_fetch_client_config(
             map.insert("VERSION".to_string(), "40128".to_string());
             map
         }
-        "ME3_BINI_PC_COMPRESSED" => load_coalesced().await?,
+        "ME3_BINI_PC_COMPRESSED" => match load_coalesced().await {
+            Ok(map) => map,
+            Err(err) => {
+                error!("Failed to load server coalesced: {}", err);
+                return Err(GlobalError::System.into());
+            }
+        },
         id => {
             if let Some(lang) = id.strip_prefix("ME3_LIVE_TLK_PC_") {
-                talk_file(lang).await?
+                talk_file(lang).await
             } else {
                 TdfMap::default()
             }
@@ -179,22 +184,24 @@ pub async fn handle_fetch_client_config(
 /// Loads the entitlements from the entitlements file and parses
 /// it as a
 fn load_entitlements() -> TdfMap<String, String> {
-    let mut map = TdfMap::<String, String>::new();
-    for (key, value) in ME3_ENT.lines().filter_map(|line| line.split_once('=')) {
-        map.insert(key.to_string(), value.to_string());
-    }
-    map
+    ME3_ENT
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect()
 }
 
 /// Loads the local coalesced if one is present falling back
 /// to the default one on error or if its missing
-async fn load_coalesced() -> ServerResult<ChunkMap> {
+async fn load_coalesced() -> std::io::Result<ChunkMap> {
     let local_path = Path::new("data/coalesced.bin");
+
     if local_path.is_file() {
-        if let Ok(bytes) = read(local_path).await {
-            if let Ok(map) = generate_coalesced(&bytes) {
-                return Ok(map);
-            }
+        if let Ok(map) = read(local_path)
+            .await
+            .and_then(|bytes| generate_coalesced(&bytes))
+        {
+            return Ok(map);
         }
 
         error!(
@@ -210,17 +217,11 @@ async fn load_coalesced() -> ServerResult<ChunkMap> {
 /// Generates a compressed caolesced from the provided bytes
 ///
 /// `bytes` The coalesced bytes
-fn generate_coalesced(bytes: &[u8]) -> ServerResult<ChunkMap> {
+fn generate_coalesced(bytes: &[u8]) -> std::io::Result<ChunkMap> {
     let compressed: Vec<u8> = {
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::new(6));
-        encoder.write_all(bytes).map_err(|_| {
-            error!("Failed to encode coalesced with ZLib (write stage)");
-            GlobalError::System
-        })?;
-        encoder.finish().map_err(|_| {
-            error!("Failed to encode coalesced with ZLib (finish stage)");
-            GlobalError::System
-        })?
+        encoder.write_all(bytes)?;
+        encoder.finish()?
     };
 
     let mut encoded = Vec::with_capacity(16 + compressed.len());
@@ -272,35 +273,35 @@ fn create_base64_map(bytes: &[u8]) -> ChunkMap {
     output
 }
 
-/// Retrieves a talk file for the specified language code falling back
-/// to the `ME3_TLK_DEFAULT` default talk file if it could not be found
-///
-/// `lang` The talk file language
-async fn talk_file(lang: &str) -> ServerResult<ChunkMap> {
-    let file_name = format!("data/{}.tlk", lang);
-    let local_path = Path::new(&file_name);
-
-    if local_path.is_file() {
-        if let Ok(bytes) = read(local_path).await {
-            return Ok(create_base64_map(&bytes));
-        }
-        error!("Unable to load local talk file falling back to default.");
-    }
-
-    // Load default talk file
-    let file_name = format!("{}.tlk", lang);
-    Ok(if let Some(file) = DefaultTlkFiles::get(&file_name) {
-        create_base64_map(file)
-    } else {
-        let bytes: &[u8] = include_bytes!("../../resources/data/tlk/default.tlk");
-        create_base64_map(bytes)
-    })
-}
-
 /// Default talk file values
 #[derive(Embedded)]
 #[folder = "src/resources/data/tlk"]
 struct DefaultTlkFiles;
+
+/// Retrieves a talk file for the specified language code falling back
+/// to the `ME3_TLK_DEFAULT` default talk file if it could not be found
+///
+/// `lang` The talk file language
+async fn talk_file(lang: &str) -> ChunkMap {
+    let file_name = format!("{}.tlk", lang);
+
+    let local_path = format!("data/{}", file_name);
+    let local_path = Path::new(&local_path);
+    if local_path.is_file() {
+        if let Ok(map) = read(local_path)
+            .await
+            .map(|bytes| create_base64_map(&bytes))
+        {
+            return map;
+        }
+        error!("Unable to load local talk file falling back to default.");
+    }
+
+    let bytes = DefaultTlkFiles::get(&file_name)
+        .unwrap_or(include_bytes!("../../resources/data/tlk/default.tlk"));
+
+    create_base64_map(bytes)
+}
 
 /// Loads the messages that should be displayed to the client and
 /// returns them in a list.
