@@ -1,9 +1,7 @@
-#![allow(unused)]
-
 use crate::utils::components::{get_command_name, get_component_name};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::{fmt::Debug, sync::Arc};
-use std::{io, ops::Deref};
+use std::fmt::Debug;
+use std::io;
 use tdf::{
     serialize_vec, DecodeResult, TdfDeserialize, TdfDeserializer, TdfSerialize, TdfStringifier,
 };
@@ -202,6 +200,7 @@ where
     Bytes::from(serialize_vec(value))
 }
 
+#[allow(unused)]
 impl Packet {
     /// Creates a new packet from the provided header and contents
     pub const fn new(header: PacketHeader, contents: Bytes) -> Self {
@@ -397,7 +396,7 @@ impl<'a> Debug for PacketDebug<'a> {
             return Ok(());
         }
 
-        let mut r = TdfDeserializer::new(&self.packet.contents);
+        let r = TdfDeserializer::new(&self.packet.contents);
         let mut out = String::new();
         out.push_str("{\n");
         let mut str = TdfStringifier::new(r, &mut out);
