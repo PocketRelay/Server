@@ -12,7 +12,7 @@ use std::{
     net::{Ipv4Addr, SocketAddr},
     sync::Arc,
 };
-use tokio::{join, select, signal};
+use tokio::{join, signal};
 use utils::logging;
 
 mod config;
@@ -83,21 +83,15 @@ async fn main() {
         .layer(Extension(sessions))
         .into_make_service_with_connect_info::<SocketAddr>();
 
-    // Create futures for server and shutdown signal
-    let server_future = Server::bind(&addr).serve(router);
-    let close_future = signal::ctrl_c();
+    info!("Starting server on {} (v{})", addr, VERSION);
 
-    info!("Started server on {} (v{})", addr, VERSION);
-
-    // Await server termination or shutdown signal
-    select! {
-       result = server_future => {
-        if let Err(err) = result {
-            error!("Failed to bind HTTP server on {}: {:?}", addr, err);
-            panic!();
-        }
-       }
-       // Handle the server being stopped with CTRL+C
-       _ = close_future => {}
+    if let Err(err) = Server::bind(&addr)
+        .serve(router)
+        .with_graceful_shutdown(async move {
+            _ = signal::ctrl_c().await;
+        })
+        .await
+    {
+        error!("Failed to bind HTTP server on {}: {:?}", addr, err);
     }
 }
