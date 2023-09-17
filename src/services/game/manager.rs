@@ -147,6 +147,31 @@ impl GameManager {
         player_link.set_game(game_id, game_ref).await;
     }
 
+    pub async fn add_from_matchmaking(&self, game_ref: GameRef, player: GamePlayer) {
+        let msid = player.player.id;
+
+        // MUST be sent to players atleast once when matchmaking otherwise it may fail
+        player.link.push(Packet::notify(
+            game_manager::COMPONENT,
+            game_manager::MATCHMAKING_ASYNC_STATUS,
+            AsyncMatchmakingStatus { player_id: msid },
+        ));
+
+        // Add the player to the game
+        self.add_to_game(
+            game_ref,
+            player,
+            GameSetupContext::Matchmaking {
+                fit_score: DEFAULT_FIT,
+                max_fit_score: DEFAULT_FIT,
+                session_id: msid,
+                result: MatchmakingResult::JoinedExistingGame,
+                player_id: msid,
+            },
+        )
+        .await;
+    }
+
     pub async fn create_game(
         self: &Arc<Self>,
         attributes: AttrMap,
@@ -181,20 +206,9 @@ impl GameManager {
             // Check if the game is joinable
             if let GameJoinableState::Joinable = join_state {
                 debug!("Found matching game (GID: {})", id);
-                let msid = player.player.id;
 
-                self.add_to_game(
-                    link.clone(),
-                    player,
-                    GameSetupContext::Matchmaking {
-                        fit_score: DEFAULT_FIT,
-                        max_fit_score: DEFAULT_FIT,
-                        session_id: msid,
-                        result: MatchmakingResult::JoinedExistingGame,
-                        player_id: msid,
-                    },
-                )
-                .await;
+                // Add the player to the game
+                self.add_from_matchmaking(link.clone(), player).await;
 
                 return Ok(());
             }
@@ -272,28 +286,8 @@ impl GameManager {
                         debug!("Matchmaking time elapsed: {}s", elapsed.as_secs())
                     }
 
-                    let msid = entry.player.player.id;
-
-                    // Send the async update (TODO: Do this at intervals)
-                    entry.player.link.push(Packet::notify(
-                        game_manager::COMPONENT,
-                        game_manager::MATCHMAKING_ASYNC_STATUS,
-                        AsyncMatchmakingStatus { player_id: msid },
-                    ));
-
                     // Add the player to the game
-                    self.add_to_game(
-                        link.clone(),
-                        entry.player,
-                        GameSetupContext::Matchmaking {
-                            fit_score: DEFAULT_FIT,
-                            max_fit_score: DEFAULT_FIT,
-                            session_id: msid,
-                            result: MatchmakingResult::JoinedExistingGame,
-                            player_id: msid,
-                        },
-                    )
-                    .await;
+                    self.add_from_matchmaking(link.clone(), entry.player).await;
                 }
                 GameJoinableState::Full | GameJoinableState::Stopping => {
                     // If the game is not joinable push the entry back to the
