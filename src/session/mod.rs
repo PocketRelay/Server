@@ -22,7 +22,7 @@ use crate::{
     },
     session::models::{NetworkAddress, QosNetworkData},
     utils::{
-        components::{self, user_sessions},
+        components::{component_key, user_sessions, DEBUG_IGNORED_PACKETS},
         types::{GameID, PlayerID, SessionID},
     },
 };
@@ -439,62 +439,42 @@ impl Session {
             return;
         }
 
-        // Ping messages are ignored from debug logging as they are very frequent
-        let ignored = packet.header.component == components::util::COMPONENT
-            && (packet.header.command == components::util::PING
-                || packet.header.command == components::util::SUSPEND_USER_PING);
-
+        let key = component_key(packet.header.component, packet.header.command);
+        let ignored = DEBUG_IGNORED_PACKETS.contains(&key);
         if ignored {
             return;
         }
-        // TODO: Blocking read is currently the only known solution
-        let data = &*self.data.read().await;
-        let debug = SessionPacketDebug {
-            action,
-            packet,
-            session_id: self.id,
-            session_data: data,
-        };
 
-        debug!("\n{:?}", debug);
+        let data = &*self.data.read().await;
+        let debug_data = DebugSessionData {
+            action,
+            id: self.id,
+            data,
+        };
+        let debug_packet = PacketDebug { packet };
+
+        debug!("{:?}{:?}", debug_data, debug_packet);
     }
 }
 
-/// Structure for wrapping session details around a debug
-/// packet message for logging
-struct SessionPacketDebug<'a> {
+struct DebugSessionData<'a> {
+    id: SessionID,
+    data: &'a Option<SessionExtData>,
     action: &'static str,
-    packet: &'a Packet,
-    session_id: SessionID,
-    session_data: &'a Option<SessionExtData>,
 }
 
-impl Debug for SessionPacketDebug<'_> {
+impl Debug for DebugSessionData<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Session {} Packet", self.action)?;
+        writeln!(f, "Session ({}): {}", self.id, self.action)?;
 
-        if let Some(data) = &self.session_data {
+        if let Some(data) = self.data.as_ref() {
             writeln!(
                 f,
-                "Info: (Name: {}, ID: {}, SID: {})",
-                &data.player.display_name, data.player.id, &self.session_id
+                "Auth ({}): (Name: {})",
+                data.player.id, &data.player.display_name,
             )?;
-        } else {
-            writeln!(f, "Info: (SID: {})", &self.session_id)?;
         }
 
-        let header = &self.packet.header;
-
-        let minified = (header.component == components::authentication::COMPONENT
-            && header.command == components::authentication::LIST_USER_ENTITLEMENTS_2)
-            || (header.component == components::util::COMPONENT
-                && (header.command == components::util::FETCH_CLIENT_CONFIG
-                    || header.command == components::util::USER_SETTINGS_LOAD_ALL));
-
-        PacketDebug {
-            packet: self.packet,
-            minified,
-        }
-        .fmt(f)
+        Ok(())
     }
 }

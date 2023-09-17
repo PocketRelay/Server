@@ -403,10 +403,7 @@ fn debug_log_packet(packet: &Packet, action: &str) {
     if !log_enabled!(log::Level::Debug) {
         return;
     }
-    let debug = PacketDebug {
-        packet,
-        minified: false,
-    };
+    let debug = PacketDebug { packet };
     debug!("\n{}\n{:?}", action, debug);
 }
 

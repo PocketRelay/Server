@@ -1,4 +1,6 @@
-use crate::utils::components::{get_command_name, get_component_name};
+use crate::utils::components::{
+    component_key, get_command_name, get_component_name, OMIT_PACKET_CONTENTS,
+};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt::Debug;
 use std::io;
@@ -348,9 +350,6 @@ impl Encoder<Packet> for PacketCodec {
 pub struct PacketDebug<'a> {
     /// Reference to the packet itself
     pub packet: &'a Packet,
-
-    /// Decide whether to display the contents of the packet
-    pub minified: bool,
 }
 
 impl<'a> Debug for PacketDebug<'a> {
@@ -358,64 +357,48 @@ impl<'a> Debug for PacketDebug<'a> {
         // Append basic header information
         let header = &self.packet.header;
 
-        let component_name = get_component_name(header.component);
-        let command_name = get_command_name(
-            header.component,
-            header.command,
-            matches!(&header.ty, PacketType::Notify),
-        );
+        let key = component_key(header.component, header.command);
 
-        match (component_name, command_name) {
-            (Some(component), Some(command)) => {
-                writeln!(f, "Component: {}({})", component, command)?;
-            }
-            (Some(component), None) => {
-                writeln!(f, "Component: {}({:#06x})", component, header.command)?;
-            }
-            _ => {
-                writeln!(
-                    f,
-                    "Component: {:#06x}({:#06x})",
-                    header.component, header.command
-                )?;
-            }
+        let is_notify = matches!(&header.ty, PacketType::Notify);
+        let is_error = matches!(&header.ty, PacketType::Error);
+
+        let component_name = get_component_name(header.component).unwrap_or("Unknown");
+        let command_name = get_command_name(key, is_notify).unwrap_or("Unkown");
+
+        write!(f, "{:?}", header.ty)?;
+
+        if is_error {
+            // Write sequence number and error for errors
+            write!(f, " ({}, E?{:#06x})", header.id, header.error)?;
+        } else if !is_notify {
+            // Write sequence number of sequenced types
+            write!(f, " ({})", header.id)?;
         }
 
-        writeln!(f, "Type: {:?}", header.ty)?;
+        writeln!(
+            f,
+            ": {}->{} ({:#06x}->{:#06x})",
+            component_name, command_name, header.component, header.command
+        )?;
 
-        if !matches!(&header.ty, PacketType::Notify) {
-            writeln!(f, "ID: {}", &header.id)?;
-        }
-
-        if let PacketType::Error = &header.ty {
-            writeln!(f, "Error: {:#06x}", &header.error)?;
-        }
+        let omit_content = OMIT_PACKET_CONTENTS.contains(&key);
 
         // Skip remaining if the message shouldn't contain its content
-        if self.minified {
+        if omit_content {
             return Ok(());
         }
 
+        write!(f, "Content: ")?;
+
         let r = TdfDeserializer::new(&self.packet.contents);
-        let mut out = String::new();
-        out.push_str("{\n");
-        let mut str = TdfStringifier::new(r, &mut out);
+        let mut str = TdfStringifier::new(r, f);
 
         // Stringify the content or append error instead
         if !str.stringify() {
-            writeln!(f, "Content Error: Content was malformed or not parsible")?;
-            writeln!(f, "Partial Content: {}", out)?;
-            writeln!(f, "Raw: {:?}", &self.packet.contents)?;
+            writeln!(&mut str.w, "Raw: {:?}", &self.packet.contents)?;
             return Ok(());
         }
 
-        if out.len() == 2 {
-            // Remove new line if nothing else was appended
-            out.pop();
-        }
-
-        out.push('}');
-
-        write!(f, "Content: {}", out)
+        writeln!(&mut str.w)
     }
 }
