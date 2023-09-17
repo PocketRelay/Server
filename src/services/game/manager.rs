@@ -5,7 +5,6 @@ use crate::{
             AsyncMatchmakingStatus, GameSettings, GameSetupContext, MatchmakingResult,
         },
         packet::Packet,
-        SessionGameData,
     },
     utils::{
         components::game_manager,
@@ -145,9 +144,7 @@ impl GameManager {
         };
 
         // Update the player current game
-        player_link
-            .set_game(Some(SessionGameData { game_id, game_ref }))
-            .await;
+        player_link.set_game(game_id, game_ref).await;
     }
 
     pub async fn create_game(

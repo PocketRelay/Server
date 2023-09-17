@@ -16,7 +16,10 @@ use self::{
 };
 use crate::{
     database::entities::Player,
-    services::{game::Game, sessions::Sessions},
+    services::{
+        game::{Game, GameRef},
+        sessions::Sessions,
+    },
     session::models::{NetworkAddress, QosNetworkData},
     utils::{
         components::{self, user_sessions},
@@ -379,40 +382,40 @@ impl Session {
         })
     }
 
-    pub async fn set_game(&self, game: Option<SessionGameData>) {
+    #[inline]
+    async fn update_data<F>(&self, update: F)
+    where
+        F: FnOnce(&mut SessionExtData),
+    {
         let data = &mut *self.data.write().await;
-        let data = match data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-
-        data.game = game;
-        data.publish_update();
+        if let Some(data) = data {
+            update(data);
+            data.publish_update();
+        }
     }
 
+    #[inline]
+    pub async fn set_game(&self, game_id: GameID, game_ref: GameRef) {
+        self.update_data(|data| {
+            data.game = Some(SessionGameData { game_id, game_ref });
+        })
+        .await;
+    }
+
+    #[inline]
     pub async fn set_hardware_flags(&self, value: HardwareFlags) {
-        let data = &mut *self.data.write().await;
-        let data = match data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-
-        data.net = Arc::new(data.net.with_hardware_flags(value));
-        data.publish_update();
+        self.update_data(|data| {
+            data.net = Arc::new(data.net.with_hardware_flags(value));
+        })
+        .await;
     }
 
+    #[inline]
     pub async fn set_network_info(&self, address: NetworkAddress, qos: QosNetworkData) {
-        let data = &mut *self.data.write().await;
-        let data = match data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-
-        data.net = Arc::new(data.net.with_basic(address, qos));
-        data.publish_update();
+        self.update_data(|data| {
+            data.net = Arc::new(data.net.with_basic(address, qos));
+        })
+        .await;
     }
 
     /// Pushes a new packet to the back of the packet buffer
