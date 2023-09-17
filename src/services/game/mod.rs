@@ -17,7 +17,7 @@ use crate::{
         types::{GameID, PlayerID},
     },
 };
-use log::debug;
+use log::{debug, warn};
 use serde::Serialize;
 use std::sync::Arc;
 use tdf::{ObjectId, TdfMap, TdfSerializer};
@@ -105,13 +105,6 @@ impl GamePlayer {
         }
     }
 
-    pub fn set_game(&self, game: Option<GameID>) {
-        let link = self.link.clone();
-        tokio::spawn(async move {
-            link.set_game(game).await;
-        });
-    }
-
     #[inline]
     pub fn push(&self, packet: Packet) {
         self.link.push(packet)
@@ -148,13 +141,6 @@ impl GamePlayer {
             w.tag_alt(b"UGID", ObjectId::new_raw(0, 0, 0));
             w.tag_u32(b"UID", self.player.id);
         });
-    }
-}
-
-impl Drop for GamePlayer {
-    fn drop(&mut self) {
-        // Clear player game when game player is dropped
-        self.set_game(None);
     }
 }
 
@@ -216,9 +202,6 @@ impl Game {
 
         // Notify the joiner of the game details
         self.notify_game_setup(player, context);
-
-        // Set current game of this player
-        player.set_game(Some(self.id));
     }
 
     pub fn update_mesh(&mut self, id: PlayerID, target: PlayerID, state: PlayerState) {
@@ -288,8 +271,11 @@ impl Game {
         // Remove the player
         let player = self.players.remove(index);
 
-        // Set current game of this player
-        player.set_game(None);
+        // Clear current game of this player
+        let clear_link = player.link.clone();
+        tokio::spawn(async move {
+            let _ = clear_link.clear_game().await;
+        });
 
         // Update the other players
         self.notify_player_removed(&player, reason);
@@ -337,6 +323,10 @@ impl Game {
     fn stop(&mut self) {
         // Mark the game as stopping
         self.state = GameState::Destructing;
+
+        if !self.players.is_empty() {
+            warn!("Game {} was stopped with players still present", self.id);
+        }
 
         // Remove the stopping game
         let game_manager = self.game_manager.clone();

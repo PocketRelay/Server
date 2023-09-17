@@ -3,16 +3,20 @@
 //! networking data.
 
 use self::{
-    models::user_sessions::{
-        HardwareFlags, LookupResponse, NotifyUserAdded, NotifyUserRemoved, NotifyUserUpdated,
-        UserDataFlags, UserIdentification, UserSessionExtendedData, UserSessionExtendedDataUpdate,
+    models::{
+        game_manager::RemoveReason,
+        user_sessions::{
+            HardwareFlags, LookupResponse, NotifyUserAdded, NotifyUserRemoved, NotifyUserUpdated,
+            UserDataFlags, UserIdentification, UserSessionExtendedData,
+            UserSessionExtendedDataUpdate,
+        },
     },
     packet::{Packet, PacketCodec, PacketDebug},
     router::BlazeRouter,
 };
 use crate::{
     database::entities::Player,
-    services::{game::manager::GameManager, sessions::Sessions},
+    services::{game::Game, sessions::Sessions},
     session::models::{NetworkAddress, QosNetworkData},
     utils::{
         components::{self, user_sessions},
@@ -46,15 +50,20 @@ pub struct Session {
     writer: mpsc::UnboundedSender<WriteMessage>,
     data: RwLock<Option<SessionExtData>>,
     router: Arc<BlazeRouter>,
-    game_manager: Arc<GameManager>,
     sessions: Arc<Sessions>,
 }
 
 pub struct SessionExtData {
     player: Arc<Player>,
     net: Arc<NetData>,
-    game: Option<GameID>,
+    game: Option<SessionGameData>,
     subscribers: Vec<(PlayerID, SessionLink)>,
+}
+
+#[derive(Clone)]
+pub struct SessionGameData {
+    pub game_id: GameID,
+    pub game_ref: Arc<RwLock<Game>>,
 }
 
 impl SessionExtData {
@@ -70,7 +79,7 @@ impl SessionExtData {
     fn ext(&self) -> UserSessionExtendedData {
         UserSessionExtendedData {
             net: self.net.clone(),
-            game: self.game,
+            game: self.game.as_ref().map(|game| game.game_id),
         }
     }
 
@@ -231,7 +240,6 @@ impl Session {
         io: Upgraded,
         addr: Ipv4Addr,
         router: Arc<BlazeRouter>,
-        game_manager: Arc<GameManager>,
         sessions: Arc<Sessions>,
     ) {
         let framed = Framed::new(io, PacketCodec);
@@ -244,7 +252,6 @@ impl Session {
             data: Default::default(),
             addr,
             router,
-            game_manager,
             sessions,
         });
 
@@ -319,7 +326,32 @@ impl Session {
         data.player.clone()
     }
 
+    /// Clears the current game returning the game data if
+    /// the player was in a game
+    ///
+    /// Called by the game itself when the player has been removed
+    pub async fn clear_game(&self) -> Option<(PlayerID, SessionGameData)> {
+        // Check that theres authentication
+        let data = &mut *self.data.write().await;
+        let data = data.as_mut()?;
+        let game = data.game.take();
+        data.publish_update();
+        let game = game?;
+
+        Some((data.player.id, game))
+    }
+
+    /// Called to remove the player from its current game
+    pub async fn remove_from_game(&self) {
+        if let Some((player_id, game)) = self.clear_game().await {
+            let game = &mut *game.game_ref.write().await;
+            game.remove_player(player_id, RemoveReason::PlayerLeft);
+        }
+    }
+
     pub async fn clear_player(&self) {
+        self.remove_from_game().await;
+
         // Check that theres authentication
         let data = &mut *self.data.write().await;
         let data = match data {
@@ -330,37 +362,24 @@ impl Session {
         // Existing sessions must be unsubscribed
         data.subscribers.clear();
 
-        // Remove session from games service
-        self.game_manager
-            .remove_session(data.game.take(), data.player.id)
-            .await;
-
         // Remove the session from the sessions service
         self.sessions.remove_session(data.player.id).await;
     }
 
-    pub async fn get_game(&self) -> Option<GameID> {
+    pub async fn get_game(&self) -> Option<SessionGameData> {
         let data = &*self.data.read().await;
-        data.as_ref().and_then(|value| value.game)
-    }
-
-    pub async fn take_game(&self) -> Option<GameID> {
-        let data = &mut *self.data.write().await;
-        data.as_mut().and_then(|value| value.game.take())
+        data.as_ref().and_then(|value| value.game.clone())
     }
 
     pub async fn get_lookup(&self) -> Option<LookupResponse> {
         let data = &*self.data.read().await;
         data.as_ref().map(|data| LookupResponse {
             player: data.player.clone(),
-            extended_data: UserSessionExtendedData {
-                net: data.net.clone(),
-                game: data.game,
-            },
+            extended_data: data.ext(),
         })
     }
 
-    pub async fn set_game(&self, game: Option<GameID>) {
+    pub async fn set_game(&self, game: Option<SessionGameData>) {
         let data = &mut *self.data.write().await;
         let data = match data {
             Some(value) => value,

@@ -2,9 +2,10 @@ use super::{rules::RuleSet, AttrMap, Game, GameJoinableState, GamePlayer, GameRe
 use crate::{
     session::{
         models::game_manager::{
-            AsyncMatchmakingStatus, GameSettings, GameSetupContext, MatchmakingResult, RemoveReason,
+            AsyncMatchmakingStatus, GameSettings, GameSetupContext, MatchmakingResult,
         },
         packet::Packet,
+        SessionGameData,
     },
     utils::{
         components::game_manager,
@@ -113,21 +114,6 @@ impl GameManager {
         (snapshots, more)
     }
 
-    pub async fn remove_session(&self, game: Option<u32>, player_id: PlayerID) {
-        if let Some(game) = game {
-            let game = match self.get_game(game).await {
-                Some(value) => value,
-                None => return,
-            };
-
-            let game = &mut *game.write().await;
-            // Send the remove message
-            game.remove_player(player_id, RemoveReason::PlayerLeft);
-        } else {
-            self.remove_queue(player_id).await;
-        }
-    }
-
     pub async fn remove_queue(&self, player_id: PlayerID) {
         let queue = &mut *self.queue.write().await;
         queue.retain(|value| value.player.player.id != player_id);
@@ -141,6 +127,27 @@ impl GameManager {
             rule_set,
             started,
         });
+    }
+
+    pub async fn add_to_game(
+        &self,
+        game_ref: GameRef,
+        player: GamePlayer,
+        context: GameSetupContext,
+    ) {
+        let player_link = player.link.clone();
+
+        // Add the player to the game
+        let game_id = {
+            let game = &mut *game_ref.write().await;
+            game.add_player(player, context);
+            game.id
+        };
+
+        // Update the player current game
+        player_link
+            .set_game(Some(SessionGameData { game_id, game_ref }))
+            .await;
     }
 
     pub async fn create_game(
@@ -179,10 +186,8 @@ impl GameManager {
                 debug!("Found matching game (GID: {})", id);
                 let msid = player.player.id;
 
-                let link = &mut *link.write().await;
-
-                // Add the player to the game
-                link.add_player(
+                self.add_to_game(
+                    link.clone(),
                     player,
                     GameSetupContext::Matchmaking {
                         fit_score: DEFAULT_FIT,
@@ -191,7 +196,8 @@ impl GameManager {
                         result: MatchmakingResult::JoinedExistingGame,
                         player_id: msid,
                     },
-                );
+                )
+                .await;
 
                 return Ok(());
             }
@@ -278,10 +284,9 @@ impl GameManager {
                         AsyncMatchmakingStatus { player_id: msid },
                     ));
 
-                    let link = &mut *link.write().await;
-
                     // Add the player to the game
-                    link.add_player(
+                    self.add_to_game(
+                        link.clone(),
                         entry.player,
                         GameSetupContext::Matchmaking {
                             fit_score: DEFAULT_FIT,
@@ -290,7 +295,8 @@ impl GameManager {
                             result: MatchmakingResult::JoinedExistingGame,
                             player_id: msid,
                         },
-                    );
+                    )
+                    .await;
                 }
                 GameJoinableState::Full | GameJoinableState::Stopping => {
                     // If the game is not joinable push the entry back to the

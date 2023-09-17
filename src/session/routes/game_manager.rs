@@ -28,32 +28,33 @@ pub async fn handle_join_game(
         .ok_or(GameManagerError::JoinPlayerFailed)?;
 
     // Find the game ID for the target session
-    let game_id = session
+    let game = session
         .get_game()
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = game_manager
-        .get_game(game_id)
-        .await
-        .ok_or(GameManagerError::InvalidGameId)?;
+    let game_id = game.game_id;
+    let link = game.game_ref;
 
     // Check the game is joinable
     let join_state = {
-        let game = &*game.read().await;
+        let game = &*link.read().await;
         game.joinable_state(None)
     };
 
     // Join the game
     if let GameJoinableState::Joinable = join_state {
         debug!("Joining game from invite (GID: {})", game_id);
-        let game = &mut *game.write().await;
-        game.add_player(
-            player,
-            GameSetupContext::Dataless {
-                context: DatalessContext::JoinGameSetup,
-            },
-        );
+
+        game_manager
+            .add_to_game(
+                link,
+                player,
+                GameSetupContext::Dataless {
+                    context: DatalessContext::JoinGameSetup,
+                },
+            )
+            .await;
 
         Ok(Blaze(JoinGameResponse {
             game_id,
@@ -146,16 +147,15 @@ pub async fn handle_create_game(
 
     // Notify matchmaking of the new game
     tokio::spawn(async move {
-        {
-            // Add the host player to the game
-            let game = &mut *link.write().await;
-            game.add_player(
+        game_manager
+            .add_to_game(
+                link.clone(),
                 player,
                 GameSetupContext::Dataless {
                     context: DatalessContext::CreateGameSetup,
                 },
-            );
-        }
+            )
+            .await;
 
         // Update matchmaking with the new game
         game_manager.process_queue(link, game_id).await;
@@ -483,6 +483,6 @@ pub async fn handle_cancel_matchmaking(
     SessionAuth(player): SessionAuth,
     Extension(game_manager): Extension<Arc<GameManager>>,
 ) {
-    let game = session.take_game().await;
-    game_manager.remove_session(game, player.id).await;
+    session.remove_from_game().await;
+    game_manager.remove_queue(player.id).await;
 }

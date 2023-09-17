@@ -9,7 +9,7 @@ use crate::{
         blaze_upgrade::{BlazeSocket, BlazeUpgrade},
         ip_address::IpAddress,
     },
-    services::{game::manager::GameManager, sessions::Sessions},
+    services::sessions::Sessions,
     session::{router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
 };
@@ -79,7 +79,6 @@ pub async fn dashboard_details(
 pub async fn upgrade(
     IpAddress(addr): IpAddress,
     Extension(router): Extension<Arc<BlazeRouter>>,
-    Extension(game_manager): Extension<Arc<GameManager>>,
     Extension(sessions): Extension<Arc<Sessions>>,
     upgrade: BlazeUpgrade,
 ) -> Response {
@@ -97,7 +96,7 @@ pub async fn upgrade(
         // Obtain a session ID
         let session_id = SESSION_IDS.fetch_add(1, Ordering::AcqRel);
 
-        Session::start(session_id, upgrade, addr, router, game_manager, sessions);
+        Session::start(session_id, upgrade, addr, router, sessions);
     });
 
     let mut response = Empty::new().into_response();
