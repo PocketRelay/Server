@@ -1,3 +1,4 @@
+use crate::{database::DbResult, utils::types::PlayerID};
 use sea_orm::{
     entity::prelude::*,
     sea_query::OnConflict,
@@ -6,8 +7,6 @@ use sea_orm::{
 };
 use serde::Serialize;
 use std::future::Future;
-
-use crate::{database::DbResult, utils::types::PlayerID};
 
 /// Structure for player data stro
 #[derive(Serialize, Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
@@ -153,17 +152,5 @@ impl Model {
                     .and(Column::Key.starts_with("class")),
             )
             .all(db)
-    }
-
-    /// Parses the challenge points value which is the second
-    /// item in the completion list.
-    ///
-    /// `db`        The database connection
-    /// `player_id` The ID of the player to get the cp for
-    pub async fn get_challenge_points(db: &DatabaseConnection, player_id: PlayerID) -> Option<u32> {
-        let list = Self::get(db, player_id, "Completion").await.ok()??.value;
-        let part = list.split(',').nth(1)?;
-        let value: u32 = part.parse().ok()?;
-        Some(value)
     }
 }

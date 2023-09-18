@@ -5,7 +5,10 @@ use crate::{
         entities::{Player, PlayerData},
         DatabaseConnection, DbResult,
     },
-    utils::parsing::{KitNameDeployed, PlayerClass},
+    utils::{
+        parsing::{KitNameDeployed, PlayerClass},
+        types::PlayerID,
+    },
 };
 use futures_util::future::BoxFuture;
 use log::{debug, error};
@@ -210,9 +213,7 @@ fn compute_n7_player(db: DatabaseConnection, player: Player) -> Lf {
 /// `player` The player to rank
 fn compute_cp_player(db: DatabaseConnection, player: Player) -> Lf {
     Box::pin(async move {
-        let value = PlayerData::get_challenge_points(&db, player.id)
-            .await
-            .unwrap_or(0);
+        let value = get_challenge_points(&db, player.id).await.unwrap_or(0);
         Ok(LeaderboardEntry {
             player_id: player.id,
             player_name: player.display_name.into_boxed_str(),
@@ -221,4 +222,14 @@ fn compute_cp_player(db: DatabaseConnection, player: Player) -> Lf {
             value,
         })
     })
+}
+
+async fn get_challenge_points(db: &DatabaseConnection, player_id: PlayerID) -> Option<u32> {
+    let list = PlayerData::get(db, player_id, "Completion")
+        .await
+        .ok()??
+        .value;
+    let part = list.split(',').nth(1)?;
+    let value: u32 = part.parse().ok()?;
+    Some(value)
 }
