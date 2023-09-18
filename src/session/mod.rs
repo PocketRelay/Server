@@ -63,10 +63,9 @@ pub struct SessionExtData {
     subscribers: Vec<(PlayerID, SessionLink)>,
 }
 
-#[derive(Clone)]
-pub struct SessionGameData {
-    pub game_id: GameID,
-    pub game_ref: Arc<RwLock<Game>>,
+struct SessionGameData {
+    game_id: GameID,
+    game_ref: Arc<RwLock<Game>>,
 }
 
 impl SessionExtData {
@@ -353,7 +352,7 @@ impl Session {
     /// the player was in a game
     ///
     /// Called by the game itself when the player has been removed
-    pub async fn clear_game(&self) -> Option<(PlayerID, SessionGameData)> {
+    pub async fn clear_game(&self) -> Option<(PlayerID, GameRef)> {
         // Check that theres authentication
         let data = &mut *self.data.write().await;
         let data = data.as_mut()?;
@@ -361,13 +360,13 @@ impl Session {
         data.publish_update();
         let game = game?;
 
-        Some((data.player.id, game))
+        Some((data.player.id, game.game_ref))
     }
 
     /// Called to remove the player from its current game
     pub async fn remove_from_game(&self) {
-        if let Some((player_id, game)) = self.clear_game().await {
-            let game = &mut *game.game_ref.write().await;
+        if let Some((player_id, game_ref)) = self.clear_game().await {
+            let game = &mut *game_ref.write().await;
             game.remove_player(player_id, RemoveReason::PlayerLeft);
         }
     }
@@ -389,9 +388,11 @@ impl Session {
         self.sessions.remove_session(data.player.id).await;
     }
 
-    pub async fn get_game(&self) -> Option<SessionGameData> {
+    pub async fn get_game(&self) -> Option<(GameID, GameRef)> {
         let data = &*self.data.read().await;
-        data.as_ref().and_then(|value| value.game.clone())
+        data.as_ref()
+            .and_then(|value| value.game.as_ref())
+            .map(|value| (value.game_id, value.game_ref.clone()))
     }
 
     pub async fn get_lookup(&self) -> Option<LookupResponse> {

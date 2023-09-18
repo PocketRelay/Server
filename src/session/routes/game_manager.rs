@@ -28,17 +28,14 @@ pub async fn handle_join_game(
         .ok_or(GameManagerError::JoinPlayerFailed)?;
 
     // Find the game ID for the target session
-    let game = session
+    let (game_id, game_ref) = session
         .get_game()
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game_id = game.game_id;
-    let link = game.game_ref;
-
     // Check the game is joinable
     let join_state = {
-        let game = &*link.read().await;
+        let game = &*game_ref.read().await;
         game.joinable_state(None)
     };
 
@@ -48,7 +45,7 @@ pub async fn handle_join_game(
 
         game_manager
             .add_to_game(
-                link,
+                game_ref,
                 player,
                 GameSetupContext::Dataless {
                     context: DatalessContext::JoinGameSetup,
