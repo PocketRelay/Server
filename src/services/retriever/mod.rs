@@ -334,7 +334,7 @@ impl OfficialSession {
     ) -> RetrieverResult<Packet> {
         let request = Packet::request(self.id, component, command, contents);
 
-        debug_log_packet(&request, "Sending to Official");
+        debug_log_packet(&request, "Send");
         let header = request.header;
 
         self.stream.send(request).await?;
@@ -363,7 +363,7 @@ impl OfficialSession {
         command: u16,
     ) -> RetrieverResult<Packet> {
         let request = Packet::request_empty(self.id, component, command);
-        debug_log_packet(&request, "Sent to Official");
+        debug_log_packet(&request, "Send");
         let header = request.header;
         self.stream.send(request).await?;
         self.id += 1;
@@ -378,7 +378,7 @@ impl OfficialSession {
                 Some(value) => value?,
                 None => return Err(RetrieverError::EarlyEof),
             };
-            debug_log_packet(&response, "Received from Official");
+            debug_log_packet(&response, "Receive");
             let header = &response.header;
 
             if let PacketType::Response = header.ty {
@@ -404,7 +404,7 @@ fn debug_log_packet(packet: &Packet, action: &str) {
         return;
     }
     let debug = PacketDebug { packet };
-    debug!("\n{}\n{:?}", action, debug);
+    debug!("\nOfficial: {}\n{:?}", action, debug);
 }
 
 /// Wrapping structure for packets to allow them to be

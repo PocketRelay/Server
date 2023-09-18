@@ -195,7 +195,7 @@ impl SessionWriter {
                 WriteMessage::Close => break,
             };
 
-            self.link.debug_log_packet("Queued Write", &packet).await;
+            self.link.debug_log_packet("Send", &packet).await;
             if self.inner.send(packet).await.is_err() {
                 break;
             }
@@ -215,7 +215,7 @@ impl SessionReader {
         while let Some(Ok(packet)) = self.inner.next().await {
             let link = self.link.clone();
             tasks.spawn(async move {
-                link.debug_log_packet("Read", &packet).await;
+                link.debug_log_packet("Receive", &packet).await;
                 let response = match link.router.handle(link.clone(), packet) {
                     // Await the handler response future
                     Ok(fut) => fut.await,
@@ -473,7 +473,7 @@ impl Session {
         };
         let debug_packet = PacketDebug { packet };
 
-        debug!("{:?}{:?}", debug_data, debug_packet);
+        debug!("\n{:?}{:?}", debug_data, debug_packet);
     }
 }
 
