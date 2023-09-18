@@ -415,9 +415,18 @@ impl Session {
         }
     }
 
-    #[inline]
     pub async fn set_game(&self, game_id: GameID, game_ref: GameRef) {
+        // Set the current game
         self.update_data(|data| {
+            // Remove the player from the game if they are already present in one
+            if let Some(game) = data.game.take() {
+                let player_id = data.player.id;
+                tokio::spawn(async move {
+                    let game = &mut *game.game_ref.write().await;
+                    game.remove_player(player_id, RemoveReason::PlayerLeft);
+                });
+            }
+
             data.game = Some(SessionGameData { game_id, game_ref });
         })
         .await;
