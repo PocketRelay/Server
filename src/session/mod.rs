@@ -33,7 +33,7 @@ use futures_util::{
 use hyper::upgrade::Upgraded;
 use log::{debug, log_enabled, warn};
 use serde::Serialize;
-use std::{fmt::Debug, net::Ipv4Addr, sync::Arc};
+use std::{fmt::Debug, net::Ipv4Addr, sync::Arc, time::Duration};
 use tokio::{
     sync::{mpsc, RwLock},
     task::JoinSet,
@@ -238,6 +238,9 @@ impl SessionReader {
 }
 
 impl Session {
+    /// Max number of times to poll a session for shutdown before erroring
+    const MAX_RELEASE_ATTEMPTS: u8 = 5;
+
     pub fn start(
         id: SessionID,
         io: Upgraded,
@@ -284,15 +287,32 @@ impl Session {
         // Clear authentication
         self.clear_player().await;
 
-        let session: Self = match Arc::try_unwrap(self) {
-            Ok(value) => value,
-            Err(arc) => {
+        let mut attempt: u8 = 1;
+
+        let mut arc = self;
+        let session = loop {
+            if attempt > Self::MAX_RELEASE_ATTEMPTS {
                 let references = Arc::strong_count(&arc);
                 warn!(
-                    "Session {} was stopped but {} references to it still exist",
+                    "Failed to stop session {} there are still {} references to it",
                     arc.id, references
                 );
                 return;
+            }
+            match Arc::try_unwrap(arc) {
+                Ok(value) => break value,
+                Err(value) => {
+                    let wait = 5 * attempt as u64;
+                    let references = Arc::strong_count(&value);
+                    debug!(
+                        "Session {} still has {} references to it, waiting {}s",
+                        value.id, references, wait
+                    );
+                    tokio::time::sleep(Duration::from_secs(wait)).await;
+                    arc = value;
+                    attempt += 1;
+                    continue;
+                }
             }
         };
 
