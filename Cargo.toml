@@ -55,6 +55,8 @@ tdf = { version = "0.1" }
 bytes = "1.4.0"
 futures = "0.3"
 
+indoc = "2"
+
 # SeaORM 
 [dependencies.sea-orm]
 version = "^0"

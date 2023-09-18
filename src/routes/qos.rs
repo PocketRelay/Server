@@ -3,6 +3,7 @@
 //! or the client doesn't seem to know its external IP
 use crate::middleware::xml::Xml;
 use axum::extract::Query;
+use indoc::formatdoc;
 use log::debug;
 use serde::Deserialize;
 
@@ -40,16 +41,17 @@ pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
     const QOS_PORT: u16 = 42130;
     const IP: u32 = u32::from_be_bytes([127, 0, 0, 1]);
 
-    let response = format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?><qos> <numprobes>0</numprobes>
-    <qosport>{}</qosport>
-    <probesize>0</probesize>
-    <qoshost>127.0.0.1</qoshost>
-    <qosip>{}</qosip>
-    <requestid>1</requestid>
-    <reqsecret>0</reqsecret>
-</qos>"#,
-        QOS_PORT, IP
-    );
-    Xml(response)
+    Xml(formatdoc! {r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+        <qos> 
+            <numprobes>0</numprobes>
+            <qosport>{}</qosport>
+            <probesize>0</probesize>
+            <qoshost>127.0.0.1</qoshost>
+            <qosip>{}</qosip>
+            <requestid>1</requestid>
+            <reqsecret>0</reqsecret>
+        </qos>
+    "#, QOS_PORT, IP
+    })
 }

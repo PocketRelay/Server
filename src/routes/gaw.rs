@@ -20,6 +20,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension,
 };
+use indoc::formatdoc;
 use serde::Deserialize;
 use std::{fmt::Display, sync::Arc};
 use tokio::try_join;
@@ -54,38 +55,36 @@ pub struct AuthQuery {
 ///
 /// `query` The query containing the auth token (In this case the hex player ID)
 pub async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
-    let response = format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<fulllogin>
-    <canageup>0</canageup>
-    <legaldochost/>
-    <needslegaldoc>0</needslegaldoc>
-    <pclogintoken/>
-    <privacypolicyuri/>
-    <sessioninfo>
-        <blazeuserid/>
-        <isfirstlogin>0</isfirstlogin>
-        <sessionkey>{}</sessionkey>
-        <lastlogindatetime/>
-        <email/>
-        <personadetails>
-            <displayname/>
-            <lastauthenticated/>
-            <personaid/>
-            <status>UNKNOWN</status>
-            <extid>0</extid>
-            <exttype>BLAZE_EXTERNAL_REF_TYPE_UNKNOWN</exttype>
-        </personadetails>
-        <userid/>
-    </sessioninfo>
-    <isoflegalcontactage>0</isoflegalcontactage>
-    <toshost/>
-    <termsofserviceuri/>
-    <tosuri/>
-</fulllogin>"#,
-        query.auth
-    );
-    Xml(response)
+    Xml(formatdoc! {r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+        <fulllogin>
+            <canageup>0</canageup>
+            <legaldochost/>
+            <needslegaldoc>0</needslegaldoc>
+            <pclogintoken/>
+            <privacypolicyuri/>
+            <sessioninfo>
+                <blazeuserid/>
+                <isfirstlogin>0</isfirstlogin>
+                <sessionkey>{}</sessionkey>
+                <lastlogindatetime/>
+                <email/>
+                <personadetails>
+                    <displayname/>
+                    <lastauthenticated/>
+                    <personaid/>
+                    <status>UNKNOWN</status>
+                    <extid>0</extid>
+                    <exttype>BLAZE_EXTERNAL_REF_TYPE_UNKNOWN</exttype>
+                </personadetails>
+                <userid/>
+            </sessioninfo>
+            <isoflegalcontactage>0</isoflegalcontactage>
+            <toshost/>
+            <termsofserviceuri/>
+            <tosuri/>
+        </fulllogin>
+    "# ,query.auth})
 }
 
 /// GET /galaxyatwar/getRatings/:id
@@ -205,32 +204,31 @@ fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> Xml {
     // Calculate the average value for the level
     let level = (a + b + c + d + e) / 5;
 
-    let response = format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<galaxyatwargetratings>
-    <ratings>
-        <ratings>{a}</ratings>
-        <ratings>{b}</ratings>
-        <ratings>{c}</ratings>
-        <ratings>{d}</ratings>
-        <ratings>{e}</ratings>
-    </ratings>
-    <level>{level}</level>
-    <assets>
-        <assets>{promotions}</assets>
-        <assets>0</assets>
-        <assets>0</assets>
-        <assets>0</assets>
-        <assets>0</assets>
-        <assets>0</assets>
-        <assets>0</assets>
-        <assets>0</assets>
-        <assets>0</assets>
-        <assets>0</assets>
-    </assets>
-</galaxyatwargetratings>"#
-    );
-    Xml(response)
+    Xml(formatdoc! {r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+        <galaxyatwargetratings>
+            <ratings>
+                <ratings>{a}</ratings>
+                <ratings>{b}</ratings>
+                <ratings>{c}</ratings>
+                <ratings>{d}</ratings>
+                <ratings>{e}</ratings>
+            </ratings>
+            <level>{level}</level>
+            <assets>
+                <assets>{promotions}</assets>
+                <assets>0</assets>
+                <assets>0</assets>
+                <assets>0</assets>
+                <assets>0</assets>
+                <assets>0</assets>
+                <assets>0</assets>
+                <assets>0</assets>
+                <assets>0</assets>
+                <assets>0</assets>
+            </assets>
+        </galaxyatwargetratings>
+    "#})
 }
 
 /// Display implementation for the GAWError this will be displayed
@@ -276,8 +274,7 @@ impl IntoResponse for GAWError {
             GAWError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        let mut response = self.to_string().into_response();
-        *response.status_mut() = status;
+        let mut response = (status, self.to_string()).into_response();
         response
             .headers_mut()
             .insert(header::CONTENT_TYPE, HeaderValue::from_static("text/xml"));
