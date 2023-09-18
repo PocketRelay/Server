@@ -141,7 +141,7 @@ pub async fn increase_ratings(
 ) -> Result<Xml, GAWError> {
     let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
     let gaw_data = gaw_data
-        .increase(&db, (query.a, query.b, query.c, query.d, query.e))
+        .add(&db, [query.a, query.b, query.c, query.d, query.e])
         .await?;
     Ok(ratings_response(gaw_data, promotions))
 }
@@ -166,9 +166,11 @@ async fn get_player_gaw_data(
         .ok_or(GAWError::InvalidToken)?;
 
     let (gaw_data, promotions) = try_join!(
-        GalaxyAtWar::find_or_create(db, player.id, config.galaxy_at_war.decay),
+        GalaxyAtWar::get(db, player.id),
         get_promotions(db, &player, config)
     )?;
+    let gaw_data = gaw_data.apply_decay(db, config.galaxy_at_war.decay).await?;
+
     Ok((gaw_data, promotions))
 }
 

@@ -542,7 +542,7 @@ pub async fn get_player_gaw(
     Extension(db): Extension<DatabaseConnection>,
 ) -> PlayersRes<GalaxyAtWar> {
     let player = find_player(&db, player_id).await?;
-    let galax_at_war = GalaxyAtWar::find_or_create(&db, player.id, 0.0).await?;
+    let galax_at_war = GalaxyAtWar::get(&db, player.id).await?;
     Ok(Json(galax_at_war))
 }
 
