@@ -6,7 +6,7 @@ use crate::{
     config::RetrieverConfig,
     session::{
         models::{InstanceDetails, InstanceNet, Port},
-        packet::{Packet, PacketCodec, PacketDebug, PacketHeader, PacketType},
+        packet::{FireFrame, FrameType, Packet, PacketCodec, PacketDebug},
     },
     utils::components::redirector,
 };
@@ -335,12 +335,12 @@ impl OfficialSession {
         let request = Packet::request(self.id, component, command, contents);
 
         debug_log_packet(&request, "Send");
-        let header = request.header;
+        let frame = request.frame.clone();
 
         self.stream.send(request).await?;
 
         self.id += 1;
-        self.expect_response(&header).await
+        self.expect_response(&frame).await
     }
 
     /// Writes a request packet and waits until the response packet is
@@ -364,7 +364,7 @@ impl OfficialSession {
     ) -> RetrieverResult<Packet> {
         let request = Packet::request_empty(self.id, component, command);
         debug_log_packet(&request, "Send");
-        let header = request.header;
+        let header = request.frame.clone();
         self.stream.send(request).await?;
         self.id += 1;
         self.expect_response(&header).await
@@ -372,21 +372,23 @@ impl OfficialSession {
 
     /// Waits for a response packet to be recieved any notification packets
     /// that are recieved are handled in the handle_notify function.
-    async fn expect_response(&mut self, request: &PacketHeader) -> RetrieverResult<Packet> {
+    async fn expect_response(&mut self, request: &FireFrame) -> RetrieverResult<Packet> {
         loop {
             let response = match self.stream.next().await {
                 Some(value) => value?,
                 None => return Err(RetrieverError::EarlyEof),
             };
             debug_log_packet(&response, "Receive");
-            let header = &response.header;
+            let header = &response.frame;
 
-            if let PacketType::Response = header.ty {
-                if header.path_matches(request) {
-                    return Ok(response);
+            match &header.ty {
+                FrameType::Response => {
+                    if header.path_matches(request) {
+                        return Ok(response);
+                    }
                 }
-            } else if let PacketType::Error = header.ty {
-                return Err(RetrieverError::Packet(ErrorPacket(response)));
+                FrameType::Error => return Err(RetrieverError::Packet(ErrorPacket(response))),
+                _ => {}
             }
         }
     }
@@ -416,7 +418,7 @@ impl std::error::Error for ErrorPacket {}
 
 impl Display for ErrorPacket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#X}", self.0.header.error)
+        write!(f, "{:#X}", self.0.frame.error)
     }
 }
 

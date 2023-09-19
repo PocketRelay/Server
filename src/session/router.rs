@@ -3,7 +3,7 @@
 
 use super::{
     models::errors::BlazeError,
-    packet::{Packet, PacketHeader},
+    packet::{FireFrame, Packet},
     SessionLink,
 };
 use crate::{
@@ -137,10 +137,10 @@ impl BlazeRouter {
         state: SessionLink,
         packet: Packet,
     ) -> Result<BoxFuture<'_, Packet>, Packet> {
-        let route = match self.routes.get(&component_key(
-            packet.header.component,
-            packet.header.command,
-        )) {
+        let route = match self
+            .routes
+            .get(&component_key(packet.frame.component, packet.frame.command))
+        {
             Some(value) => value,
             None => return Err(packet),
         };
@@ -174,7 +174,7 @@ pub struct Blaze<V>(pub V);
 /// responses
 pub struct BlazeWithHeader<V> {
     pub req: V,
-    pub header: PacketHeader,
+    pub frame: FireFrame,
 }
 
 /// [Blaze] tdf type for contents that have already been
@@ -294,7 +294,7 @@ impl<V> BlazeWithHeader<V> {
         E: TdfSerialize,
     {
         Packet {
-            header: self.header.response(),
+            frame: self.frame.response(),
             contents: Bytes::from(serialize_vec(&res)),
         }
     }
@@ -318,7 +318,7 @@ where
             V::deserialize(&mut r)
                 .map(|value| BlazeWithHeader {
                     req: value,
-                    header: req.packet.header,
+                    frame: req.packet.frame.clone(),
                 })
                 .map_err(|err| {
                     error!("Error while decoding packet: {:?}", err);

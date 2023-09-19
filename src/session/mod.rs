@@ -469,7 +469,7 @@ impl Session {
             return;
         }
 
-        let key = component_key(packet.header.component, packet.header.command);
+        let key = component_key(packet.frame.component, packet.frame.command);
         let ignored = DEBUG_IGNORED_PACKETS.contains(&key);
         if ignored {
             return;
