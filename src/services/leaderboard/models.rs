@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime};
 
 /// Structure for an entry in a leaderboard group
-#[derive(Serialize, Clone)]
+#[derive(Serialize)]
 pub struct LeaderboardEntry {
     /// The ID of the player this entry is for
     pub player_id: PlayerID,
