@@ -19,3 +19,5 @@ tools/target
 
 /src/resources/public/*
 !/src/resources/public/content
+
+*.exe
