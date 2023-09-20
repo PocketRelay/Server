@@ -33,7 +33,15 @@ use futures_util::{
 use hyper::upgrade::Upgraded;
 use log::{debug, log_enabled, warn};
 use serde::Serialize;
-use std::{fmt::Debug, net::Ipv4Addr, sync::Arc, time::Duration};
+use std::{
+    fmt::Debug,
+    net::Ipv4Addr,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tokio::{
     sync::{mpsc, RwLock},
     task::JoinSet,
@@ -236,17 +244,16 @@ impl SessionReader {
     }
 }
 
+static SESSION_IDS: AtomicU32 = AtomicU32::new(1);
+
 impl Session {
     /// Max number of times to poll a session for shutdown before erroring
     const MAX_RELEASE_ATTEMPTS: u8 = 5;
 
-    pub fn start(
-        id: SessionID,
-        io: Upgraded,
-        addr: Ipv4Addr,
-        router: Arc<BlazeRouter>,
-        sessions: Arc<Sessions>,
-    ) {
+    pub fn start(io: Upgraded, addr: Ipv4Addr, router: Arc<BlazeRouter>, sessions: Arc<Sessions>) {
+        // Obtain a session ID
+        let id = SESSION_IDS.fetch_add(1, Ordering::AcqRel);
+
         let framed = Framed::new(io, PacketCodec);
         let (write, read) = framed.split();
         let (tx, rx) = mpsc::unbounded_channel();

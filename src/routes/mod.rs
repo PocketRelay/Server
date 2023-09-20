@@ -6,6 +6,8 @@ use axum::{
 
 use crate::middleware::cors::cors_layer;
 
+use self::server::clear_log;
+
 mod auth;
 mod games;
 mod gaw;
@@ -86,7 +88,7 @@ pub fn router() -> Router {
                     "/server",
                     Router::new()
                         .route("/", get(server::server_details))
-                        .route("/log", get(server::get_log))
+                        .route("/log", get(server::get_log).delete(clear_log))
                         .route("/upgrade", get(server::upgrade))
                         .route("/telemetry", post(server::submit_telemetry))
                         .route("/dashboard", get(server::dashboard_details)),

@@ -4,30 +4,21 @@
 use crate::{
     config::{RuntimeConfig, VERSION},
     database::entities::players::PlayerRole,
-    middleware::{
-        auth::AdminAuth,
-        blaze_upgrade::{BlazeSocket, BlazeUpgrade},
-        ip_address::IpAddress,
-    },
+    middleware::{auth::AdminAuth, ip_address::IpAddress},
     services::sessions::Sessions,
     session::{router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
 };
 use axum::{
-    body::Empty,
-    http::{header, HeaderValue, StatusCode},
+    http::{header, StatusCode},
     response::{IntoResponse, Response},
     Extension, Json,
 };
+use hyper::upgrade::OnUpgrade;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
-};
-use tokio::fs::read_to_string;
-
-static SESSION_IDS: AtomicU32 = AtomicU32::new(1);
+use std::{net::Ipv4Addr, sync::Arc};
+use tokio::fs::{read_to_string, File};
 
 /// Response detailing the information about this Pocket Relay server
 /// contains the version information as well as the server information
@@ -80,38 +71,43 @@ pub async fn upgrade(
     IpAddress(addr): IpAddress,
     Extension(router): Extension<Arc<BlazeRouter>>,
     Extension(sessions): Extension<Arc<Sessions>>,
-    upgrade: BlazeUpgrade,
+    Extension(upgrade): Extension<OnUpgrade>,
 ) -> Response {
-    // TODO: Socket address extraction for forwarded reverse proxy
+    // Spawn the upgrading process to its own task
+    tokio::spawn(handle_upgrade(upgrade, addr, router, sessions));
 
-    tokio::spawn(async move {
-        let BlazeSocket(upgrade) = match upgrade.upgrade().await {
-            Ok(value) => value,
-            Err(err) => {
-                error!("Failed to upgrade blaze socket: {}", err);
-                return;
-            }
-        };
+    // Let the client know to upgrade its connection
+    (
+        // Switching protocols status code
+        StatusCode::SWITCHING_PROTOCOLS,
+        // Headers required for upgrading
+        [(header::CONNECTION, "upgrade"), (header::UPGRADE, "blaze")],
+    )
+        .into_response()
+}
 
-        // Obtain a session ID
-        let session_id = SESSION_IDS.fetch_add(1, Ordering::AcqRel);
+/// Handles upgrading a connection and starting a new session
+/// from the connection
+pub async fn handle_upgrade(
+    upgrade: OnUpgrade,
+    addr: Ipv4Addr,
+    router: Arc<BlazeRouter>,
+    sessions: Arc<Sessions>,
+) {
+    let upgraded = match upgrade.await {
+        Ok(upgraded) => upgraded,
+        Err(err) => {
+            error!("Failed to upgrade client connection: {}", err);
+            return;
+        }
+    };
 
-        Session::start(session_id, upgrade, addr, router, sessions);
-    });
-
-    let mut response = Empty::new().into_response();
-    // Use the switching protocols status code
-    *response.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
-
-    let headers = response.headers_mut();
-    // Add the upgraidng headers
-    headers.insert(header::CONNECTION, HeaderValue::from_static("upgrade"));
-    headers.insert(header::UPGRADE, HeaderValue::from_static("blaze"));
-
-    response
+    Session::start(upgraded, addr, router, sessions);
 }
 
 /// GET /api/server/log
+///
+/// Responds with the server log file contents
 ///
 /// Handles loading and responding with the server log file
 /// contents for the log section on the super admin portion
@@ -121,9 +117,39 @@ pub async fn get_log(AdminAuth(auth): AdminAuth) -> Result<String, StatusCode> {
         return Err(StatusCode::FORBIDDEN);
     }
     let path = std::path::Path::new(LOG_FILE_NAME);
-    read_to_string(path)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+    read_to_string(path).await.map_err(|err| {
+        error!("Failed to read server log file: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
+}
+
+/// DELETE /api/server/log
+///
+/// Truncates the server log file, useful for long log files that
+/// are starting to take up lots of space or have out-served their
+/// usefulness
+///
+/// Requires super admin authentication
+pub async fn clear_log(AdminAuth(auth): AdminAuth) -> Result<(), StatusCode> {
+    if auth.role < PlayerRole::SuperAdmin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let path = std::path::Path::new(LOG_FILE_NAME);
+
+    // Open the file
+    let file = File::open(path).await.map_err(|err| {
+        error!("Failed to open server log file: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Truncate the file
+    file.set_len(0).await.map_err(|err| {
+        error!("Failed to truncate server log file: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(())
 }
 
 /// Structure of a telemetry message coming from a client
