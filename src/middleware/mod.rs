@@ -6,3 +6,5 @@ pub mod cors;
 pub mod ip_address;
 /// XML response types
 pub mod xml;
+
+pub mod upgrade;

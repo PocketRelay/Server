@@ -4,7 +4,7 @@
 use crate::{
     config::{RuntimeConfig, VERSION},
     database::entities::players::PlayerRole,
-    middleware::{auth::AdminAuth, ip_address::IpAddress},
+    middleware::{auth::AdminAuth, ip_address::IpAddress, upgrade::Upgrade},
     services::sessions::Sessions,
     session::{router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
@@ -71,7 +71,7 @@ pub async fn upgrade(
     IpAddress(addr): IpAddress,
     Extension(router): Extension<Arc<BlazeRouter>>,
     Extension(sessions): Extension<Arc<Sessions>>,
-    Extension(upgrade): Extension<OnUpgrade>,
+    Upgrade(upgrade): Upgrade,
 ) -> Response {
     // Spawn the upgrading process to its own task
     tokio::spawn(handle_upgrade(upgrade, addr, router, sessions));
@@ -109,9 +109,7 @@ pub async fn handle_upgrade(
 ///
 /// Responds with the server log file contents
 ///
-/// Handles loading and responding with the server log file
-/// contents for the log section on the super admin portion
-/// of the dashboard
+/// Requires super admin authentication
 pub async fn get_log(AdminAuth(auth): AdminAuth) -> Result<String, StatusCode> {
     if auth.role < PlayerRole::SuperAdmin {
         return Err(StatusCode::FORBIDDEN);
