@@ -1,23 +1,14 @@
 //! Service for storing links to all the currenly active
 //! authenticated sessions on the server
 
-use crate::session::SessionLink;
 use crate::utils::hashing::IntHashMap;
 use crate::utils::types::PlayerID;
-use argon2::password_hash::rand_core::{OsRng, RngCore};
+use crate::{session::SessionLink, utils::signing::SigningKey};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use log::error;
-use ring::hmac::{self, Key, HMAC_SHA256};
-use std::{
-    path::Path,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tokio::{
-    fs::{write, File},
-    io::{self, AsyncReadExt},
-};
 
 /// Service for storing links to authenticated sessions and
 /// functionality for authenticating sessions
@@ -26,13 +17,12 @@ pub struct Sessions {
     sessions: RwLock<IntHashMap<PlayerID, SessionLink>>,
 
     /// HMAC key used for computing signatures
-    key: Key,
+    key: SigningKey,
 }
 
 impl Sessions {
     /// Starts a new service returning its link
-    pub async fn new() -> Self {
-        let key = Self::create_key().await;
+    pub fn new(key: SigningKey) -> Self {
         Self {
             sessions: Default::default(),
             key,
@@ -58,7 +48,7 @@ impl Sessions {
         let msg = Base64UrlUnpadded::encode_string(data);
 
         // Create a signature from the raw message bytes
-        let sig = hmac::sign(&self.key, data);
+        let sig = self.key.sign(data);
         let sig = Base64UrlUnpadded::encode_string(sig.as_ref());
 
         // Join the message and signature to create the token
@@ -67,45 +57,6 @@ impl Sessions {
 
     /// Expiry time for tokens
     const EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24 * 30 /* 30 Days */);
-
-    /// Creates a new instance of the tokens structure loading/creating
-    /// the secret bytes that are used for signing authentication tokens
-    pub async fn create_key() -> Key {
-        // Path to the file containing the server secret value
-        let secret_path = Path::new("data/secret.bin");
-
-        // The bytes of the secret
-        let mut secret = [0u8; 64];
-
-        // Attempt to load existing secret
-        if secret_path.exists() {
-            if let Err(err) = Self::read_secret(&mut secret, secret_path).await {
-                error!("Failed to read secrets file: {:?}", err);
-            } else {
-                return Key::new(HMAC_SHA256, &secret);
-            }
-        }
-
-        // Generate random secret bytes
-        OsRng.fill_bytes(&mut secret);
-
-        // Save the created secret
-        if let Err(err) = write(secret_path, &secret).await {
-            error!("Failed to write secrets file: {:?}", err);
-        }
-
-        Key::new(HMAC_SHA256, &secret)
-    }
-
-    /// Reads the secret from the secrets file into the provided buffer
-    /// returning whether the entire secret could be read
-    ///
-    /// `out` The buffer to read the secret to
-    async fn read_secret(out: &mut [u8], path: &Path) -> io::Result<()> {
-        let mut file = File::open(path).await?;
-        file.read_exact(out).await?;
-        Ok(())
-    }
 
     pub fn verify_token(&self, token: &str) -> Result<u32, VerifyError> {
         // Split the token parts
@@ -123,7 +74,7 @@ impl Sessions {
         Base64UrlUnpadded::decode(sig_raw, &mut sig)?;
 
         // Verify the signature
-        if hmac::verify(&self.key, &msg, &sig).is_err() {
+        if !self.key.verify(&msg, &sig) {
             return Err(VerifyError::Invalid);
         }
 

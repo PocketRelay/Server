@@ -4,6 +4,7 @@ use crate::{
         game::manager::GameManager, leaderboard::Leaderboard, retriever::Retriever,
         sessions::Sessions,
     },
+    utils::signing::SigningKey,
 };
 use axum::{Extension, Server};
 use config::load_config;
@@ -49,15 +50,16 @@ async fn main() {
     // This step may take longer than expected so its spawned instead of joined
     tokio::spawn(logging::log_connection_urls(config.port));
 
-    let (db, retriever, sessions) = join!(
+    let (db, retriever, signing_key) = join!(
         database::init(&runtime_config),
         Retriever::start(config.retriever),
-        Sessions::new()
+        SigningKey::global()
     );
+
     let game_manager = Arc::new(GameManager::new());
     let leaderboard = Arc::new(Leaderboard::new());
+    let sessions = Arc::new(Sessions::new(signing_key));
     let config = Arc::new(runtime_config);
-    let sessions = Arc::new(sessions);
     let retriever = Arc::new(retriever);
 
     // Initialize session router
