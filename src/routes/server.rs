@@ -18,7 +18,7 @@ use hyper::upgrade::OnUpgrade;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::{net::Ipv4Addr, sync::Arc};
-use tokio::fs::{read_to_string, File};
+use tokio::fs::{read_to_string, OpenOptions};
 
 /// Response detailing the information about this Pocket Relay server
 /// contains the version information as well as the server information
@@ -136,10 +136,14 @@ pub async fn clear_log(AdminAuth(auth): AdminAuth) -> Result<(), StatusCode> {
     let path = std::path::Path::new(LOG_FILE_NAME);
 
     // Open the file
-    let file = File::open(path).await.map_err(|err| {
-        error!("Failed to open server log file: {}", err);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let file = OpenOptions::new()
+        .write(true)
+        .open(path)
+        .await
+        .map_err(|err| {
+            error!("Failed to open server log file: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Truncate the file
     file.set_len(0).await.map_err(|err| {
