@@ -1,7 +1,6 @@
 use crate::config::RuntimeConfig;
 use axum::{
     async_trait,
-    body::boxed,
     extract::{rejection::ExtensionRejection, ConnectInfo, FromRequestParts},
     http::request::Parts,
     response::{IntoResponse, Response},
@@ -36,22 +35,21 @@ where
 
         // Reverse proxies should respect the X-Real-IP header
         if config.reverse_proxy {
-            let ip = match extract_ip_header(&parts.headers) {
-                Ok(ip) => ip,
-                Err(err) => {
+            return extract_ip_header(&parts.headers)
+                .map_err(|err| {
                     warn!("Failed to extract X-Real-IP header from incoming request. If you are NOT using a reverse proxy\n\
                     disable the `reverse_proxy` config property, otherwise check that your reverse proxy is configured\n\
                     correctly according the guide. (Closing connection with error) cause: {}", err);
-                    return Err(err);
-                }
-            };
-            return Ok(Self(ip));
+                    err
+                })
+                .map(Self);
         }
 
-        let Extension(ConnectInfo(addr)) =
-            Extension::<ConnectInfo<SocketAddr>>::from_request_parts(parts, state).await?;
-        let addr = try_socket_address(addr)?;
-        Ok(Self(addr))
+        Extension::<ConnectInfo<SocketAddr>>::from_request_parts(parts, state)
+            .await
+            .map_err(IpAddressError::ConnectInfo)
+            .and_then(|value| try_socket_address(value.0 .0))
+            .map(Self)
     }
 }
 
@@ -60,12 +58,11 @@ where
 fn extract_ip_header(headers: &HeaderMap) -> Result<Ipv4Addr, IpAddressError> {
     let header = headers
         .get(REAL_IP_HEADER)
-        .ok_or(IpAddressError::MissingHeader)?;
-
-    let value = header.to_str()?;
+        .ok_or(IpAddressError::MissingHeader)
+        .and_then(|header| header.to_str().map_err(IpAddressError::InvalidHeader))?;
 
     // Attempt to parse as IP address first (address)
-    if let Ok(addr) = value.parse::<IpAddr>() {
+    if let Ok(addr) = header.parse::<IpAddr>() {
         return match addr {
             IpAddr::V4(addr) => Ok(addr),
             IpAddr::V6(_) => Err(IpAddressError::Unsupported),
@@ -73,7 +70,7 @@ fn extract_ip_header(headers: &HeaderMap) -> Result<Ipv4Addr, IpAddressError> {
     }
 
     // Fallback attempt to parse as a socket address (address:port)
-    let addr = value.parse::<SocketAddr>()?;
+    let addr = header.parse::<SocketAddr>()?;
     try_socket_address(addr)
 }
 
@@ -92,7 +89,7 @@ fn try_socket_address(addr: SocketAddr) -> Result<Ipv4Addr, IpAddressError> {
 pub enum IpAddressError {
     /// Fallback extraction attempt failed
     #[error(transparent)]
-    ConnectInfo(#[from] ExtensionRejection),
+    ConnectInfo(ExtensionRejection),
 
     /// Header wasn't present on the request
     #[error("X-Real-IP header is missing")]
@@ -100,7 +97,7 @@ pub enum IpAddressError {
 
     /// Header contained non ASCII characters
     #[error("Header X-Real-IP contained unexpected characters")]
-    InvalidHeader(#[from] ToStrError),
+    InvalidHeader(ToStrError),
 
     /// Header couldn't be parsed as an address`
     #[error("Failed to parse X-Real-IP: {0}")]
@@ -114,13 +111,11 @@ pub enum IpAddressError {
 /// IntoResponse implementation for TokenError to allow it to be
 /// used within the result type as a error response
 impl IntoResponse for IpAddressError {
-    #[inline]
     fn into_response(self) -> Response {
-        let status: StatusCode = match self {
-            IpAddressError::ConnectInfo(err) => return err.into_response(),
-            _ => StatusCode::BAD_REQUEST,
-        };
-        (status, boxed(self.to_string())).into_response()
+        match self {
+            IpAddressError::ConnectInfo(err) => err.into_response(),
+            err => (StatusCode::BAD_REQUEST, err.to_string()).into_response(),
+        }
     }
 }
 
