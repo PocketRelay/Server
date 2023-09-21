@@ -182,68 +182,6 @@ impl NetData {
     }
 }
 
-// Writer for writing packets
-struct SessionWriter {
-    inner: SplitSink<Framed<Upgraded, PacketCodec>, Packet>,
-    rx: mpsc::UnboundedReceiver<WriteMessage>,
-    link: SessionLink,
-}
-
-pub enum WriteMessage {
-    Write(Packet),
-    Close,
-}
-
-impl SessionWriter {
-    pub async fn process(mut self) {
-        while let Some(msg) = self.rx.recv().await {
-            let packet = match msg {
-                WriteMessage::Write(packet) => packet,
-                WriteMessage::Close => break,
-            };
-
-            self.link.debug_log_packet("Send", &packet).await;
-            if self.inner.send(packet).await.is_err() {
-                break;
-            }
-        }
-    }
-}
-
-struct SessionReader {
-    inner: SplitStream<Framed<Upgraded, PacketCodec>>,
-    link: SessionLink,
-}
-
-impl SessionReader {
-    pub async fn process(mut self) {
-        let mut tasks = JoinSet::new();
-
-        while let Some(Ok(packet)) = self.inner.next().await {
-            let link = self.link.clone();
-            tasks.spawn(async move {
-                link.debug_log_packet("Receive", &packet).await;
-                let response = match link.router.handle(link.clone(), packet) {
-                    // Await the handler response future
-                    Ok(fut) => fut.await,
-
-                    // Handle no handler for packet
-                    Err(packet) => {
-                        debug!("Missing packet handler");
-                        Packet::response_empty(&packet)
-                    }
-                };
-                // Push the response to the client
-                link.push(response);
-            });
-        }
-
-        tasks.shutdown().await;
-
-        self.link.stop().await;
-    }
-}
-
 static SESSION_IDS: AtomicU32 = AtomicU32::new(1);
 
 impl Session {
@@ -280,6 +218,26 @@ impl Session {
 
         tokio::spawn(reader.process());
         tokio::spawn(writer.process());
+    }
+
+    /// Handles routing a packet
+    async fn handle_packet(self: Arc<Self>, packet: Packet) {
+        let route_link = self.clone();
+        let this = &*self;
+
+        this.debug_log_packet("Receive", &packet).await;
+        let response = match this.router.handle(route_link, packet) {
+            // Await the handler response future
+            Ok(fut) => fut.await,
+
+            // Handle no handler for packet
+            Err(packet) => {
+                debug!("Missing packet handler");
+                Packet::response_empty(&packet)
+            }
+        };
+        // Push the response to the client
+        this.push(response);
     }
 
     /// Internal session stopped function called by the reader when
@@ -513,5 +471,52 @@ impl Debug for DebugSessionData<'_> {
         }
 
         Ok(())
+    }
+}
+
+// Writer for writing packets
+struct SessionWriter {
+    inner: SplitSink<Framed<Upgraded, PacketCodec>, Packet>,
+    rx: mpsc::UnboundedReceiver<WriteMessage>,
+    link: SessionLink,
+}
+
+pub enum WriteMessage {
+    Write(Packet),
+    Close,
+}
+
+impl SessionWriter {
+    pub async fn process(mut self) {
+        while let Some(msg) = self.rx.recv().await {
+            let packet = match msg {
+                WriteMessage::Write(packet) => packet,
+                WriteMessage::Close => break,
+            };
+
+            self.link.debug_log_packet("Send", &packet).await;
+            if self.inner.send(packet).await.is_err() {
+                break;
+            }
+        }
+    }
+}
+
+struct SessionReader {
+    inner: SplitStream<Framed<Upgraded, PacketCodec>>,
+    link: SessionLink,
+}
+
+impl SessionReader {
+    pub async fn process(mut self) {
+        let mut tasks = JoinSet::new();
+
+        while let Some(Ok(packet)) = self.inner.next().await {
+            let link = self.link.clone();
+            tasks.spawn(link.handle_packet(packet));
+        }
+
+        tasks.shutdown().await;
+        self.link.stop().await;
     }
 }
