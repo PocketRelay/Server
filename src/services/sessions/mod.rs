@@ -5,9 +5,7 @@ use crate::utils::hashing::IntHashMap;
 use crate::utils::types::PlayerID;
 use crate::{session::SessionLink, utils::signing::SigningKey};
 use base64ct::{Base64UrlUnpadded, Encoding};
-use log::error;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use thiserror::Error;
 use tokio::sync::RwLock;
 
 /// Service for storing links to authenticated sessions and
@@ -21,6 +19,9 @@ pub struct Sessions {
 }
 
 impl Sessions {
+    /// Expiry time for tokens
+    const EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24 * 30 /* 30 Days */);
+
     /// Starts a new service returning its link
     pub fn new(key: SigningKey) -> Self {
         Self {
@@ -55,9 +56,6 @@ impl Sessions {
         [msg, sig].join(".")
     }
 
-    /// Expiry time for tokens
-    const EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24 * 30 /* 30 Days */);
-
     pub fn verify_token(&self, token: &str) -> Result<u32, VerifyError> {
         // Split the token parts
         let (msg_raw, sig_raw) = match token.split_once('.') {
@@ -67,11 +65,11 @@ impl Sessions {
 
         // Decode the 12 byte token message
         let mut msg = [0u8; 12];
-        Base64UrlUnpadded::decode(msg_raw, &mut msg)?;
+        Base64UrlUnpadded::decode(msg_raw, &mut msg).map_err(|_| VerifyError::Invalid)?;
 
         // Decode 32byte signature (SHA256)
         let mut sig = [0u8; 32];
-        Base64UrlUnpadded::decode(sig_raw, &mut sig)?;
+        Base64UrlUnpadded::decode(sig_raw, &mut sig).map_err(|_| VerifyError::Invalid)?;
 
         // Verify the signature
         if !self.key.verify(&msg, &sig) {
@@ -117,18 +115,30 @@ impl Sessions {
 }
 
 /// Errors that can occur while verifying a token
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum VerifyError {
     /// The token is expired
-    #[error("Expired token")]
     Expired,
     /// The token is invalid
-    #[error("Invalid token")]
     Invalid,
 }
 
-impl From<base64ct::Error> for VerifyError {
-    fn from(_: base64ct::Error) -> Self {
-        Self::Invalid
+#[cfg(test)]
+mod test {
+    use crate::utils::signing::SigningKey;
+
+    use super::Sessions;
+
+    /// Tests that tokens can be created and verified correctly
+    #[test]
+    fn test_token() {
+        let (key, _) = SigningKey::generate();
+        let sessions = Sessions::new(key);
+
+        let player_id = 32;
+        let token = sessions.create_token(player_id);
+        let claim = sessions.verify_token(&token).unwrap();
+
+        assert_eq!(player_id, claim)
     }
 }

@@ -1,8 +1,7 @@
-use std::{io, path::Path};
-
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use log::{debug, error};
 use ring::hmac::{self, Key, Tag, HMAC_SHA256};
+use std::{io, path::Path};
 use tokio::{
     fs::{write, File},
     io::AsyncReadExt,
