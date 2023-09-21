@@ -38,3 +38,71 @@ pub async fn cors_layer<T>(req: Request<T>, next: Next<T>) -> Response {
     );
     res
 }
+
+#[cfg(test)]
+mod test {
+    use super::cors_layer;
+    use axum::{middleware::from_fn, routing::get, Router};
+    use hyper::{
+        header::{
+            ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
+        },
+        Body, Method, Request, StatusCode,
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_options() {
+        let app = Router::new()
+            .route("/", get(|| async {}))
+            .layer(from_fn(cors_layer));
+
+        let req = Request::builder()
+            .uri("/")
+            .method(Method::OPTIONS)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+        let headers = res.headers();
+        let allowed_methods = headers
+            .get(ACCESS_CONTROL_ALLOW_METHODS)
+            .expect("Missing allowed methods header");
+        assert_eq!(allowed_methods.to_str().unwrap(), "*");
+
+        let allowed_headers = headers
+            .get(ACCESS_CONTROL_ALLOW_HEADERS)
+            .expect("Missing allowed headers header");
+        assert_eq!(allowed_headers.to_str().unwrap(), "*");
+
+        let allowed_origin = headers
+            .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+            .expect("Missing allowed origin header");
+        assert_eq!(allowed_origin.to_str().unwrap(), "*");
+    }
+
+    #[tokio::test]
+    async fn test_get() {
+        let app = Router::new()
+            .route("/", get(|| async {}))
+            .layer(from_fn(cors_layer));
+
+        let req = Request::builder()
+            .uri("/")
+            .method(Method::GET)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let headers = res.headers();
+
+        let allowed_origin = headers
+            .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+            .expect("Missing allowed origin header");
+        assert_eq!(allowed_origin.to_str().unwrap(), "*");
+    }
+}
