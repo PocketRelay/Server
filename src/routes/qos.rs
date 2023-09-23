@@ -38,8 +38,10 @@ pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
     debug!("Recieved QOS query: (Port: {})", query.port);
 
     /// Port for the local Quality of Service server
-    const QOS_PORT: u16 = 42130;
-    const IP: u32 = u32::from_be_bytes([127, 0, 0, 1]);
+    // const QOS_PORT: u16 = 42130;
+    const QOS_PORT: u16 = 17499;
+    // const IP: u32 = u32::from_be_bytes([127, 0, 0, 1]);
+    const IP: u32 = 2733913518;
 
     Xml(formatdoc! {r#"
         <?xml version="1.0" encoding="UTF-8"?>
@@ -47,7 +49,6 @@ pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
             <numprobes>0</numprobes>
             <qosport>{}</qosport>
             <probesize>0</probesize>
-            <qoshost>127.0.0.1</qoshost>
             <qosip>{}</qosip>
             <requestid>1</requestid>
             <reqsecret>0</reqsecret>
