@@ -138,10 +138,10 @@ pub struct QosNetworkData {
 #[derive(Debug, Default, Copy, Clone, Serialize, TdfDeserialize, TdfSerialize, TdfTyped)]
 #[repr(u8)]
 pub enum NatType {
+    #[default]
     Open = 0x0,
     Moderate = 0x1,
     Sequential = 0x2,
-    #[default]
     Strict = 0x3,
     #[tdf(default)]
     Unknown = 0x4,
