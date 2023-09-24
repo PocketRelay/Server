@@ -33,7 +33,13 @@ pub fn router() -> Router {
                 .route("/increaseRatings/:id", get(gaw::increase_ratings)),
         )
         // Quality of service
-        .route("/qos/qos", get(qos::qos))
+        .nest(
+            "/qos",
+            Router::new()
+                .route("/qos", get(qos::qos))
+                .route("/firewall", get(qos::firewall))
+                .route("/firetype", get(qos::firetype)),
+        )
         // Dashboard API
         .nest(
             "/api",
