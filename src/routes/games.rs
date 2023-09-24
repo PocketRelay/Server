@@ -1,10 +1,7 @@
 use crate::{
     database::entities::players::PlayerRole,
     middleware::auth::Auth,
-    services::game::{
-        manager::{GameManager, GetGameMessage, SnapshotQueryMessage},
-        GameSnapshot, SnapshotMessage,
-    },
+    services::game::{manager::GameManager, GameSnapshot},
     utils::types::GameID,
 };
 use axum::{
@@ -13,8 +10,8 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::prelude::{Link, LinkError};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use thiserror::Error;
 
 /// Errors that could occur while working with game endpoints
@@ -23,9 +20,6 @@ pub enum GamesError {
     /// The requested game could not be found (For specific game lookup)
     #[error("Game not found")]
     NotFound,
-    /// Something went wrong with the link to the games service
-    #[error("Failed to access games service")]
-    Link(#[from] LinkError),
 }
 
 /// Response type alias for JSON responses with GamesError
@@ -63,22 +57,19 @@ pub struct GamesResponse {
 /// players with admin level or greater access.
 pub async fn get_games(
     Query(query): Query<GamesRequest>,
-    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Auth(auth): Auth,
 ) -> GamesRes<GamesResponse> {
     let GamesRequest { offset, count } = query;
 
     let count: usize = count.unwrap_or(20) as usize;
     let offset: usize = offset * count;
+    let include_net = auth.role >= PlayerRole::Admin;
 
     // Retrieve the game snapshots
     let (games, more) = game_manager
-        .send(SnapshotQueryMessage {
-            offset,
-            count,
-            include_net: auth.role >= PlayerRole::Admin,
-        })
-        .await?;
+        .create_snapshot(offset, count, include_net)
+        .await;
 
     Ok(Json(GamesResponse { games, more }))
 }
@@ -92,19 +83,15 @@ pub async fn get_games(
 /// players with admin level or greater access.
 pub async fn get_game(
     Path(game_id): Path<GameID>,
-    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Auth(auth): Auth,
 ) -> GamesRes<GameSnapshot> {
     let game = game_manager
-        .send(GetGameMessage { game_id })
-        .await?
+        .get_game(game_id)
+        .await
         .ok_or(GamesError::NotFound)?;
-
-    let snapshot = game
-        .send(SnapshotMessage {
-            include_net: auth.role >= PlayerRole::Admin,
-        })
-        .await?;
+    let game = &*game.read().await;
+    let snapshot = game.snapshot(auth.role >= PlayerRole::Admin);
 
     Ok(Json(snapshot))
 }
@@ -114,7 +101,6 @@ impl IntoResponse for GamesError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             Self::NotFound => StatusCode::NOT_FOUND,
-            Self::Link(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (status_code, self.to_string()).into_response()

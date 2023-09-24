@@ -3,24 +3,26 @@
 
 use super::{
     models::errors::BlazeError,
-    packet::{Packet, PacketHeader},
+    packet::{FireFrame, Packet},
     SessionLink,
 };
 use crate::{
+    database::entities::Player,
+    services::game::GamePlayer,
     session::models::errors::GlobalError,
     utils::{
         components::{component_key, ComponentKey},
-        types::BoxFuture,
+        hashing::IntHashMap,
     },
 };
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
 use log::error;
 use std::{
     any::{Any, TypeId},
-    collections::HashMap,
     convert::Infallible,
-    future::{ready, Future},
-    hash::{BuildHasherDefault, Hasher},
+    future::ready,
+    future::Future,
     marker::PhantomData,
     sync::Arc,
 };
@@ -73,11 +75,12 @@ impl PacketRequest {
     }
 }
 
-type AnyMap = HashMap<TypeId, Box<dyn Any + Send + Sync>, BuildHasherDefault<IdHasher>>;
+type AnyMap = IntHashMap<TypeId, Box<dyn Any + Send + Sync>>;
+type RouteMap = IntHashMap<ComponentKey, Box<dyn ErasedHandler>>;
 
 pub struct BlazeRouterBuilder {
     /// Map for looking up a route based on the component key
-    routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<ComponentKeyHasher>>,
+    routes: RouteMap,
     extensions: AnyMap,
 }
 
@@ -124,7 +127,7 @@ impl BlazeRouterBuilder {
 
 pub struct BlazeRouter {
     /// Map for looking up a route based on the component key
-    routes: HashMap<ComponentKey, Box<dyn ErasedHandler>, BuildHasherDefault<ComponentKeyHasher>>,
+    routes: RouteMap,
     extensions: Arc<AnyMap>,
 }
 
@@ -134,10 +137,10 @@ impl BlazeRouter {
         state: SessionLink,
         packet: Packet,
     ) -> Result<BoxFuture<'_, Packet>, Packet> {
-        let route = match self.routes.get(&component_key(
-            packet.header.component,
-            packet.header.command,
-        )) {
+        let route = match self
+            .routes
+            .get(&component_key(packet.frame.component, packet.frame.command))
+        {
             Some(value) => value,
             None => return Err(packet),
         };
@@ -150,52 +153,11 @@ impl BlazeRouter {
     }
 }
 
-/// "Hasher" used by the router map that just directly stores the integer value
-/// from the component key as no hashing is required
-#[derive(Default)]
-pub struct ComponentKeyHasher(u32);
-
-impl Hasher for ComponentKeyHasher {
-    fn finish(&self) -> u64 {
-        self.0 as u64
-    }
-
-    fn write(&mut self, _bytes: &[u8]) {
-        panic!("Attempted to use component key hasher to hash bytes")
-    }
-
-    fn write_u32(&mut self, i: u32) {
-        self.0 = i;
-    }
-}
-
-// With TypeIds as keys, there's no need to hash them. They are already hashes
-// themselves, coming from the compiler. The IdHasher just holds the u64 of
-// the TypeId, and then returns it, instead of doing any bit fiddling.
-#[derive(Default)]
-pub struct IdHasher(u64);
-
-impl Hasher for IdHasher {
-    fn write(&mut self, _: &[u8]) {
-        panic!("Attempted to use id hasher to hash bytes")
-    }
-
-    #[inline]
-    fn write_u64(&mut self, id: u64) {
-        self.0 = id;
-    }
-
-    #[inline]
-    fn finish(&self) -> u64 {
-        self.0
-    }
-}
-
 pub trait FromPacketRequest: Sized {
     type Rejection: IntoPacketResponse;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a;
@@ -212,12 +174,16 @@ pub struct Blaze<V>(pub V);
 /// responses
 pub struct BlazeWithHeader<V> {
     pub req: V,
-    pub header: PacketHeader,
+    pub frame: FireFrame,
 }
 
 /// [Blaze] tdf type for contents that have already been
 /// serialized ahead of time
 pub struct RawBlaze(Bytes);
+
+/// Extracts the session authenticated player if one is present,
+/// responds with [GlobalError::AuthenticationRequired] if there is none
+pub struct SessionAuth(pub Arc<Player>);
 
 pub struct Extension<T>(pub T);
 
@@ -228,7 +194,7 @@ where
     type Rejection = BlazeError;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -245,6 +211,45 @@ where
                 .cloned()
                 .map(Extension),
         ))
+    }
+}
+
+impl FromPacketRequest for GamePlayer {
+    type Rejection = BlazeError;
+
+    fn from_packet_request<'a>(
+        req: &'a mut PacketRequest,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        Box::pin(async move {
+            let data = &*req.state.data.read().await;
+            let data = data.as_ref().ok_or(GlobalError::AuthenticationRequired)?;
+            Ok(GamePlayer::new(
+                data.player.clone(),
+                data.net.clone(),
+                req.state.clone(),
+            ))
+        })
+    }
+}
+
+impl FromPacketRequest for SessionAuth {
+    type Rejection = BlazeError;
+
+    fn from_packet_request<'a>(
+        req: &'a mut PacketRequest,
+    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
+    where
+        Self: 'a,
+    {
+        Box::pin(async move {
+            let data = &*req.state.data.read().await;
+            let data = data.as_ref().ok_or(GlobalError::AuthenticationRequired)?;
+            let player = data.player.clone();
+            Ok(SessionAuth(player))
+        })
     }
 }
 
@@ -266,7 +271,7 @@ where
     type Rejection = BlazeError;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -289,7 +294,7 @@ impl<V> BlazeWithHeader<V> {
         E: TdfSerialize,
     {
         Packet {
-            header: self.header.response(),
+            frame: self.frame.response(),
             contents: Bytes::from(serialize_vec(&res)),
         }
     }
@@ -302,7 +307,7 @@ where
     type Rejection = BlazeError;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -313,7 +318,7 @@ where
             V::deserialize(&mut r)
                 .map(|value| BlazeWithHeader {
                     req: value,
-                    header: req.packet.header,
+                    frame: req.packet.frame.clone(),
                 })
                 .map_err(|err| {
                     error!("Error while decoding packet: {:?}", err);
@@ -327,7 +332,7 @@ impl FromPacketRequest for SessionLink {
     type Rejection = Infallible;
 
     fn from_packet_request<'a>(
-        req: &'a PacketRequest,
+        req: &'a mut PacketRequest,
     ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
     where
         Self: 'a,
@@ -440,10 +445,10 @@ macro_rules! impl_handler {
             fn handle(&self, req: PacketRequest) -> BoxFuture<'_, Packet>
             {
                 Box::pin(async move {
-                    let req = req;
+                    let mut req = req;
                     $(
 
-                        let $ty = match $ty::from_packet_request(&req).await {
+                        let $ty = match $ty::from_packet_request(&mut req).await {
                             Ok(value) => value,
                             Err(rejection) => return rejection.into_response(&req.packet),
                         };

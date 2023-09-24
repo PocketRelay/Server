@@ -1,8 +1,10 @@
 //! Routes for the Quality of Service server. Unknown whether any of the
 //! response address and ports are correct however this request must succeed
 //! or the client doesn't seem to know its external IP
-use crate::{middleware::xml::Xml, utils::models::Port};
+
+use crate::middleware::xml::Xml;
 use axum::extract::Query;
+use indoc::formatdoc;
 use log::debug;
 use serde::Deserialize;
 
@@ -12,6 +14,8 @@ pub struct QosQuery {
     /// The port the client is using
     #[serde(rename = "prpt")]
     port: u16,
+
+    qtype: u8,
 }
 
 /// GET /qos/qos
@@ -37,19 +41,76 @@ pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
     debug!("Recieved QOS query: (Port: {})", query.port);
 
     /// Port for the local Quality of Service server
-    const QOS_PORT: Port = 42130;
+    const QOS_PORT: u16 = 42130;
+    // const QOS_PORT: u16 = 17499;
     const IP: u32 = u32::from_be_bytes([127, 0, 0, 1]);
+    // const IP: u32 = 2733913518;
 
-    let response = format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?><qos> <numprobes>0</numprobes>
-    <qosport>{}</qosport>
-    <probesize>0</probesize>
-    <qoshost>127.0.0.1</qoshost>
-    <qosip>{}</qosip>
-    <requestid>1</requestid>
-    <reqsecret>0</reqsecret>
-</qos>"#,
-        QOS_PORT, IP
-    );
-    Xml(response)
+    if query.qtype == 1 {
+        Xml(formatdoc! {r#"
+            <?xml version="1.0" encoding="UTF-8"?>
+            <qos> 
+                <numprobes>0</numprobes>
+                <qosport>{}</qosport>
+                <probesize>0</probesize>
+                <qosip>{}</qosip>
+                <requestid>1</requestid>
+                <reqsecret>0</reqsecret>
+            </qos>
+        "#, QOS_PORT, IP
+        })
+    } else {
+        Xml(formatdoc! {r#"
+            <?xml version="1.0" encoding="UTF-8"?>
+            <qos> 
+                <numprobes>10</numprobes>
+                <qosport>{}</qosport>
+                <probesize>1200</probesize>
+                <qosip>{}</qosip>
+                <requestid>1</requestid>
+                <reqsecret>1</reqsecret>
+            </qos>
+        "#, QOS_PORT, IP
+        })
+    }
+}
+
+/// GET /qos/firewall
+///
+/// Called by game: /qos/firewall?vers=1&nint=2
+pub async fn firewall() -> Xml {
+    // TODO: Appears to point to two other servers
+    // 162.244.53.174
+    // 162.244.53.175
+    Xml(formatdoc! {r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+        <firewall>
+            <ips>
+                <ips>2733913518</ips>
+                <ips>2733913519</ips>
+            </ips>
+            <numinterfaces>2</numinterfaces>
+            <ports>
+                <ports>17500</ports>
+                <ports>17501</ports>
+            </ports>
+            <requestid>747</requestid>
+            <reqsecret>502</reqsecret>
+        </firewall>
+    "#
+    })
+}
+
+/// GET /qos/firetype
+///
+/// Called by game: /qos/firetype?vers=1&rqid=768&rqsc=526&inip=-1062708997&inpt=3659
+pub async fn firetype() -> Xml {
+    // TODO: Firetype
+    // my wifi is: 2 cloudflare vpn is: 4
+    Xml(formatdoc! {r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+        <firetype>
+            <firetype>2</firetype>
+        </firetype>
+    "#})
 }

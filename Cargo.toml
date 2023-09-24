@@ -1,6 +1,6 @@
 [package]
 name = "pocket-relay"
-version = "0.5.9"
+version = "0.5.10"
 description = "Pocket Relay Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
@@ -43,9 +43,6 @@ thiserror = "1"
 # Email validation
 email_address = "0.2.4"
 
-# Async services framework
-interlink = "0.1"
-
 # Codec utils for encoding and decoding packets
 tokio-util = { version = "0.7", features = ["codec"] }
 
@@ -53,10 +50,12 @@ tokio-util = { version = "0.7", features = ["codec"] }
 hyper = "0.14.25"
 tower = "0.4"
 
-bitflags = "2.3.1"
+bitflags = { version = "2.3.1", features = ["serde"] }
 tdf = { version = "0.1" }
 bytes = "1.4.0"
+futures = "0.3"
 
+indoc = "2"
 
 # SeaORM 
 [dependencies.sea-orm]

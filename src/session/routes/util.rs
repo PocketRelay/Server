@@ -1,24 +1,25 @@
 use crate::{
-    config::VERSION,
+    config::{RuntimeConfig, VERSION},
     database::entities::PlayerData,
     session::{
         models::{
-            errors::{GlobalError, ServerResult},
+            errors::{BlazeError, GlobalError, ServerResult},
             util::*,
         },
-        router::{Blaze, Extension},
-        DetailsMessage, GetHostTarget, GetPlayerIdMessage, SessionLink,
+        router::{Blaze, Extension, SessionAuth},
+        SessionLink,
     },
 };
 use base64ct::{Base64, Encoding};
 use embeddy::Embedded;
 use flate2::{write::ZlibEncoder, Compression};
-use interlink::prelude::Link;
 use log::error;
 use sea_orm::DatabaseConnection;
 use std::{
+    cmp::Ordering,
     io::Write,
     path::Path,
+    sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tdf::TdfMap;
@@ -79,9 +80,10 @@ pub async fn handle_get_ticker_server() -> Blaze<TickerServer> {
 ///     }
 /// }
 /// ```
-pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Blaze<PreAuthResponse>> {
-    let host_target = session.send(GetHostTarget {}).await?;
-    Ok(Blaze(PreAuthResponse { host_target }))
+pub async fn handle_pre_auth(
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+) -> ServerResult<Blaze<PreAuthResponse>> {
+    Ok(Blaze(PreAuthResponse { config }))
 }
 
 /// Handles post authentication requests. This provides information about other
@@ -92,21 +94,17 @@ pub async fn handle_pre_auth(session: SessionLink) -> ServerResult<Blaze<PreAuth
 /// ID: 27
 /// Content: {}
 /// ```
-pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Blaze<PostAuthResponse>> {
-    let player_id = session
-        .send(GetPlayerIdMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
-    // Queue the session details to be sent to this client
-    let _ = session.do_send(DetailsMessage {
-        link: Link::clone(&session),
-    });
+pub async fn handle_post_auth(
+    session: SessionLink,
+    SessionAuth(player): SessionAuth,
+) -> ServerResult<Blaze<PostAuthResponse>> {
+    // Subscribe to the session with itself
+    session.add_subscriber(player.id, session.clone()).await;
 
     Ok(Blaze(PostAuthResponse {
         telemetry: TelemetryServer,
         ticker: TickerServer,
-        player_id,
+        player_id: player.id,
     }))
 }
 
@@ -121,8 +119,7 @@ pub async fn handle_post_auth(session: SessionLink) -> ServerResult<Blaze<PostAu
 /// ```
 ///
 pub async fn handle_ping() -> Blaze<PingResponse> {
-    let now = SystemTime::now();
-    let server_time = now
+    let server_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_secs();
@@ -151,11 +148,10 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 /// }
 /// ```
 pub async fn handle_fetch_client_config(
-    session: SessionLink,
     Blaze(req): Blaze<FetchConfigRequest>,
 ) -> ServerResult<Blaze<FetchConfigResponse>> {
-    let config = match req.id.as_ref() {
-        "ME3_DATA" => data_config(&session).await,
+    let config = match req.id.as_str() {
+        "ME3_DATA" => data_config(),
         "ME3_MSG" => messages(),
         "ME3_ENT" => load_entitlements(),
         "ME3_DIME" => {
@@ -169,10 +165,16 @@ pub async fn handle_fetch_client_config(
             map.insert("VERSION".to_string(), "40128".to_string());
             map
         }
-        "ME3_BINI_PC_COMPRESSED" => load_coalesced().await?,
+        "ME3_BINI_PC_COMPRESSED" => match load_coalesced().await {
+            Ok(map) => map,
+            Err(err) => {
+                error!("Failed to load server coalesced: {}", err);
+                return Err(GlobalError::System.into());
+            }
+        },
         id => {
             if let Some(lang) = id.strip_prefix("ME3_LIVE_TLK_PC_") {
-                talk_file(lang).await?
+                talk_file(lang).await
             } else {
                 TdfMap::default()
             }
@@ -185,22 +187,24 @@ pub async fn handle_fetch_client_config(
 /// Loads the entitlements from the entitlements file and parses
 /// it as a
 fn load_entitlements() -> TdfMap<String, String> {
-    let mut map = TdfMap::<String, String>::new();
-    for (key, value) in ME3_ENT.lines().filter_map(|line| line.split_once('=')) {
-        map.insert(key.to_string(), value.to_string());
-    }
-    map
+    ME3_ENT
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect()
 }
 
 /// Loads the local coalesced if one is present falling back
 /// to the default one on error or if its missing
-async fn load_coalesced() -> ServerResult<ChunkMap> {
+async fn load_coalesced() -> std::io::Result<ChunkMap> {
     let local_path = Path::new("data/coalesced.bin");
+
     if local_path.is_file() {
-        if let Ok(bytes) = read(local_path).await {
-            if let Ok(map) = generate_coalesced(&bytes) {
-                return Ok(map);
-            }
+        if let Ok(map) = read(local_path)
+            .await
+            .and_then(|bytes| generate_coalesced(&bytes))
+        {
+            return Ok(map);
         }
 
         error!(
@@ -216,17 +220,11 @@ async fn load_coalesced() -> ServerResult<ChunkMap> {
 /// Generates a compressed caolesced from the provided bytes
 ///
 /// `bytes` The coalesced bytes
-fn generate_coalesced(bytes: &[u8]) -> ServerResult<ChunkMap> {
+fn generate_coalesced(bytes: &[u8]) -> std::io::Result<ChunkMap> {
     let compressed: Vec<u8> = {
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::new(6));
-        encoder.write_all(bytes).map_err(|_| {
-            error!("Failed to encode coalesced with ZLib (write stage)");
-            GlobalError::System
-        })?;
-        encoder.finish().map_err(|_| {
-            error!("Failed to encode coalesced with ZLib (finish stage)");
-            GlobalError::System
-        })?
+        encoder.write_all(bytes)?;
+        encoder.finish()?
     };
 
     let mut encoded = Vec::with_capacity(16 + compressed.len());
@@ -278,35 +276,35 @@ fn create_base64_map(bytes: &[u8]) -> ChunkMap {
     output
 }
 
-/// Retrieves a talk file for the specified language code falling back
-/// to the `ME3_TLK_DEFAULT` default talk file if it could not be found
-///
-/// `lang` The talk file language
-async fn talk_file(lang: &str) -> ServerResult<ChunkMap> {
-    let file_name = format!("data/{}.tlk", lang);
-    let local_path = Path::new(&file_name);
-
-    if local_path.is_file() {
-        if let Ok(bytes) = read(local_path).await {
-            return Ok(create_base64_map(&bytes));
-        }
-        error!("Unable to load local talk file falling back to default.");
-    }
-
-    // Load default talk file
-    let file_name = format!("{}.tlk", lang);
-    Ok(if let Some(file) = DefaultTlkFiles::get(&file_name) {
-        create_base64_map(file)
-    } else {
-        let bytes: &[u8] = include_bytes!("../../resources/data/tlk/default.tlk");
-        create_base64_map(bytes)
-    })
-}
-
 /// Default talk file values
 #[derive(Embedded)]
 #[folder = "src/resources/data/tlk"]
 struct DefaultTlkFiles;
+
+/// Retrieves a talk file for the specified language code falling back
+/// to the `ME3_TLK_DEFAULT` default talk file if it could not be found
+///
+/// `lang` The talk file language
+async fn talk_file(lang: &str) -> ChunkMap {
+    let file_name = format!("{}.tlk", lang);
+
+    let local_path = format!("data/{}", file_name);
+    let local_path = Path::new(&local_path);
+    if local_path.is_file() {
+        if let Ok(map) = read(local_path)
+            .await
+            .map(|bytes| create_base64_map(&bytes))
+        {
+            return map;
+        }
+        error!("Unable to load local talk file falling back to default.");
+    }
+
+    let bytes = DefaultTlkFiles::get(&file_name)
+        .unwrap_or(include_bytes!("../../resources/data/tlk/default.tlk"));
+
+    create_base64_map(bytes)
+}
 
 /// Loads the messages that should be displayed to the client and
 /// returns them in a list.
@@ -426,22 +424,8 @@ impl Message {
 /// Image Server: http://eaassets-a.akamaihd.net/gameplayservices/prod/MassEffect/3/
 /// Telemetry Server: 159.153.235.32:9988
 ///
-async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
-    let host_target = match session.send(GetHostTarget).await {
-        Ok(value) => value,
-        Err(_) => return TdfMap::with_capacity(0),
-    };
-
-    let prefix = if host_target.local_http {
-        format!("http://127.0.0.1:{}", LOCAL_HTTP_PORT)
-    } else {
-        format!(
-            "{}{}:{}",
-            host_target.scheme.value(),
-            host_target.host,
-            host_target.port
-        )
-    };
+fn data_config() -> TdfMap<String, String> {
+    let prefix = format!("http://127.0.0.1:{}", LOCAL_HTTP_PORT);
 
     let tele_port = TELEMETRY_PORT;
 
@@ -474,6 +458,13 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
 /// Handles suspend user ping packets. The usage of this is unknown and needs
 /// further research
 ///
+/// Handles suspending user ping timeout for a specific period of time. The client
+/// provides a time in microseconds and the server responds with whether it will
+/// allow the time
+///
+/// [UtilError::]
+///
+///
 /// ```
 /// Route: Util(SuspendUserPing)
 /// ID: 31
@@ -481,12 +472,13 @@ async fn data_config(session: &SessionLink) -> TdfMap<String, String> {
 ///     "TVAL": 90000000
 /// }
 /// ```
-pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> ServerResult<()> {
-    match req.value {
-        20000000 => Err(UtilError::SuspendPingTimeTooSmall.into()),
-        90000000 => Err(UtilError::PingSuspended.into()),
-        _ => Ok(()),
-    }
+pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> BlazeError {
+    let res = match req.time_value.cmp(&90000000) {
+        Ordering::Less => UtilError::SuspendPingTimeTooSmall,
+        Ordering::Greater => UtilError::SuspendPingTimeTooLarge,
+        Ordering::Equal => UtilError::PingSuspended,
+    };
+    res.into()
 }
 
 /// Handles updating the stored data for this account
@@ -501,16 +493,11 @@ pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> 
 /// }
 /// ```
 pub async fn handle_user_settings_save(
-    session: SessionLink,
+    SessionAuth(player): SessionAuth,
     Extension(db): Extension<DatabaseConnection>,
     Blaze(req): Blaze<SettingsSaveRequest>,
 ) -> ServerResult<()> {
-    let player = session
-        .send(GetPlayerIdMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
-    PlayerData::set(&db, player, req.key, req.value).await?;
+    PlayerData::set(&db, player.id, req.key, req.value).await?;
     Ok(())
 }
 
@@ -523,21 +510,15 @@ pub async fn handle_user_settings_save(
 /// Content: {}
 /// ```
 pub async fn handle_load_settings(
-    session: SessionLink,
+    SessionAuth(player): SessionAuth,
     Extension(db): Extension<DatabaseConnection>,
 ) -> ServerResult<Blaze<SettingsResponse>> {
-    let player = session
-        .send(GetPlayerIdMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
     // Load the player data from the database
-    let data: Vec<PlayerData> = PlayerData::all(&db, player).await?;
+    let settings: TdfMap<String, String> = PlayerData::all(&db, player.id)
+        .await?
+        .into_iter()
+        .map(|entry| (entry.key, entry.value))
+        .collect();
 
-    // Encode the player data into a settings map and order it
-    let mut settings = TdfMap::<String, String>::with_capacity(data.len());
-    for value in data {
-        settings.insert(value.key, value.value);
-    }
     Ok(Blaze(SettingsResponse { settings }))
 }

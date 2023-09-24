@@ -1,154 +1,145 @@
-#![allow(unused)]
-
-use crate::utils::components::{get_command_name, get_component_name};
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::{fmt::Debug, sync::Arc};
-use std::{io, ops::Deref};
-use tdf::{
-    serialize_vec, DecodeResult, TdfDeserialize, TdfDeserializer, TdfSerialize, TdfStringifier,
+use crate::utils::components::{
+    component_key, get_command_name, get_component_name, OMIT_PACKET_CONTENTS,
 };
+use bitflags::bitflags;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::fmt::Debug;
+use std::io;
+use tdf::{prelude::*, serialize_vec};
 use tokio_util::codec::{Decoder, Encoder};
 
-/// The different types of packets
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
-pub enum PacketType {
-    /// ID counted request packets (0x00)
-    Request = 0x00,
-    /// Packets responding to requests (0x10)
-    Response = 0x10,
-    /// Unique packets coming from the server (0x20)
-    Notify = 0x20,
-    /// Error packets (0x30)
-    Error = 0x30,
+pub enum FrameType {
+    /// Request to a server
+    Request = 0x0,
+    /// Response to a request
+    Response = 0x1,
+    /// Async notification from the server
+    Notify = 0x2,
+    /// Error response from the server
+    Error = 0x3,
 }
 
-/// From u8 implementation to convert bytes back into
-/// PacketTypes
-impl From<u8> for PacketType {
+bitflags! {
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub struct PacketOptions: u8 {
+        const NONE = 0x0;
+        /// Frame length is extended from 16bits to 32bits
+        const JUMBO_FRAME = 0x1;
+        const HAS_CONTEXT = 0x2;
+        const IMMEDIATE = 0x4;
+        const JUMBO_CONTEXT = 0x8;
+    }
+}
+
+impl From<u8> for FrameType {
     fn from(value: u8) -> Self {
         match value {
-            0x00 => PacketType::Request,
-            0x10 => PacketType::Response,
-            0x20 => PacketType::Notify,
-            0x30 => PacketType::Error,
-            // Default type fallback to request
-            _ => PacketType::Request,
+            0x0 => FrameType::Request,
+            0x1 => FrameType::Response,
+            0x2 => FrameType::Notify,
+            0x3 => FrameType::Error,
+            _ => FrameType::Request,
         }
     }
 }
 
-/// Structure of packet header which comes before the
-/// packet content and describes it.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct PacketHeader {
-    /// The component of this packet
+/// Framing structure
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FireFrame {
+    /// The component that should handle this frame
     pub component: u16,
-    /// The command of this packet
+    /// The command this frame is for
     pub command: u16,
-    /// A possible error this packet contains (zero is none)
+    /// Error code if present, otherwise zero
     pub error: u16,
-    /// The type of this packet
-    pub ty: PacketType,
-    /// The unique ID of this packet (Notify packets this is just zero)
-    pub id: u16,
+    /// The type of frame
+    pub ty: FrameType,
+    /// Additional options assocaited with this frame
+    pub options: PacketOptions,
+    /// Sequence number for tracking request and response mappings
+    pub seq: u16,
 }
 
-impl PacketHeader {
-    /// Creates a notify header for the provided component and command
-    ///
-    /// `component` The component to use
-    /// `command`   The command to use
+impl FireFrame {
+    const MIN_HEADER_SIZE: usize = 12;
+    const JUMBO_SIZE: usize = std::mem::size_of::<u16>();
+
     pub const fn notify(component: u16, command: u16) -> Self {
         Self {
             component,
             command,
             error: 0,
-            ty: PacketType::Notify,
-            id: 0,
+            ty: FrameType::Notify,
+            options: PacketOptions::NONE,
+            seq: 0,
         }
     }
 
-    /// Creates a request header for the provided id, component
-    /// and command
-    ///
-    /// `id`        The packet ID
-    /// `component` The component to use
-    /// `command`   The command to use
-    pub const fn request(id: u16, component: u16, command: u16) -> Self {
+    pub const fn request(seq: u16, component: u16, command: u16) -> Self {
         Self {
             component,
             command,
             error: 0,
-            ty: PacketType::Request,
-            id,
+            ty: FrameType::Request,
+            options: PacketOptions::NONE,
+            seq,
         }
     }
 
-    /// Creates a response to the provided packet header by
-    /// changing the type of the header
     pub const fn response(&self) -> Self {
-        self.with_type(PacketType::Response)
+        self.with_type(FrameType::Response)
     }
 
-    /// Copies the header contents changing its Packet Type
-    ///
-    /// `ty` The new packet type
-    pub const fn with_type(&self, ty: PacketType) -> Self {
+    pub const fn with_type(&self, ty: FrameType) -> Self {
         Self {
             component: self.component,
             command: self.command,
             error: self.error,
             ty,
-            id: self.id,
+            options: PacketOptions::NONE,
+            seq: self.seq,
         }
     }
 
-    /// Copies the header contents changing its Packet Type
     pub const fn with_error(&self, error: u16) -> Self {
         Self {
             component: self.component,
             command: self.command,
             error,
-            ty: PacketType::Error,
-            id: self.id,
+            ty: FrameType::Error,
+            options: PacketOptions::NONE,
+            seq: self.seq,
         }
     }
 
-    /// Checks if the component and command of this packet header matches
-    /// that of the other packet header
-    ///
-    /// `other` The packet header to compare to
-    pub fn path_matches(&self, other: &PacketHeader) -> bool {
+    pub fn path_matches(&self, other: &FireFrame) -> bool {
         self.component.eq(&other.component) && self.command.eq(&other.command)
     }
 
-    /// Encodes the contents of this header appending to the
-    /// output source
-    ///
-    /// `dst`    The dst to append the bytes to
-    /// `length` The length of the content after the header
     pub fn write(&self, dst: &mut BytesMut, length: usize) {
-        let is_extended = length > 0xFFFF;
+        let mut options = self.options;
+        if length > 0xFFFF {
+            options |= PacketOptions::JUMBO_FRAME;
+        }
+
         dst.put_u16(length as u16);
         dst.put_u16(self.component);
         dst.put_u16(self.command);
         dst.put_u16(self.error);
-        dst.put_u8(self.ty as u8);
-        dst.put_u8(if is_extended { 0x10 } else { 0x00 });
-        dst.put_u16(self.id);
-        if is_extended {
-            dst.put_u8(((length & 0xFF000000) >> 24) as u8);
-            dst.put_u8(((length & 0x00FF0000) >> 16) as u8);
+        dst.put_u8((self.ty as u8) << 4);
+        dst.put_u8(options.bits() << 4);
+        dst.put_u16(self.seq);
+
+        if options.contains(PacketOptions::JUMBO_FRAME) {
+            // Put the extended length (The next 16 bits of the value to make the 32bit length)
+            dst.put_u16((length >> 16) as u16);
         }
     }
 
-    /// Attempts to read the packet header from the provided
-    /// source bytes returning None if there aren't enough bytes
-    ///
-    /// `src` The bytes to read from
-    pub fn read(src: &mut BytesMut) -> Option<(PacketHeader, usize)> {
-        if src.len() < 12 {
+    pub fn read(src: &mut BytesMut) -> Option<(FireFrame, usize)> {
+        if src.len() < Self::MIN_HEADER_SIZE {
             return None;
         }
 
@@ -156,42 +147,38 @@ impl PacketHeader {
         let component = src.get_u16();
         let command = src.get_u16();
         let error = src.get_u16();
-        let ty = src.get_u8();
-        // If we encounter 0x10 here then the packet contains extended length
-        // bytes so its longer than a u16::MAX length
-        let is_extended = src.get_u8() == 0x10;
-        let id = src.get_u16();
+        let ty = src.get_u8() >> 4;
+        let options = src.get_u8() >> 4;
+        let options = PacketOptions::from_bits_retain(options);
+        let seq = src.get_u16();
 
-        if is_extended {
+        if options.contains(PacketOptions::JUMBO_FRAME) {
             // We need another two bytes for the extended length
-            if src.len() < 2 {
+            if src.len() < Self::JUMBO_SIZE {
                 return None;
             }
-            length += src.get_u16() as usize;
+            let ext_length = (src.get_u16() as usize) << 16;
+            length |= ext_length;
         }
 
-        let ty = PacketType::from(ty);
-        let header = PacketHeader {
+        let ty = FrameType::from(ty);
+        let header = FireFrame {
             component,
             command,
             error,
             ty,
-            id,
+            options,
+            seq,
         };
         Some((header, length))
     }
 }
 
-/// Structure for Blaze packets contains the contents of the packet
-/// and the header for identification.
-///
-/// Packets can be cloned with little memory usage increase because
-/// the content is stored as Bytes.
 #[derive(Debug, Clone)]
 pub struct Packet {
-    /// The packet header
-    pub header: PacketHeader,
-    /// The packet encoded byte contents
+    /// The frame preceeding this packet
+    pub frame: FireFrame,
+    /// The encoded contents of the packet
     pub contents: Bytes,
 }
 
@@ -202,56 +189,60 @@ where
     Bytes::from(serialize_vec(value))
 }
 
+#[allow(unused)]
 impl Packet {
     /// Creates a new packet from the provided header and contents
-    pub const fn new(header: PacketHeader, contents: Bytes) -> Self {
-        Self { header, contents }
+    pub const fn new(header: FireFrame, contents: Bytes) -> Self {
+        Self {
+            frame: header,
+            contents,
+        }
     }
 
     /// Creates a new packet from the provided header with empty content
     #[inline]
-    pub const fn new_empty(header: PacketHeader) -> Self {
+    pub const fn new_empty(header: FireFrame) -> Self {
         Self::new(header, Bytes::new())
     }
 
     #[inline]
     pub const fn new_request(id: u16, component: u16, command: u16, contents: Bytes) -> Packet {
-        Self::new(PacketHeader::request(id, component, command), contents)
+        Self::new(FireFrame::request(id, component, command), contents)
     }
 
     #[inline]
     pub const fn new_response(packet: &Packet, contents: Bytes) -> Self {
-        Self::new(packet.header.response(), contents)
+        Self::new(packet.frame.response(), contents)
     }
 
     #[inline]
     pub const fn new_error(packet: &Packet, error: u16, contents: Bytes) -> Self {
-        Self::new(packet.header.with_error(error), contents)
+        Self::new(packet.frame.with_error(error), contents)
     }
 
     #[inline]
     pub const fn new_notify(component: u16, command: u16, contents: Bytes) -> Packet {
-        Self::new(PacketHeader::notify(component, command), contents)
+        Self::new(FireFrame::notify(component, command), contents)
     }
 
     #[inline]
     pub const fn request_empty(id: u16, component: u16, command: u16) -> Packet {
-        Self::new_empty(PacketHeader::request(id, component, command))
+        Self::new_empty(FireFrame::request(id, component, command))
     }
 
     #[inline]
     pub const fn response_empty(packet: &Packet) -> Self {
-        Self::new_empty(packet.header.response())
+        Self::new_empty(packet.frame.response())
     }
 
     #[inline]
     pub const fn error_empty(packet: &Packet, error: u16) -> Packet {
-        Self::new_empty(packet.header.with_error(error))
+        Self::new_empty(packet.frame.with_error(error))
     }
 
     #[inline]
     pub const fn notify_empty(component: u16, command: u16) -> Packet {
-        Self::new_empty(PacketHeader::notify(component, command))
+        Self::new_empty(FireFrame::notify(component, command))
     }
 
     #[inline]
@@ -296,7 +287,7 @@ impl Packet {
     }
 
     pub fn read(src: &mut BytesMut) -> Option<Self> {
-        let (header, length) = PacketHeader::read(src)?;
+        let (frame, length) = FireFrame::read(src)?;
 
         if src.len() < length {
             return None;
@@ -304,14 +295,14 @@ impl Packet {
 
         let contents = src.split_to(length);
         Some(Self {
-            header,
+            frame,
             contents: contents.freeze(),
         })
     }
 
     pub fn write(&self, dst: &mut BytesMut) {
         let contents = &self.contents;
-        self.header.write(dst, contents.len());
+        self.frame.write(dst, contents.len());
         dst.extend_from_slice(contents);
     }
 }
@@ -349,74 +340,56 @@ impl Encoder<Packet> for PacketCodec {
 pub struct PacketDebug<'a> {
     /// Reference to the packet itself
     pub packet: &'a Packet,
-
-    /// Decide whether to display the contents of the packet
-    pub minified: bool,
 }
 
 impl<'a> Debug for PacketDebug<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Append basic header information
-        let header = &self.packet.header;
+        let header = &self.packet.frame;
 
-        let component_name = get_component_name(header.component);
-        let command_name = get_command_name(
-            header.component,
-            header.command,
-            matches!(&header.ty, PacketType::Notify),
-        );
+        let key = component_key(header.component, header.command);
 
-        match (component_name, command_name) {
-            (Some(component), Some(command)) => {
-                writeln!(f, "Component: {}({})", component, command)?;
-            }
-            (Some(component), None) => {
-                writeln!(f, "Component: {}({:#06x})", component, header.command)?;
-            }
-            _ => {
-                writeln!(
-                    f,
-                    "Component: {:#06x}({:#06x})",
-                    header.component, header.command
-                )?;
-            }
+        let is_notify = matches!(&header.ty, FrameType::Notify);
+        let is_error = matches!(&header.ty, FrameType::Error);
+
+        let component_name = get_component_name(header.component).unwrap_or("Unknown");
+        let command_name = get_command_name(key, is_notify).unwrap_or("Unkown");
+
+        write!(f, "{:?}", header.ty)?;
+
+        if is_error {
+            // Write sequence number and error for errors
+            write!(f, " ({}, E?{:#06x})", header.seq, header.error)?;
+        } else if !is_notify {
+            // Write sequence number of sequenced types
+            write!(f, " ({})", header.seq)?;
         }
 
-        writeln!(f, "Type: {:?}", header.ty)?;
+        writeln!(
+            f,
+            ": {}->{} ({:#06x}->{:#06x})",
+            component_name, command_name, header.component, header.command
+        )?;
 
-        if !matches!(&header.ty, PacketType::Notify) {
-            writeln!(f, "ID: {}", &header.id)?;
-        }
+        let omit_content = OMIT_PACKET_CONTENTS.contains(&key);
 
-        if let PacketType::Error = &header.ty {
-            writeln!(f, "Error: {:#06x}", &header.error)?;
-        }
+        writeln!(f, "Options: {:?}", header.options)?;
 
         // Skip remaining if the message shouldn't contain its content
-        if self.minified {
+        if omit_content {
             return Ok(());
         }
 
-        let mut r = TdfDeserializer::new(&self.packet.contents);
-        let mut out = String::new();
-        out.push_str("{\n");
-        let mut str = TdfStringifier::new(r, &mut out);
+        write!(f, "Content: ")?;
 
-        // Stringify the content or append error instead
+        let r = TdfDeserializer::new(&self.packet.contents);
+        let mut str = TdfStringifier::new(r, f);
+
         if !str.stringify() {
-            writeln!(f, "Content Error: Content was malformed or not parsible")?;
-            writeln!(f, "Partial Content: {}", out)?;
-            writeln!(f, "Raw: {:?}", &self.packet.contents)?;
-            return Ok(());
+            // Write the raw content if stringify doesn't complete
+            writeln!(&mut str.w, "Raw: {:?}", &self.packet.contents)?;
         }
 
-        if out.len() == 2 {
-            // Remove new line if nothing else was appended
-            out.pop();
-        }
-
-        out.push('}');
-
-        write!(f, "Content: {}", out)
+        Ok(())
     }
 }

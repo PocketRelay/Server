@@ -1,77 +1,49 @@
 use self::{manager::GameManager, rules::RuleSet};
 use crate::{
     database::entities::Player,
-    services::game::manager::{ProcessQueueMessage, RemoveGameMessage},
     session::{
-        packet::Packet, router::RawBlaze, DetailsMessage, InformSessions, PushExt, Session,
-        SetGameMessage,
+        models::game_manager::{
+            AdminListChange, AdminListOperation, AttributesChange, GameSettings, GameSetupContext,
+            GameSetupResponse, GameState, GetGameDetails, HostMigrateFinished, HostMigrateStart,
+            JoinComplete, PlayerJoining, PlayerRemoved, PlayerState, PlayerStateChange,
+            RemoveReason, SettingChange, StateChange,
+        },
+        packet::Packet,
+        router::RawBlaze,
+        NetData, SessionLink,
     },
     utils::{
-        components::{game_manager, user_sessions},
-        models::NetData,
+        components::game_manager,
         types::{GameID, PlayerID},
     },
 };
-use interlink::prelude::*;
-use log::debug;
-use models::*;
+use log::{debug, warn};
 use serde::Serialize;
 use std::sync::Arc;
-use tdf::{ObjectId, TdfMap, TdfSerialize, TdfSerializer};
+use tdf::{ObjectId, TdfMap, TdfSerializer};
+use tokio::sync::RwLock;
 
 pub mod manager;
-pub mod models;
 pub mod rules;
+
+pub type GameRef = Arc<RwLock<Game>>;
 
 /// Game service running within the server
 pub struct Game {
     /// Unique ID for this game
     pub id: GameID,
+
     /// The current game state
     pub state: GameState,
     /// The current game setting
-    pub setting: GameSettings,
+    pub settings: GameSettings,
     /// The game attributes
     pub attributes: AttrMap,
-    /// The list of players in this game
+
     pub players: Vec<GamePlayer>,
+
     /// Services access
-    pub game_manager: Link<GameManager>,
-}
-
-impl Service for Game {
-    fn stopping(&mut self) {
-        debug!("Game is stopping (GID: {})", self.id);
-        // Remove the stopping game
-        let _ = self
-            .game_manager
-            .do_send(RemoveGameMessage { game_id: self.id });
-    }
-}
-
-impl Game {
-    /// Starts a new game service with the provided initial state
-    ///
-    /// `id`         The unique ID for the game
-    /// `attributes` The initial game attributes
-    /// `setting`    The initial game setting value
-    pub fn start(
-        id: GameID,
-        attributes: AttrMap,
-        setting: GameSettings,
-        game_manager: Link<GameManager>,
-    ) -> Link<Game> {
-        let this = Game {
-            id,
-            state: GameState::Initializing,
-            setting,
-            attributes,
-            players: Vec::with_capacity(4),
-            game_manager,
-        };
-
-        this.start()
-    }
+    pub game_manager: Arc<GameManager>,
 }
 
 /// Snapshot of the current game state and players
@@ -96,11 +68,11 @@ pub type AttrMap = TdfMap<String, String>;
 /// within a game
 pub struct GamePlayer {
     /// Session player
-    pub player: Player,
+    pub player: Arc<Player>,
     /// Session address
-    pub link: Link<Session>,
+    pub link: SessionLink,
     /// Networking information for the player
-    pub net: NetData,
+    pub net: Arc<NetData>,
     /// The mesh state of the player
     pub state: PlayerState,
 }
@@ -114,7 +86,7 @@ pub struct GamePlayerSnapshot {
     /// The player name of the snapshot
     pub display_name: Box<str>,
     /// The player net data of the snapshot if collected
-    pub net: Option<NetData>,
+    pub net: Option<Arc<NetData>>,
 }
 
 impl GamePlayer {
@@ -124,7 +96,7 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(player: Player, net: NetData, link: Link<Session>) -> Self {
+    pub fn new(player: Arc<Player>, net: Arc<NetData>, link: SessionLink) -> Self {
         Self {
             player,
             link,
@@ -133,8 +105,9 @@ impl GamePlayer {
         }
     }
 
-    pub fn set_game(&self, game: Option<GameID>) {
-        let _ = self.link.do_send(SetGameMessage { game });
+    #[inline]
+    pub fn push(&self, packet: Packet) {
+        self.link.push(packet)
     }
 
     /// Takes a snapshot of the current player state
@@ -152,48 +125,57 @@ impl GamePlayer {
     }
 
     pub fn encode<S: TdfSerializer>(&self, game_id: GameID, slot: usize, w: &mut S) {
-        w.tag_blob_empty(b"BLOB");
-        w.tag_u8(b"EXID", 0);
-        w.tag_owned(b"GID", game_id);
-        w.tag_u32(b"LOC", 0x64654445);
-        w.tag_str(b"NAME", &self.player.display_name);
-        w.tag_u32(b"PID", self.player.id);
-        w.tag_ref(b"PNET", &self.net.addr);
-        w.tag_owned(b"SID", slot);
-        w.tag_u8(b"SLOT", 0);
-        w.tag_ref(b"STAT", &self.state);
-        w.tag_u16(b"TIDX", 0xffff);
-        w.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
-        w.tag_alt(b"UGID", ObjectId::new_raw(0, 0, 0));
-        w.tag_u32(b"UID", self.player.id);
-        w.tag_group_end();
+        w.group_body(|w| {
+            w.tag_blob_empty(b"BLOB");
+            w.tag_u8(b"EXID", 0);
+            w.tag_owned(b"GID", game_id);
+            w.tag_u32(b"LOC", 0x64654445);
+            w.tag_str(b"NAME", &self.player.display_name);
+            w.tag_u32(b"PID", self.player.id);
+            w.tag_ref(b"PNET", &self.net.addr);
+            w.tag_owned(b"SID", slot);
+            w.tag_u8(b"SLOT", 0);
+            w.tag_ref(b"STAT", &self.state);
+            w.tag_u16(b"TIDX", 0xffff);
+            w.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
+            w.tag_alt(b"UGID", ObjectId::new_raw(0, 0, 0));
+            w.tag_u32(b"UID", self.player.id);
+        });
     }
 }
 
-impl Drop for GamePlayer {
-    fn drop(&mut self) {
-        // Clear player game when game player is dropped
-        self.set_game(None);
+/// Different results for checking if a game is
+/// joinable
+pub enum GameJoinableState {
+    /// Game is currenlty joinable
+    Joinable,
+    /// Game is full
+    Full,
+    /// The game doesn't match the provided rules
+    NotMatch,
+    /// The game is stopping
+    Stopping,
+}
+
+impl Game {
+    /// Constant for the maximum number of players allowed in
+    /// a game at one time. Used to determine a games full state
+    const MAX_PLAYERS: usize = 4;
+
+    pub async fn game_data(&self) -> RawBlaze {
+        let data = GetGameDetails { game: self };
+        data.into()
     }
-}
 
-/// Message to add a new player to this game
-#[derive(Message)]
-pub struct AddPlayerMessage {
-    /// The player to add to the game
-    pub player: GamePlayer,
-    /// Context to which the player should be added
-    pub context: GameSetupContext,
-}
-
-/// Handler for adding a player to the game
-impl Handler<AddPlayerMessage> for Game {
-    type Response = ();
-
-    fn handle(&mut self, msg: AddPlayerMessage, _ctx: &mut ServiceContext<Self>) {
+    pub fn add_player(&mut self, mut player: GamePlayer, context: GameSetupContext) {
         let slot = self.players.len();
 
-        self.players.push(msg.player);
+        // Player is the host player (They are connected)
+        if slot == 0 {
+            player.state = PlayerState::ActiveConnected;
+        }
+
+        self.players.push(player);
 
         // Obtain the player that was just added
         let player = self
@@ -201,12 +183,10 @@ impl Handler<AddPlayerMessage> for Game {
             .last()
             .expect("Player was added but is missing from players");
 
-        // Whether the player was not the host player
-        let is_other = slot != 0;
-
-        if is_other {
+        // Player isn't the host player
+        if slot != 0 {
             // Notify other players of the joined player
-            self.notify_all(
+            self.push_all(&Packet::notify(
                 game_manager::COMPONENT,
                 game_manager::PLAYER_JOINING,
                 PlayerJoining {
@@ -214,143 +194,25 @@ impl Handler<AddPlayerMessage> for Game {
                     player,
                     game_id: self.id,
                 },
-            );
+            ));
 
             // Update other players with the client details
-            self.update_clients(player);
+            self.add_user_sub(player.player.id, player.link.clone());
         }
 
         // Notify the joiner of the game details
-        self.notify_game_setup(player, msg.context);
-
-        // Set current game of this player
-        player.set_game(Some(self.id));
-
-        if is_other {
-            // Provide the new players session details to the other players
-            let links: Vec<Link<Session>> = self
-                .players
-                .iter()
-                .map(|player| player.link.clone())
-                .collect();
-            let _ = player.link.do_send(InformSessions { links });
-        }
+        self.notify_game_setup(player, context);
     }
-}
 
-/// Message to alter the current game state
-#[derive(Message)]
-pub struct SetStateMessage {
-    /// The new game state
-    pub state: GameState,
-}
-
-/// Handler for setting the game state
-impl Handler<SetStateMessage> for Game {
-    type Response = ();
-
-    fn handle(&mut self, msg: SetStateMessage, _ctx: &mut ServiceContext<Self>) {
-        self.state = msg.state;
-        self.notify_state();
-    }
-}
-
-/// Message for setting the current game setting value
-#[derive(Message)]
-pub struct SetSettingMessage {
-    /// The new setting value
-    pub setting: GameSettings,
-}
-
-/// Handler for setting the game setting
-impl Handler<SetSettingMessage> for Game {
-    type Response = ();
-
-    fn handle(&mut self, msg: SetSettingMessage, _ctx: &mut ServiceContext<Self>) {
-        let setting = msg.setting;
-        debug!("Updating game setting (Value: {:?})", &setting);
-        self.setting = setting;
-        self.notify_all(
-            game_manager::COMPONENT,
-            game_manager::GAME_SETTINGS_CHANGE,
-            SettingChange {
-                id: self.id,
-                setting,
-            },
-        );
-    }
-}
-
-/// Message for setting the game attributes
-#[derive(Message)]
-pub struct SetAttributesMessage {
-    /// The new attributes
-    pub attributes: AttrMap,
-}
-
-/// Handler for setting the game attributes
-impl Handler<SetAttributesMessage> for Game {
-    type Response = ();
-
-    fn handle(&mut self, msg: SetAttributesMessage, ctx: &mut ServiceContext<Self>) {
-        let attributes = msg.attributes;
-
-        debug!("Updating game attributes");
-        let packet = Packet::notify(
-            game_manager::COMPONENT,
-            game_manager::GAME_ATTRIB_CHANGE,
-            AttributesChange {
-                id: self.id,
-                attributes: &attributes,
-            },
-        );
-
-        self.attributes.insert_presorted(attributes.into_inner());
-        self.push_all(&packet);
-
-        // Don't update matchmaking for full games
-        if self.players.len() < Self::MAX_PLAYERS {
-            let _ = self.game_manager.do_send(ProcessQueueMessage {
-                link: ctx.link(),
-                game_id: self.id,
-            });
-        }
-    }
-}
-
-/// Message to update the mesh connection state between
-/// clients
-#[derive(Message)]
-pub struct UpdateMeshMessage {
-    /// The ID of the session updating its connection
-    pub id: PlayerID,
-    /// The target player that its updating with
-    pub target: PlayerID,
-    /// The player mesh state
-    pub state: PlayerState,
-}
-
-/// Handler for updating mesh connections
-impl Handler<UpdateMeshMessage> for Game {
-    type Response = ();
-
-    fn handle(&mut self, msg: UpdateMeshMessage, _ctx: &mut ServiceContext<Self>) {
-        let state = msg.state;
+    pub fn update_mesh(&mut self, id: PlayerID, target: PlayerID, state: PlayerState) {
         if let PlayerState::ActiveConnecting = state {
             // Ensure the target player is in the game
-            if !self
-                .players
-                .iter()
-                .any(|value| value.player.id == msg.target)
-            {
+            if !self.players.iter().any(|value| value.player.id == target) {
                 return;
             }
 
             // Find the index of the session player
-            let session = self
-                .players
-                .iter_mut()
-                .find(|value| value.player.id == msg.id);
+            let session = self.players.iter_mut().find(|value| value.player.id == id);
 
             let session = match session {
                 Some(value) => value,
@@ -367,55 +229,39 @@ impl Handler<UpdateMeshMessage> for Game {
                 state: session.state,
             };
 
+            // TODO: Move into a "connection complete" function
+
             // Notify players of the player state change
-            self.notify_all(
+            self.push_all(&Packet::notify(
                 game_manager::COMPONENT,
                 game_manager::GAME_PLAYER_STATE_CHANGE,
                 state_change,
-            );
+            ));
 
             // Notify players of the completed connection
-            self.notify_all(
+            self.push_all(&Packet::notify(
                 game_manager::COMPONENT,
                 game_manager::PLAYER_JOIN_COMPLETED,
                 JoinComplete {
                     game_id: self.id,
                     player_id,
                 },
-            );
+            ));
 
             // Add the player to the admin list
             self.modify_admin_list(player_id, AdminListOperation::Add);
         }
     }
-}
 
-/// Message for removing a player from the game
-#[derive(Message)]
-#[msg(rtype = "()")]
-pub struct RemovePlayerMessage {
-    /// The ID of the player/session to remove
-    pub id: u32,
-    /// The reason for removing the player
-    pub reason: RemoveReason,
-}
-
-/// Handler for removing a player from the game
-impl Handler<RemovePlayerMessage> for Game {
-    type Response = ();
-    fn handle(
-        &mut self,
-        msg: RemovePlayerMessage,
-        ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+    pub fn remove_player(&mut self, id: u32, reason: RemoveReason) {
         // Already empty game handling
         if self.players.is_empty() {
-            ctx.stop();
+            self.stop();
             return;
         }
 
         // Find the player index
-        let index = self.players.iter().position(|v| v.player.id == msg.id);
+        let index = self.players.iter().position(|v| v.player.id == id);
 
         let index = match index {
             Some(value) => value,
@@ -425,12 +271,15 @@ impl Handler<RemovePlayerMessage> for Game {
         // Remove the player
         let player = self.players.remove(index);
 
-        // Set current game of this player
-        player.set_game(None);
+        // Clear current game of this player
+        let clear_link = player.link.clone();
+        tokio::spawn(async move {
+            let _ = clear_link.clear_game().await;
+        });
 
         // Update the other players
-        self.notify_player_removed(&player, msg.reason);
-        self.notify_fetch_data(&player);
+        self.notify_player_removed(&player, reason);
+        self.rem_user_sub(player.player.id, player.link.clone());
         self.modify_admin_list(player.player.id, AdminListOperation::Remove);
 
         debug!(
@@ -445,107 +294,83 @@ impl Handler<RemovePlayerMessage> for Game {
 
         if self.players.is_empty() {
             // Game is empty stop it
-            ctx.stop();
+            self.stop();
         }
     }
-}
 
-/// Handler for checking if a game is joinable
-#[derive(Message, Clone)]
-#[msg(rtype = "GameJoinableState")]
-pub struct CheckJoinableMessage {
-    /// The player rule set if one is provided
-    pub rule_set: Option<Arc<RuleSet>>,
-}
+    pub fn new(
+        id: GameID,
+        attributes: AttrMap,
+        settings: GameSettings,
+        game_manager: Arc<GameManager>,
+    ) -> Game {
+        Game {
+            id,
+            attributes,
+            settings,
+            state: Default::default(),
+            players: Default::default(),
+            game_manager,
+        }
+    }
 
-/// Different results for checking if a game is
-/// joinable
-pub enum GameJoinableState {
-    /// Game is currenlty joinable
-    Joinable,
-    /// Game is full
-    Full,
-    /// The game doesn't match the provided rules
-    NotMatch,
-}
+    /// Called by the game manager service once this game has been stopped and
+    /// removed from the game list
+    fn stopped(self) {
+        debug!("Game is stopped (GID: {})", self.id);
+    }
 
-/// Handler for checking if a game is joinable
-impl Handler<CheckJoinableMessage> for Game {
-    type Response = Mr<CheckJoinableMessage>;
+    fn stop(&mut self) {
+        // Mark the game as stopping
+        self.state = GameState::Destructing;
 
-    fn handle(
-        &mut self,
-        msg: CheckJoinableMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
+        if !self.players.is_empty() {
+            warn!("Game {} was stopped with players still present", self.id);
+        }
+
+        // Remove the stopping game
+        let game_manager = self.game_manager.clone();
+        let game_id = self.id;
+        tokio::spawn(async move {
+            game_manager.remove_game(game_id).await;
+        });
+    }
+
+    pub fn joinable_state(&self, rule_set: Option<&RuleSet>) -> GameJoinableState {
+        if let GameState::Destructing = self.state {
+            return GameJoinableState::Stopping;
+        }
+
         // Handle full game
         if self.players.len() >= Self::MAX_PLAYERS {
-            return Mr(GameJoinableState::Full);
+            return GameJoinableState::Full;
         }
 
         // Check ruleset matches
-        if let Some(rule_set) = msg.rule_set {
+        if let Some(rule_set) = rule_set {
             if !rule_set.matches(&self.attributes) {
-                return Mr(GameJoinableState::NotMatch);
+                return GameJoinableState::NotMatch;
             }
         }
 
-        Mr(GameJoinableState::Joinable)
+        GameJoinableState::Joinable
     }
-}
 
-/// Message to take a snapshot of the game and its state
-#[derive(Message)]
-#[msg(rtype = "GameSnapshot")]
-pub struct SnapshotMessage {
-    /// Whether to include the networking details in the snapshot
-    pub include_net: bool,
-}
-
-/// Handler for taking snapshots of the game and its state
-impl Handler<SnapshotMessage> for Game {
-    type Response = Mr<SnapshotMessage>;
-
-    fn handle(&mut self, msg: SnapshotMessage, _ctx: &mut ServiceContext<Self>) -> Self::Response {
+    pub fn snapshot(&self, include_net: bool) -> GameSnapshot {
         let players = self
             .players
             .iter()
-            .map(|value| value.snapshot(msg.include_net))
+            .map(|value| value.snapshot(include_net))
             .collect();
-        Mr(GameSnapshot {
+
+        GameSnapshot {
             id: self.id,
             state: self.state,
-            setting: self.setting.bits(),
+            setting: self.settings.bits(),
             attributes: self.attributes.clone(),
             players,
-        })
+        }
     }
-}
-
-/// Message for getting an encoded packet body of the game data
-#[derive(Message)]
-#[msg(rtype = "RawBlaze")]
-pub struct GetGameDataMessage;
-
-/// Handler for getting an encoded packet body of the game data
-impl Handler<GetGameDataMessage> for Game {
-    type Response = Mr<GetGameDataMessage>;
-
-    fn handle(
-        &mut self,
-        _msg: GetGameDataMessage,
-        _ctx: &mut ServiceContext<Self>,
-    ) -> Self::Response {
-        let data = GetGameDetails { game: self };
-        let data: RawBlaze = data.into();
-        Mr(data)
-    }
-}
-
-impl Game {
-    /// Constant for the maximum number of players allowed in
-    /// a game at one time. Used to determine a games full state
-    const MAX_PLAYERS: usize = 4;
 
     /// Writes the provided packet to all connected sessions.
     /// Does not wait for the write to complete just waits for
@@ -555,48 +380,97 @@ impl Game {
     fn push_all(&self, packet: &Packet) {
         self.players
             .iter()
-            .for_each(|value| value.link.push(packet.clone()));
+            .for_each(|value| value.push(packet.clone()));
     }
 
-    /// Sends a notification packet to all the connected session
-    /// with the provided component and contents
-    ///
-    /// `component` The packet component
-    /// `contents`  The packet contents
-    fn notify_all<C: TdfSerialize>(&self, component: u16, command: u16, contents: C) {
-        let packet = Packet::notify(component, command, contents);
+    pub fn set_state(&mut self, state: GameState) {
+        self.state = state;
+
+        debug!("Updated game state (Value: {:?})", &state);
+
+        self.push_all(&Packet::notify(
+            game_manager::COMPONENT,
+            game_manager::GAME_STATE_CHANGE,
+            StateChange { id: self.id, state },
+        ));
+    }
+
+    pub fn set_settings(&mut self, settings: GameSettings) {
+        self.settings = settings;
+
+        debug!("Updated game setting (Value: {:?})", &settings);
+
+        self.push_all(&Packet::notify(
+            game_manager::COMPONENT,
+            game_manager::GAME_SETTINGS_CHANGE,
+            SettingChange {
+                id: self.id,
+                settings,
+            },
+        ));
+    }
+
+    pub fn set_attributes(&mut self, attributes: AttrMap) {
+        let packet = Packet::notify(
+            game_manager::COMPONENT,
+            game_manager::GAME_ATTRIB_CHANGE,
+            AttributesChange {
+                id: self.id,
+                attributes: &attributes,
+            },
+        );
+
+        self.attributes.insert_presorted(attributes.into_inner());
+
+        debug!("Updated game attributes");
+
         self.push_all(&packet);
     }
 
-    /// Notifies all players of the current game state
-    fn notify_state(&self) {
-        self.notify_all(
-            game_manager::COMPONENT,
-            game_manager::GAME_STATE_CHANGE,
-            StateChange {
-                id: self.id,
-                state: self.state,
-            },
-        );
+    /// Creates a subscription between all the users and the the target player
+    fn add_user_sub(&self, target_id: PlayerID, target_link: SessionLink) {
+        debug!("Adding user subscriptions");
+
+        // Subscribe all the clients to eachother
+        self.players
+            .iter()
+            .filter(|other| other.player.id.ne(&target_id))
+            .for_each(|other| {
+                let other_id = other.player.id;
+                let other_link = other.link.clone();
+                let target_link = target_link.clone();
+
+                tokio::spawn(async move {
+                    target_link
+                        .add_subscriber(other_id, other_link.clone())
+                        .await;
+                    other_link
+                        .add_subscriber(target_id, target_link.clone())
+                        .await;
+                });
+            });
     }
 
-    /// Updates all the client details for the provided session.
-    /// Tells each client to send session updates to the session
-    /// and the session to send them as well.
-    ///
-    /// `session` The session to update for
-    fn update_clients(&self, player: &GamePlayer) {
-        debug!("Updating clients with new session details");
-        self.players.iter().for_each(|value| {
-            if value.player.id != player.player.id {
-                let addr1 = player.link.clone();
-                let addr2 = value.link.clone();
+    /// Notifies the provided player and all other players
+    /// in the game that they should remove eachother from
+    /// their player data list
+    fn rem_user_sub(&self, target_id: PlayerID, target_link: SessionLink) {
+        debug!("Removing user subscriptions");
 
-                // Queue the session details to be sent to this client
-                let _ = player.link.do_send(DetailsMessage { link: addr2 });
-                let _ = value.link.do_send(DetailsMessage { link: addr1 });
-            }
-        });
+        // Unsubscribe all the clients from eachother
+        self.players
+            .iter()
+            .filter(|other| other.player.id.ne(&target_id))
+            .for_each(|other| {
+                let other_id = other.player.id;
+                let other_link = other.link.clone();
+                let target_link = target_link.clone();
+
+                tokio::spawn(async move {
+                    target_link.remove_subscriber(other_id).await;
+                    other_link.remove_subscriber(target_id).await;
+                });
+            });
     }
 
     /// Notifies the provided player that the game has been setup and
@@ -608,12 +482,12 @@ impl Game {
         let packet = Packet::notify(
             game_manager::COMPONENT,
             game_manager::GAME_SETUP,
-            GameDetails {
+            GameSetupResponse {
                 game: self,
                 context,
             },
         );
-        player.link.push(packet);
+        player.push(packet);
     }
 
     /// Modifies the psudo admin list this list doesn't actually exist in
@@ -628,7 +502,7 @@ impl Game {
             None => return,
         };
 
-        self.notify_all(
+        self.push_all(&Packet::notify(
             game_manager::COMPONENT,
             game_manager::ADMIN_LIST_CHANGE,
             AdminListChange {
@@ -637,7 +511,7 @@ impl Game {
                 operation,
                 host_id: host.player.id,
             },
-        );
+        ));
     }
 
     /// Notifies all the session and the removed session that a
@@ -657,35 +531,7 @@ impl Game {
             },
         );
         self.push_all(&packet);
-        player.link.push(packet);
-    }
-
-    /// Notifies all the sessions in the game to fetch the player data
-    /// for the provided session and the session to fetch the extended
-    /// data for all the other sessions. Will early return if there
-    /// are no players left.
-    ///
-    /// `session`   The session to update with the other clients
-    /// `player_id` The player id of the session to update
-    fn notify_fetch_data(&self, player: &GamePlayer) {
-        self.notify_all(
-            user_sessions::COMPONENT,
-            user_sessions::FETCH_EXTENDED_DATA,
-            FetchExtendedData {
-                player_id: player.player.id,
-            },
-        );
-
-        for other_player in &self.players {
-            let packet = Packet::notify(
-                user_sessions::COMPONENT,
-                user_sessions::FETCH_EXTENDED_DATA,
-                FetchExtendedData {
-                    player_id: other_player.player.id,
-                },
-            );
-            player.link.push(packet)
-        }
+        player.push(packet);
     }
 
     /// Attempts to migrate the host of this game if there are still players
@@ -693,8 +539,8 @@ impl Game {
     fn try_migrate_host(&mut self) {
         // TODO: With more than one player this fails
 
-        // Obtain the new player at the first index
-        let new_host = match self.players.first() {
+        // Obtain the new host player
+        let host_id = match self.players.first().map(|player| player.player.id) {
             Some(value) => value,
             None => return,
         };
@@ -702,29 +548,25 @@ impl Game {
         debug!("Starting host migration (GID: {})", self.id);
 
         // Start host migration
-        self.state = GameState::Migrating;
-        self.notify_state();
-        self.notify_all(
+        self.set_state(GameState::Migrating);
+        self.push_all(&Packet::notify(
             game_manager::COMPONENT,
             game_manager::HOST_MIGRATION_START,
             HostMigrateStart {
                 game_id: self.id,
-                host_id: new_host.player.id,
+                host_id,
                 pmig: 2,
                 slot: 0,
             },
-        );
+        ));
 
         // Finished host migration
-        self.state = GameState::InGame;
-        self.notify_state();
-        self.notify_all(
+        self.set_state(GameState::InGame);
+        self.push_all(&Packet::notify(
             game_manager::COMPONENT,
             game_manager::HOST_MIGRATION_FINISHED,
             HostMigrateFinished { game_id: self.id },
-        );
-
-        self.update_clients(new_host);
+        ));
 
         debug!("Finished host migration (GID: {})", self.id);
     }

@@ -1,79 +1,58 @@
 use crate::{
     services::{
-        game::{
-            manager::{
-                CreateMessage, GameManager, GetGameMessage, ProcessQueueMessage,
-                QueuePlayerMessage, TryAddMessage, TryAddResult,
-            },
-            models::{DatalessContext, GameSetupContext},
-            AddPlayerMessage, CheckJoinableMessage, GameJoinableState, GamePlayer,
-            GetGameDataMessage, RemovePlayerMessage, SetAttributesMessage, SetSettingMessage,
-            SetStateMessage, UpdateMeshMessage,
-        },
-        sessions::{LookupMessage, Sessions},
+        game::{manager::GameManager, GameJoinableState, GamePlayer},
+        sessions::Sessions,
     },
     session::{
         models::{
             errors::{GlobalError, ServerResult},
             game_manager::*,
         },
-        router::{Blaze, Extension, RawBlaze},
-        GetGamePlayerMessage, GetPlayerGameMessage, GetPlayerIdMessage, SessionLink,
+        router::{Blaze, Extension, RawBlaze, SessionAuth},
+        SessionLink,
     },
 };
-use interlink::prelude::Link;
 use log::{debug, info};
 use std::sync::Arc;
 
 pub async fn handle_join_game(
-    session: SessionLink,
-    Extension(sessions): Extension<Link<Sessions>>,
-    Extension(game_manager): Extension<Link<GameManager>>,
+    player: GamePlayer,
+    Extension(sessions): Extension<Arc<Sessions>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<JoinGameRequest>,
 ) -> ServerResult<Blaze<JoinGameResponse>> {
-    // Load the session
-    let player: GamePlayer = session
-        .send(GetGamePlayerMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
     // Lookup the session join target
     let session = sessions
-        .send(LookupMessage {
-            player_id: req.user.id,
-        })
-        .await;
-
-    // Ensure there wasn't an error
-    let session = match session {
-        Ok(Some(value)) => value,
-        _ => return Err(GlobalError::System.into()),
-    };
+        .lookup_session(req.user.id)
+        .await
+        .ok_or(GameManagerError::JoinPlayerFailed)?;
 
     // Find the game ID for the target session
-    let game_id = session.send(GetPlayerGameMessage {}).await;
-    let game_id = match game_id {
-        Ok(Some(value)) => value,
-        _ => return Err(GlobalError::System.into()),
-    };
-
-    let game = game_manager.send(GetGameMessage { game_id }).await?;
-
-    let game = match game {
-        Some(value) => value,
-        None => return Err(GameManagerError::InvalidGameId.into()),
-    };
+    let (game_id, game_ref) = session
+        .get_game()
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
 
     // Check the game is joinable
-    let join_state = game.send(CheckJoinableMessage { rule_set: None }).await?;
+    let join_state = {
+        let game = &*game_ref.read().await;
+        game.joinable_state(None)
+    };
 
     // Join the game
     if let GameJoinableState::Joinable = join_state {
         debug!("Joining game from invite (GID: {})", game_id);
-        let _ = game.do_send(AddPlayerMessage {
-            player,
-            context: GameSetupContext::Dataless(DatalessContext::JoinGameSetup),
-        });
+
+        game_manager
+            .add_to_game(
+                game_ref,
+                player,
+                GameSetupContext::Dataless {
+                    context: DatalessContext::JoinGameSetup,
+                },
+            )
+            .await;
+
         Ok(Blaze(JoinGameResponse {
             game_id,
             state: JoinGameState::JoinedGame,
@@ -85,7 +64,7 @@ pub async fn handle_join_game(
 
 pub async fn handle_get_game_data(
     Blaze(mut req): Blaze<GetGameDataRequest>,
-    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
 ) -> ServerResult<RawBlaze> {
     if req.game_list.is_empty() {
         return Err(GlobalError::System.into());
@@ -94,11 +73,13 @@ pub async fn handle_get_game_data(
     let game_id = req.game_list.remove(0);
 
     let game = game_manager
-        .send(GetGameMessage { game_id })
-        .await?
+        .get_game(game_id)
+        .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let body = game.send(GetGameDataMessage).await?;
+    let game = &*game.read().await;
+
+    let body = game.game_data().await;
 
     Ok(body)
 }
@@ -155,25 +136,27 @@ pub async fn handle_get_game_data(
 /// }
 /// ```
 pub async fn handle_create_game(
-    session: SessionLink,
-    Extension(game_manager): Extension<Link<GameManager>>,
+    player: GamePlayer,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<CreateGameRequest>,
 ) -> ServerResult<Blaze<CreateGameResponse>> {
-    let player: GamePlayer = session
-        .send(GetGamePlayerMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
-    let (link, game_id) = game_manager
-        .send(CreateMessage {
-            attributes: req.attributes,
-            setting: req.setting,
-            host: player,
-        })
-        .await?;
+    let (link, game_id) = game_manager.create_game(req.attributes, req.setting).await;
 
     // Notify matchmaking of the new game
-    let _ = game_manager.do_send(ProcessQueueMessage { link, game_id });
+    tokio::spawn(async move {
+        game_manager
+            .add_to_game(
+                link.clone(),
+                player,
+                GameSetupContext::Dataless {
+                    context: DatalessContext::CreateGameSetup,
+                },
+            )
+            .await;
+
+        // Update matchmaking with the new game
+        game_manager.process_queue(link, game_id).await;
+    });
 
     Ok(Blaze(CreateGameResponse { game_id }))
 }
@@ -199,21 +182,29 @@ pub async fn handle_create_game(
 /// }
 /// ```
 pub async fn handle_set_attributes(
-    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<SetAttributesRequest>,
 ) -> ServerResult<()> {
     let link = game_manager
-        .send(GetGameMessage {
-            game_id: req.game_id,
-        })
-        .await?;
+        .get_game(req.game_id)
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
 
-    if let Some(link) = link {
-        link.send(SetAttributesMessage {
-            attributes: req.attributes,
-        })
-        .await?;
+    {
+        let game = &mut *link.write().await;
+        game.set_attributes(req.attributes);
     }
+
+    // Update matchmaking for the changed game
+    tokio::spawn(async move {
+        let join_state = {
+            let game = &*link.read().await;
+            game.joinable_state(None)
+        };
+        if let GameJoinableState::Joinable = join_state {
+            game_manager.process_queue(link, req.game_id).await;
+        }
+    });
 
     Ok(())
 }
@@ -229,18 +220,16 @@ pub async fn handle_set_attributes(
 /// }
 /// ```
 pub async fn handle_set_state(
-    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<SetStateRequest>,
 ) -> ServerResult<()> {
     let link = game_manager
-        .send(GetGameMessage {
-            game_id: req.game_id,
-        })
-        .await?;
+        .get_game(req.game_id)
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
 
-    if let Some(link) = link {
-        link.send(SetStateMessage { state: req.state }).await?;
-    }
+    let game = &mut *link.write().await;
+    game.set_state(req.state);
 
     Ok(())
 }
@@ -256,21 +245,16 @@ pub async fn handle_set_state(
 /// }
 /// ```
 pub async fn handle_set_setting(
-    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<SetSettingRequest>,
 ) -> ServerResult<()> {
     let link = game_manager
-        .send(GetGameMessage {
-            game_id: req.game_id,
-        })
-        .await?;
+        .get_game(req.game_id)
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
 
-    if let Some(link) = link {
-        link.send(SetSettingMessage {
-            setting: req.setting,
-        })
-        .await?;
-    }
+    let game = &mut *link.write().await;
+    game.set_settings(req.setting);
 
     Ok(())
 }
@@ -289,25 +273,18 @@ pub async fn handle_set_setting(
 /// }
 /// ```
 pub async fn handle_remove_player(
-    Extension(game_manager): Extension<Link<GameManager>>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<RemovePlayerRequest>,
-) {
-    let game = match game_manager
-        .send(GetGameMessage {
-            game_id: req.game_id,
-        })
+) -> ServerResult<()> {
+    let link = game_manager
+        .get_game(req.game_id)
         .await
-    {
-        Ok(Some(value)) => value,
-        _ => return,
-    };
+        .ok_or(GameManagerError::InvalidGameId)?;
 
-    let _ = game
-        .send(RemovePlayerMessage {
-            reason: req.reason,
-            id: req.player_id,
-        })
-        .await;
+    let game = &mut *link.write().await;
+    game.remove_player(req.player_id, req.reason);
+
+    Ok(())
 }
 
 /// Handles updating mesh connections
@@ -327,38 +304,22 @@ pub async fn handle_remove_player(
 /// }
 /// ```
 pub async fn handle_update_mesh_connection(
-    session: SessionLink,
-    Extension(game_manager): Extension<Link<GameManager>>,
+    SessionAuth(player): SessionAuth,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(mut req): Blaze<UpdateMeshRequest>,
 ) -> ServerResult<()> {
-    let id = match session.send(GetPlayerIdMessage).await? {
-        Some(value) => value,
-        None => return Err(GlobalError::AuthenticationRequired.into()),
-    };
-
     let target = match req.targets.pop() {
         Some(value) => value,
         None => return Ok(()),
     };
 
     let link = game_manager
-        .send(GetGameMessage {
-            game_id: req.game_id,
-        })
-        .await?;
+        .get_game(req.game_id)
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
 
-    let link = match link {
-        Some(value) => value,
-        None => return Ok(()),
-    };
-
-    let _ = link
-        .send(UpdateMeshMessage {
-            id,
-            target: target.player_id,
-            state: target.state,
-        })
-        .await;
+    let game = &mut *link.write().await;
+    game.update_mesh(player.id, target.player_id, target.state);
 
     Ok(())
 }
@@ -485,34 +446,21 @@ pub async fn handle_update_mesh_connection(
 /// }
 /// ```
 pub async fn handle_start_matchmaking(
-    session: SessionLink,
-    Extension(game_manager): Extension<Link<GameManager>>,
+    player: GamePlayer,
+    Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(req): Blaze<MatchmakingRequest>,
 ) -> ServerResult<Blaze<MatchmakingResponse>> {
-    let player: GamePlayer = session
-        .send(GetGamePlayerMessage)
-        .await?
-        .ok_or(GlobalError::AuthenticationRequired)?;
-
     let session_id = player.player.id;
 
     info!("Player {} started matchmaking", player.player.display_name);
 
-    let rule_set = Arc::new(req.rules);
-
-    let result = game_manager
-        .send(TryAddMessage {
-            player,
-            rule_set: rule_set.clone(),
-        })
-        .await?;
-
-    // If adding failed attempt to queue instead
-    if let TryAddResult::Failure(player) = result {
-        game_manager
-            .send(QueuePlayerMessage { player, rule_set })
-            .await?;
-    }
+    tokio::spawn(async move {
+        let rule_set = Arc::new(req.rules);
+        // If adding failed attempt to queue instead
+        if let Err(player) = game_manager.try_add(player, &rule_set).await {
+            game_manager.queue(player, rule_set).await;
+        }
+    });
 
     Ok(Blaze(MatchmakingResponse { id: session_id }))
 }
@@ -527,11 +475,11 @@ pub async fn handle_start_matchmaking(
 ///     "MSID": 1
 /// }
 /// ```
-pub async fn handle_cancel_matchmaking(session: SessionLink) {
-    session
-        .exec(|session, _| {
-            session.remove_games();
-        })
-        .await
-        .ok();
+pub async fn handle_cancel_matchmaking(
+    session: SessionLink,
+    SessionAuth(player): SessionAuth,
+    Extension(game_manager): Extension<Arc<GameManager>>,
+) {
+    session.remove_from_game().await;
+    game_manager.remove_queue(player.id).await;
 }

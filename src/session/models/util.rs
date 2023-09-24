@@ -1,9 +1,9 @@
+use super::Port;
 use crate::{
-    session::SessionHostTarget,
-    utils::{models::Port, types::PlayerID},
+    config::{QosServerConfig, RuntimeConfig},
+    utils::types::PlayerID,
 };
-
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType};
 
 #[derive(Debug, Clone)]
@@ -47,6 +47,7 @@ impl TdfSerialize for TelemetryServer {
             w.tag_zero(b"ANON");
             w.tag_str(b"DISA", TELEMTRY_DISA);
             w.tag_str(b"FILT", "-UION/****");
+            // Encoded locale actually BE encoded string bytes (enNZ)
             w.tag_u32(b"LOC", 1701727834);
             w.tag_str(b"NOOK", "US,CA,MX");
             // Last known telemetry port: 9988
@@ -86,9 +87,12 @@ pub const SRC_VERSION: &str = "303107";
 pub const BLAZE_VERSION: &str = "Blaze 3.15.08.0 (CL# 1629389)";
 pub const PING_PERIOD: &str = "15s";
 
+/// Alias used for ping sites
+pub const PING_SITE_ALIAS: &str = "ea-sjc";
+
 /// Structure for the response to a pre authentication request
 pub struct PreAuthResponse {
-    pub host_target: SessionHostTarget,
+    pub config: Arc<RuntimeConfig>,
 }
 
 impl TdfSerialize for PreAuthResponse {
@@ -129,11 +133,16 @@ impl TdfSerialize for PreAuthResponse {
 
         // Quality Of Service Server details
         w.group(b"QOSS", |w| {
-            let (http_host, http_port) = if self.host_target.local_http {
-                ("127.0.0.1", LOCAL_HTTP_PORT)
-            } else {
-                (&self.host_target.host as &str, self.host_target.port)
+            let qos = &self.config.qos;
+
+            let (http_host, http_port) = match qos {
+                QosServerConfig::Official => ("gossjcprod-qos01.ea.com", 17502),
+                QosServerConfig::Local => ("127.0.0.1", LOCAL_HTTP_PORT),
+                QosServerConfig::Custom { host, port } => (host.as_str(), *port),
             };
+
+            // let http_host = "127.0.0.1";
+            // let http_port = 17499;
 
             // Bioware Primary Server
             w.group(b"BWPS", |w| {
@@ -150,7 +159,7 @@ impl TdfSerialize for PreAuthResponse {
                 w.tag_map_start(b"LTPS", TdfType::String, TdfType::Group, 1);
 
                 // Key for the server
-                "ea-sjc".serialize(w);
+                PING_SITE_ALIAS.serialize(w);
 
                 w.group_body(|w| {
                     // Same as the Bioware primary server
@@ -232,9 +241,9 @@ pub struct FetchConfigResponse {
 /// Structure for the suspend user ping request
 #[derive(TdfDeserialize)]
 pub struct SuspendPingRequest {
-    /// The suspend ping value
+    /// The suspend ping value (Suspend time in microseconds)
     #[tdf(tag = "TVAL")]
-    pub value: u32,
+    pub time_value: u32,
 }
 
 /// Structure for the request to update the settings for

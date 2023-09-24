@@ -3,8 +3,7 @@ use crate::{
         entities::{players::PlayerRole, Player},
         DbErr,
     },
-    services::sessions::{Sessions, VerifyError, VerifyTokenMessage},
-    utils::types::BoxFuture,
+    services::sessions::{Sessions, VerifyError},
 };
 use axum::{
     body::boxed,
@@ -12,8 +11,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use interlink::prelude::{Link, LinkError};
+use futures_util::future::BoxFuture;
 use sea_orm::DatabaseConnection;
+use std::sync::Arc;
 use thiserror::Error;
 
 pub struct Auth(pub Player);
@@ -64,26 +64,24 @@ impl<S> FromRequestParts<S> for Auth {
             .clone();
         let sessions = parts
             .extensions
-            .get::<Link<Sessions>>()
-            .expect("Database connection extension missing")
-            .clone();
+            .get::<Arc<Sessions>>()
+            .expect("Database connection extension missing");
 
-        Box::pin(async move {
-            // Extract the token from the headers
-            let token = parts
-                .headers
-                .get(TOKEN_HEADER)
-                .and_then(|value| value.to_str().ok())
-                .ok_or(TokenError::MissingToken)?;
-
-            let player_id = sessions
-                .send(VerifyTokenMessage(token.to_string()))
-                .await
-                .map_err(TokenError::SessionService)?
-                .map_err(|err| match err {
+        // Extract the token from the headers and verify it as a player id
+        let player_id = parts
+            .headers
+            .get(TOKEN_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .ok_or(TokenError::MissingToken)
+            .and_then(|token| {
+                sessions.verify_token(token).map_err(|err| match err {
                     VerifyError::Expired => TokenError::ExpiredToken,
                     VerifyError::Invalid => TokenError::InvalidToken,
-                })?;
+                })
+            });
+
+        Box::pin(async move {
+            let player_id = player_id?;
 
             let player = Player::by_id(&db, player_id)
                 .await?
@@ -113,9 +111,6 @@ pub enum TokenError {
     /// Database error
     #[error("Internal server error")]
     Database(#[from] DbErr),
-    /// Session service error
-    #[error("Session service unavailable")]
-    SessionService(LinkError),
 }
 
 /// IntoResponse implementation for TokenError to allow it to be
@@ -127,7 +122,7 @@ impl IntoResponse for TokenError {
             Self::MissingToken => StatusCode::BAD_REQUEST,
             Self::InvalidToken | Self::ExpiredToken => StatusCode::UNAUTHORIZED,
             Self::MissingRole => StatusCode::FORBIDDEN,
-            Self::Database(_) | Self::SessionService(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (status, boxed(self.to_string())).into_response()

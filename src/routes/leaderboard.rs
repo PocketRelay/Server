@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use crate::{
-    services::leaderboard::{models::*, Leaderboard, QueryMessage},
+    services::leaderboard::{models::*, Leaderboard},
     utils::types::PlayerID,
 };
 use axum::{
@@ -8,7 +10,6 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::prelude::{Link, LinkError};
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -21,15 +22,9 @@ pub enum LeaderboardError {
     /// The provided query range was out of bounds on the underlying query
     #[error("Unacceptable query range")]
     InvalidRange,
-    /// Something went wrong with the link to the leaderboard service
-    #[error("Failed to access leaderboard service")]
-    Link(#[from] LinkError),
     /// The requested player was not found in the leaderboard
     #[error("Player not found")]
     PlayerNotFound,
-    /// Error for when a unknown leaderboard is requested
-    #[error("Unknown leaderboard")]
-    UnknownLeaderboard,
 }
 
 /// Structure of a query requesting a specific leaderboard contains
@@ -66,15 +61,12 @@ pub struct LeaderboardResponse<'a> {
 /// `name`  The name of the leaderboard type to query
 /// `query` The leaderboard query
 pub async fn get_leaderboard(
-    Path(name): Path<String>,
+    Path(ty): Path<LeaderboardType>,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(leaderboard): Extension<Link<Leaderboard>>,
+    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Query(query): Query<LeaderboardQuery>,
 ) -> Result<Response, LeaderboardError> {
     let LeaderboardQuery { offset, count } = query;
-
-    let ty: LeaderboardType =
-        LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
 
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
@@ -84,11 +76,13 @@ pub async fn get_leaderboard(
     // Calculate the start and ending indexes
     let start: usize = offset * count;
 
-    let group = leaderboard.send(QueryMessage(ty, db)).await?;
+    let group = leaderboard.query(ty, &db).await;
 
-    let (entries, more) = group
+    let entries = group
         .get_normal(start, count)
         .ok_or(LeaderboardError::InvalidRange)?;
+
+    let more = group.has_more(start, count);
 
     let response = Json(LeaderboardResponse {
         total: group.values.len(),
@@ -107,13 +101,11 @@ pub async fn get_leaderboard(
 /// `name`      The name of the leaderboard type to query
 /// `player_id` The ID of the player to find the leaderboard ranking of
 pub async fn get_player_ranking(
+    Path((ty, player_id)): Path<(LeaderboardType, PlayerID)>,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(leaderboard): Extension<Link<Leaderboard>>,
-    Path((name, player_id)): Path<(String, PlayerID)>,
+    Extension(leaderboard): Extension<Arc<Leaderboard>>,
 ) -> Result<Response, LeaderboardError> {
-    let ty: LeaderboardType =
-        LeaderboardType::try_parse(&name).ok_or(LeaderboardError::UnknownLeaderboard)?;
-    let group = leaderboard.send(QueryMessage(ty, db)).await?;
+    let group = leaderboard.query(ty, &db).await;
 
     let entry = match group.get_entry(player_id) {
         Some(value) => value,
@@ -130,9 +122,8 @@ impl IntoResponse for LeaderboardError {
     #[inline]
     fn into_response(self) -> Response {
         let status = match &self {
-            Self::PlayerNotFound | Self::UnknownLeaderboard => StatusCode::NOT_FOUND,
+            Self::PlayerNotFound => StatusCode::NOT_FOUND,
             Self::InvalidRange => StatusCode::BAD_REQUEST,
-            Self::Link(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, self.to_string()).into_response()
     }

@@ -3,8 +3,8 @@ use crate::{
     session::{
         models::messaging::*,
         packet::Packet,
-        router::{Blaze, Extension},
-        GetPlayerMessage, PushExt, SessionLink,
+        router::{Blaze, Extension, SessionAuth},
+        SessionLink,
     },
     utils::components::messaging,
 };
@@ -23,23 +23,17 @@ use std::sync::Arc;
 ///     "PSIZ": 0,
 ///     "SMSK": 0,
 ///     "SORT": 0,
-///     " (0, 0, 0),
+///     "SRCE": (0, 0, 0),
 ///     "STAT": 0,
 ///     "TARG": (0, 0, 0),
 ///     "TYPE": 0
 /// }
 /// ```
-///
 pub async fn handle_fetch_messages(
     session: SessionLink,
+    SessionAuth(player): SessionAuth,
     Extension(config): Extension<Arc<RuntimeConfig>>,
 ) -> Blaze<FetchMessageResponse> {
-    // Request a copy of the player data
-    let Ok(Some(player)) = session.send(GetPlayerMessage).await else {
-        // Not authenticated return empty count
-        return Blaze(FetchMessageResponse { count: 0 });
-    };
-
     // Message with player name replaced
     let mut message: String = config
         .menu_message

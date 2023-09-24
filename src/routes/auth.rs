@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     config::RuntimeConfig,
     database::entities::Player,
-    services::sessions::{CreateTokenMessage, Sessions},
+    services::sessions::Sessions,
     utils::hashing::{hash_password, verify_password},
 };
 use axum::{
@@ -11,7 +11,6 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use interlink::prelude::{Link, LinkError};
 use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -22,10 +21,6 @@ pub enum AuthError {
     /// Database error
     #[error("Server error occurred")]
     Database(#[from] DbErr),
-
-    /// Session service error
-    #[error("Session service unavailable")]
-    SessionService(LinkError),
 
     /// Failed to hash the user password
     #[error("Server error occurred")]
@@ -79,7 +74,7 @@ pub struct TokenResponse {
 /// containing the authentication token for the user
 pub async fn login(
     Extension(db): Extension<DatabaseConnection>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
     Json(req): Json<LoginRequest>,
 ) -> AuthRes<TokenResponse> {
     let LoginRequest { email, password } = req;
@@ -97,10 +92,7 @@ pub async fn login(
         return Err(AuthError::InvalidCredentails);
     }
 
-    let token = sessions
-        .send(CreateTokenMessage(player.id))
-        .await
-        .map_err(AuthError::SessionService)?;
+    let token = sessions.create_token(player.id);
     Ok(Json(TokenResponse { token }))
 }
 
@@ -124,7 +116,7 @@ pub struct CreateRequest {
 pub async fn create(
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
     Json(req): Json<CreateRequest>,
 ) -> AuthRes<TokenResponse> {
     if config.dashboard.disable_registration {
@@ -150,10 +142,7 @@ pub async fn create(
     let password: String = hash_password(&password)?;
     let player: Player = Player::create(&db, email, username, Some(password), &config).await?;
 
-    let token = sessions
-        .send(CreateTokenMessage(player.id))
-        .await
-        .map_err(AuthError::SessionService)?;
+    let token = sessions.create_token(player.id);
     Ok(Json(TokenResponse { token }))
 }
 
@@ -161,9 +150,7 @@ pub async fn create(
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            Self::Database(_) | Self::PasswordHash(_) | Self::SessionService(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            Self::Database(_) | Self::PasswordHash(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::InvalidCredentails | Self::OriginAccess => StatusCode::UNAUTHORIZED,
             Self::EmailTaken | Self::InvalidUsername => StatusCode::BAD_REQUEST,
             Self::RegistrationDisabled => StatusCode::FORBIDDEN,

@@ -18,6 +18,27 @@ static COMPONENT_NAMES: &[(u16, &str)] = &[
 static mut COMMANDS: Option<HashMap<ComponentKey, &'static str>> = None;
 static mut NOTIFICATIONS: Option<HashMap<ComponentKey, &'static str>> = None;
 
+// Packets that will have their content omitted for debug logging
+#[rustfmt::skip]
+pub static OMIT_PACKET_CONTENTS: &[ComponentKey] = &[
+    // Hide authentication packets for user privacy
+    component_key(authentication::COMPONENT, authentication::ORIGIN_LOGIN),
+    component_key(authentication::COMPONENT, authentication::LOGIN),
+    component_key(authentication::COMPONENT, authentication::SILENT_LOGIN),
+    // Hide large data packets that will clog up logs
+    component_key(authentication::COMPONENT, authentication::LIST_USER_ENTITLEMENTS_2),
+    component_key(util::COMPONENT, util::FETCH_CLIENT_CONFIG),
+    component_key(util::COMPONENT, util::USER_SETTINGS_LOAD_ALL),
+];
+
+// Packets that wont show up in debug logging
+#[rustfmt::skip]
+pub static DEBUG_IGNORED_PACKETS: &[ComponentKey] = &[
+    // Ping messages occur very frequently and contain nothing important
+    component_key(util::COMPONENT, util::PING),
+    component_key(util::COMPONENT, util::SUSPEND_USER_PING),
+];
+
 /// Initializes the stored component state. Should only be
 /// called on initial startup
 pub fn initialize() {
@@ -34,8 +55,7 @@ pub fn get_component_name(component: u16) -> Option<&'static str> {
         .copied()
 }
 
-pub fn get_command_name(component: u16, command: u16, notify: bool) -> Option<&'static str> {
-    let key = component_key(component, command);
+pub fn get_command_name(key: ComponentKey, notify: bool) -> Option<&'static str> {
     let map = if notify {
         unsafe { NOTIFICATIONS.as_ref() }
     } else {
@@ -370,10 +390,10 @@ pub mod user_sessions {
     pub const RESUME_SESSION: u16 = 0x23;
 
     // Notifications
-    pub const SET_SESSION: u16 = 0x1;
-    pub const SESSION_DETAILS: u16 = 0x2;
-    pub const FETCH_EXTENDED_DATA: u16 = 0x3;
-    pub const UPDATE_EXTENDED_DATA_ATTRIBUTE: u16 = 0x5;
+    pub const USER_SESSION_EXTENDED_DATA_UPDATE: u16 = 0x1;
+    pub const USER_ADDED: u16 = 0x2;
+    pub const USER_REMOVED: u16 = 0x3;
+    pub const USER_UPDATED: u16 = 0x5;
 
     // Object Types
     pub const PLAYER_TYPE: ObjectType = ObjectType::new(COMPONENT, 1);
@@ -647,10 +667,10 @@ fn notifications() -> HashMap<ComponentKey, &'static str> {
         (component_key(gr::COMPONENT, gr::GAME_REPORT_SUBMITTED), "GameReportSubmitted"),
 
         // User Sessions
-        (component_key(us::COMPONENT, us::SET_SESSION), "SetSession"),
-        (component_key(us::COMPONENT, us::SESSION_DETAILS), "SessionDetails"),
-        (component_key(us::COMPONENT, us::UPDATE_EXTENDED_DATA_ATTRIBUTE), "UpdateExtendedDataAttribute"),
-        (component_key(us::COMPONENT, us::FETCH_EXTENDED_DATA), "FetchExtendedData"),
+        (component_key(us::COMPONENT, us::USER_SESSION_EXTENDED_DATA_UPDATE), "UserSessionExtendedDataUpdate"),
+        (component_key(us::COMPONENT, us::USER_ADDED), "UserAdded"),
+        (component_key(us::COMPONENT, us::USER_UPDATED), "UserUpdated"),
+        (component_key(us::COMPONENT, us::USER_REMOVED), "UserRemoved"),
     ]
     .into_iter()
     .collect()

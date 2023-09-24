@@ -4,15 +4,16 @@ use crate::{
         game::manager::GameManager, leaderboard::Leaderboard, retriever::Retriever,
         sessions::Sessions,
     },
+    utils::signing::SigningKey,
 };
 use axum::{Extension, Server};
 use config::load_config;
-use log::{error, info, LevelFilter};
+use log::{debug, error, info, LevelFilter};
 use std::{
     net::{Ipv4Addr, SocketAddr},
     sync::Arc,
 };
-use tokio::{join, select, signal};
+use tokio::{join, signal};
 use utils::logging;
 
 mod config;
@@ -44,26 +45,32 @@ async fn main() {
         galaxy_at_war: config.galaxy_at_war,
         menu_message: config.menu_message,
         dashboard: config.dashboard,
+        qos: config.qos,
     };
+
+    debug!("QoS server: {:?}", &runtime_config.qos);
 
     // This step may take longer than expected so its spawned instead of joined
     tokio::spawn(logging::log_connection_urls(config.port));
 
-    let (db, retriever, sessions) = join!(
+    let (db, retriever, signing_key) = join!(
         database::init(&runtime_config),
         Retriever::start(config.retriever),
-        Sessions::start()
+        SigningKey::global()
     );
-    let game_manager = GameManager::start();
-    let leaderboard = Leaderboard::start();
+
+    let game_manager = Arc::new(GameManager::new());
+    let leaderboard = Arc::new(Leaderboard::new());
+    let sessions = Arc::new(Sessions::new(signing_key));
     let config = Arc::new(runtime_config);
+    let retriever = Arc::new(retriever);
 
     // Initialize session router
     let mut router = session::routes::router();
 
     router.add_extension(db.clone());
     router.add_extension(config.clone());
-    router.add_extension(retriever.clone());
+    router.add_extension(retriever);
     router.add_extension(game_manager.clone());
     router.add_extension(leaderboard.clone());
     router.add_extension(sessions.clone());
@@ -81,21 +88,15 @@ async fn main() {
         .layer(Extension(sessions))
         .into_make_service_with_connect_info::<SocketAddr>();
 
-    // Create futures for server and shutdown signal
-    let server_future = Server::bind(&addr).serve(router);
-    let close_future = signal::ctrl_c();
+    info!("Starting server on {} (v{})", addr, VERSION);
 
-    info!("Started server on {} (v{})", addr, VERSION);
-
-    // Await server termination or shutdown signal
-    select! {
-       result = server_future => {
-        if let Err(err) = result {
-            error!("Failed to bind HTTP server on {}: {:?}", addr, err);
-            panic!();
-        }
-       }
-       // Handle the server being stopped with CTRL+C
-       _ = close_future => {}
+    if let Err(err) = Server::bind(&addr)
+        .serve(router)
+        .with_graceful_shutdown(async move {
+            _ = signal::ctrl_c().await;
+        })
+        .await
+    {
+        error!("Failed to bind HTTP server on {}: {:?}", addr, err);
     }
 }

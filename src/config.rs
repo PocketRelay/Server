@@ -1,12 +1,15 @@
-use crate::utils::models::Port;
 use log::LevelFilter;
 use serde::Deserialize;
 use std::{env, fs::read_to_string, path::Path};
 
+use crate::session::models::Port;
+
 /// The server version extracted from the Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[derive(Default)]
 pub struct RuntimeConfig {
+    pub qos: QosServerConfig,
     pub reverse_proxy: bool,
     pub galaxy_at_war: GalaxyAtWarConfig,
     pub menu_message: String,
@@ -58,6 +61,7 @@ pub fn load_config() -> Option<Config> {
 #[serde(default)]
 pub struct Config {
     pub port: Port,
+    pub qos: QosServerConfig,
     pub reverse_proxy: bool,
     pub dashboard: DashboardConfig,
     pub menu_message: String,
@@ -70,6 +74,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             port: 80,
+            qos: QosServerConfig::default(),
             reverse_proxy: false,
             dashboard: Default::default(),
             menu_message: "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>".to_string(),
@@ -78,6 +83,18 @@ impl Default for Config {
             retriever: Default::default(),
         }
     }
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum QosServerConfig {
+    /// Use the official QoS server
+    Official,
+    /// Use the local QoS server (might cause issues)
+    #[default]
+    Local,
+    /// Use a custom QoS server
+    Custom { host: String, port: u16 },
 }
 
 #[derive(Deserialize)]
@@ -97,6 +114,7 @@ impl Default for GalaxyAtWarConfig {
 }
 
 #[derive(Default, Deserialize)]
+#[serde(default)]
 pub struct DashboardConfig {
     pub super_email: Option<String>,
     pub super_password: Option<String>,

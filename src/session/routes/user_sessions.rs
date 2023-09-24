@@ -1,21 +1,19 @@
-use interlink::prelude::Link;
-use sea_orm::DatabaseConnection;
-
 use crate::{
     database::entities::Player,
-    services::sessions::{LookupMessage, Sessions, VerifyError, VerifyTokenMessage},
+    services::sessions::{Sessions, VerifyError},
     session::{
         models::{
             auth::{AuthResponse, AuthenticationError},
-            errors::{GlobalError, ServerResult},
+            errors::ServerResult,
             user_sessions::*,
+            NetworkAddress,
         },
         router::{Blaze, Extension},
-        GetLookupMessage, GetSocketAddrMessage, HardwareFlagMessage, LookupResponse,
-        NetworkInfoMessage, SessionLink, SetPlayerMessage,
+        LookupResponse, SessionLink,
     },
-    utils::models::NetworkAddress,
 };
+use sea_orm::DatabaseConnection;
+use std::sync::Arc;
 
 /// Attempts to lookup another authenticated session details
 ///
@@ -34,27 +32,20 @@ use crate::{
 /// ```
 pub async fn handle_lookup_user(
     Blaze(req): Blaze<LookupRequest>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
 ) -> ServerResult<Blaze<LookupResponse>> {
     // Lookup the session
-    let session = sessions
-        .send(LookupMessage {
-            player_id: req.player_id,
-        })
-        .await;
 
-    // Ensure there wasn't an error
-    let session = match session {
-        Ok(Some(value)) => value,
-        _ => return Err(GlobalError::System.into()),
-    };
+    let session = sessions
+        .lookup_session(req.player_id)
+        .await
+        .ok_or(UserSessionsError::UserNotFound)?;
 
     // Get the lookup response from the session
-    let response = session.send(GetLookupMessage {}).await;
-    let response = match response {
-        Ok(Some(value)) => value,
-        _ => return Err(GlobalError::System.into()),
-    };
+    let response = session
+        .get_lookup()
+        .await
+        .ok_or(UserSessionsError::UserNotFound)?;
 
     Ok(Blaze(response))
 }
@@ -72,15 +63,14 @@ pub async fn handle_lookup_user(
 pub async fn handle_resume_session(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(sessions): Extension<Link<Sessions>>,
+    Extension(sessions): Extension<Arc<Sessions>>,
     Blaze(req): Blaze<ResumeSessionRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     let session_token = req.session_token;
 
     // Verify the authentication token
     let player_id = sessions
-        .send(VerifyTokenMessage(session_token.clone()))
-        .await?
+        .verify_token(&session_token)
         .map_err(|err| match err {
             VerifyError::Expired => AuthenticationError::ExpiredToken,
             VerifyError::Invalid => AuthenticationError::InvalidToken,
@@ -90,9 +80,8 @@ pub async fn handle_resume_session(
         .await?
         .ok_or(AuthenticationError::InvalidToken)?;
 
-    // Failing to set the player likely the player disconnected or
-    // the server is shutting down
-    session.send(SetPlayerMessage(Some(player.clone()))).await?;
+    let player = session.set_player(player).await;
+    sessions.add_session(player.id, session).await;
 
     Ok(Blaze(AuthResponse {
         player,
@@ -139,21 +128,15 @@ pub async fn handle_update_network(
 
         // If address is missing
         if ext.addr.is_unspecified() {
-            // Obtain socket address from session
-            if let Ok(addr) = session.send(GetSocketAddrMessage).await {
-                // Replace address with new address and port with same as local port
-                ext.addr = addr;
-                ext.port = pair.internal.port;
-            }
+            // Replace address with new address and port with same as local port
+            ext.addr = session.addr;
+            ext.port = pair.internal.port;
         }
     }
 
-    let _ = session
-        .send(NetworkInfoMessage {
-            address: req.address,
-            qos: req.qos,
-        })
-        .await;
+    tokio::spawn(async move {
+        session.set_network_info(req.address, req.qos).await;
+    });
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
@@ -167,11 +150,9 @@ pub async fn handle_update_network(
 /// ```
 pub async fn handle_update_hardware_flag(
     session: SessionLink,
-    Blaze(req): Blaze<HardwareFlagRequest>,
+    Blaze(req): Blaze<UpdateHardwareFlagsRequest>,
 ) {
-    let _ = session
-        .send(HardwareFlagMessage {
-            value: req.hardware_flag,
-        })
-        .await;
+    tokio::spawn(async move {
+        session.set_hardware_flags(req.hardware_flags).await;
+    });
 }

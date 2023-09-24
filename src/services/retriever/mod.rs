@@ -1,53 +1,44 @@
 //! Retriever system for connecting and retrieving data from the official
 //! Mass Effect 3 servers.
 
-use std::{
-    fmt::{Debug, Display},
-    ops::Add,
-    time::{Duration, SystemTime},
-};
-
 use self::origin::OriginFlowService;
 use crate::{
     config::RetrieverConfig,
-    session::packet::{Packet, PacketCodec, PacketDebug, PacketHeader, PacketType},
-    utils::{
-        components::redirector,
+    session::{
         models::{InstanceDetails, InstanceNet, Port},
+        packet::{FireFrame, FrameType, Packet, PacketCodec, PacketDebug},
     },
+    utils::components::redirector,
 };
-
 use blaze_ssl_async::{stream::BlazeStream, BlazeError};
 use futures_util::{SinkExt, StreamExt};
-use interlink::prelude::*;
 use log::{debug, error, log_enabled};
 use models::InstanceRequest;
 use origin::OriginFlow;
 use reqwest;
 use serde::Deserialize;
+use std::{
+    fmt::Display,
+    ops::Add,
+    time::{Duration, SystemTime},
+};
 use tdf::{DecodeError, TdfDeserialize, TdfSerialize};
 use thiserror::Error;
-use tokio::io;
+use tokio::{io, sync::RwLock};
 use tokio_util::codec::Framed;
 
 mod models;
-
 pub mod origin;
 
 /// Structure for the retrievier system which contains the host address
 /// for the official game server in order to make further connections
-#[derive(Service)]
 pub struct Retriever {
     // Optional official instance if fetching is possible
-    instance: Option<OfficialInstance>,
+    instance: RwLock<Option<OfficialInstance>>,
 
     /// Optional service for creating origin flows if enabled
     origin_flow: Option<OriginFlowService>,
 }
-
-#[derive(Message)]
-#[msg(rtype = "Result<OriginFlow, GetFlowError>")]
-pub struct GetOriginFlow;
 
 #[derive(Debug, Error)]
 pub enum GetFlowError {
@@ -59,45 +50,6 @@ pub enum GetFlowError {
     Session,
     #[error("Origin authentication is not enabled")]
     OriginDisabled,
-}
-
-impl Handler<GetOriginFlow> for Retriever {
-    type Response = Sfr<Retriever, GetOriginFlow>;
-
-    fn handle(
-        &mut self,
-        _msg: GetOriginFlow,
-        _ctx: &mut interlink::service::ServiceContext<Self>,
-    ) -> Self::Response {
-        Sfr::new(move |act: &mut Retriever, _ctx| {
-            Box::pin(async move {
-                let mut instance = act.instance.as_ref().ok_or(GetFlowError::Unavailable)?;
-
-                // Obtain a new instance if the current one is expired
-                if instance.expiry < SystemTime::now() {
-                    debug!("Current official instance is outdated.. retrieving a new instance");
-
-                    instance = match OfficialInstance::obtain().await {
-                        Ok(value) => act.instance.insert(value),
-                        Err(err) => {
-                            act.instance = None;
-                            error!("Official server instance expired but failed to obtain new instance: {}", err);
-                            return Err(GetFlowError::Instance);
-                        }
-                    };
-                }
-
-                let session = instance.session().await.ok_or(GetFlowError::Session)?;
-                let flow = act
-                    .origin_flow
-                    .as_ref()
-                    .ok_or(GetFlowError::OriginDisabled)?
-                    .create(session);
-
-                Ok(flow)
-            })
-        })
-    }
 }
 
 /// Connection details for an official server instance
@@ -247,7 +199,7 @@ impl Retriever {
     /// ip address of the gosredirector.ea.com host and then creates a
     /// connection to the redirector server and obtains the IP and Port
     /// of the Official server.
-    pub async fn start(config: RetrieverConfig) -> Link<Retriever> {
+    pub async fn start(config: RetrieverConfig) -> Retriever {
         let instance = if config.enabled {
             match OfficialInstance::obtain().await {
                 Ok(value) => Some(value),
@@ -268,12 +220,52 @@ impl Retriever {
             None
         };
 
-        let this = Retriever {
-            instance,
+        Retriever {
+            instance: RwLock::new(instance),
             origin_flow,
+        }
+    }
+
+    pub async fn origin_flow(&self) -> Result<OriginFlow, GetFlowError> {
+        let flow = self
+            .origin_flow
+            .as_ref()
+            .ok_or(GetFlowError::OriginDisabled)?;
+
+        let read_guard = self.instance.read().await;
+        let instance = read_guard.as_ref().ok_or(GetFlowError::Unavailable)?;
+        let is_expired = instance.expiry < SystemTime::now();
+
+        let guard = if is_expired {
+            // Drop the read instance and guard
+            let _ = instance;
+            drop(read_guard);
+
+            debug!("Current official instance is outdated.. retrieving a new instance");
+            let mut write_guard = self.instance.write().await;
+
+            let official = match OfficialInstance::obtain().await {
+                Ok(value) => Some(value),
+                Err(err) => {
+                    error!(
+                        "Official server instance expired but failed to obtain new instance: {}",
+                        err
+                    );
+                    None
+                }
+            };
+
+            *write_guard = official;
+
+            write_guard.downgrade()
+        } else {
+            read_guard
         };
 
-        this.start()
+        let instance = guard.as_ref().ok_or(GetFlowError::Instance)?;
+        let session = instance.session().await.ok_or(GetFlowError::Session)?;
+
+        Ok(flow.create(session))
     }
 }
 
@@ -342,13 +334,13 @@ impl OfficialSession {
     ) -> RetrieverResult<Packet> {
         let request = Packet::request(self.id, component, command, contents);
 
-        debug_log_packet(&request, "Sending to Official");
-        let header = request.header;
+        debug_log_packet(&request, "Send");
+        let frame = request.frame.clone();
 
         self.stream.send(request).await?;
 
         self.id += 1;
-        self.expect_response(&header).await
+        self.expect_response(&frame).await
     }
 
     /// Writes a request packet and waits until the response packet is
@@ -371,8 +363,8 @@ impl OfficialSession {
         command: u16,
     ) -> RetrieverResult<Packet> {
         let request = Packet::request_empty(self.id, component, command);
-        debug_log_packet(&request, "Sent to Official");
-        let header = request.header;
+        debug_log_packet(&request, "Send");
+        let header = request.frame.clone();
         self.stream.send(request).await?;
         self.id += 1;
         self.expect_response(&header).await
@@ -380,21 +372,23 @@ impl OfficialSession {
 
     /// Waits for a response packet to be recieved any notification packets
     /// that are recieved are handled in the handle_notify function.
-    async fn expect_response(&mut self, request: &PacketHeader) -> RetrieverResult<Packet> {
+    async fn expect_response(&mut self, request: &FireFrame) -> RetrieverResult<Packet> {
         loop {
             let response = match self.stream.next().await {
                 Some(value) => value?,
                 None => return Err(RetrieverError::EarlyEof),
             };
-            debug_log_packet(&response, "Received from Official");
-            let header = &response.header;
+            debug_log_packet(&response, "Receive");
+            let header = &response.frame;
 
-            if let PacketType::Response = header.ty {
-                if header.path_matches(request) {
-                    return Ok(response);
+            match &header.ty {
+                FrameType::Response => {
+                    if header.path_matches(request) {
+                        return Ok(response);
+                    }
                 }
-            } else if let PacketType::Error = header.ty {
-                return Err(RetrieverError::Packet(ErrorPacket(response)));
+                FrameType::Error => return Err(RetrieverError::Packet(ErrorPacket(response))),
+                _ => {}
             }
         }
     }
@@ -411,11 +405,8 @@ fn debug_log_packet(packet: &Packet, action: &str) {
     if !log_enabled!(log::Level::Debug) {
         return;
     }
-    let debug = PacketDebug {
-        packet,
-        minified: false,
-    };
-    debug!("\n{}\n{:?}", action, debug);
+    let debug = PacketDebug { packet };
+    debug!("\nOfficial: {}\n{:?}", action, debug);
 }
 
 /// Wrapping structure for packets to allow them to be
@@ -427,7 +418,7 @@ impl std::error::Error for ErrorPacket {}
 
 impl Display for ErrorPacket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#X}", self.0.header.error)
+        write!(f, "{:#X}", self.0.frame.error)
     }
 }
 
