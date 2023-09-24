@@ -1,5 +1,8 @@
 use super::Port;
-use crate::{config::RuntimeConfig, utils::types::PlayerID};
+use crate::{
+    config::{QosServerConfig, RuntimeConfig},
+    utils::types::PlayerID,
+};
 use std::{borrow::Cow, sync::Arc};
 use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType};
 
@@ -132,8 +135,12 @@ impl TdfSerialize for PreAuthResponse {
         w.group(b"QOSS", |w| {
             let qos = &self.config.qos;
 
-            let http_host = &qos.host;
-            let http_port = qos.port;
+            let (http_host, http_port) = match qos {
+                QosServerConfig::Official => ("gossjcprod-qos01.ea.com", 17502),
+                QosServerConfig::Local => ("127.0.0.1", LOCAL_HTTP_PORT),
+                QosServerConfig::Custom { host, port } => (host.as_str(), *port),
+            };
+
             // let http_host = "127.0.0.1";
             // let http_port = 17499;
 

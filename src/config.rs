@@ -85,21 +85,16 @@ impl Default for Config {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(default)]
-pub struct QosServerConfig {
-    pub host: String,
-    pub port: u16,
-}
-
-impl Default for QosServerConfig {
-    fn default() -> Self {
-        // Default to official game QOS servers
-        Self {
-            host: "gossjcprod-qos01.ea.com".to_string(),
-            port: 17502,
-        }
-    }
+#[derive(Debug, Default, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum QosServerConfig {
+    /// Use the official QoS server
+    Official,
+    /// Use the local QoS server (might cause issues)
+    #[default]
+    Local,
+    /// Use a custom QoS server
+    Custom { host: String, port: u16 },
 }
 
 #[derive(Deserialize)]

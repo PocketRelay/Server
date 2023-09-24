@@ -8,7 +8,7 @@ use crate::{
 };
 use axum::{Extension, Server};
 use config::load_config;
-use log::{error, info, LevelFilter};
+use log::{debug, error, info, LevelFilter};
 use std::{
     net::{Ipv4Addr, SocketAddr},
     sync::Arc,
@@ -47,6 +47,8 @@ async fn main() {
         dashboard: config.dashboard,
         qos: config.qos,
     };
+
+    debug!("QoS server: {:?}", &runtime_config.qos);
 
     // This step may take longer than expected so its spawned instead of joined
     tokio::spawn(logging::log_connection_urls(config.port));
