@@ -9,6 +9,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Default)]
 pub struct RuntimeConfig {
+    pub qos: QosServerConfig,
     pub reverse_proxy: bool,
     pub galaxy_at_war: GalaxyAtWarConfig,
     pub menu_message: String,
@@ -60,6 +61,7 @@ pub fn load_config() -> Option<Config> {
 #[serde(default)]
 pub struct Config {
     pub port: Port,
+    pub qos: QosServerConfig,
     pub reverse_proxy: bool,
     pub dashboard: DashboardConfig,
     pub menu_message: String,
@@ -72,12 +74,30 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             port: 80,
+            qos: QosServerConfig::default(),
             reverse_proxy: false,
             dashboard: Default::default(),
             menu_message: "<font color='#B2B2B2'>Pocket Relay</font> - <font color='#FFFF66'>Logged as: {n}</font>".to_string(),
             galaxy_at_war: Default::default(),
             logging: LevelFilter::Info,
             retriever: Default::default(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(default)]
+pub struct QosServerConfig {
+    pub host: String,
+    pub port: u16,
+}
+
+impl Default for QosServerConfig {
+    fn default() -> Self {
+        // Default to official game QOS servers
+        Self {
+            host: "gossjcprod-qos01.ea.com".to_string(),
+            port: 17502,
         }
     }
 }

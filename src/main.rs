@@ -45,6 +45,7 @@ async fn main() {
         galaxy_at_war: config.galaxy_at_war,
         menu_message: config.menu_message,
         dashboard: config.dashboard,
+        qos: config.qos,
     };
 
     // This step may take longer than expected so its spawned instead of joined

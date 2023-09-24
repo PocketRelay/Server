@@ -1,5 +1,5 @@
 use crate::{
-    config::VERSION,
+    config::{RuntimeConfig, VERSION},
     database::entities::PlayerData,
     session::{
         models::{
@@ -19,6 +19,7 @@ use std::{
     cmp::Ordering,
     io::Write,
     path::Path,
+    sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tdf::TdfMap;
@@ -79,8 +80,10 @@ pub async fn handle_get_ticker_server() -> Blaze<TickerServer> {
 ///     }
 /// }
 /// ```
-pub async fn handle_pre_auth() -> ServerResult<Blaze<PreAuthResponse>> {
-    Ok(Blaze(PreAuthResponse))
+pub async fn handle_pre_auth(
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+) -> ServerResult<Blaze<PreAuthResponse>> {
+    Ok(Blaze(PreAuthResponse { config }))
 }
 
 /// Handles post authentication requests. This provides information about other

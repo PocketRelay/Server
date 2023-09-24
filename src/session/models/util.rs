@@ -1,6 +1,6 @@
 use super::Port;
-use crate::utils::types::PlayerID;
-use std::borrow::Cow;
+use crate::{config::RuntimeConfig, utils::types::PlayerID};
+use std::{borrow::Cow, sync::Arc};
 use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType};
 
 #[derive(Debug, Clone)]
@@ -88,7 +88,9 @@ pub const PING_PERIOD: &str = "15s";
 pub const PING_SITE_ALIAS: &str = "ea-sjc";
 
 /// Structure for the response to a pre authentication request
-pub struct PreAuthResponse;
+pub struct PreAuthResponse {
+    pub config: Arc<RuntimeConfig>,
+}
 
 impl TdfSerialize for PreAuthResponse {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
@@ -128,8 +130,10 @@ impl TdfSerialize for PreAuthResponse {
 
         // Quality Of Service Server details
         w.group(b"QOSS", |w| {
-            let http_host = "gossjcprod-qos01.ea.com";
-            let http_port = 17502;
+            let qos = &self.config.qos;
+
+            let http_host = &qos.host;
+            let http_port = qos.port;
             // let http_host = "127.0.0.1";
             // let http_port = 17499;
 
