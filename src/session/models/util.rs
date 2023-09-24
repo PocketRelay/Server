@@ -128,10 +128,10 @@ impl TdfSerialize for PreAuthResponse {
 
         // Quality Of Service Server details
         w.group(b"QOSS", |w| {
-            // let http_host = "gossjcprod-qos01.ea.com";
-            // let http_port = 17502;
-            let http_host = "127.0.0.1";
-            let http_port = LOCAL_HTTP_PORT;
+            let http_host = "gossjcprod-qos01.ea.com";
+            let http_port = 17502;
+            // let http_host = "127.0.0.1";
+            // let http_port = 17499;
 
             // Bioware Primary Server
             w.group(b"BWPS", |w| {
