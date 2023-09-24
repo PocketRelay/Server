@@ -44,6 +44,7 @@ impl TdfSerialize for TelemetryServer {
             w.tag_zero(b"ANON");
             w.tag_str(b"DISA", TELEMTRY_DISA);
             w.tag_str(b"FILT", "-UION/****");
+            // Encoded locale actually BE encoded string bytes (enNZ)
             w.tag_u32(b"LOC", 1701727834);
             w.tag_str(b"NOOK", "US,CA,MX");
             // Last known telemetry port: 9988
@@ -127,6 +128,8 @@ impl TdfSerialize for PreAuthResponse {
 
         // Quality Of Service Server details
         w.group(b"QOSS", |w| {
+            // let http_host = "gossjcprod-qos01.ea.com";
+            // let http_port = 17502;
             let http_host = "127.0.0.1";
             let http_port = LOCAL_HTTP_PORT;
 
