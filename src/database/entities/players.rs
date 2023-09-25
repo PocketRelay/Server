@@ -38,7 +38,17 @@ impl ActiveModelBehavior for ActiveModel {}
 /// determine their permissions to access different server
 /// functionality
 #[derive(
-    Deserialize, Serialize, Debug, Clone, PartialEq, PartialOrd, Ord, Eq, EnumIter, DeriveActiveEnum,
+    Deserialize,
+    Serialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Eq,
+    EnumIter,
+    DeriveActiveEnum,
 )]
 #[sea_orm(rs_type = "u8", db_type = "TinyUnsigned")]
 #[repr(u8)]
