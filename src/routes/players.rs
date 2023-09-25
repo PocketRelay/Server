@@ -72,7 +72,7 @@ type PlayersResult<T> = Result<T, PlayersError>;
 ///
 /// `db`        The database connection
 /// `player_id` The ID of the player to find
-async fn find_player(db: &DatabaseConnection, player_id: PlayerID) -> PlayersResult<Player> {
+async fn find_player(db: &DatabaseConnection, player_id: PlayerID) -> Result<Player, PlayersError> {
     Player::by_id(db, player_id)
         .await?
         .ok_or(PlayersError::PlayerNotFound)
@@ -111,7 +111,7 @@ pub async fn get_players(
     _: AdminAuth,
     Query(query): Query<PlayersQuery>,
     Extension(db): Extension<DatabaseConnection>,
-) -> PlayersRes<PlayersResponse> {
+) -> Result<Json<PlayersResponse>, PlayersError> {
     const DEFAULT_COUNT: u8 = 20;
 
     let count = query.count.unwrap_or(DEFAULT_COUNT);
@@ -147,7 +147,7 @@ pub async fn get_player(
     _: AdminAuth,
     Path(player_id): Path<PlayerID>,
     Extension(db): Extension<DatabaseConnection>,
-) -> PlayersRes<Player> {
+) -> Result<Json<Player>, PlayersError> {
     let player = find_player(&db, player_id).await?;
     Ok(Json(player))
 }
@@ -178,7 +178,7 @@ pub async fn set_details(
     Path(player_id): Path<PlayerID>,
     Extension(db): Extension<DatabaseConnection>,
     Json(req): Json<UpdateDetailsRequest>,
-) -> PlayersResult<()> {
+) -> Result<(), PlayersError> {
     // Get the target player
     let player = find_player(&db, player_id).await?;
 
@@ -205,7 +205,7 @@ pub async fn update_details(
     Auth(auth): Auth,
     Extension(db): Extension<DatabaseConnection>,
     Json(req): Json<UpdateDetailsRequest>,
-) -> PlayersResult<()> {
+) -> Result<(), PlayersError> {
     if !EmailAddress::is_valid(&req.email) {
         return Err(PlayersError::InvalidEmail);
     }
@@ -226,7 +226,7 @@ async fn attempt_set_details(
     db: &DatabaseConnection,
     player: Player,
     req: UpdateDetailsRequest,
-) -> PlayersResult<()> {
+) -> Result<(), PlayersError> {
     // Decide whether to update the account email based on whether
     // it has been changed
     let email = if player.email == req.email {
@@ -274,7 +274,7 @@ pub async fn set_password(
     AdminAuth(auth): AdminAuth,
     Path(player_id): Path<PlayerID>,
     Extension(db): Extension<DatabaseConnection>,
-    Json(req): Json<SetPasswordRequest>,
+    Json(SetPasswordRequest { password }): Json<SetPasswordRequest>,
 ) -> PlayersResult<()> {
     // Get the target player
     let player = find_player(&db, player_id).await?;
@@ -284,7 +284,7 @@ pub async fn set_password(
         return Err(PlayersError::InvalidPermission);
     }
 
-    let password = hash_password(&req.password)?;
+    let password = hash_password(&password)?;
     player.set_password(&db, password).await?;
 
     // Ok status code indicating updated
@@ -304,10 +304,8 @@ pub async fn set_role(
     AdminAuth(auth): AdminAuth,
     Path(player_id): Path<PlayerID>,
     Extension(db): Extension<DatabaseConnection>,
-    Json(req): Json<SetPlayerRoleRequest>,
+    Json(SetPlayerRoleRequest { role }): Json<SetPlayerRoleRequest>,
 ) -> PlayersResult<()> {
-    let role = req.role;
-
     // Super admin role cannot be granted by anyone but the server
     if let PlayerRole::SuperAdmin = role {
         return Err(PlayersError::InvalidPermission);
@@ -343,13 +341,11 @@ pub struct UpdatePasswordRequest {
 pub async fn update_password(
     Auth(player): Auth,
     Extension(db): Extension<DatabaseConnection>,
-    Json(req): Json<UpdatePasswordRequest>,
-) -> PlayersResult<()> {
-    let UpdatePasswordRequest {
+    Json(UpdatePasswordRequest {
         current_password,
         new_password,
-    } = req;
-
+    }): Json<UpdatePasswordRequest>,
+) -> PlayersResult<()> {
     let player_password: &str = player
         .password
         .as_ref()
@@ -493,7 +489,7 @@ pub async fn set_data(
     AdminAuth(auth): AdminAuth,
     Path((player_id, key)): Path<(PlayerID, String)>,
     Extension(db): Extension<DatabaseConnection>,
-    Json(req): Json<SetDataRequest>,
+    Json(SetDataRequest { value }): Json<SetDataRequest>,
 ) -> PlayersResult<()> {
     let player: Player = find_player(&db, player_id).await?;
 
@@ -501,7 +497,7 @@ pub async fn set_data(
         return Err(PlayersError::InvalidPermission);
     }
 
-    PlayerData::set(&db, player.id, key.clone(), req.value).await?;
+    PlayerData::set(&db, player.id, key.clone(), value).await?;
 
     Ok(())
 }

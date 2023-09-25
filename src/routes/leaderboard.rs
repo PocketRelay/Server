@@ -64,10 +64,8 @@ pub async fn get_leaderboard(
     Path(ty): Path<LeaderboardType>,
     Extension(db): Extension<DatabaseConnection>,
     Extension(leaderboard): Extension<Arc<Leaderboard>>,
-    Query(query): Query<LeaderboardQuery>,
+    Query(LeaderboardQuery { offset, count }): Query<LeaderboardQuery>,
 ) -> Result<Response, LeaderboardError> {
-    let LeaderboardQuery { offset, count } = query;
-
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
 

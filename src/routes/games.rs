@@ -22,9 +22,6 @@ pub enum GamesError {
     NotFound,
 }
 
-/// Response type alias for JSON responses with GamesError
-type GamesRes<T> = Result<Json<T>, GamesError>;
-
 /// The query structure for a players query
 #[derive(Deserialize)]
 pub struct GamesRequest {
@@ -56,12 +53,10 @@ pub struct GamesResponse {
 /// Player networking information is included for requesting
 /// players with admin level or greater access.
 pub async fn get_games(
-    Query(query): Query<GamesRequest>,
-    Extension(game_manager): Extension<Arc<GameManager>>,
     Auth(auth): Auth,
-) -> GamesRes<GamesResponse> {
-    let GamesRequest { offset, count } = query;
-
+    Query(GamesRequest { offset, count }): Query<GamesRequest>,
+    Extension(game_manager): Extension<Arc<GameManager>>,
+) -> Result<Json<GamesResponse>, GamesError> {
     let count: usize = count.unwrap_or(20) as usize;
     let offset: usize = offset * count;
     let include_net = auth.role >= PlayerRole::Admin;
@@ -82,10 +77,10 @@ pub async fn get_games(
 /// Player networking information is included for requesting
 /// players with admin level or greater access.
 pub async fn get_game(
+    Auth(auth): Auth,
     Path(game_id): Path<GameID>,
     Extension(game_manager): Extension<Arc<GameManager>>,
-    Auth(auth): Auth,
-) -> GamesRes<GameSnapshot> {
+) -> Result<Json<GameSnapshot>, GamesError> {
     let game = game_manager
         .get_game(game_id)
         .await

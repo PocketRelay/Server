@@ -75,10 +75,8 @@ pub struct TokenResponse {
 pub async fn login(
     Extension(db): Extension<DatabaseConnection>,
     Extension(sessions): Extension<Arc<Sessions>>,
-    Json(req): Json<LoginRequest>,
+    Json(LoginRequest { email, password }): Json<LoginRequest>,
 ) -> AuthRes<TokenResponse> {
-    let LoginRequest { email, password } = req;
-
     // Find a player with the matching email
     let player: Player = Player::by_email(&db, &email)
         .await?
@@ -117,17 +115,15 @@ pub async fn create(
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
     Extension(sessions): Extension<Arc<Sessions>>,
-    Json(req): Json<CreateRequest>,
+    Json(CreateRequest {
+        username,
+        email,
+        password,
+    }): Json<CreateRequest>,
 ) -> AuthRes<TokenResponse> {
     if config.dashboard.disable_registration {
         return Err(AuthError::RegistrationDisabled);
     }
-
-    let CreateRequest {
-        username,
-        email,
-        password,
-    } = req;
 
     // Validate the username is not empty
     if username.is_empty() {

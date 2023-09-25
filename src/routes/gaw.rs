@@ -54,7 +54,7 @@ pub struct AuthQuery {
 /// so not nessicary to implement the fetching
 ///
 /// `query` The query containing the auth token (In this case the hex player ID)
-pub async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
+pub async fn shared_token_login(Query(AuthQuery { auth }): Query<AuthQuery>) -> Xml {
     Xml(formatdoc! {r#"
         <?xml version="1.0" encoding="UTF-8"?>
         <fulllogin>
@@ -84,7 +84,7 @@ pub async fn shared_token_login(Query(query): Query<AuthQuery>) -> Xml {
             <termsofserviceuri/>
             <tosuri/>
         </fulllogin>
-    "# ,query.auth})
+    "# ,auth})
 }
 
 /// GET /galaxyatwar/getRatings/:id
@@ -134,15 +134,13 @@ pub struct IncreaseQuery {
 /// `query` The query data containing the increase values
 pub async fn increase_ratings(
     Path(id): Path<String>,
-    Query(query): Query<IncreaseQuery>,
+    Query(IncreaseQuery { a, b, c, d, e }): Query<IncreaseQuery>,
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
     Extension(sessions): Extension<Arc<Sessions>>,
 ) -> Result<Xml, GAWError> {
     let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
-    let gaw_data = gaw_data
-        .add(&db, [query.a, query.b, query.c, query.d, query.e])
-        .await?;
+    let gaw_data = gaw_data.add(&db, [a, b, c, d, e]).await?;
     Ok(ratings_response(gaw_data, promotions))
 }
 
@@ -197,24 +195,27 @@ async fn get_promotions(
 /// `ratings`    The galaxy at war ratings value
 /// `promotions` The promotions value
 fn ratings_response(ratings: GalaxyAtWar, promotions: u32) -> Xml {
-    let a = ratings.group_a;
-    let b = ratings.group_b;
-    let c = ratings.group_c;
-    let d = ratings.group_d;
-    let e = ratings.group_e;
+    let GalaxyAtWar {
+        group_a,
+        group_b,
+        group_c,
+        group_d,
+        group_e,
+        ..
+    } = ratings;
 
     // Calculate the average value for the level
-    let level = (a + b + c + d + e) / 5;
+    let level = (group_a + group_b + group_c + group_d + group_e) / 5;
 
     Xml(formatdoc! {r#"
         <?xml version="1.0" encoding="UTF-8"?>
         <galaxyatwargetratings>
             <ratings>
-                <ratings>{a}</ratings>
-                <ratings>{b}</ratings>
-                <ratings>{c}</ratings>
-                <ratings>{d}</ratings>
-                <ratings>{e}</ratings>
+                <ratings>{group_a}</ratings>
+                <ratings>{group_b}</ratings>
+                <ratings>{group_c}</ratings>
+                <ratings>{group_d}</ratings>
+                <ratings>{group_e}</ratings>
             </ratings>
             <level>{level}</level>
             <assets>
