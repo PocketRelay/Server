@@ -11,11 +11,6 @@
 [Discord Server (discord.gg/yvycWW8RgR)](https://discord.gg/yvycWW8RgR)
 [Website (pocket-relay.pages.dev)](https://pocket-relay.pages.dev/)
 
-> **📌 Update Notice**
-> If you are updating from a version lower than 0.3 you will need to 
-> delete the app.db file before launching or else the server will not
-> work
-
 Development is undergone on the [dev](https://github.com/PocketRelay/Server/tree/dev) branch so the master branch can be
 considered semi stable with only non breaking changes being merged in-between releases
 
@@ -23,16 +18,20 @@ considered semi stable with only non breaking changes being merged in-between re
 
 With **Pocket Relay** you can play Mass Effect 3 multiplayer offline by yourself, over LAN, or even over WAN as a public server 
 
+View the website for information https://pocket-relay.pages.dev/
+
+
 ## 📌 EA / BioWare Notice
 
-The **Pocket Relay** software in all its forms are in no way or form supported, endorsed, or provided by BioWare or Electronic Arts. 
+The **Pocket Relay** software in all its forms are in no way or form supported, endorsed, or provided by BioWare or Electronic Arts. Mass Effect is a registered trademark of Bioware/EA International (Studio and Publishing), Ltd in the U.S. and/or other countries. All Mass Effect art, images, and lore are the sole property of Bioware/EA International (Studio and Publishing), Ltd and have been reproduced here in an effort to assist the Mass Effect player community. All other trademarks are the property of their respective owners.
+
 
 ## 📖 Starting your own server
 
 For guides check out the [Website (pocket-relay.pages.dev)](https://pocket-relay.pages.dev/) or refer directly to 
 the [Server Setup Guide](https://pocket-relay.pages.dev/guide/server/)
 
-## 📦 Downloads
+## 📦 Direct Downloads
 
 Below is a table of the download links for the different platforms
 
@@ -40,6 +39,8 @@ Below is a table of the download links for the different platforms
 | -------- | ------------------------------------------------------------------------------------------------------- |
 | Windows  | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-windows.exe) |
 | Linux    | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-linux)       |
+
+You can find individual releases on the [Releases](https://github.com/PocketRelay/Server/releases) page
 
 
 ## 🔧 Configuration
@@ -67,45 +68,11 @@ on Windows, Linux, etc. *Note the server will store the player data and logging 
 
 ## 🚀 Manual Building
 
-Instructions for building the server can be found [Here](https://pocket-relay.pages.dev/guide/server/building/)
+Instructions for building the server can be found at https://pocket-relay.pages.dev/docs/server/manual-building
 
 > **Note**
 > Building the server can be quite a heavy load on your computer
 
-## Dashboard
-
-Below are some screenshots of the included dashboard. You can access the dashboard by visting the server connection URL this 
-URL will be present in the server logs / output upon launching.
-
-> **Note**
-> If you are running the server on the same computer you can access the dashboard using http://localhost
-
-![Dashboard Login](images/3.png)
-![Dashboard Home](images/1.png)
-![Dashboard Inventory](images/2.png)
-
-## ⛔️ Known Issues
-
-**Host Migration** Host migration is partially working however it only currently works
-for a single player. If there is more than one player in the game when host migration
-occurs currently all the other players get booted from the game except for the new host.
-This also causes the game to become un-joinable for other players.
-
-> Host migration is a fixable issue it just needs more testing and experimenting
-
-**Inital connection failure on menu when using cracked game** When connecting to the server
-for the first time when you've originally logged into the official servers you will be given
-a connection error screen. You can just press okay on this error this is because the server couldn't
-authenticate you using a session token that was for the original server. Once you're on
-the main menu you can push the button on the terminal or the "Multiplayer" button and you will be
-taken to a login screen where you can create a new account with Pocket Relay.
-
-> The only way to solve this issue would be to delete or move the Local_Profile.sav file
-> whenever switching servers in order to clear the token.
-
-**Account creation crash** Sometimes when attempting to create a new account the Mass Effect client
-will crash. The cause for this is not yet known but restarting the game and attempting to create
-an account again usually works.
 
 ## 🧾 License
 
