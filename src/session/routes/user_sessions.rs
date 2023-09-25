@@ -64,10 +64,8 @@ pub async fn handle_resume_session(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
     Extension(sessions): Extension<Arc<Sessions>>,
-    Blaze(req): Blaze<ResumeSessionRequest>,
+    Blaze(ResumeSessionRequest { session_token }): Blaze<ResumeSessionRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
-    let session_token = req.session_token;
-
     // Verify the authentication token
     let player_id = sessions
         .verify_token(&session_token)
@@ -121,9 +119,10 @@ pub async fn handle_resume_session(
 /// ```
 pub async fn handle_update_network(
     session: SessionLink,
-    Blaze(mut req): Blaze<UpdateNetworkRequest>,
+    Blaze(UpdateNetworkRequest { mut address, qos }): Blaze<UpdateNetworkRequest>,
 ) {
-    if let NetworkAddress::AddressPair(pair) = &mut req.address {
+    // TODO: This won't be required after QoS servers are correctly functioning
+    if let NetworkAddress::AddressPair(pair) = &mut address {
         let ext = &mut pair.external;
 
         // If address is missing
@@ -135,7 +134,7 @@ pub async fn handle_update_network(
     }
 
     tokio::spawn(async move {
-        session.set_network_info(req.address, req.qos).await;
+        session.set_network_info(address, qos).await;
     });
 }
 
@@ -150,9 +149,9 @@ pub async fn handle_update_network(
 /// ```
 pub async fn handle_update_hardware_flag(
     session: SessionLink,
-    Blaze(req): Blaze<UpdateHardwareFlagsRequest>,
+    Blaze(UpdateHardwareFlagsRequest { hardware_flags }): Blaze<UpdateHardwareFlagsRequest>,
 ) {
     tokio::spawn(async move {
-        session.set_hardware_flags(req.hardware_flags).await;
+        session.set_hardware_flags(hardware_flags).await;
     });
 }

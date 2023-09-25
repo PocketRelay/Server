@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 pub async fn handle_join_game(
     player: GamePlayer,
+    Blaze(JoinGameRequest { user }): Blaze<JoinGameRequest>,
     Extension(sessions): Extension<Arc<Sessions>>,
     Extension(game_manager): Extension<Arc<GameManager>>,
-    Blaze(req): Blaze<JoinGameRequest>,
 ) -> ServerResult<Blaze<JoinGameResponse>> {
     // Lookup the session join target
     let session = sessions
-        .lookup_session(req.user.id)
+        .lookup_session(user.id)
         .await
         .ok_or(GameManagerError::JoinPlayerFailed)?;
 
@@ -63,22 +63,16 @@ pub async fn handle_join_game(
 }
 
 pub async fn handle_get_game_data(
-    Blaze(mut req): Blaze<GetGameDataRequest>,
+    Blaze(GetGameDataRequest { game_list }): Blaze<GetGameDataRequest>,
     Extension(game_manager): Extension<Arc<GameManager>>,
 ) -> ServerResult<RawBlaze> {
-    if req.game_list.is_empty() {
-        return Err(GlobalError::System.into());
-    }
-
-    let game_id = req.game_list.remove(0);
-
+    let game_id = game_list.first().copied().ok_or(GlobalError::System)?;
     let game = game_manager
         .get_game(game_id)
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
     let game = &*game.read().await;
-
     let body = game.game_data().await;
 
     Ok(body)
@@ -138,9 +132,12 @@ pub async fn handle_get_game_data(
 pub async fn handle_create_game(
     player: GamePlayer,
     Extension(game_manager): Extension<Arc<GameManager>>,
-    Blaze(req): Blaze<CreateGameRequest>,
+    Blaze(CreateGameRequest {
+        attributes,
+        setting,
+    }): Blaze<CreateGameRequest>,
 ) -> ServerResult<Blaze<CreateGameResponse>> {
-    let (link, game_id) = game_manager.create_game(req.attributes, req.setting).await;
+    let (link, game_id) = game_manager.create_game(attributes, setting).await;
 
     // Notify matchmaking of the new game
     tokio::spawn(async move {
@@ -183,16 +180,19 @@ pub async fn handle_create_game(
 /// ```
 pub async fn handle_set_attributes(
     Extension(game_manager): Extension<Arc<GameManager>>,
-    Blaze(req): Blaze<SetAttributesRequest>,
+    Blaze(SetAttributesRequest {
+        attributes,
+        game_id,
+    }): Blaze<SetAttributesRequest>,
 ) -> ServerResult<()> {
     let link = game_manager
-        .get_game(req.game_id)
+        .get_game(game_id)
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
     {
         let game = &mut *link.write().await;
-        game.set_attributes(req.attributes);
+        game.set_attributes(attributes);
     }
 
     // Update matchmaking for the changed game
@@ -202,7 +202,7 @@ pub async fn handle_set_attributes(
             game.joinable_state(None)
         };
         if let GameJoinableState::Joinable = join_state {
-            game_manager.process_queue(link, req.game_id).await;
+            game_manager.process_queue(link, game_id).await;
         }
     });
 
@@ -221,15 +221,15 @@ pub async fn handle_set_attributes(
 /// ```
 pub async fn handle_set_state(
     Extension(game_manager): Extension<Arc<GameManager>>,
-    Blaze(req): Blaze<SetStateRequest>,
+    Blaze(SetStateRequest { game_id, state }): Blaze<SetStateRequest>,
 ) -> ServerResult<()> {
     let link = game_manager
-        .get_game(req.game_id)
+        .get_game(game_id)
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
     let game = &mut *link.write().await;
-    game.set_state(req.state);
+    game.set_state(state);
 
     Ok(())
 }
@@ -246,15 +246,15 @@ pub async fn handle_set_state(
 /// ```
 pub async fn handle_set_setting(
     Extension(game_manager): Extension<Arc<GameManager>>,
-    Blaze(req): Blaze<SetSettingRequest>,
+    Blaze(SetSettingRequest { game_id, setting }): Blaze<SetSettingRequest>,
 ) -> ServerResult<()> {
     let link = game_manager
-        .get_game(req.game_id)
+        .get_game(game_id)
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
     let game = &mut *link.write().await;
-    game.set_settings(req.setting);
+    game.set_settings(setting);
 
     Ok(())
 }
@@ -274,15 +274,19 @@ pub async fn handle_set_setting(
 /// ```
 pub async fn handle_remove_player(
     Extension(game_manager): Extension<Arc<GameManager>>,
-    Blaze(req): Blaze<RemovePlayerRequest>,
+    Blaze(RemovePlayerRequest {
+        game_id,
+        player_id,
+        reason,
+    }): Blaze<RemovePlayerRequest>,
 ) -> ServerResult<()> {
     let link = game_manager
-        .get_game(req.game_id)
+        .get_game(game_id)
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
     let game = &mut *link.write().await;
-    game.remove_player(req.player_id, req.reason);
+    game.remove_player(player_id, reason);
 
     Ok(())
 }
@@ -306,15 +310,18 @@ pub async fn handle_remove_player(
 pub async fn handle_update_mesh_connection(
     SessionAuth(player): SessionAuth,
     Extension(game_manager): Extension<Arc<GameManager>>,
-    Blaze(mut req): Blaze<UpdateMeshRequest>,
+    Blaze(UpdateMeshRequest {
+        game_id,
+        mut targets,
+    }): Blaze<UpdateMeshRequest>,
 ) -> ServerResult<()> {
-    let target = match req.targets.pop() {
+    let target = match targets.pop() {
         Some(value) => value,
         None => return Ok(()),
     };
 
     let link = game_manager
-        .get_game(req.game_id)
+        .get_game(game_id)
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
@@ -448,14 +455,14 @@ pub async fn handle_update_mesh_connection(
 pub async fn handle_start_matchmaking(
     player: GamePlayer,
     Extension(game_manager): Extension<Arc<GameManager>>,
-    Blaze(req): Blaze<MatchmakingRequest>,
+    Blaze(MatchmakingRequest { rules }): Blaze<MatchmakingRequest>,
 ) -> ServerResult<Blaze<MatchmakingResponse>> {
     let session_id = player.player.id;
 
     info!("Player {} started matchmaking", player.player.display_name);
 
     tokio::spawn(async move {
-        let rule_set = Arc::new(req.rules);
+        let rule_set = Arc::new(rules);
         // If adding failed attempt to queue instead
         if let Err(player) = game_manager.try_add(player, &rule_set).await {
             game_manager.queue(player, rule_set).await;

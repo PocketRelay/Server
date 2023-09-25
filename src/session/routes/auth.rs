@@ -65,10 +65,10 @@ pub async fn handle_silent_login(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
     Extension(sessions): Extension<Arc<Sessions>>,
-    Blaze(req): Blaze<SilentLoginRequest>,
+    Blaze(SilentLoginRequest { token }): Blaze<SilentLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     // Verify the authentication token
-    let player_id = sessions.verify_token(&req.token).map_err(|err| match err {
+    let player_id = sessions.verify_token(&token).map_err(|err| match err {
         VerifyError::Expired => AuthenticationError::ExpiredToken,
         VerifyError::Invalid => AuthenticationError::InvalidToken,
     })?;
@@ -83,7 +83,7 @@ pub async fn handle_silent_login(
 
     Ok(Blaze(AuthResponse {
         player,
-        session_token: req.token,
+        session_token: token,
         silent: true,
     }))
 }
@@ -94,7 +94,7 @@ pub async fn handle_origin_login(
     Extension(config): Extension<Arc<RuntimeConfig>>,
     Extension(sessions): Extension<Arc<Sessions>>,
     Extension(retriever): Extension<Arc<Retriever>>,
-    Blaze(req): Blaze<OriginLoginRequest>,
+    Blaze(OriginLoginRequest { token, .. }): Blaze<OriginLoginRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
     // Obtain an origin flow
     let mut flow = retriever.origin_flow().await.map_err(|err| {
@@ -102,7 +102,7 @@ pub async fn handle_origin_login(
         GlobalError::System
     })?;
 
-    let player: Player = flow.login(&db, req.token, &config).await.map_err(|err| {
+    let player: Player = flow.login(&db, token, &config).await.map_err(|err| {
         error!("Failed to login with origin: {}", err);
         GlobalError::System
     })?;
@@ -209,9 +209,8 @@ static ENTITLEMENTS: &[Entitlement; 34] = &[
 /// }
 /// ```
 pub async fn handle_list_entitlements(
-    Blaze(req): Blaze<ListEntitlementsRequest>,
+    Blaze(ListEntitlementsRequest { tag }): Blaze<ListEntitlementsRequest>,
 ) -> Option<Blaze<ListEntitlementsResponse>> {
-    let tag: String = req.tag;
     if !tag.is_empty() {
         return None;
     }
@@ -286,9 +285,8 @@ pub async fn handle_create_account(
     Extension(db): Extension<DatabaseConnection>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
     Extension(sessions): Extension<Arc<Sessions>>,
-    Blaze(req): Blaze<CreateAccountRequest>,
+    Blaze(CreateAccountRequest { email, password }): Blaze<CreateAccountRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {
-    let email = req.email;
     if !EmailAddress::is_valid(&email) {
         return Err(AuthenticationError::InvalidEmail.into());
     }
@@ -299,7 +297,7 @@ pub async fn handle_create_account(
     }
 
     // Hash the proivded plain text password using Argon2
-    let hashed_password: String = hash_password(&req.password).map_err(|err| {
+    let hashed_password: String = hash_password(&password).map_err(|err| {
         error!("Failed to hash password for creating account: {}", err);
         GlobalError::System
     })?;

@@ -148,9 +148,9 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 /// }
 /// ```
 pub async fn handle_fetch_client_config(
-    Blaze(req): Blaze<FetchConfigRequest>,
+    Blaze(FetchConfigRequest { id }): Blaze<FetchConfigRequest>,
 ) -> ServerResult<Blaze<FetchConfigResponse>> {
-    let config = match req.id.as_str() {
+    let config = match id.as_str() {
         "ME3_DATA" => data_config(),
         "ME3_MSG" => messages(),
         "ME3_ENT" => load_entitlements(),
@@ -472,8 +472,10 @@ fn data_config() -> TdfMap<String, String> {
 ///     "TVAL": 90000000
 /// }
 /// ```
-pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> BlazeError {
-    let res = match req.time_value.cmp(&90000000) {
+pub async fn handle_suspend_user_ping(
+    Blaze(SuspendPingRequest { time_value }): Blaze<SuspendPingRequest>,
+) -> BlazeError {
+    let res = match time_value.cmp(&90000000) {
         Ordering::Less => UtilError::SuspendPingTimeTooSmall,
         Ordering::Greater => UtilError::SuspendPingTimeTooLarge,
         Ordering::Equal => UtilError::PingSuspended,
@@ -495,9 +497,9 @@ pub async fn handle_suspend_user_ping(Blaze(req): Blaze<SuspendPingRequest>) -> 
 pub async fn handle_user_settings_save(
     SessionAuth(player): SessionAuth,
     Extension(db): Extension<DatabaseConnection>,
-    Blaze(req): Blaze<SettingsSaveRequest>,
+    Blaze(SettingsSaveRequest { value, key }): Blaze<SettingsSaveRequest>,
 ) -> ServerResult<()> {
-    PlayerData::set(&db, player.id, req.key, req.value).await?;
+    PlayerData::set(&db, player.id, key, value).await?;
     Ok(())
 }
 
