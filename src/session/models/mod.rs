@@ -125,13 +125,13 @@ pub enum InstanceNet {
 pub struct QosNetworkData {
     /// Downstream bits per second
     #[tdf(tag = "DBPS")]
-    pub dbps: u16,
+    pub dbps: u32,
     /// Natt type
     #[tdf(tag = "NATT")]
     pub natt: NatType,
     /// Upstream bits per second
     #[tdf(tag = "UBPS")]
-    pub ubps: u16,
+    pub ubps: u32,
 }
 
 //
