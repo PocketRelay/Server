@@ -15,6 +15,7 @@ use super::NetworkAddress;
 pub enum GameManagerError {
     InvalidGameId = 0x2,
     GameFull = 0x4,
+    PermissionDenied = 0x1e,
     PlayerNotFound = 0x65,
     AlreadyGameMember = 0x67,
     RemovePlayerFailed = 0x68,
@@ -91,16 +92,32 @@ pub struct UpdateMeshRequest {
     #[tdf(tag = "GID")]
     pub game_id: GameID,
     #[tdf(tag = "TARG")]
-    pub targets: Vec<MeshTarget>,
+    pub targets: Vec<PlayerConnectionStatus>,
 }
 
 #[derive(TdfDeserialize, TdfTyped)]
 #[tdf(group)]
-pub struct MeshTarget {
+pub struct PlayerConnectionStatus {
     #[tdf(tag = "PID")]
     pub player_id: PlayerID,
     #[tdf(tag = "STAT")]
-    pub state: PlayerState,
+    pub status: PlayerNetConnectionStatus,
+}
+
+#[derive(TdfDeserialize, TdfTyped)]
+#[repr(u8)]
+pub enum PlayerNetConnectionStatus {
+    Disconnected = 0x0,
+    EstablishingConnection = 0x1,
+    Connected = 0x2,
+}
+
+#[derive(TdfDeserialize)]
+pub struct AddAdminPlayerRequest {
+    #[tdf(tag = "GID")]
+    pub game_id: GameID,
+    #[tdf(tag = "PID")]
+    pub player_id: PlayerID,
 }
 
 /// Structure of the request for starting matchmaking. Contains

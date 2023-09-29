@@ -228,8 +228,10 @@ pub async fn handle_set_state(
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &mut *link.write().await;
-    game.set_state(state);
+    tokio::spawn(async move {
+        let game = &mut *link.write().await;
+        game.set_state(state);
+    });
 
     Ok(())
 }
@@ -253,8 +255,10 @@ pub async fn handle_set_setting(
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &mut *link.write().await;
-    game.set_settings(setting);
+    tokio::spawn(async move {
+        let game = &mut *link.write().await;
+        game.set_settings(setting);
+    });
 
     Ok(())
 }
@@ -285,13 +289,17 @@ pub async fn handle_remove_player(
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &mut *link.write().await;
-    game.remove_player(player_id, reason).await;
+    tokio::spawn(async move {
+        let game = &mut *link.write().await;
+        game.remove_player(player_id, reason).await;
+    });
 
     Ok(())
 }
 
 /// Handles updating mesh connections
+///
+/// Only sent by the host player (I think)
 ///
 /// ```
 /// Route: GameManager(UpdateMeshConnection)
@@ -325,8 +333,40 @@ pub async fn handle_update_mesh_connection(
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &mut *link.write().await;
-    game.update_mesh(player.id, target.player_id, target.state);
+    tokio::spawn(async move {
+        let game = &mut *link.write().await;
+
+        // Ensure the host is the one making the change
+        if !game.is_host_player(player.id) {
+            return;
+        }
+
+        game.update_mesh(target.player_id, target.status);
+    });
+
+    Ok(())
+}
+
+pub async fn handle_add_admin_player(
+    SessionAuth(player): SessionAuth,
+    Extension(game_manager): Extension<Arc<GameManager>>,
+    Blaze(AddAdminPlayerRequest { game_id, player_id }): Blaze<AddAdminPlayerRequest>,
+) -> ServerResult<()> {
+    let link = game_manager
+        .get_game(game_id)
+        .await
+        .ok_or(GameManagerError::InvalidGameId)?;
+
+    tokio::spawn(async move {
+        let game = &mut *link.write().await;
+
+        // Ensure the host is the one making the change
+        if !game.is_host_player(player.id) {
+            return;
+        }
+
+        game.add_admin_player(player_id);
+    });
 
     Ok(())
 }

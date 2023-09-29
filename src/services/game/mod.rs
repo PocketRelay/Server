@@ -5,8 +5,8 @@ use crate::{
         models::game_manager::{
             AdminListChange, AdminListOperation, AttributesChange, GameSettings, GameSetupContext,
             GameSetupResponse, GameState, GetGameDetails, HostMigrateFinished, HostMigrateStart,
-            JoinComplete, PlayerJoining, PlayerRemoved, PlayerState, PlayerStateChange,
-            RemoveReason, SettingChange, StateChange,
+            JoinComplete, PlayerJoining, PlayerNetConnectionStatus, PlayerRemoved, PlayerState,
+            PlayerStateChange, RemoveReason, SettingChange, StateChange,
         },
         packet::Packet,
         router::RawBlaze,
@@ -206,53 +206,61 @@ impl Game {
         self.notify_game_setup(player, context);
     }
 
-    pub fn update_mesh(&mut self, id: PlayerID, target: PlayerID, state: PlayerState) {
-        if let PlayerState::ActiveConnecting = state {
-            // Ensure the target player is in the game
-            if !self.players.iter().any(|value| value.player.id == target) {
+    pub fn add_admin_player(&mut self, target_id: PlayerID) {
+        // Add the player to the admin list
+        self.modify_admin_list(target_id, AdminListOperation::Add);
+    }
+
+    pub fn is_host_player(&self, player_id: PlayerID) -> bool {
+        self.players
+            .first()
+            .is_some_and(|host| host.player.id == player_id)
+    }
+
+    pub fn update_mesh(&mut self, target_id: PlayerID, status: PlayerNetConnectionStatus) {
+        // We only care about a connected state
+        match status {
+            PlayerNetConnectionStatus::Connected => {}
+            _ => return,
+        }
+
+        // Obtain the target player
+        let target_slot = match self
+            .players
+            .iter_mut()
+            .find(|slot| slot.player.id == target_id)
+        {
+            Some(value) => value,
+            None => {
+                debug!(
+                    "Unable to find player to update mesh state for (PID: {} GID: {})",
+                    target_id, self.id
+                );
                 return;
             }
+        };
 
-            // Find the index of the session player
-            let session = self.players.iter_mut().find(|value| value.player.id == id);
-
-            let session = match session {
-                Some(value) => value,
-                None => return,
-            };
-
-            // Update the session state
-            session.state = PlayerState::ActiveConnected;
-
-            let player_id = session.player.id;
-            let state_change = PlayerStateChange {
+        // Mark the player as connected and update the state for all users
+        target_slot.state = PlayerState::ActiveConnected;
+        self.push_all(&Packet::notify(
+            game_manager::COMPONENT,
+            game_manager::GAME_PLAYER_STATE_CHANGE,
+            PlayerStateChange {
                 gid: self.id,
-                pid: player_id,
-                state: session.state,
-            };
+                pid: target_id,
+                state: PlayerState::ActiveConnected,
+            },
+        ));
 
-            // TODO: Move into a "connection complete" function
-
-            // Notify players of the player state change
-            self.push_all(&Packet::notify(
-                game_manager::COMPONENT,
-                game_manager::GAME_PLAYER_STATE_CHANGE,
-                state_change,
-            ));
-
-            // Notify players of the completed connection
-            self.push_all(&Packet::notify(
-                game_manager::COMPONENT,
-                game_manager::PLAYER_JOIN_COMPLETED,
-                JoinComplete {
-                    game_id: self.id,
-                    player_id,
-                },
-            ));
-
-            // Add the player to the admin list
-            self.modify_admin_list(player_id, AdminListOperation::Add);
-        }
+        // Notify all players that the player has completely joined
+        self.push_all(&Packet::notify(
+            game_manager::COMPONENT,
+            game_manager::PLAYER_JOIN_COMPLETED,
+            JoinComplete {
+                game_id: self.id,
+                player_id: target_id,
+            },
+        ));
     }
 
     pub async fn remove_player(&mut self, id: u32, reason: RemoveReason) {

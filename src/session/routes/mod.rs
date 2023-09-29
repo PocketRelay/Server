@@ -51,6 +51,7 @@ pub fn router() -> BlazeRouterBuilder {
         builder.route(g::COMPONENT, g::SET_GAME_ATTRIBUTES, handle_set_attributes);
         builder.route(g::COMPONENT, g::REMOVE_PLAYER, handle_remove_player);
         builder.route(g::COMPONENT, g::UPDATE_MESH_CONNECTION,handle_update_mesh_connection);
+        builder.route(g::COMPONENT, g::ADD_ADMIN_PLAYER,handle_add_admin_player);
         builder.route(g::COMPONENT, g::START_MATCHMAKING,handle_start_matchmaking);
         builder.route(g::COMPONENT, g::CANCEL_MATCHMAKING,handle_cancel_matchmaking);
         builder.route(g::COMPONENT, g::GET_GAME_DATA_FROM_ID, handle_get_game_data);

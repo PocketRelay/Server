@@ -12,7 +12,7 @@ pub type ServerResult<T> = Result<T, BlazeError>;
 
 #[test]
 fn decode_error() {
-    let value: i32 = 96258;
+    let value: i32 = 1966084;
     let bytes = value.to_le_bytes();
     let mut out = [0u8; 2];
     out.copy_from_slice(&bytes[2..]);
