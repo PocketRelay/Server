@@ -332,7 +332,8 @@ impl Session {
     pub async fn remove_from_game(&self) {
         if let Some((player_id, game_ref)) = self.clear_game().await {
             let game = &mut *game_ref.write().await;
-            game.remove_player(player_id, RemoveReason::PlayerLeft);
+            game.remove_player(player_id, RemoveReason::PlayerLeft)
+                .await;
         }
     }
 
@@ -388,7 +389,8 @@ impl Session {
                 let player_id = data.player.id;
                 tokio::spawn(async move {
                     let game = &mut *game.game_ref.write().await;
-                    game.remove_player(player_id, RemoveReason::PlayerLeft);
+                    game.remove_player(player_id, RemoveReason::PlayerLeft)
+                        .await;
                 });
             }
 

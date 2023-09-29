@@ -17,11 +17,12 @@ use crate::{
         types::{GameID, PlayerID},
     },
 };
+use futures_util::future::join_all;
 use log::{debug, warn};
 use serde::Serialize;
 use std::sync::Arc;
 use tdf::{ObjectId, TdfMap, TdfSerializer};
-use tokio::sync::RwLock;
+use tokio::{join, sync::RwLock};
 
 pub mod manager;
 pub mod rules;
@@ -167,7 +168,7 @@ impl Game {
         data.into()
     }
 
-    pub fn add_player(&mut self, mut player: GamePlayer, context: GameSetupContext) {
+    pub async fn add_player(&mut self, mut player: GamePlayer, context: GameSetupContext) {
         let slot = self.players.len();
 
         // Player is the host player (They are connected)
@@ -185,6 +186,10 @@ impl Game {
 
         // Player isn't the host player
         if slot != 0 {
+            // Update other players with the client details
+            self.add_user_sub(player.player.id, player.link.clone())
+                .await;
+
             // Notify other players of the joined player
             self.push_all(&Packet::notify(
                 game_manager::COMPONENT,
@@ -195,9 +200,6 @@ impl Game {
                     game_id: self.id,
                 },
             ));
-
-            // Update other players with the client details
-            self.add_user_sub(player.player.id, player.link.clone());
         }
 
         // Notify the joiner of the game details
@@ -253,7 +255,7 @@ impl Game {
         }
     }
 
-    pub fn remove_player(&mut self, id: u32, reason: RemoveReason) {
+    pub async fn remove_player(&mut self, id: u32, reason: RemoveReason) {
         // Already empty game handling
         if self.players.is_empty() {
             self.stop();
@@ -273,13 +275,12 @@ impl Game {
 
         // Clear current game of this player
         let clear_link = player.link.clone();
-        tokio::spawn(async move {
-            let _ = clear_link.clear_game().await;
-        });
+        let _ = clear_link.clear_game().await;
 
         // Update the other players
         self.notify_player_removed(&player, reason);
-        self.rem_user_sub(player.player.id, player.link.clone());
+        self.rem_user_sub(player.player.id, player.link.clone())
+            .await;
         self.modify_admin_list(player.player.id, AdminListOperation::Remove);
 
         debug!(
@@ -428,49 +429,54 @@ impl Game {
     }
 
     /// Creates a subscription between all the users and the the target player
-    fn add_user_sub(&self, target_id: PlayerID, target_link: SessionLink) {
+    async fn add_user_sub(&self, target_id: PlayerID, target_link: SessionLink) {
         debug!("Adding user subscriptions");
 
-        // Subscribe all the clients to eachother
-        self.players
+        // Subscribe all the clients to each other
+        let futures = self
+            .players
             .iter()
             .filter(|other| other.player.id.ne(&target_id))
-            .for_each(|other| {
+            .map(|other| {
                 let other_id = other.player.id;
                 let other_link = other.link.clone();
                 let target_link = target_link.clone();
 
-                tokio::spawn(async move {
-                    target_link
-                        .add_subscriber(other_id, other_link.clone())
-                        .await;
-                    other_link
-                        .add_subscriber(target_id, target_link.clone())
-                        .await;
-                });
+                async move {
+                    join!(
+                        target_link.add_subscriber(other_id, other_link.clone()),
+                        other_link.add_subscriber(target_id, target_link.clone())
+                    );
+                }
             });
+
+        join_all(futures).await;
     }
 
     /// Notifies the provided player and all other players
     /// in the game that they should remove eachother from
     /// their player data list
-    fn rem_user_sub(&self, target_id: PlayerID, target_link: SessionLink) {
+    async fn rem_user_sub(&self, target_id: PlayerID, target_link: SessionLink) {
         debug!("Removing user subscriptions");
 
         // Unsubscribe all the clients from eachother
-        self.players
+        let futures = self
+            .players
             .iter()
             .filter(|other| other.player.id.ne(&target_id))
-            .for_each(|other| {
+            .map(|other| {
                 let other_id = other.player.id;
                 let other_link = other.link.clone();
                 let target_link = target_link.clone();
 
-                tokio::spawn(async move {
-                    target_link.remove_subscriber(other_id).await;
-                    other_link.remove_subscriber(target_id).await;
-                });
+                async move {
+                    join!(
+                        target_link.remove_subscriber(other_id),
+                        other_link.remove_subscriber(target_id)
+                    );
+                }
             });
+        join_all(futures).await;
     }
 
     /// Notifies the provided player that the game has been setup and

@@ -286,7 +286,7 @@ pub async fn handle_remove_player(
         .ok_or(GameManagerError::InvalidGameId)?;
 
     let game = &mut *link.write().await;
-    game.remove_player(player_id, reason);
+    game.remove_player(player_id, reason).await;
 
     Ok(())
 }
