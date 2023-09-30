@@ -95,12 +95,12 @@ impl TdfSerialize for UserSessionExtendedData {
             w.tag_str_empty(b"CTY");
             // Client data
             w.tag_var_int_list_empty(b"CVAR");
-            // Data map
+            // Data map (INVESTIGATE, seems to have many different possible values) 91940, 689, 16538
             w.tag_map_tuples(b"DMAP", &[(0x70001, 0x409a)]);
             // Hardware flags
             w.tag_owned(b"HWFG", self.net.hardware_flags.bits());
             // Ping server latency list
-            w.tag_list_slice(b"PSLM", &[0xfff0fff]);
+            w.tag_list_slice(b"PSLM", &[141]);
             // Quality of service data
             w.tag_ref(b"QDAT", &self.net.qos);
             // User info attributes
