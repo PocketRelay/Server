@@ -51,8 +51,8 @@ configuration documentation [Here (docs/CONFIG.md)](https://pocket-relay.pages.d
 
 ## ⚙️ Features
 
-- **Origin Support** This server supports **Origin** / **EA Launcher** copies of the game through its fetching system. As long as the official servers are still available and you have internet access the server will connect to the official servers to authorize **Origin** accounts. *This behavior can be disabled using the `PR_ORIGIN_FETCH` environment variable*
-- **Origin Fetching** Along with supporting **Origin** authentication your player data from the official servers can also be loaded for those logging into **Origin** accounts. *This behavior can be disabled using the `PR_ORIGIN_FETCH_DATA` environment variable*
+- **Origin Support** This server supports **Origin** / **EA Launcher** copies of the game through its fetching system. As long as the official servers are still available and you have internet access the server will connect to the official servers to authorize **Origin** accounts. *This behavior can be disabled in the configuration*
+- **Origin Fetching** Along with supporting **Origin** authentication your player data from the official servers can also be loaded for those logging into **Origin** accounts. *This behavior can be disabled in the configuration*
 - **Portable & Platform Independent** This server can be run on most hardware and software due to its low requirements and custom
 implementations of lots of required portions allowing you to run it
 on Windows, Linux, etc. *Note the server will store the player data and logging in a folder named `data` in the same folder as the exe*
