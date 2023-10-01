@@ -9,10 +9,7 @@ use crate::{
 use axum::{Extension, Server};
 use config::load_config;
 use log::{debug, error, info, LevelFilter};
-use std::{
-    net::{Ipv4Addr, SocketAddr},
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::{join, signal};
 use utils::logging;
 
@@ -37,7 +34,7 @@ async fn main() {
     logging::setup(config.logging);
 
     // Create the server socket address while the port is still available
-    let addr: SocketAddr = (Ipv4Addr::UNSPECIFIED, config.port).into();
+    let addr: SocketAddr = SocketAddr::new(config.host, config.port);
 
     // Config data persisted to runtime
     let runtime_config = RuntimeConfig {
