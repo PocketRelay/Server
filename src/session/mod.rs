@@ -186,7 +186,7 @@ static SESSION_IDS: AtomicU32 = AtomicU32::new(1);
 
 impl Session {
     /// Max number of times to poll a session for shutdown before erroring
-    const MAX_RELEASE_ATTEMPTS: u8 = 5;
+    const MAX_RELEASE_ATTEMPTS: u8 = 20;
 
     pub fn start(io: Upgraded, addr: Ipv4Addr, router: Arc<BlazeRouter>, sessions: Arc<Sessions>) {
         // Obtain a session ID

@@ -49,7 +49,7 @@ const DEFAULT_FIT: u16 = 21600;
 
 impl GameManager {
     /// Max number of times to poll a game for shutdown before erroring
-    const MAX_RELEASE_ATTEMPTS: u8 = 5;
+    const MAX_RELEASE_ATTEMPTS: u8 = 20;
 
     /// Starts a new game manager service returning its link
     pub fn new() -> Self {
