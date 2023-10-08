@@ -511,14 +511,11 @@ struct SessionReader {
 
 impl SessionReader {
     pub async fn process(mut self) {
-        let mut tasks = JoinSet::new();
-
         while let Some(Ok(packet)) = self.inner.next().await {
             let link = self.link.clone();
-            tasks.spawn(link.handle_packet(packet));
+            link.handle_packet(packet).await;
         }
 
-        tasks.shutdown().await;
         self.link.stop().await;
     }
 }
