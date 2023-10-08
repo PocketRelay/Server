@@ -198,7 +198,7 @@ impl Game {
                 .await;
 
             // Notify other players of the joined player
-            self.push_all(&Packet::notify(
+            self.notify_all(Packet::notify(
                 game_manager::COMPONENT,
                 game_manager::PLAYER_JOINING,
                 PlayerJoining {
@@ -249,7 +249,7 @@ impl Game {
 
         // Mark the player as connected and update the state for all users
         target_slot.state = PlayerState::ActiveConnected;
-        self.push_all(&Packet::notify(
+        self.notify_all(Packet::notify(
             game_manager::COMPONENT,
             game_manager::GAME_PLAYER_STATE_CHANGE,
             PlayerStateChange {
@@ -260,7 +260,7 @@ impl Game {
         ));
 
         // Notify all players that the player has completely joined
-        self.push_all(&Packet::notify(
+        self.notify_all(Packet::notify(
             game_manager::COMPONENT,
             game_manager::PLAYER_JOIN_COMPLETED,
             JoinComplete {
@@ -393,7 +393,7 @@ impl Game {
     /// it to be placed into each sessions write buffers.
     ///
     /// `packet` The packet to write
-    fn push_all(&self, packet: &Packet) {
+    fn notify_all(&self, packet: Packet) {
         self.players
             .iter()
             .for_each(|value| value.notify(packet.clone()));
@@ -404,7 +404,7 @@ impl Game {
 
         debug!("Updated game state (Value: {:?})", &state);
 
-        self.push_all(&Packet::notify(
+        self.notify_all(Packet::notify(
             game_manager::COMPONENT,
             game_manager::GAME_STATE_CHANGE,
             StateChange { id: self.id, state },
@@ -416,7 +416,7 @@ impl Game {
 
         debug!("Updated game setting (Value: {:?})", &settings);
 
-        self.push_all(&Packet::notify(
+        self.notify_all(Packet::notify(
             game_manager::COMPONENT,
             game_manager::GAME_SETTINGS_CHANGE,
             SettingChange {
@@ -440,7 +440,7 @@ impl Game {
 
         debug!("Updated game attributes");
 
-        self.push_all(&packet);
+        self.notify_all(packet);
     }
 
     /// Creates a subscription between all the users and the the target player
@@ -523,7 +523,7 @@ impl Game {
             None => return,
         };
 
-        self.push_all(&Packet::notify(
+        self.notify_all(Packet::notify(
             game_manager::COMPONENT,
             game_manager::ADMIN_LIST_CHANGE,
             AdminListChange {
@@ -551,7 +551,7 @@ impl Game {
                 reason,
             },
         );
-        self.push_all(&packet);
+        self.notify_all(packet.clone());
         player.notify(packet);
     }
 
@@ -570,7 +570,7 @@ impl Game {
 
         // Start host migration
         self.set_state(GameState::Migrating);
-        self.push_all(&Packet::notify(
+        self.notify_all(Packet::notify(
             game_manager::COMPONENT,
             game_manager::HOST_MIGRATION_START,
             HostMigrateStart {
@@ -583,7 +583,7 @@ impl Game {
 
         // Finished host migration
         self.set_state(GameState::InGame);
-        self.push_all(&Packet::notify(
+        self.notify_all(Packet::notify(
             game_manager::COMPONENT,
             game_manager::HOST_MIGRATION_FINISHED,
             HostMigrateFinished { game_id: self.id },
