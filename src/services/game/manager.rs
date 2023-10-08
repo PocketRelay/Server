@@ -151,7 +151,7 @@ impl GameManager {
         let msid = player.player.id;
 
         // MUST be sent to players atleast once when matchmaking otherwise it may fail
-        player.link.push(Packet::notify(
+        player.notify_handle.notify(Packet::notify(
             game_manager::COMPONENT,
             game_manager::MATCHMAKING_ASYNC_STATUS,
             AsyncMatchmakingStatus { player_id: msid },

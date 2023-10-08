@@ -23,6 +23,7 @@ use crate::{
     session::models::{NetworkAddress, QosNetworkData},
     utils::{
         components::{component_key, user_sessions, DEBUG_IGNORED_PACKETS},
+        lock::QueueLock,
         types::{GameID, PlayerID, SessionID},
     },
 };
@@ -42,10 +43,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::{
-    sync::{mpsc, RwLock},
-    task::JoinSet,
-};
+use tokio::sync::{mpsc, RwLock};
 use tokio_util::codec::Framed;
 
 pub mod models;
@@ -58,17 +56,37 @@ pub type SessionLink = Arc<Session>;
 pub struct Session {
     id: SessionID,
     addr: Ipv4Addr,
+    busy_lock: QueueLock,
     writer: mpsc::UnboundedSender<WriteMessage>,
     data: RwLock<Option<SessionExtData>>,
     router: Arc<BlazeRouter>,
     sessions: Arc<Sessions>,
 }
 
+#[derive(Clone)]
+pub struct SessionNotifyHandle {
+    busy_lock: QueueLock,
+    tx: mpsc::UnboundedSender<WriteMessage>,
+}
+
+impl SessionNotifyHandle {
+    /// Pushes a new notification packet, this will aquire a queue position
+    /// waiting until the current response is handled before sending
+    pub fn notify(&self, packet: Packet) {
+        let tx = self.tx.clone();
+        let busy_lock = self.busy_lock.aquire();
+        tokio::spawn(async move {
+            let _guard = busy_lock.await;
+            let _ = tx.send(WriteMessage::Write(packet));
+        });
+    }
+}
+
 pub struct SessionExtData {
     player: Arc<Player>,
     net: Arc<NetData>,
     game: Option<SessionGameData>,
-    subscribers: Vec<(PlayerID, SessionLink)>,
+    subscribers: Vec<(PlayerID, SessionNotifyHandle)>,
 }
 
 struct SessionGameData {
@@ -93,7 +111,7 @@ impl SessionExtData {
         }
     }
 
-    fn add_subscriber(&mut self, player_id: PlayerID, subscriber: SessionLink) {
+    fn add_subscriber(&mut self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
         // Create the details packets
         let added_notify = Packet::notify(
             user_sessions::COMPONENT,
@@ -115,8 +133,8 @@ impl SessionExtData {
         );
 
         self.subscribers.push((player_id, subscriber.clone()));
-        subscriber.push(added_notify);
-        subscriber.push(update_notify);
+        subscriber.notify(added_notify);
+        subscriber.notify(update_notify);
     }
 
     fn remove_subscriber(&mut self, player_id: PlayerID) {
@@ -134,7 +152,7 @@ impl SessionExtData {
             NotifyUserRemoved { player_id },
         );
 
-        subscriber.push(removed_notify)
+        subscriber.notify(removed_notify)
     }
 
     /// Publishes changes of the session data to all the
@@ -150,7 +168,7 @@ impl SessionExtData {
         );
 
         for (_, subscriber) in &self.subscribers {
-            subscriber.push(packet.clone());
+            subscriber.notify(packet.clone());
         }
     }
 }
@@ -196,8 +214,11 @@ impl Session {
         let (write, read) = framed.split();
         let (tx, rx) = mpsc::unbounded_channel();
 
+        let busy_lock = QueueLock::new();
+
         let session = Arc::new(Self {
             id,
+            busy_lock: busy_lock.clone(),
             writer: tx,
             data: Default::default(),
             addr,
@@ -206,6 +227,7 @@ impl Session {
         });
 
         let reader = SessionReader {
+            busy_lock,
             link: session.clone(),
             inner: read,
         };
@@ -238,6 +260,13 @@ impl Session {
         };
         // Push the response to the client
         this.push(response);
+    }
+
+    pub fn notify_handle(&self) -> SessionNotifyHandle {
+        SessionNotifyHandle {
+            busy_lock: self.busy_lock.clone(),
+            tx: self.writer.clone(),
+        }
     }
 
     /// Internal session stopped function called by the reader when
@@ -283,7 +312,7 @@ impl Session {
         debug!("Session stopped (SID: {})", session.id);
     }
 
-    pub async fn add_subscriber(&self, player_id: PlayerID, subscriber: SessionLink) {
+    pub async fn add_subscriber(&self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
         let data = &mut *self.data.write().await;
         let data = match data {
             Some(value) => value,
@@ -415,11 +444,8 @@ impl Session {
         .await;
     }
 
-    /// Pushes a new packet to the back of the packet buffer
-    /// and sends a flush notification
-    ///
-    /// `packet` The packet to push to the buffer
-    pub fn push(&self, packet: Packet) {
+    /// Pushes a new packet to the packet writer
+    fn push(&self, packet: Packet) {
         _ = self.writer.send(WriteMessage::Write(packet))
         // TODO: Handle failing to send contents to writer
     }
@@ -505,6 +531,7 @@ impl SessionWriter {
 }
 
 struct SessionReader {
+    busy_lock: QueueLock,
     inner: SplitStream<Framed<Upgraded, PacketCodec>>,
     link: SessionLink,
 }
@@ -512,6 +539,7 @@ struct SessionReader {
 impl SessionReader {
     pub async fn process(mut self) {
         while let Some(Ok(packet)) = self.inner.next().await {
+            let _guard = self.busy_lock.aquire().await;
             let link = self.link.clone();
             link.handle_packet(packet).await;
         }

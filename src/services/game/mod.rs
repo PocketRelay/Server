@@ -10,7 +10,7 @@ use crate::{
         },
         packet::Packet,
         router::RawBlaze,
-        NetData, SessionLink,
+        NetData, SessionLink, SessionNotifyHandle,
     },
     utils::{
         components::game_manager,
@@ -72,6 +72,7 @@ pub struct GamePlayer {
     pub player: Arc<Player>,
     /// Session address
     pub link: SessionLink,
+    pub notify_handle: SessionNotifyHandle,
     /// Networking information for the player
     pub net: Arc<NetData>,
     /// The mesh state of the player
@@ -97,18 +98,24 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(player: Arc<Player>, net: Arc<NetData>, link: SessionLink) -> Self {
+    pub fn new(
+        player: Arc<Player>,
+        net: Arc<NetData>,
+        link: SessionLink,
+        notify_handle: SessionNotifyHandle,
+    ) -> Self {
         Self {
             player,
             link,
+            notify_handle,
             net,
             state: PlayerState::ActiveConnecting,
         }
     }
 
     #[inline]
-    pub fn push(&self, packet: Packet) {
-        self.link.push(packet)
+    pub fn notify(&self, packet: Packet) {
+        self.notify_handle.notify(packet)
     }
 
     /// Takes a snapshot of the current player state
@@ -389,7 +396,7 @@ impl Game {
     fn push_all(&self, packet: &Packet) {
         self.players
             .iter()
-            .for_each(|value| value.push(packet.clone()));
+            .for_each(|value| value.notify(packet.clone()));
     }
 
     pub fn set_state(&mut self, state: GameState) {
@@ -452,8 +459,8 @@ impl Game {
 
                 async move {
                     join!(
-                        target_link.add_subscriber(other_id, other_link.clone()),
-                        other_link.add_subscriber(target_id, target_link.clone())
+                        target_link.add_subscriber(other_id, other_link.notify_handle()),
+                        other_link.add_subscriber(target_id, target_link.notify_handle())
                     );
                 }
             });
@@ -501,7 +508,7 @@ impl Game {
                 context,
             },
         );
-        player.push(packet);
+        player.notify(packet);
     }
 
     /// Modifies the psudo admin list this list doesn't actually exist in
@@ -545,7 +552,7 @@ impl Game {
             },
         );
         self.push_all(&packet);
-        player.push(packet);
+        player.notify(packet);
     }
 
     /// Attempts to migrate the host of this game if there are still players

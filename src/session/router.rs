@@ -64,12 +64,17 @@ where
 pub struct PacketRequest {
     pub state: SessionLink,
     pub packet: Packet,
-    pub extensions: Arc<AnyMap>,
+    pub extensions: Extensions,
 }
 
-impl PacketRequest {
-    pub fn extension<T: Send + Sync + 'static>(&self) -> Option<&T> {
-        self.extensions
+#[derive(Clone)]
+pub struct Extensions {
+    inner: Arc<AnyMap>,
+}
+
+impl Extensions {
+    pub fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        self.inner
             .get(&TypeId::of::<T>())
             .and_then(|boxed| (&**boxed as &(dyn Any + 'static)).downcast_ref())
     }
@@ -120,7 +125,9 @@ impl BlazeRouterBuilder {
     pub fn build(self) -> Arc<BlazeRouter> {
         Arc::new(BlazeRouter {
             routes: self.routes,
-            extensions: Arc::new(self.extensions),
+            extensions: Extensions {
+                inner: Arc::new(self.extensions),
+            },
         })
     }
 }
@@ -128,7 +135,7 @@ impl BlazeRouterBuilder {
 pub struct BlazeRouter {
     /// Map for looking up a route based on the component key
     routes: RouteMap,
-    extensions: Arc<AnyMap>,
+    pub extensions: Extensions,
 }
 
 impl BlazeRouter {
@@ -200,7 +207,8 @@ where
         Self: 'a,
     {
         Box::pin(ready(
-            req.extension()
+            req.extensions
+                .get()
                 .ok_or_else(|| {
                     error!(
                         "Attempted to extract missing extension {}",
@@ -230,6 +238,7 @@ impl FromPacketRequest for GamePlayer {
                 data.player.clone(),
                 data.net.clone(),
                 req.state.clone(),
+                req.state.notify_handle(),
             ))
         })
     }

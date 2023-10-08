@@ -29,7 +29,7 @@ use crate::{
 /// }
 /// ```
 pub async fn handle_submit_offline(session: SessionLink) {
-    session.push(Packet::notify(
+    session.notify_handle().notify(Packet::notify(
         game_reporting::COMPONENT,
         game_reporting::GAME_REPORT_SUBMITTED,
         GameReportResponse,
