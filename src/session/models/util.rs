@@ -144,14 +144,15 @@ impl TdfSerialize for PreAuthResponse {
             // let http_host = "127.0.0.1";
             // let http_port = 17499;
 
-            // Bioware Primary Server
+            // (qtyp=2)
             w.group(b"BWPS", |w| {
                 w.tag_str(b"PSA", http_host);
                 w.tag_u16(b"PSP", http_port);
                 w.tag_str(b"SNA", "prod-sjc");
             });
 
-            w.tag_u8(b"LNP", 10);
+            // Number of probes to send to BWPS
+            w.tag_u8(b"LNP", 1);
 
             // List of other Quality Of Service servers? Values present in this
             // list are later included in a ping list
@@ -161,6 +162,7 @@ impl TdfSerialize for PreAuthResponse {
                 // Key for the server
                 PING_SITE_ALIAS.serialize(w);
 
+                // (qtyp=1)
                 w.group_body(|w| {
                     // Same as the Bioware primary server
                     w.tag_str(b"PSA", http_host);
