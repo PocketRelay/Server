@@ -200,6 +200,7 @@ impl TdfSerialize for PostAuthResponse {
             w.tag_blob_empty(b"CSIG");
             w.tag_str(b"PJID", SRC_VERSION);
             w.tag_u16(b"PORT", 443);
+            // Purchases (1) | FriendsList (2) | Achievements (4) | Consumables (8) = 0xF
             w.tag_u8(b"RPRT", 0xF);
             w.tag_u8(b"TIID", 0);
         });
