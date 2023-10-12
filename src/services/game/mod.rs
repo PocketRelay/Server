@@ -183,6 +183,21 @@ impl Game {
             player.state = PlayerState::ActiveConnected;
         }
 
+        // Update other players with the client details
+        self.add_user_sub(player.player.id, player.link.clone())
+            .await;
+
+        // Notify other players of the joining player
+        self.notify_all(Packet::notify(
+            game_manager::COMPONENT,
+            game_manager::PLAYER_JOINING,
+            PlayerJoining {
+                slot,
+                player: &player,
+                game_id: self.id,
+            },
+        ));
+
         self.players.push(player);
 
         // Obtain the player that was just added
@@ -190,24 +205,6 @@ impl Game {
             .players
             .last()
             .expect("Player was added but is missing from players");
-
-        // Player isn't the host player
-        if slot != 0 {
-            // Update other players with the client details
-            self.add_user_sub(player.player.id, player.link.clone())
-                .await;
-
-            // Notify other players of the joined player
-            self.notify_all(Packet::notify(
-                game_manager::COMPONENT,
-                game_manager::PLAYER_JOINING,
-                PlayerJoining {
-                    slot,
-                    player,
-                    game_id: self.id,
-                },
-            ));
-        }
 
         // Notify the joiner of the game details
         self.notify_game_setup(player, context);
