@@ -102,7 +102,7 @@ pub async fn handle_upgrade(
         }
     };
 
-    Session::start(upgraded, addr, router, sessions);
+    tokio::spawn(Session::start(upgraded, addr, router, sessions));
 }
 
 /// GET /api/server/log
