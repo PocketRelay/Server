@@ -23,24 +23,24 @@ use crate::{
     session::models::{NetworkAddress, QosNetworkData},
     utils::{
         components::{component_key, user_sessions, DEBUG_IGNORED_PACKETS},
-        lock::QueueLock,
+        lock::{QueueLock, QueueLockGuard, TicketAquireFuture},
         types::{GameID, PlayerID, SessionID},
     },
 };
-use futures_util::{
-    stream::{SplitSink, SplitStream},
-    SinkExt, StreamExt,
-};
+use futures_util::{future::BoxFuture, Sink, Stream};
 use hyper::upgrade::Upgraded;
 use log::{debug, log_enabled, warn};
 use serde::Serialize;
+use std::future::Future;
 use std::{
     fmt::Debug,
     net::Ipv4Addr,
+    pin::Pin,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
     },
+    task::{ready, Context, Poll},
     time::Duration,
 };
 use tokio::sync::{mpsc, RwLock};
@@ -57,16 +57,15 @@ pub struct Session {
     id: SessionID,
     addr: Ipv4Addr,
     busy_lock: QueueLock,
-    writer: mpsc::UnboundedSender<WriteMessage>,
+    tx: mpsc::UnboundedSender<Packet>,
     data: RwLock<Option<SessionExtData>>,
-    router: Arc<BlazeRouter>,
     sessions: Arc<Sessions>,
 }
 
 #[derive(Clone)]
 pub struct SessionNotifyHandle {
     busy_lock: QueueLock,
-    tx: mpsc::UnboundedSender<WriteMessage>,
+    tx: mpsc::UnboundedSender<Packet>,
 }
 
 impl SessionNotifyHandle {
@@ -77,7 +76,7 @@ impl SessionNotifyHandle {
         let busy_lock = self.busy_lock.aquire();
         tokio::spawn(async move {
             let _guard = busy_lock.await;
-            let _ = tx.send(WriteMessage::Write(packet));
+            let _ = tx.send(packet);
         });
     }
 }
@@ -91,6 +90,7 @@ pub struct SessionExtData {
 
 struct SessionGameData {
     game_id: GameID,
+    // TODO: Its not ideal to hold references to the game, replace this when possible
     game_ref: Arc<RwLock<Game>>,
 }
 
@@ -112,47 +112,47 @@ impl SessionExtData {
     }
 
     fn add_subscriber(&mut self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
-        // Create the details packets
-        let added_notify = Packet::notify(
+        // Notify the addition of this user data to the subscriber
+        subscriber.notify(Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_ADDED,
             NotifyUserAdded {
                 session_data: self.ext(),
                 user: UserIdentification::from_player(&self.player),
             },
-        );
+        ));
 
-        // Create update notifying the user of the subscription
-        let update_notify = Packet::notify(
+        // Notify the user that they are now subscribed to this user
+        subscriber.notify(Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_UPDATED,
             NotifyUserUpdated {
                 flags: UserDataFlags::SUBSCRIBED | UserDataFlags::ONLINE,
                 player_id: self.player.id,
             },
-        );
+        ));
 
-        self.subscribers.push((player_id, subscriber.clone()));
-        subscriber.notify(added_notify);
-        subscriber.notify(update_notify);
+        // Add the subscriber
+        self.subscribers.push((player_id, subscriber));
     }
 
     fn remove_subscriber(&mut self, player_id: PlayerID) {
-        let index = match self.subscribers.iter().position(|(id, _)| player_id.eq(id)) {
-            Some(value) => value,
-            None => return,
-        };
+        let subscriber = self
+            .subscribers
+            .iter()
+            // Find the subscriber to remove
+            .position(|(id, _sub)| player_id.eq(id))
+            // Remove the subscriber
+            .map(|index| self.subscribers.swap_remove(index));
 
-        let (_, subscriber) = self.subscribers.swap_remove(index);
-
-        // Create the details packets
-        let removed_notify = Packet::notify(
-            user_sessions::COMPONENT,
-            user_sessions::USER_REMOVED,
-            NotifyUserRemoved { player_id },
-        );
-
-        subscriber.notify(removed_notify)
+        if let Some((_, subscriber)) = subscriber {
+            // Notify the subscriber they've removed the user subcription
+            subscriber.notify(Packet::notify(
+                user_sessions::COMPONENT,
+                user_sessions::USER_REMOVED,
+                NotifyUserRemoved { player_id },
+            ))
+        }
     }
 
     /// Publishes changes of the session data to all the
@@ -167,9 +167,9 @@ impl SessionExtData {
             },
         );
 
-        for (_, subscriber) in &self.subscribers {
-            subscriber.notify(packet.clone());
-        }
+        self.subscribers
+            .iter()
+            .for_each(|(_, sub)| sub.notify(packet.clone()));
     }
 }
 
@@ -206,66 +206,44 @@ impl Session {
     /// Max number of times to poll a session for shutdown before erroring
     const MAX_RELEASE_ATTEMPTS: u8 = 20;
 
-    pub fn start(io: Upgraded, addr: Ipv4Addr, router: Arc<BlazeRouter>, sessions: Arc<Sessions>) {
+    pub async fn start(
+        io: Upgraded,
+        addr: Ipv4Addr,
+        router: Arc<BlazeRouter>,
+        sessions: Arc<Sessions>,
+    ) {
         // Obtain a session ID
         let id = SESSION_IDS.fetch_add(1, Ordering::AcqRel);
 
-        let framed = Framed::new(io, PacketCodec);
-        let (write, read) = framed.split();
         let (tx, rx) = mpsc::unbounded_channel();
-
-        let busy_lock = QueueLock::new();
 
         let session = Arc::new(Self {
             id,
-            busy_lock: busy_lock.clone(),
-            writer: tx,
+            busy_lock: QueueLock::new(),
+            tx,
             data: Default::default(),
             addr,
-            router,
             sessions,
         });
 
-        let reader = SessionReader {
-            busy_lock,
-            link: session.clone(),
-            inner: read,
-        };
-
-        let writer = SessionWriter {
-            link: session.clone(),
+        SessionFuture {
+            io: Framed::new(io, PacketCodec),
+            router: &router,
             rx,
-            inner: write,
-        };
+            session: session.clone(),
+            read_state: ReadState::Recv,
+            write_state: WriteState::Recv,
+            stop: false,
+        }
+        .await;
 
-        tokio::spawn(reader.process());
-        tokio::spawn(writer.process());
-    }
-
-    /// Handles routing a packet
-    async fn handle_packet(self: Arc<Self>, packet: Packet) {
-        let route_link = self.clone();
-        let this = &*self;
-
-        this.debug_log_packet("Receive", &packet).await;
-        let response = match this.router.handle(route_link, packet) {
-            // Await the handler response future
-            Ok(fut) => fut.await,
-
-            // Handle no handler for packet
-            Err(packet) => {
-                debug!("Missing packet handler");
-                Packet::response_empty(&packet)
-            }
-        };
-        // Push the response to the client
-        this.push(response);
+        session.stop().await;
     }
 
     pub fn notify_handle(&self) -> SessionNotifyHandle {
         SessionNotifyHandle {
             busy_lock: self.busy_lock.clone(),
-            tx: self.writer.clone(),
+            tx: self.tx.clone(),
         }
     }
 
@@ -273,10 +251,6 @@ impl Session {
     /// the connection is terminated, cleans up any references and
     /// asserts only 1 strong reference exists
     async fn stop(self: Arc<Self>) {
-        // Tell the write half to close and wait until its closed
-        _ = self.writer.send(WriteMessage::Close);
-        self.writer.closed().await;
-
         // Clear authentication
         self.clear_player().await;
 
@@ -444,19 +418,13 @@ impl Session {
         .await;
     }
 
-    /// Pushes a new packet to the packet writer
-    fn push(&self, packet: Packet) {
-        _ = self.writer.send(WriteMessage::Write(packet))
-        // TODO: Handle failing to send contents to writer
-    }
-
     /// Logs the contents of the provided packet to the debug output along with
     /// the header information and basic session information.
     ///
     /// `action` The name of the action this packet is undergoing.
     ///          (e.g. Writing or Reading)
     /// `packet` The packet that is being logged
-    async fn debug_log_packet(&self, action: &'static str, packet: &Packet) {
+    fn debug_log_packet(&self, action: &'static str, packet: &Packet) {
         // Skip if debug logging is disabled
         if !log_enabled!(log::Level::Debug) {
             return;
@@ -468,11 +436,9 @@ impl Session {
             return;
         }
 
-        let data = &*self.data.read().await;
         let debug_data = DebugSessionData {
             action,
             id: self.id,
-            data,
         };
         let debug_packet = PacketDebug { packet };
 
@@ -480,70 +446,183 @@ impl Session {
     }
 }
 
-struct DebugSessionData<'a> {
+struct DebugSessionData {
     id: SessionID,
-    data: &'a Option<SessionExtData>,
     action: &'static str,
 }
 
-impl Debug for DebugSessionData<'_> {
+impl Debug for DebugSessionData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Session ({}): {}", self.id, self.action)?;
-
-        if let Some(data) = self.data.as_ref() {
-            writeln!(
-                f,
-                "Auth ({}): (Name: {})",
-                data.player.id, &data.player.display_name,
-            )?;
-        }
 
         Ok(())
     }
 }
 
-// Writer for writing packets
-struct SessionWriter {
-    inner: SplitSink<Framed<Upgraded, PacketCodec>, Packet>,
-    rx: mpsc::UnboundedReceiver<WriteMessage>,
-    link: SessionLink,
+/// Future for processing a session
+struct SessionFuture<'a> {
+    /// The IO for reading and writing
+    io: Framed<Upgraded, PacketCodec>,
+    /// Receiver for packets to write
+    rx: mpsc::UnboundedReceiver<Packet>,
+    /// The session this link is for
+    session: SessionLink,
+    /// The router to use
+    router: &'a BlazeRouter,
+    /// The reading state
+    read_state: ReadState<'a>,
+    /// The writing state
+    write_state: WriteState,
+    /// Whether the future has been stopped
+    stop: bool,
 }
 
-pub enum WriteMessage {
-    Write(Packet),
-    Close,
+/// Session future writing state
+enum WriteState {
+    /// Waiting for a packet to write
+    Recv,
+    /// Waiting for the framed to become read
+    Write { packet: Option<Packet> },
+    /// Flushing the framed
+    Flush,
 }
 
-impl SessionWriter {
-    pub async fn process(mut self) {
-        while let Some(msg) = self.rx.recv().await {
-            let packet = match msg {
-                WriteMessage::Write(packet) => packet,
-                WriteMessage::Close => break,
-            };
+/// Session future reading state
+enum ReadState<'a> {
+    /// Waiting for a packet
+    Recv,
+    /// Aquiring a lock guard
+    Aquire {
+        /// Future for the locking guard
+        ticket: TicketAquireFuture,
+        /// The packet that was read
+        packet: Option<Packet>,
+    },
+    /// Future for a handler is being polled
+    Handle {
+        /// Locking guard
+        guard: QueueLockGuard,
+        /// Handle future
+        future: BoxFuture<'a, Packet>,
+    },
+}
 
-            self.link.debug_log_packet("Send", &packet).await;
-            if self.inner.send(packet).await.is_err() {
-                break;
+impl SessionFuture<'_> {
+    /// Polls the write state, the poll ready state returns whether
+    /// the future should continue
+    fn poll_write_state(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        match &mut self.write_state {
+            WriteState::Recv => {
+                // Try receive a packet from the write channel
+                let result = ready!(Pin::new(&mut self.rx).poll_recv(cx));
+
+                if let Some(packet) = result {
+                    self.write_state = WriteState::Write {
+                        packet: Some(packet),
+                    };
+                } else {
+                    // All writers have closed, session must be closed (Future end)
+                    self.stop = true;
+                }
+            }
+            WriteState::Write { packet } => {
+                // Wait until the inner is ready
+                if ready!(Pin::new(&mut self.io).poll_ready(cx)).is_ok() {
+                    let packet = packet
+                        .take()
+                        .expect("Unexpected write state without packet");
+
+                    self.session.debug_log_packet("Send", &packet);
+
+                    // Write the packet to the buffer
+                    Pin::new(&mut self.io)
+                        .start_send(packet)
+                        // Packet encoder impl shouldn't produce errors
+                        .expect("Packet encoder errored");
+
+                    self.write_state = WriteState::Flush;
+                } else {
+                    // Failed to ready, session must be closed
+                    self.stop = true;
+                }
+            }
+            WriteState::Flush => {
+                // Wait until the flush is complete
+                if ready!(Pin::new(&mut self.io).poll_flush(cx)).is_ok() {
+                    self.write_state = WriteState::Recv;
+                } else {
+                    // Failed to flush, session must be closed
+                    self.stop = true
+                }
             }
         }
+
+        Poll::Ready(())
+    }
+
+    /// Polls the read state, the poll ready state returns whether
+    /// the future should continue
+    fn poll_read_state(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        match &mut self.read_state {
+            ReadState::Recv => {
+                // Try receive a packet from the write channel
+                let result = ready!(Pin::new(&mut self.io).poll_next(cx));
+
+                if let Some(Ok(packet)) = result {
+                    let ticket = self.session.busy_lock.aquire();
+                    self.read_state = ReadState::Aquire {
+                        ticket,
+                        packet: Some(packet),
+                    }
+                } else {
+                    // Reader has closed or reading encountered an error (Either way stop reading)
+                    self.stop = true;
+                }
+            }
+            ReadState::Aquire { ticket, packet } => {
+                let guard = ready!(Pin::new(ticket).poll(cx));
+                let packet = packet
+                    .take()
+                    .expect("Unexpected aquire state without packet");
+
+                self.session.debug_log_packet("Receive", &packet);
+
+                let future = self.router.handle(self.session.clone(), packet);
+
+                // Move onto a handling state
+                self.read_state = ReadState::Handle { guard, future };
+            }
+            ReadState::Handle {
+                guard: _gaurd,
+                future,
+            } => {
+                // Poll the handler until completion
+                let response = ready!(Pin::new(future).poll(cx));
+
+                // Send the response to the writer
+                _ = self.session.tx.send(response);
+
+                // Reset back to the reading state
+                self.read_state = ReadState::Recv;
+            }
+        }
+        Poll::Ready(())
     }
 }
 
-struct SessionReader {
-    busy_lock: QueueLock,
-    inner: SplitStream<Framed<Upgraded, PacketCodec>>,
-    link: SessionLink,
-}
+impl Future for SessionFuture<'_> {
+    type Output = ();
 
-impl SessionReader {
-    pub async fn process(mut self) {
-        while let Some(Ok(packet)) = self.inner.next().await {
-            let _guard = self.busy_lock.aquire().await;
-            let link = self.link.clone();
-            link.handle_packet(packet).await;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+
+        while this.poll_write_state(cx).is_ready() {}
+        while this.poll_read_state(cx).is_ready() {}
+
+        if this.stop {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
         }
-
-        self.link.stop().await;
     }
 }

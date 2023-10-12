@@ -17,7 +17,7 @@ use crate::{
 };
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
-use log::error;
+use log::{debug, error};
 use std::{
     any::{Any, TypeId},
     convert::Infallible,
@@ -139,24 +139,25 @@ pub struct BlazeRouter {
 }
 
 impl BlazeRouter {
-    pub fn handle(
-        &self,
-        state: SessionLink,
-        packet: Packet,
-    ) -> Result<BoxFuture<'_, Packet>, Packet> {
-        let route = match self
+    pub fn handle(&self, state: SessionLink, packet: Packet) -> BoxFuture<'_, Packet> {
+        match self
             .routes
             .get(&component_key(packet.frame.component, packet.frame.command))
         {
-            Some(value) => value,
-            None => return Err(packet),
-        };
-
-        Ok(route.handle(PacketRequest {
-            state,
-            packet,
-            extensions: self.extensions.clone(),
-        }))
+            Some(route) => route.handle(PacketRequest {
+                state,
+                packet,
+                extensions: self.extensions.clone(),
+            }),
+            // Respond with a default empty packet
+            None => {
+                debug!(
+                    "Missing packet handler for {:#06x}->{:#06x}",
+                    packet.frame.component, packet.frame.command
+                );
+                Box::pin(ready(Packet::response_empty(&packet)))
+            }
+        }
     }
 }
 
