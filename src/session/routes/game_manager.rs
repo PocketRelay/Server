@@ -17,18 +17,19 @@ use std::sync::Arc;
 
 pub async fn handle_join_game(
     player: GamePlayer,
+    session: SessionLink,
     Blaze(JoinGameRequest { user }): Blaze<JoinGameRequest>,
     Extension(sessions): Extension<Arc<Sessions>>,
     Extension(game_manager): Extension<Arc<GameManager>>,
 ) -> ServerResult<Blaze<JoinGameResponse>> {
     // Lookup the session join target
-    let session = sessions
+    let other_session = sessions
         .lookup_session(user.id)
         .await
         .ok_or(GameManagerError::JoinPlayerFailed)?;
 
     // Find the game ID for the target session
-    let (game_id, game_ref) = session
+    let (game_id, game_ref) = other_session
         .get_game()
         .await
         .ok_or(GameManagerError::InvalidGameId)?;
@@ -47,6 +48,7 @@ pub async fn handle_join_game(
             .add_to_game(
                 game_ref,
                 player,
+                session,
                 GameSetupContext::Dataless {
                     context: DatalessContext::JoinGameSetup,
                 },
@@ -131,6 +133,7 @@ pub async fn handle_get_game_data(
 /// ```
 pub async fn handle_create_game(
     player: GamePlayer,
+    session: SessionLink,
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(CreateGameRequest {
         attributes,
@@ -145,6 +148,7 @@ pub async fn handle_create_game(
             .add_to_game(
                 link.clone(),
                 player,
+                session,
                 GameSetupContext::Dataless {
                     context: DatalessContext::CreateGameSetup,
                 },
@@ -291,7 +295,7 @@ pub async fn handle_remove_player(
 
     tokio::spawn(async move {
         let game = &mut *link.write().await;
-        game.remove_player(player_id, reason).await;
+        game.remove_player(player_id, reason);
     });
 
     Ok(())

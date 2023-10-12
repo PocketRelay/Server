@@ -238,7 +238,7 @@ impl FromPacketRequest for GamePlayer {
             Ok(GamePlayer::new(
                 data.player.clone(),
                 data.net.clone(),
-                req.state.clone(),
+                Arc::downgrade(&req.state),
                 req.state.notify_handle(),
             ))
         })

@@ -31,7 +31,6 @@ use futures_util::{future::BoxFuture, Sink, Stream};
 use hyper::upgrade::Upgraded;
 use log::{debug, log_enabled, warn};
 use serde::Serialize;
-use std::future::Future;
 use std::{
     fmt::Debug,
     net::Ipv4Addr,
@@ -43,6 +42,7 @@ use std::{
     task::{ready, Context, Poll},
     time::Duration,
 };
+use std::{future::Future, sync::Weak};
 use tokio::sync::{mpsc, RwLock};
 use tokio_util::codec::Framed;
 
@@ -52,6 +52,7 @@ pub mod router;
 pub mod routes;
 
 pub type SessionLink = Arc<Session>;
+pub type WeakSessionLink = Weak<Session>;
 
 pub struct Session {
     id: SessionID,
@@ -335,8 +336,7 @@ impl Session {
     pub async fn remove_from_game(&self) {
         if let Some((player_id, game_ref)) = self.clear_game().await {
             let game = &mut *game_ref.write().await;
-            game.remove_player(player_id, RemoveReason::PlayerLeft)
-                .await;
+            game.remove_player(player_id, RemoveReason::PlayerLeft);
         }
     }
 
@@ -392,8 +392,7 @@ impl Session {
                 let player_id = data.player.id;
                 tokio::spawn(async move {
                     let game = &mut *game.game_ref.write().await;
-                    game.remove_player(player_id, RemoveReason::PlayerLeft)
-                        .await;
+                    game.remove_player(player_id, RemoveReason::PlayerLeft);
                 });
             }
 

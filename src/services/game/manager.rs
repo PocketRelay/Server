@@ -5,6 +5,7 @@ use crate::{
             AsyncMatchmakingStatus, GameSettings, GameSetupContext, MatchmakingResult,
         },
         packet::Packet,
+        SessionLink,
     },
     utils::{
         components::game_manager,
@@ -132,10 +133,9 @@ impl GameManager {
         &self,
         game_ref: GameRef,
         player: GamePlayer,
+        session: SessionLink,
         context: GameSetupContext,
     ) {
-        let player_link = player.link.clone();
-
         // Add the player to the game
         let game_id = {
             let game = &mut *game_ref.write().await;
@@ -144,10 +144,16 @@ impl GameManager {
         };
 
         // Update the player current game
-        player_link.set_game(game_id, game_ref).await;
+        session.set_game(game_id, game_ref).await;
     }
 
     pub async fn add_from_matchmaking(&self, game_ref: GameRef, player: GamePlayer) {
+        let session = match player.link.upgrade() {
+            Some(value) => value,
+            // Session was dropped
+            None => return,
+        };
+
         let msid = player.player.id;
 
         // MUST be sent to players atleast once when matchmaking otherwise it may fail
@@ -161,6 +167,7 @@ impl GameManager {
         self.add_to_game(
             game_ref,
             player,
+            session,
             GameSetupContext::Matchmaking {
                 fit_score: DEFAULT_FIT,
                 max_fit_score: DEFAULT_FIT,
