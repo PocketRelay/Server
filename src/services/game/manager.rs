@@ -139,7 +139,7 @@ impl GameManager {
         // Add the player to the game
         let game_id = {
             let game = &mut *game_ref.write().await;
-            game.add_player(player, context).await;
+            game.add_player(player, context);
             game.id
         };
 
