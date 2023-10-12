@@ -282,9 +282,8 @@ impl Game {
 
     pub fn update_mesh(&mut self, target_id: PlayerID, status: PlayerNetConnectionStatus) {
         // We only care about a connected state
-        match status {
-            PlayerNetConnectionStatus::Connected => {}
-            _ => return,
+        if !matches!(status, PlayerNetConnectionStatus::Connected) {
+            return;
         }
 
         // Obtain the target player
