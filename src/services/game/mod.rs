@@ -357,6 +357,8 @@ impl Game {
             player.player.id, self.id
         );
 
+        drop(player);
+
         // If the player was in the host slot attempt migration
         if index == 0 {
             self.try_migrate_host();

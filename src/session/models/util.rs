@@ -3,7 +3,7 @@ use crate::{
     config::{QosServerConfig, RuntimeConfig},
     utils::types::PlayerID,
 };
-use std::{borrow::Cow, mem::transmute_copy, sync::Arc};
+use std::{borrow::Cow, sync::Arc};
 use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType};
 
 #[derive(Debug, Clone)]
