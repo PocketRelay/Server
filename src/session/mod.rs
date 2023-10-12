@@ -17,7 +17,7 @@ use self::{
 use crate::{
     database::entities::Player,
     services::{
-        game::{Game, GameRef},
+        game::{GameRef, WeakGameRef},
         sessions::Sessions,
     },
     session::models::{NetworkAddress, QosNetworkData},
@@ -91,8 +91,7 @@ pub struct SessionExtData {
 
 struct SessionGameData {
     game_id: GameID,
-    // TODO: Its not ideal to hold references to the game, replace this when possible
-    game_ref: Arc<RwLock<Game>>,
+    game_ref: WeakGameRef,
 }
 
 impl SessionExtData {
@@ -321,23 +320,38 @@ impl Session {
     /// the player was in a game
     ///
     /// Called by the game itself when the player has been removed
-    pub async fn clear_game(&self) -> Option<(PlayerID, GameRef)> {
-        // Check that theres authentication
-        let data = &mut *self.data.write().await;
-        let data = data.as_mut()?;
-        let game = data.game.take();
-        data.publish_update();
-        let game = game?;
+    pub async fn clear_game(&self) -> Option<(PlayerID, WeakGameRef)> {
+        let mut game: Option<SessionGameData> = None;
+        let mut player_id: Option<PlayerID> = None;
 
-        Some((data.player.id, game.game_ref))
+        self.update_data(|data| {
+            game = data.game.take();
+            player_id = Some(data.player.id);
+        })
+        .await;
+
+        let game = game?;
+        let player_id = player_id?;
+
+        Some((player_id, game.game_ref))
     }
 
     /// Called to remove the player from its current game
     pub async fn remove_from_game(&self) {
-        if let Some((player_id, game_ref)) = self.clear_game().await {
-            let game = &mut *game_ref.write().await;
-            game.remove_player(player_id, RemoveReason::PlayerLeft);
-        }
+        let (player_id, game_ref) = match self.clear_game().await {
+            Some(value) => value,
+            // Player isn't in a game
+            None => return,
+        };
+
+        let game_ref = match game_ref.upgrade() {
+            Some(value) => value,
+            // Game doesn't exist anymore
+            None => return,
+        };
+
+        let game = &mut *game_ref.write().await;
+        game.remove_player(player_id, RemoveReason::PlayerLeft);
     }
 
     pub async fn clear_player(&self) {
@@ -361,7 +375,13 @@ impl Session {
         let data = &*self.data.read().await;
         data.as_ref()
             .and_then(|value| value.game.as_ref())
-            .map(|value| (value.game_id, value.game_ref.clone()))
+            // Try upgrading the reference to get an actual game
+            .and_then(|value| {
+                value
+                    .game_ref
+                    .upgrade()
+                    .map(|game_ref| (value.game_id, game_ref))
+            })
     }
 
     pub async fn get_lookup(&self) -> Option<LookupResponse> {
@@ -384,18 +404,12 @@ impl Session {
         }
     }
 
-    pub async fn set_game(&self, game_id: GameID, game_ref: GameRef) {
+    pub async fn set_game(&self, game_id: GameID, game_ref: WeakGameRef) {
+        // Remove the player from the game if they are already present in one
+        self.remove_from_game().await;
+
         // Set the current game
         self.update_data(|data| {
-            // Remove the player from the game if they are already present in one
-            if let Some(game) = data.game.take() {
-                let player_id = data.player.id;
-                tokio::spawn(async move {
-                    let game = &mut *game.game_ref.write().await;
-                    game.remove_player(player_id, RemoveReason::PlayerLeft);
-                });
-            }
-
             data.game = Some(SessionGameData { game_id, game_ref });
         })
         .await;

@@ -19,7 +19,7 @@ use crate::{
 };
 use log::{debug, warn};
 use serde::Serialize;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use tdf::{ObjectId, TdfMap, TdfSerializer};
 use tokio::sync::RwLock;
 
@@ -27,6 +27,7 @@ pub mod manager;
 pub mod rules;
 
 pub type GameRef = Arc<RwLock<Game>>;
+pub type WeakGameRef = Weak<RwLock<Game>>;
 
 /// Game service running within the server
 pub struct Game {
