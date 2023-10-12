@@ -144,6 +144,11 @@ pub async fn handle_create_game(
 
     // Notify matchmaking of the new game
     tokio::spawn(async move {
+        let mut player = player;
+
+        // Player is the host player (They are connected by default)
+        player.state = PlayerState::ActiveConnected;
+
         game_manager
             .add_to_game(
                 link.clone(),

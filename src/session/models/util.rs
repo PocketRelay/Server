@@ -3,7 +3,7 @@ use crate::{
     config::{QosServerConfig, RuntimeConfig},
     utils::types::PlayerID,
 };
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, mem::transmute_copy, sync::Arc};
 use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType};
 
 #[derive(Debug, Clone)]
@@ -36,6 +36,9 @@ pub const TELEMETRY_PORT: Port = 42129;
 // The constant port for the local http server
 pub const LOCAL_HTTP_PORT: Port = 42131;
 
+// English locale NZ
+pub const LOCALE_NZ: u32 = u32::from_be_bytes(*b"enNZ");
+
 /// Structure for encoding the telemetry server details
 pub struct TelemetryServer;
 
@@ -48,7 +51,7 @@ impl TdfSerialize for TelemetryServer {
             w.tag_str(b"DISA", TELEMTRY_DISA);
             w.tag_str(b"FILT", "-UION/****");
             // Encoded locale actually BE encoded string bytes (enNZ)
-            w.tag_u32(b"LOC", 1701727834);
+            w.tag_u32(b"LOC", LOCALE_NZ);
             w.tag_str(b"NOOK", "US,CA,MX");
             // Last known telemetry port: 9988
             w.tag_owned(b"PORT", TELEMETRY_PORT);

@@ -1,3 +1,4 @@
+use crate::session::models::util::LOCALE_NZ;
 use tdf::{TdfDeserializeOwned, TdfSerialize, TdfType};
 
 /// Packet encoding for Redirector GetServerInstance packets
@@ -17,7 +18,7 @@ impl TdfSerialize for InstanceRequest {
         w.tag_str(b"DSDK", "8.14.7.1");
         w.tag_str(b"ENV", "prod");
         w.tag_union_unset(b"FPID");
-        w.tag_u32(b"LOC", 0x656e4e5a);
+        w.tag_u32(b"LOC", LOCALE_NZ);
         w.tag_str(b"NAME", "masseffect-3-pc");
         w.tag_str(b"PLAT", "Windows");
         w.tag_str(b"PROF", "standardSecure_v3");

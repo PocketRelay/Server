@@ -2,11 +2,15 @@ use self::{manager::GameManager, rules::RuleSet};
 use crate::{
     database::entities::Player,
     session::{
-        models::game_manager::{
-            AdminListChange, AdminListOperation, AttributesChange, GameSettings, GameSetupContext,
-            GameSetupResponse, GameState, GetGameDetails, HostMigrateFinished, HostMigrateStart,
-            JoinComplete, PlayerJoining, PlayerNetConnectionStatus, PlayerRemoved, PlayerState,
-            PlayerStateChange, RemoveReason, SettingChange, StateChange,
+        models::{
+            game_manager::{
+                AdminListChange, AdminListOperation, AttributesChange, GameSettings,
+                GameSetupContext, GameSetupResponse, GameState, GetGameDetails,
+                HostMigrateFinished, HostMigrateStart, JoinComplete, PlayerJoining,
+                PlayerNetConnectionStatus, PlayerRemoved, PlayerState, PlayerStateChange,
+                RemoveReason, SettingChange, StateChange,
+            },
+            util::LOCALE_NZ,
         },
         packet::Packet,
         router::RawBlaze,
@@ -158,19 +162,33 @@ impl GamePlayer {
 
     pub fn encode<S: TdfSerializer>(&self, game_id: GameID, slot: usize, w: &mut S) {
         w.group_body(|w| {
+            // Custom data
             w.tag_blob_empty(b"BLOB");
+            // External ID
             w.tag_u8(b"EXID", 0);
+            // Game ID
             w.tag_owned(b"GID", game_id);
-            w.tag_u32(b"LOC", 0x64654445);
+            // Account locale
+            w.tag_u32(b"LOC", LOCALE_NZ);
+            // Player name
             w.tag_str(b"NAME", &self.player.display_name);
+            // Player ID
             w.tag_u32(b"PID", self.player.id);
+            // Playet network data
             w.tag_ref(b"PNET", &self.net.addr);
+            // Slot ID
             w.tag_owned(b"SID", slot);
+            // Slot type (0 = PUBLIC, 1 = PRIVATE)
             w.tag_u8(b"SLOT", 0);
+            // Player state
             w.tag_ref(b"STAT", &self.state);
+            // Team index
             w.tag_u16(b"TIDX", 0xffff);
-            w.tag_u8(b"TIME", 0); /* Unix timestamp in millseconds */
+            // Unix millisecond timestamp of the player joined the game in
+            w.tag_u8(b"TIME", 0);
+            // User group ID
             w.tag_alt(b"UGID", ObjectId::new_raw(0, 0, 0));
+            // Player session ID
             w.tag_u32(b"UID", self.player.id);
         });
     }
@@ -194,18 +212,29 @@ impl Game {
     /// a game at one time. Used to determine a games full state
     const MAX_PLAYERS: usize = 4;
 
+    pub fn new(
+        id: GameID,
+        attributes: AttrMap,
+        settings: GameSettings,
+        game_manager: Arc<GameManager>,
+    ) -> Game {
+        Game {
+            id,
+            attributes,
+            settings,
+            state: Default::default(),
+            players: Default::default(),
+            game_manager,
+        }
+    }
+
     pub async fn game_data(&self) -> RawBlaze {
         let data = GetGameDetails { game: self };
         data.into()
     }
 
-    pub fn add_player(&mut self, mut player: GamePlayer, context: GameSetupContext) {
+    pub fn add_player(&mut self, player: GamePlayer, context: GameSetupContext) {
         let slot = self.players.len();
-
-        // Player is the host player (They are connected)
-        if slot == 0 {
-            player.state = PlayerState::ActiveConnected;
-        }
 
         // Update other players with the client details
         self.add_user_sub(&player);
@@ -223,14 +252,21 @@ impl Game {
 
         self.players.push(player);
 
-        // Obtain the player that was just added
+        // Get the player that was just added
         let player = self
             .players
             .last()
-            .expect("Player was added but is missing from players");
+            .expect("Expected inserted player was missing");
 
-        // Notify the joiner of the game details
-        self.notify_game_setup(player, context);
+        // Send the player the game setup details
+        player.notify(Packet::notify(
+            game_manager::COMPONENT,
+            game_manager::GAME_SETUP,
+            GameSetupResponse {
+                game: self,
+                context,
+            },
+        ));
     }
 
     pub fn add_admin_player(&mut self, target_id: PlayerID) {
@@ -329,22 +365,6 @@ impl Game {
         if self.players.is_empty() {
             // Game is empty stop it
             self.stop();
-        }
-    }
-
-    pub fn new(
-        id: GameID,
-        attributes: AttrMap,
-        settings: GameSettings,
-        game_manager: Arc<GameManager>,
-    ) -> Game {
-        Game {
-            id,
-            attributes,
-            settings,
-            state: Default::default(),
-            players: Default::default(),
-            game_manager,
         }
     }
 
@@ -489,23 +509,6 @@ impl Game {
                 target.try_unsubscribe(other.player.id);
                 other.try_unsubscribe(target.player.id);
             });
-    }
-
-    /// Notifies the provided player that the game has been setup and
-    /// is ready for them to attempt to join.
-    ///
-    /// `session` The session to notify
-    /// `slot`    The slot the player is joining into
-    fn notify_game_setup(&self, player: &GamePlayer, context: GameSetupContext) {
-        let packet = Packet::notify(
-            game_manager::COMPONENT,
-            game_manager::GAME_SETUP,
-            GameSetupResponse {
-                game: self,
-                context,
-            },
-        );
-        player.notify(packet);
     }
 
     /// Modifies the psudo admin list this list doesn't actually exist in
