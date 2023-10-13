@@ -6,11 +6,8 @@ use crate::utils::hashing::IntHashMap;
 use crate::utils::signing::SigningKey;
 use crate::utils::types::PlayerID;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use std::sync::MutexGuard;
-use std::{
-    sync::Mutex,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use parking_lot::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 type SessionMap = IntHashMap<PlayerID, WeakSessionLink>;
 
@@ -108,24 +105,18 @@ impl Sessions {
         Ok(id)
     }
 
-    fn sessions(&self) -> MutexGuard<'_, SessionMap> {
-        self.sessions
-            .lock()
-            .expect("Session service mutex was poisoned")
-    }
-
     pub fn remove_session(&self, player_id: PlayerID) {
-        let sessions = &mut *self.sessions();
+        let sessions = &mut *self.sessions.lock();
         sessions.remove(&player_id);
     }
 
     pub fn add_session(&self, player_id: PlayerID, link: WeakSessionLink) {
-        let sessions = &mut *self.sessions();
+        let sessions = &mut *self.sessions.lock();
         sessions.insert(player_id, link);
     }
 
     pub fn lookup_session(&self, player_id: PlayerID) -> Option<SessionLink> {
-        let sessions = &mut *self.sessions();
+        let sessions = &mut *self.sessions.lock();
         let session = sessions.get(&player_id)?;
         let session = match session.upgrade() {
             Some(value) => value,
