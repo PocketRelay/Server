@@ -447,12 +447,8 @@ impl Debug for DebugSessionData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Session ({}): {}", self.id, self.action)?;
 
-        if let Some(data) = &self.auth {
-            writeln!(
-                f,
-                "Auth ({}): (Name: {})",
-                data.player.id, &data.player.display_name,
-            )?;
+        if let Some(auth) = &self.auth {
+            writeln!(f, "Auth ({}): (Name: {})", auth.id, &auth.display_name,)?;
         }
 
         Ok(())
