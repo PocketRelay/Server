@@ -119,25 +119,19 @@ impl GamePlayer {
 
     pub fn try_clear_game(&self) {
         if let Some(link) = self.link.upgrade() {
-            tokio::spawn(async move {
-                link.clear_game().await;
-            });
+            link.clear_game();
         }
     }
 
     pub fn try_subscribe(&self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
         if let Some(link) = self.link.upgrade() {
-            tokio::spawn(async move {
-                link.add_subscriber(player_id, subscriber).await;
-            });
+            link.add_subscriber(player_id, subscriber);
         }
     }
 
     pub fn try_unsubscribe(&self, player_id: PlayerID) {
         if let Some(link) = self.link.upgrade() {
-            tokio::spawn(async move {
-                link.remove_subscriber(player_id).await;
-            });
+            link.remove_subscriber(player_id);
         }
     }
 

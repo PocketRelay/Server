@@ -30,6 +30,7 @@ use crate::{
 use futures_util::{future::BoxFuture, Sink, Stream};
 use hyper::upgrade::Upgraded;
 use log::{debug, log_enabled, warn};
+use parking_lot::Mutex;
 use serde::Serialize;
 use std::{
     fmt::Debug,
@@ -40,10 +41,9 @@ use std::{
         Arc,
     },
     task::{ready, Context, Poll},
-    time::Duration,
 };
 use std::{future::Future, sync::Weak};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 
 pub mod models;
@@ -59,8 +59,7 @@ pub struct Session {
     addr: Ipv4Addr,
     busy_lock: QueueLock,
     tx: mpsc::UnboundedSender<Packet>,
-    // TODO: Replace this with just a Mutex
-    data: RwLock<Option<SessionExtData>>,
+    data: Mutex<Option<SessionExtData>>,
     sessions: Arc<Sessions>,
 }
 
@@ -204,9 +203,6 @@ impl NetData {
 static SESSION_IDS: AtomicU32 = AtomicU32::new(1);
 
 impl Session {
-    /// Max number of times to poll a session for shutdown before erroring
-    const MAX_RELEASE_ATTEMPTS: u8 = 20;
-
     pub async fn start(
         io: Upgraded,
         addr: Ipv4Addr,
@@ -238,7 +234,7 @@ impl Session {
         }
         .await;
 
-        session.stop().await;
+        session.stop();
     }
 
     pub fn notify_handle(&self) -> SessionNotifyHandle {
@@ -251,15 +247,14 @@ impl Session {
     /// Internal session stopped function called by the reader when
     /// the connection is terminated, cleans up any references and
     /// asserts only 1 strong reference exists
-    async fn stop(self: Arc<Self>) {
+    fn stop(self: Arc<Self>) {
         // Clear authentication
-        self.clear_player().await;
+        self.clear_player();
 
-        let mut attempt: u8 = 1;
-
-        let mut arc = self;
-        let session = loop {
-            if attempt > Self::MAX_RELEASE_ATTEMPTS {
+        // Session should now be the sole owner
+        let session = match Arc::try_unwrap(self) {
+            Ok(value) => value,
+            Err(arc) => {
                 let references = Arc::strong_count(&arc);
                 warn!(
                     "Failed to stop session {} there are still {} references to it",
@@ -267,51 +262,29 @@ impl Session {
                 );
                 return;
             }
-            match Arc::try_unwrap(arc) {
-                Ok(value) => break value,
-                Err(value) => {
-                    let wait = 5 * attempt as u64;
-                    let references = Arc::strong_count(&value);
-                    debug!(
-                        "Session {} still has {} references to it, waiting {}s",
-                        value.id, references, wait
-                    );
-                    tokio::time::sleep(Duration::from_secs(wait)).await;
-                    arc = value;
-                    attempt += 1;
-                    continue;
-                }
-            }
         };
 
         debug!("Session stopped (SID: {})", session.id);
     }
 
-    pub async fn add_subscriber(&self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
-        let data = &mut *self.data.write().await;
-        let data = match data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-        data.add_subscriber(player_id, subscriber);
+    pub fn add_subscriber(&self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
+        let data = &mut *self.data.lock();
+        if let Some(data) = data {
+            data.add_subscriber(player_id, subscriber);
+        }
+    }
+    pub fn remove_subscriber(&self, player_id: PlayerID) {
+        let data = &mut *self.data.lock();
+        if let Some(data) = data {
+            data.remove_subscriber(player_id)
+        }
     }
 
-    pub async fn remove_subscriber(&self, player_id: PlayerID) {
-        let data = &mut *self.data.write().await;
-        let data = match data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-        data.remove_subscriber(player_id);
-    }
-
-    pub async fn set_player(&self, player: Player) -> Arc<Player> {
+    pub fn set_player(&self, player: Player) -> Arc<Player> {
         // Clear the current authentication
-        self.clear_player().await;
+        self.clear_player();
 
-        let data = &mut *self.data.write().await;
+        let data = &mut *self.data.lock();
         let data = data.insert(SessionExtData::new(player));
 
         data.player.clone()
@@ -321,15 +294,14 @@ impl Session {
     /// the player was in a game
     ///
     /// Called by the game itself when the player has been removed
-    pub async fn clear_game(&self) -> Option<(PlayerID, WeakGameRef)> {
+    pub fn clear_game(&self) -> Option<(PlayerID, WeakGameRef)> {
         let mut game: Option<SessionGameData> = None;
         let mut player_id: Option<PlayerID> = None;
 
         self.update_data(|data| {
             game = data.game.take();
             player_id = Some(data.player.id);
-        })
-        .await;
+        });
 
         let game = game?;
         let player_id = player_id?;
@@ -338,8 +310,8 @@ impl Session {
     }
 
     /// Called to remove the player from its current game
-    pub async fn remove_from_game(&self) {
-        let (player_id, game_ref) = match self.clear_game().await {
+    pub fn remove_from_game(&self) {
+        let (player_id, game_ref) = match self.clear_game() {
             Some(value) => value,
             // Player isn't in a game
             None => return,
@@ -351,15 +323,18 @@ impl Session {
             None => return,
         };
 
-        let game = &mut *game_ref.write().await;
-        game.remove_player(player_id, RemoveReason::PlayerLeft);
+        // Spawn an async task to handle removing the player
+        tokio::spawn(async move {
+            let game = &mut *game_ref.write().await;
+            game.remove_player(player_id, RemoveReason::PlayerLeft);
+        });
     }
 
-    pub async fn clear_player(&self) {
-        self.remove_from_game().await;
+    pub fn clear_player(&self) {
+        self.remove_from_game();
 
         // Check that theres authentication
-        let data = &mut *self.data.write().await;
+        let data = &mut *self.data.lock();
         let data = match data {
             Some(value) => value,
             None => return,
@@ -372,8 +347,8 @@ impl Session {
         self.sessions.remove_session(data.player.id);
     }
 
-    pub async fn get_game(&self) -> Option<(GameID, GameRef)> {
-        let data = &*self.data.read().await;
+    pub fn get_game(&self) -> Option<(GameID, GameRef)> {
+        let data = &*self.data.lock();
         data.as_ref()
             .and_then(|value| value.game.as_ref())
             // Try upgrading the reference to get an actual game
@@ -385,8 +360,8 @@ impl Session {
             })
     }
 
-    pub async fn get_lookup(&self) -> Option<LookupResponse> {
-        let data = &*self.data.read().await;
+    pub fn get_lookup(&self) -> Option<LookupResponse> {
+        let data = &*self.data.lock();
         data.as_ref().map(|data| LookupResponse {
             player: data.player.clone(),
             extended_data: data.ext(),
@@ -394,42 +369,39 @@ impl Session {
     }
 
     #[inline]
-    async fn update_data<F>(&self, update: F)
+    fn update_data<F>(&self, update: F)
     where
         F: FnOnce(&mut SessionExtData),
     {
-        let data = &mut *self.data.write().await;
+        let data = &mut *self.data.lock();
         if let Some(data) = data {
             update(data);
             data.publish_update();
         }
     }
 
-    pub async fn set_game(&self, game_id: GameID, game_ref: WeakGameRef) {
+    pub fn set_game(&self, game_id: GameID, game_ref: WeakGameRef) {
         // Remove the player from the game if they are already present in one
-        self.remove_from_game().await;
+        self.remove_from_game();
 
         // Set the current game
         self.update_data(|data| {
             data.game = Some(SessionGameData { game_id, game_ref });
-        })
-        .await;
+        });
     }
 
     #[inline]
-    pub async fn set_hardware_flags(&self, value: HardwareFlags) {
+    pub fn set_hardware_flags(&self, value: HardwareFlags) {
         self.update_data(|data| {
             data.net = Arc::new(data.net.with_hardware_flags(value));
-        })
-        .await;
+        });
     }
 
     #[inline]
-    pub async fn set_network_info(&self, address: NetworkAddress, qos: QosNetworkData) {
+    pub fn set_network_info(&self, address: NetworkAddress, qos: QosNetworkData) {
         self.update_data(|data| {
             data.net = Arc::new(data.net.with_basic(address, qos));
-        })
-        .await;
+        });
     }
 
     /// Logs the contents of the provided packet to the debug output along with

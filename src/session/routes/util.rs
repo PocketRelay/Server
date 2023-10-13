@@ -99,9 +99,7 @@ pub async fn handle_post_auth(
     SessionAuth(player): SessionAuth,
 ) -> ServerResult<Blaze<PostAuthResponse>> {
     // Subscribe to the session with itself
-    session
-        .add_subscriber(player.id, session.notify_handle())
-        .await;
+    session.add_subscriber(player.id, session.notify_handle());
 
     Ok(Blaze(PostAuthResponse {
         telemetry: TelemetryServer,

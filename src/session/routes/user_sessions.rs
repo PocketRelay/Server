@@ -43,7 +43,6 @@ pub async fn handle_lookup_user(
     // Get the lookup response from the session
     let response = session
         .get_lookup()
-        .await
         .ok_or(UserSessionsError::UserNotFound)?;
 
     Ok(Blaze(response))
@@ -77,7 +76,7 @@ pub async fn handle_resume_session(
         .await?
         .ok_or(AuthenticationError::InvalidToken)?;
 
-    let player = session.set_player(player).await;
+    let player = session.set_player(player);
     sessions.add_session(player.id, Arc::downgrade(&session));
 
     Ok(Blaze(AuthResponse {
@@ -132,9 +131,7 @@ pub async fn handle_update_network(
         }
     }
 
-    tokio::spawn(async move {
-        session.set_network_info(address, qos).await;
-    });
+    session.set_network_info(address, qos);
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
@@ -150,7 +147,5 @@ pub async fn handle_update_hardware_flag(
     session: SessionLink,
     Blaze(UpdateHardwareFlagsRequest { hardware_flags }): Blaze<UpdateHardwareFlagsRequest>,
 ) {
-    tokio::spawn(async move {
-        session.set_hardware_flags(hardware_flags).await;
-    });
+    session.set_hardware_flags(hardware_flags);
 }

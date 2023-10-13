@@ -49,7 +49,7 @@ pub async fn handle_login(
 
     // Update the session stored player
 
-    let player = session.set_player(player).await;
+    let player = session.set_player(player);
     sessions.add_session(player.id, Arc::downgrade(&session));
 
     let session_token: String = sessions.create_token(player.id);
@@ -78,7 +78,7 @@ pub async fn handle_silent_login(
         .ok_or(AuthenticationError::InvalidToken)?;
 
     // Update the session stored player
-    let player = session.set_player(player).await;
+    let player = session.set_player(player);
     sessions.add_session(player.id, Arc::downgrade(&session));
 
     Ok(Blaze(AuthResponse {
@@ -108,7 +108,7 @@ pub async fn handle_origin_login(
     })?;
 
     // Update the session stored player
-    let player = session.set_player(player).await;
+    let player = session.set_player(player);
     sessions.add_session(player.id, Arc::downgrade(&session));
 
     let session_token: String = sessions.create_token(player.id);
@@ -133,7 +133,7 @@ pub async fn handle_logout(
     SessionAuth(player): SessionAuth,
     Extension(sessions): Extension<Arc<Sessions>>,
 ) {
-    session.clear_player().await;
+    session.clear_player();
     sessions.remove_session(player.id);
 }
 
@@ -309,7 +309,7 @@ pub async fn handle_create_account(
     let player: Player =
         Player::create(&db, email, display_name, Some(hashed_password), &config).await?;
 
-    let player = session.set_player(player).await;
+    let player = session.set_player(player);
     sessions.add_session(player.id, Arc::downgrade(&session));
 
     let session_token = sessions.create_token(player.id);

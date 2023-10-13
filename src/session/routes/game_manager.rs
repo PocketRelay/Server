@@ -30,7 +30,6 @@ pub async fn handle_join_game(
     // Find the game ID for the target session
     let (game_id, game_ref) = other_session
         .get_game()
-        .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
     // Check the game is joinable
@@ -535,6 +534,6 @@ pub async fn handle_cancel_matchmaking(
     SessionAuth(player): SessionAuth,
     Extension(game_manager): Extension<Arc<GameManager>>,
 ) {
-    session.remove_from_game().await;
+    session.remove_from_game();
     game_manager.remove_queue(player.id).await;
 }
