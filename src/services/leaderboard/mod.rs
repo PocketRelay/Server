@@ -12,15 +12,16 @@ use crate::{
 };
 use futures_util::future::BoxFuture;
 use log::{debug, error};
+use parking_lot::Mutex;
 use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use std::{collections::HashMap, sync::Arc, time::Instant};
-use tokio::{sync::RwLock, task::JoinSet};
+use tokio::task::JoinSet;
 
 pub mod models;
 
 pub struct Leaderboard {
     /// Map between the group types and the actual leaderboard group content
-    groups: RwLock<HashMap<LeaderboardType, GroupState>>,
+    groups: Mutex<HashMap<LeaderboardType, GroupState>>,
 }
 
 /// Extra state wrapper around a leaderboard group which
@@ -47,7 +48,7 @@ impl Leaderboard {
         db: &DatabaseConnection,
     ) -> Arc<LeaderboardGroup> {
         {
-            let groups = &mut *self.groups.write().await;
+            let groups = &mut *self.groups.lock();
             // If the group already exists and is not expired we can respond with it
             if let Some(group) = groups.get_mut(&ty) {
                 let inner = &group.group;
@@ -61,7 +62,7 @@ impl Leaderboard {
                 // Mark the group as currently being computed
                 group.computing = true;
             } else {
-                // Create dummy empty group to hand out while computing
+                // Create dummy empty group to hand out while computing (Prevents multiple computes)
                 let dummy = GroupState {
                     computing: true,
                     group: Arc::new(LeaderboardGroup::dummy()),
@@ -76,7 +77,7 @@ impl Leaderboard {
 
         // Store the updated group
         {
-            let groups = &mut *self.groups.write().await;
+            let groups = &mut *self.groups.lock();
             groups.insert(
                 ty,
                 GroupState {
