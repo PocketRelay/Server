@@ -417,14 +417,19 @@ impl Session {
         }
 
         let key = component_key(packet.frame.component, packet.frame.command);
-        let ignored = DEBUG_IGNORED_PACKETS.contains(&key);
-        if ignored {
+
+        // Don't log the packet if its debug ignored
+        if DEBUG_IGNORED_PACKETS.contains(&key) {
             return;
         }
+
+        // Get the authenticated player to include in the debug message
+        let auth = self.data.lock().as_ref().map(|data| data.player.clone());
 
         let debug_data = DebugSessionData {
             action,
             id: self.id,
+            auth,
         };
         let debug_packet = PacketDebug { packet };
 
@@ -434,12 +439,21 @@ impl Session {
 
 struct DebugSessionData {
     id: SessionID,
+    auth: Option<Arc<Player>>,
     action: &'static str,
 }
 
 impl Debug for DebugSessionData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Session ({}): {}", self.id, self.action)?;
+
+        if let Some(data) = &self.auth {
+            writeln!(
+                f,
+                "Auth ({}): (Name: {})",
+                data.player.id, &data.player.display_name,
+            )?;
+        }
 
         Ok(())
     }
