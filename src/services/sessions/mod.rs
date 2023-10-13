@@ -109,11 +109,9 @@ impl Sessions {
     }
 
     fn sessions(&self) -> MutexGuard<'_, SessionMap> {
-        match self.sessions.lock() {
-            Ok(value) => value,
-            // Session service can continue normally if lock is poisoned
-            Err(err) => err.into_inner(),
-        }
+        self.sessions
+            .lock()
+            .expect("Session service mutex was poisoned")
     }
 
     pub fn remove_session(&self, player_id: PlayerID) {
