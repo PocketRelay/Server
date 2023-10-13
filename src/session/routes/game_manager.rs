@@ -73,7 +73,7 @@ pub async fn handle_get_game_data(
         .ok_or(GameManagerError::InvalidGameId)?;
 
     let game = &*game.read().await;
-    let body = game.game_data().await;
+    let body = game.game_data();
 
     Ok(body)
 }

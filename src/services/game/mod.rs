@@ -222,7 +222,7 @@ impl Game {
         }
     }
 
-    pub async fn game_data(&self) -> RawBlaze {
+    pub fn game_data(&self) -> RawBlaze {
         let data = GetGameDetails { game: self };
         data.into()
     }
