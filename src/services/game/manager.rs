@@ -22,7 +22,10 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
-use tokio::{sync::RwLock, task::JoinSet};
+use tokio::{
+    sync::{Mutex, RwLock},
+    task::JoinSet,
+};
 
 /// Manager which controls all the active games on the server
 /// commanding them to do different actions and removing them
@@ -33,7 +36,7 @@ pub struct GameManager {
     /// Stored value for the ID to give the next game
     next_id: AtomicU32,
     /// Matchmaking entry queue
-    queue: RwLock<VecDeque<MatchmakingEntry>>,
+    queue: Mutex<VecDeque<MatchmakingEntry>>,
 }
 
 /// Entry into the matchmaking queue
@@ -115,13 +118,13 @@ impl GameManager {
     }
 
     pub async fn remove_queue(&self, player_id: PlayerID) {
-        let queue = &mut *self.queue.write().await;
+        let queue = &mut *self.queue.lock().await;
         queue.retain(|value| value.player.player.id != player_id);
     }
 
     pub async fn queue(&self, player: GamePlayer, rule_set: Arc<RuleSet>) {
         let started = SystemTime::now();
-        let queue = &mut *self.queue.write().await;
+        let queue = &mut *self.queue.lock().await;
         queue.push_back(MatchmakingEntry {
             player,
             rule_set,
@@ -263,7 +266,7 @@ impl GameManager {
     }
 
     pub async fn process_queue(&self, link: GameRef, game_id: GameID) {
-        let queue = &mut *self.queue.write().await;
+        let queue = &mut *self.queue.lock().await;
         if queue.is_empty() {
             return;
         }
