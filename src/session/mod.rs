@@ -244,9 +244,8 @@ impl Session {
         }
     }
 
-    /// Internal session stopped function called by the reader when
-    /// the connection is terminated, cleans up any references and
-    /// asserts only 1 strong reference exists
+    /// Called when the session is considered stopped (Reader/Writer future has completed)
+    /// in order to clean up any remaining references to the session before dropping
     fn stop(self: Arc<Self>) {
         // Clear authentication
         self.clear_player();
