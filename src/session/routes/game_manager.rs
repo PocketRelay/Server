@@ -25,7 +25,6 @@ pub async fn handle_join_game(
     // Lookup the session join target
     let other_session = sessions
         .lookup_session(user.id)
-        .await
         .ok_or(GameManagerError::JoinPlayerFailed)?;
 
     // Find the game ID for the target session

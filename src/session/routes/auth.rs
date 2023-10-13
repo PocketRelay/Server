@@ -50,7 +50,7 @@ pub async fn handle_login(
     // Update the session stored player
 
     let player = session.set_player(player).await;
-    sessions.add_session(player.id, session).await;
+    sessions.add_session(player.id, Arc::downgrade(&session));
 
     let session_token: String = sessions.create_token(player.id);
 
@@ -79,7 +79,7 @@ pub async fn handle_silent_login(
 
     // Update the session stored player
     let player = session.set_player(player).await;
-    sessions.add_session(player.id, session).await;
+    sessions.add_session(player.id, Arc::downgrade(&session));
 
     Ok(Blaze(AuthResponse {
         player,
@@ -109,7 +109,7 @@ pub async fn handle_origin_login(
 
     // Update the session stored player
     let player = session.set_player(player).await;
-    sessions.add_session(player.id, session).await;
+    sessions.add_session(player.id, Arc::downgrade(&session));
 
     let session_token: String = sessions.create_token(player.id);
 
@@ -134,7 +134,7 @@ pub async fn handle_logout(
     Extension(sessions): Extension<Arc<Sessions>>,
 ) {
     session.clear_player().await;
-    sessions.remove_session(player.id).await;
+    sessions.remove_session(player.id);
 }
 
 // Skip formatting these entitlement creations
@@ -310,7 +310,7 @@ pub async fn handle_create_account(
         Player::create(&db, email, display_name, Some(hashed_password), &config).await?;
 
     let player = session.set_player(player).await;
-    sessions.add_session(player.id, session).await;
+    sessions.add_session(player.id, Arc::downgrade(&session));
 
     let session_token = sessions.create_token(player.id);
 

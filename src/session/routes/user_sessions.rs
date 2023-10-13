@@ -38,7 +38,6 @@ pub async fn handle_lookup_user(
 
     let session = sessions
         .lookup_session(req.player_id)
-        .await
         .ok_or(UserSessionsError::UserNotFound)?;
 
     // Get the lookup response from the session
@@ -79,7 +78,7 @@ pub async fn handle_resume_session(
         .ok_or(AuthenticationError::InvalidToken)?;
 
     let player = session.set_player(player).await;
-    sessions.add_session(player.id, session).await;
+    sessions.add_session(player.id, Arc::downgrade(&session));
 
     Ok(Blaze(AuthResponse {
         player,

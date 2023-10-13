@@ -59,6 +59,7 @@ pub struct Session {
     addr: Ipv4Addr,
     busy_lock: QueueLock,
     tx: mpsc::UnboundedSender<Packet>,
+    // TODO: Replace this with just a Mutex
     data: RwLock<Option<SessionExtData>>,
     sessions: Arc<Sessions>,
 }
@@ -368,7 +369,7 @@ impl Session {
         data.subscribers.clear();
 
         // Remove the session from the sessions service
-        self.sessions.remove_session(data.player.id).await;
+        self.sessions.remove_session(data.player.id);
     }
 
     pub async fn get_game(&self) -> Option<(GameID, GameRef)> {
