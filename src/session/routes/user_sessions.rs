@@ -121,16 +121,33 @@ pub async fn handle_update_network(
     Extension(config): Extension<Arc<RuntimeConfig>>,
     Blaze(UpdateNetworkRequest { mut address, qos }): Blaze<UpdateNetworkRequest>,
 ) {
-    if !matches!(config.qos, QosServerConfig::Disabled) {
-        // TODO: This won't be required after QoS servers are correctly functioning
-        if let NetworkAddress::AddressPair(pair) = &mut address {
-            let ext = &mut pair.external;
+    match &config.qos {
+        QosServerConfig::Disabled => {}
+        // Hamachi should override local addresses
+        QosServerConfig::Hamachi { host } => {
+            // TODO: This won't be required after QoS servers are correctly functioning
+            if let NetworkAddress::AddressPair(pair) = &mut address {
+                let int = &mut pair.internal;
 
-            // If address is missing
-            if ext.addr.is_unspecified() {
-                // Replace address with new address and port with same as local port
-                ext.addr = session.addr;
-                ext.port = pair.internal.port;
+                if session.addr.is_loopback() {
+                    int.addr = *host;
+                } else {
+                    int.addr = session.addr;
+                }
+            }
+        }
+
+        _ => {
+            // TODO: This won't be required after QoS servers are correctly functioning
+            if let NetworkAddress::AddressPair(pair) = &mut address {
+                let ext = &mut pair.external;
+
+                // If address is missing
+                if ext.addr.is_unspecified() {
+                    // Replace address with new address and port with same as local port
+                    ext.addr = session.addr;
+                    ext.port = pair.internal.port;
+                }
             }
         }
     }

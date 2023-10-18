@@ -104,6 +104,11 @@ pub enum QosServerConfig {
     Custom { host: String, port: u16 },
     /// Disable the QoS server (Public IP *wont* be resolved)
     Disabled,
+    /// Configuration to use when using hamachi
+    Hamachi {
+        /// The address of the host computer (Required for 127.0.0.1 resolution)
+        host: Ipv4Addr,
+    },
 }
 
 #[derive(Deserialize)]

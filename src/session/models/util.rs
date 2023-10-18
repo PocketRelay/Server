@@ -138,14 +138,17 @@ impl TdfSerialize for PreAuthResponse {
         w.group(b"QOSS", |w| {
             let qos = &self.config.qos;
 
+            let mut disabled = false;
+
             let (http_host, http_port) = match qos {
                 QosServerConfig::Official => ("gossjcprod-qos01.ea.com", 17502),
                 QosServerConfig::Local => ("127.0.0.1", LOCAL_HTTP_PORT),
                 QosServerConfig::Custom { host, port } => (host.as_str(), *port),
-                QosServerConfig::Disabled => ("0", 0),
+                QosServerConfig::Disabled | QosServerConfig::Hamachi { .. } => {
+                    disabled = true;
+                    ("0", 0)
+                }
             };
-
-            let disabled = matches!(qos, QosServerConfig::Disabled);
 
             // let http_host = "127.0.0.1";
             // let http_port = 17499;
