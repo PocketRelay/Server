@@ -142,7 +142,10 @@ impl TdfSerialize for PreAuthResponse {
                 QosServerConfig::Official => ("gossjcprod-qos01.ea.com", 17502),
                 QosServerConfig::Local => ("127.0.0.1", LOCAL_HTTP_PORT),
                 QosServerConfig::Custom { host, port } => (host.as_str(), *port),
+                QosServerConfig::Disabled => ("0", 0),
             };
+
+            let disabled = matches!(qos, QosServerConfig::Disabled);
 
             // let http_host = "127.0.0.1";
             // let http_port = 17499;
@@ -160,18 +163,25 @@ impl TdfSerialize for PreAuthResponse {
             // List of other Quality Of Service servers? Values present in this
             // list are later included in a ping list
             {
-                w.tag_map_start(b"LTPS", TdfType::String, TdfType::Group, 1);
+                w.tag_map_start(
+                    b"LTPS",
+                    TdfType::String,
+                    TdfType::Group,
+                    if disabled { 0 } else { 1 },
+                );
 
-                // Key for the server
-                PING_SITE_ALIAS.serialize(w);
+                if !disabled {
+                    // Key for the server
+                    PING_SITE_ALIAS.serialize(w);
 
-                // (qtyp=1)
-                w.group_body(|w| {
-                    // Same as the Bioware primary server
-                    w.tag_str(b"PSA", http_host);
-                    w.tag_u16(b"PSP", http_port);
-                    w.tag_str(b"SNA", "prod-sjc");
-                });
+                    // (qtyp=1)
+                    w.group_body(|w| {
+                        // Same as the Bioware primary server
+                        w.tag_str(b"PSA", http_host);
+                        w.tag_u16(b"PSP", http_port);
+                        w.tag_str(b"SNA", "prod-sjc");
+                    });
+                }
             }
 
             // Possibly server version ID (1161889797)

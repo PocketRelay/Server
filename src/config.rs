@@ -102,6 +102,8 @@ pub enum QosServerConfig {
     Local,
     /// Use a custom QoS server
     Custom { host: String, port: u16 },
+    /// Disable the QoS server (Public IP *wont* be resolved)
+    Disabled,
 }
 
 #[derive(Deserialize)]

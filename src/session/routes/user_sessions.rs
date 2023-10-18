@@ -1,4 +1,5 @@
 use crate::{
+    config::{QosServerConfig, RuntimeConfig},
     database::entities::Player,
     services::sessions::{Sessions, VerifyError},
     session::{
@@ -117,17 +118,20 @@ pub async fn handle_resume_session(
 /// ```
 pub async fn handle_update_network(
     session: SessionLink,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
     Blaze(UpdateNetworkRequest { mut address, qos }): Blaze<UpdateNetworkRequest>,
 ) {
-    // TODO: This won't be required after QoS servers are correctly functioning
-    if let NetworkAddress::AddressPair(pair) = &mut address {
-        let ext = &mut pair.external;
+    if !matches!(config.qos, QosServerConfig::Disabled) {
+        // TODO: This won't be required after QoS servers are correctly functioning
+        if let NetworkAddress::AddressPair(pair) = &mut address {
+            let ext = &mut pair.external;
 
-        // If address is missing
-        if ext.addr.is_unspecified() {
-            // Replace address with new address and port with same as local port
-            ext.addr = session.addr;
-            ext.port = pair.internal.port;
+            // If address is missing
+            if ext.addr.is_unspecified() {
+                // Replace address with new address and port with same as local port
+                ext.addr = session.addr;
+                ext.port = pair.internal.port;
+            }
         }
     }
 
