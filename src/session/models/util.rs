@@ -3,8 +3,9 @@ use crate::{
     config::{QosServerConfig, RuntimeConfig},
     utils::types::PlayerID,
 };
-use std::{borrow::Cow, sync::Arc};
-use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType};
+use bitflags::bitflags;
+use std::{borrow::Cow, net::Ipv4Addr, sync::Arc};
+use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType, TdfTyped};
 
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -284,4 +285,67 @@ pub struct SettingsResponse {
     /// The settings map
     #[tdf(tag = "SMAP")]
     pub settings: TdfMap<String, String>,
+}
+
+bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct UpnpFlags: u16 {
+        /// NAT type promoted from Moderate to Open due to UPnP success result.
+        const NAT_PROMOTED = 0x1;
+        /// WAN IP address does not match IP address seen by Blaze server.
+        const DOUBLE_NAT = 0x2;
+        /// External port derived by QoS was overridden by UPnP external port.
+        const PORT_OVERRIDE = 0x4;
+    }
+}
+
+impl From<u16> for UpnpFlags {
+    fn from(value: u16) -> Self {
+        Self::from_bits_retain(value)
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, TdfDeserialize, TdfTyped)]
+#[repr(u8)]
+pub enum UpnpStatus {
+    /// Upnp status unknown.
+    #[default]
+    #[tdf(default)]
+    Unknown = 0,
+    /// Upnp found, but not fully working.
+    Found = 1,
+    /// Upnp is enabled (found and port mapping added).
+    Enabled = 2,
+}
+
+/// Contains UPnP data such as status flags, device info, etc.
+#[derive(TdfDeserialize)]
+pub struct SetClientMetricsRequest {
+    /// pnp Blaze status flags.
+    #[tdf(tag = "UBFL", into = u16)]
+    pub blaze_flags: UpnpFlags,
+
+    /// Upnp device info.
+    #[tdf(tag = "UDEV")]
+    pub device_info: String,
+
+    /// Upnp status flags.
+    #[tdf(tag = "UFLG")]
+    pub flags: u16,
+
+    /// Upnp last result code.
+    #[tdf(tag = "ULRC")]
+    pub last_result_code: i32,
+
+    /// Upnp metrics report NAT type.
+    #[tdf(tag = "UNAT")]
+    pub nat_type: u16,
+
+    /// Upnp status.
+    #[tdf(tag = "USTA")]
+    pub status: UpnpStatus,
+
+    /// WAN IP address
+    #[tdf(tag = "UWAN", into = u32)]
+    pub wan: Ipv4Addr,
 }

@@ -85,6 +85,7 @@ pub fn router() -> BlazeRouterBuilder {
         builder.route(u::COMPONENT, u::GET_TELEMETRY_SERVER, handle_get_telemetry_server);
         builder.route(u::COMPONENT, u::GET_TICKER_SERVER, handle_get_ticker_server);
         builder.route(u::COMPONENT, u::USER_SETTINGS_LOAD_ALL, handle_load_settings);
+        builder.route(u::COMPONENT, u::SET_CLIENT_METRICS, handle_set_client_metrics);
     }
 
     // Messaging

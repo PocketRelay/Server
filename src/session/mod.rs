@@ -396,6 +396,11 @@ impl Session {
         });
     }
 
+    pub fn network_info(&self) -> Option<Arc<NetData>> {
+        let data = &mut *self.data.lock();
+        data.as_ref().map(|value| value.net.clone())
+    }
+
     #[inline]
     pub fn set_network_info(&self, address: NetworkAddress, qos: QosNetworkData) {
         self.update_data(|data| {

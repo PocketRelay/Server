@@ -168,7 +168,7 @@ pub enum NetworkAddress {
 pub type Port = u16;
 
 /// Pair of socket addresses
-#[derive(Debug, Clone, TdfDeserialize, TdfSerialize, TdfTyped, Serialize)]
+#[derive(Debug, Default, Clone, TdfDeserialize, TdfSerialize, TdfTyped, Serialize)]
 #[tdf(group)]
 pub struct IpPairAddress {
     #[tdf(tag = "EXIP")]
@@ -185,4 +185,13 @@ pub struct PairAddress {
     pub addr: Ipv4Addr,
     #[tdf(tag = "PORT")]
     pub port: u16,
+}
+
+impl Default for PairAddress {
+    fn default() -> Self {
+        Self {
+            addr: Ipv4Addr::UNSPECIFIED,
+            port: 0,
+        }
+    }
 }
