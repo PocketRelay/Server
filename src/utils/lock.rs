@@ -1,3 +1,4 @@
+use log::warn;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{atomic::AtomicUsize, Arc};
@@ -52,6 +53,10 @@ struct QueueLockInner {
 }
 
 /// Future while waiting to aquire its lock
+///
+/// TODO: If these futures are dropped early then
+/// the lock wont be able to unlock, figure out how
+/// to fix this..?
 pub struct TicketAquireFuture {
     /// The queue lock being waited on
     inner: Arc<QueueLockInner>,
@@ -59,6 +64,20 @@ pub struct TicketAquireFuture {
     poll: PollSemaphore,
     /// The ticket for this queue position
     ticket: usize,
+}
+
+impl Drop for TicketAquireFuture {
+    fn drop(&mut self) {
+        let current = self
+            .inner
+            .current_ticket
+            .load(std::sync::atomic::Ordering::SeqCst);
+
+        // Ensure we are the ticket that is allowed
+        if current != self.ticket {
+            warn!("Early dropped ticket aquire {}", self.ticket);
+        }
+    }
 }
 
 /// Guard which releases the queue lock when dropped
@@ -73,28 +92,32 @@ impl Future for TicketAquireFuture {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
-        loop {
-            let permit =
-                ready!(this.poll.poll_acquire(cx)).expect("Queue task semaphore was closed");
+        let permit = ready!(this.poll.poll_acquire(cx)).expect("Queue task semaphore was closed");
 
-            // Ensure we are the ticket that is allowed
-            if this
-                .inner
-                .current_ticket
-                .load(std::sync::atomic::Ordering::SeqCst)
-                == this.ticket
-            {
-                return Poll::Ready(QueueLockGuard {
-                    _permit: permit,
-                    inner: this.inner.clone(),
-                });
-            }
+        let current = this
+            .inner
+            .current_ticket
+            .load(std::sync::atomic::Ordering::SeqCst);
+
+        // Ensure we are the ticket that is allowed
+        if current == this.ticket {
+            Poll::Ready(QueueLockGuard {
+                _permit: permit,
+                inner: this.inner.clone(),
+            })
+        } else {
+            // Make sure this future is polled again when possible
+            // TODO: Is this okay to do?? (Tokio defers their version but thats internal crate access)
+            cx.waker().wake_by_ref();
+
+            Poll::Pending
         }
     }
 }
 
 impl Drop for QueueLockGuard {
     fn drop(&mut self) {
+        // Set the current ticket to the next ticket
         self.inner
             .current_ticket
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
