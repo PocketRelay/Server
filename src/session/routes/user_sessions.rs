@@ -119,7 +119,11 @@ pub async fn handle_resume_session(
 pub async fn handle_update_network(
     session: SessionLink,
     Extension(config): Extension<Arc<RuntimeConfig>>,
-    Blaze(UpdateNetworkRequest { mut address, qos }): Blaze<UpdateNetworkRequest>,
+    Blaze(UpdateNetworkRequest {
+        mut address,
+        qos,
+        ping_site_latency,
+    }): Blaze<UpdateNetworkRequest>,
 ) {
     match &config.qos {
         QosServerConfig::Disabled => {}
@@ -152,7 +156,9 @@ pub async fn handle_update_network(
         }
     }
 
-    session.set_network_info(address, qos);
+    let ping_site_latency: Vec<u32> = ping_site_latency.values().copied().collect();
+
+    session.set_network_info(address, qos, ping_site_latency);
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag

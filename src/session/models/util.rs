@@ -86,8 +86,8 @@ impl TdfSerialize for TickerServer {
     }
 }
 
-/// Server SRC version
-pub const SRC_VERSION: &str = "303107";
+/// Origin auth source?
+pub const AUTH_SOURCE: &str = "303107";
 pub const BLAZE_VERSION: &str = "Blaze 3.15.08.0 (CL# 1629389)";
 pub const PING_PERIOD: &str = "15s";
 
@@ -102,9 +102,9 @@ pub struct PreAuthResponse {
 impl TdfSerialize for PreAuthResponse {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         w.tag_zero(b"ANON");
-        w.tag_str(b"ASRC", SRC_VERSION);
-        // This list appears to contain the IDs of the components that the game
-        // uses throughout its lifecycle
+        // Authentication source
+        w.tag_str(b"ASRC", AUTH_SOURCE);
+        // List of components configured on the server.
         w.tag_list_slice(
             b"CIDS",
             &[
@@ -114,13 +114,14 @@ impl TdfSerialize for PreAuthResponse {
         );
         w.tag_str_empty(b"CNGN");
 
-        // Double nested map containing configuration options for
-        // ping intervals and VOIP headset update rates
+        // Client configuration provided by the server
         w.group(b"CONF", |w| {
             w.tag_map_tuples(
                 b"CONF",
                 &[
+                    // Client to server ping period
                     ("pingPeriod", PING_PERIOD),
+                    // VOIP headset update rate
                     ("voipHeadsetUpdateRate", "1000"),
                     // XLSP (Xbox Live Server Platform)
                     ("xlspConnectionIdleTimeout", "300"),
@@ -128,11 +129,17 @@ impl TdfSerialize for PreAuthResponse {
             );
         });
 
+        // Service name.
         w.tag_str(b"INST", "masseffect-3-pc");
-        w.tag_zero(b"MINR");
+        // Underage support
+        w.tag_bool(b"MINR", false);
+        // Persona namespace
         w.tag_str(b"NASP", "cem_ea_id");
+        // Title-specific identifier for legal documents retrieval
         w.tag_str_empty(b"PILD");
+        // Server platform.
         w.tag_str(b"PLAT", "pc");
+
         w.tag_str_empty(b"PTAG");
 
         // Quality Of Service Server details
@@ -192,9 +199,9 @@ impl TdfSerialize for PreAuthResponse {
             w.tag_u32(b"SVID", 0x45410805);
         });
 
-        // Server src version
-        w.tag_str(b"RSRC", SRC_VERSION);
-        // Server blaze version
+        // Registration source
+        w.tag_str(b"RSRC", AUTH_SOURCE);
+        // Server version.
         w.tag_str(b"SVER", BLAZE_VERSION)
     }
 }
@@ -215,7 +222,7 @@ impl TdfSerialize for PostAuthResponse {
         w.group(b"PSS", |w| {
             w.tag_str(b"ADRS", "playersyncservice.ea.com");
             w.tag_blob_empty(b"CSIG");
-            w.tag_str(b"PJID", SRC_VERSION);
+            w.tag_str(b"PJID", AUTH_SOURCE);
             w.tag_u16(b"PORT", 443);
             // Purchases (1) | FriendsList (2) | Achievements (4) | Consumables (8) = 0xF
             w.tag_u8(b"RPRT", 0xF);

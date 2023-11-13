@@ -553,7 +553,7 @@ pub async fn handle_set_client_metrics(
     }): Blaze<SetClientMetricsRequest>,
 ) {
     let network_info = session.network_info().unwrap_or_default();
-
+    let ping_site_latency = network_info.ping_site_latency.clone();
     let qos = network_info.qos;
     let mut pair_addr = match &network_info.addr {
         NetworkAddress::AddressPair(pair) => pair.clone(),
@@ -580,5 +580,9 @@ pub async fn handle_set_client_metrics(
     }
 
     // Update network info with new details
-    session.set_network_info(NetworkAddress::AddressPair(pair_addr), qos);
+    session.set_network_info(
+        NetworkAddress::AddressPair(pair_addr),
+        qos,
+        ping_site_latency,
+    );
 }

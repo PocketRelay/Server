@@ -7,7 +7,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use serde::Serialize;
-use tdf::{ObjectId, TdfDeserialize, TdfSerialize, TdfTyped};
+use tdf::{ObjectId, TdfDeserialize, TdfMap, TdfSerialize, TdfTyped};
 
 use super::{util::PING_SITE_ALIAS, NetworkAddress, QosNetworkData};
 
@@ -35,6 +35,9 @@ pub struct UpdateNetworkRequest {
     /// The client Quality of Service data
     #[tdf(tag = "NQOS")]
     pub qos: QosNetworkData,
+    /// Latency to the different ping sites
+    #[tdf(tag = "NLMP")]
+    pub ping_site_latency: TdfMap<String, u32>,
 }
 
 /// Request to update the stored hardware flags for a session
@@ -100,7 +103,7 @@ impl TdfSerialize for UserSessionExtendedData {
             // Hardware flags
             w.tag_owned(b"HWFG", self.net.hardware_flags.bits());
             // Ping server latency list
-            w.tag_list_slice(b"PSLM", &[141]);
+            w.tag_list_slice(b"PSLM", &self.net.ping_site_latency);
             // Quality of service data
             w.tag_ref(b"QDAT", &self.net.qos);
             // User info attributes

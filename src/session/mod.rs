@@ -178,15 +178,22 @@ pub struct NetData {
     pub addr: NetworkAddress,
     pub qos: QosNetworkData,
     pub hardware_flags: HardwareFlags,
+    pub ping_site_latency: Vec<u32>,
 }
 
 impl NetData {
     // Re-creates the current net data using the provided address and QOS data
-    pub fn with_basic(&self, addr: NetworkAddress, qos: QosNetworkData) -> Self {
+    pub fn with_basic(
+        &self,
+        addr: NetworkAddress,
+        qos: QosNetworkData,
+        ping_site_latency: Vec<u32>,
+    ) -> Self {
         Self {
             addr,
             qos,
             hardware_flags: self.hardware_flags,
+            ping_site_latency,
         }
     }
 
@@ -196,6 +203,7 @@ impl NetData {
             addr: self.addr.clone(),
             qos: self.qos,
             hardware_flags: flags,
+            ping_site_latency: self.ping_site_latency.clone(),
         }
     }
 }
@@ -402,9 +410,14 @@ impl Session {
     }
 
     #[inline]
-    pub fn set_network_info(&self, address: NetworkAddress, qos: QosNetworkData) {
+    pub fn set_network_info(
+        &self,
+        address: NetworkAddress,
+        qos: QosNetworkData,
+        ping_site_latency: Vec<u32>,
+    ) {
         self.update_data(|data| {
-            data.net = Arc::new(data.net.with_basic(address, qos));
+            data.net = Arc::new(data.net.with_basic(address, qos, ping_site_latency));
         });
     }
 
