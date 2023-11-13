@@ -32,12 +32,12 @@ pub struct UpdateNetworkRequest {
     /// The client address net groups
     #[tdf(tag = "ADDR")]
     pub address: NetworkAddress,
-    /// The client Quality of Service data
-    #[tdf(tag = "NQOS")]
-    pub qos: QosNetworkData,
     /// Latency to the different ping sites
     #[tdf(tag = "NLMP")]
     pub ping_site_latency: TdfMap<String, u32>,
+    /// The client Quality of Service data
+    #[tdf(tag = "NQOS")]
+    pub qos: QosNetworkData,
 }
 
 /// Request to update the stored hardware flags for a session
