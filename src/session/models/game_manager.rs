@@ -1,13 +1,16 @@
 use bitflags::bitflags;
 use serde::Serialize;
-use tdf::{Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped};
+use tdf::{
+    types::tagged_union::TAGGED_UNSET_KEY, Blob, GroupSlice, TaggedUnion, TdfDeserialize,
+    TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped,
+};
 
 use crate::{
     services::game::{rules::RuleSet, AttrMap, Game, GamePlayer},
     utils::types::{GameID, PlayerID, SessionID},
 };
 
-use super::NetworkAddress;
+use super::{util::PING_SITE_ALIAS, NetworkAddress};
 
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -573,18 +576,32 @@ impl TdfSerialize for PlayerJoining<'_> {
 )]
 #[repr(u8)]
 pub enum GameState {
+    /// Data structure just created
     NewState = 0x0,
+    /// Closed to joins/matchmaking
     #[tdf(default)]
     #[default]
     Initializing = 0x1,
-    Virtual = 0x2,
+    /// Game will need topology host assigned when player joins.
+    InactiveVirtual = 0x2,
+    /// Game created via matchmaking is waiting for connections to be established and validated.
+    ConnectionVerification = 0x3,
+    /// Pre game state, obey joinMode flags
     PreGame = 0x82,
+    /// Game available, obey joinMode flag
     InGame = 0x83,
+    /// After game is done,closed to joins/matchmaking
     PostGame = 0x4,
+    /// Game migration state, closed to joins/matchmaking
     Migrating = 0x5,
+    /// Game destruction state, closed to joins/matchmaking
     Destructing = 0x6,
+    /// Game resetable state, closed to joins/matchmaking, but available to be reset
     Resetable = 0x7,
-    ReplaySetup = 0x8,
+    /// Unresponsive, closed to joins/matchmaking
+    Unresponsive = 0x9,
+    /// Initialized state, intended for the use of game group
+    GameGroupInitialized = 0x10,
 }
 
 bitflags! {
@@ -622,7 +639,8 @@ impl From<u16> for GameSettings {
     }
 }
 
-const VSTR: &str = "ME3-295976325-179181965240128";
+const GAME_PROTOCOL_VERSION: &str = "ME3-295976325-179181965240128";
+const GAME_PROTOCOL_VERSION_HASH: u64 = 0x5a4f2b378b715c6;
 
 #[derive(TdfSerialize, TdfTyped)]
 pub enum GameSetupContext {
@@ -672,6 +690,54 @@ pub enum DatalessContext {
     // HostInjectionSetupContext = 0x4,
 }
 
+#[allow(unused)]
+#[derive(Debug, Copy, Clone, TdfSerialize, TdfTyped)]
+#[repr(u8)]
+pub enum PresenceMode {
+    // No presence management. E.g. For games that should never be advertised in shell UX and cannot be used for 1st party invites.
+    None = 0x0,
+    // Full presence as defined by the platform.
+    Standard = 0x1,
+    // Private presence as defined by the platform. For private games which are closed to uninvited/outside users.
+    Private = 0x2,
+}
+
+#[allow(unused)]
+#[derive(Debug, Copy, Clone, TdfSerialize, TdfTyped)]
+#[repr(u8)]
+pub enum VoipTopology {
+    /// VOIP is disabled (for a game)
+    Disabled = 0x0,
+    // /// VOIP uses a star topology; typically some form of 3rd party server dedicated to mixing/broadcasting voip streams.
+    // DedicatedServer = 0x1
+    /// VOIP uses a full mesh topology; each player makes peer connections to the other players/members for voip traffic.
+    PeerToPeer = 0x2,
+}
+
+#[allow(unused)]
+#[derive(Debug, Copy, Clone, TdfSerialize, TdfTyped)]
+#[repr(u8)]
+pub enum GameNetworkTopology {
+    /// client server peer hosted network topology
+    PeerHosted = 0x0,
+    /// client server dedicated server topology
+    Dedicated = 0x1,
+    /// Peer to peer full mesh network topology
+    FullMesh = 0x82,
+    /// Networking is disabled??
+    Disabled = 0xFF,
+}
+
+#[allow(unused)]
+#[derive(Debug, Copy, Clone, TdfSerialize, TdfTyped)]
+#[repr(u8)]
+pub enum SlotType {
+    // Public participant slot, usable by any participant
+    PublicParticipant = 0x0,
+    // Private participant slot, reserved for invited participant
+    PrivateParticipant = 0x1,
+}
+
 pub struct GameSetupResponse<'a> {
     pub game: &'a Game,
     pub context: GameSetupContext,
@@ -683,32 +749,66 @@ impl TdfSerialize for GameSetupResponse<'_> {
         let host = game.players.first().expect("Missing game host for setup");
 
         w.group(b"GAME", |w| {
+            // Admin player list
             w.tag_list_iter_owned(b"ADMN", game.players.iter().map(|player| player.player.id));
+            // Game attributes
             w.tag_ref(b"ATTR", &game.attributes);
-            w.tag_list_slice::<u8>(b"CAP", &[4, 0]);
+            // Slot Capacities
+            w.tag_list_slice::<usize>(
+                b"CAP",
+                &[
+                    Game::MAX_PLAYERS, /* Public slots */
+                    0,                 /* Private slots */
+                ],
+            );
+            // Game ID
             w.tag_u32(b"GID", game.id);
+            // Game Name
             w.tag_str(b"GNAM", &host.player.display_name);
-            w.tag_u64(b"GPVH", 0x5a4f2b378b715c6);
+            // Game Protocol Version Hash
+            w.tag_u64(b"GPVH", GAME_PROTOCOL_VERSION_HASH);
+            // Game settings
             w.tag_owned(b"GSET", game.settings.bits());
+            // Game Reporting ID
             w.tag_u64(b"GSID", 0x4000000a76b645);
+            // Game state
             w.tag_ref(b"GSTA", &game.state);
-
+            // Game Type used for game reporting as passed up in the request.
             w.tag_str_empty(b"GTYP");
+
             {
+                // Topology host network list (The heat bug is present so this encoded as a group even though its a union)
                 w.tag_list_start(b"HNET", TdfType::Group, 1);
-                w.write_byte(2);
+
                 if let NetworkAddress::AddressPair(pair) = &host.net.addr {
+                    w.write_byte(2 /* Address pair type */);
                     TdfSerialize::serialize(pair, w)
+                } else {
+                    // Uh oh.. host networking is missing...?
+                    w.write_byte(TAGGED_UNSET_KEY);
+                    w.write_byte(0);
                 }
             }
 
+            // Host session ID
             w.tag_u32(b"HSES", host.player.id);
             w.tag_zero(b"IGNO");
-            w.tag_u8(b"MCAP", 4);
+
+            // Max player capacity
+            w.tag_usize(b"MCAP", Game::MAX_PLAYERS);
+
+            // Host network qos data
             w.tag_ref(b"NQOS", &host.net.qos);
-            w.tag_zero(b"NRES");
-            w.tag_zero(b"NTOP");
+
+            // Flag to indicate that this game is not resetable. This applies only to the CLIENT_SERVER_DEDICATED topology.  The game will be prevented from ever going into the RESETABlE state.
+            w.tag_bool(b"NRES", false);
+
+            // Game network topology
+            w.tag_alt(b"NTOP", GameNetworkTopology::PeerHosted);
+
+            // Persisted Game id for the game, used only when game setting's enablePersistedGameIds is true.
             w.tag_str_empty(b"PGID");
+            // Persisted Game id secret for the game, used only when game setting's enablePersistedGameIds is true.
             w.tag_blob_empty(b"PGSR");
 
             // Platform host info
@@ -717,24 +817,33 @@ impl TdfSerialize for GameSetupResponse<'_> {
                 w.tag_zero(b"HSLT");
             });
 
-            w.tag_u8(b"PRES", 0x1);
-            w.tag_str_empty(b"PSAS");
+            // Presence mode
+            w.tag_alt(b"PRES", PresenceMode::Standard);
+            // Ping site alias
+            w.tag_str(b"PSAS", PING_SITE_ALIAS);
             // Queue capacity
             w.tag_zero(b"QCAP");
-            // Shared game randomness seed?
+            // Shared game randomness seed? (a 32 bit number shared between clients)
+            // TODO: Randomly generate this when creating a game?
             w.tag_u32(b"SEED", 0x4cbc8585);
-            // tEAM capacity
+            // Team capacity
             w.tag_zero(b"TCAP");
 
-            // Topology host info
+            // The topology host for the game (everyone connects to this person).
             w.group(b"THST", |w| {
+                // Player ID
                 w.tag_u32(b"HPID", host.player.id);
+                // Slot ID
                 w.tag_zero(b"HSLT");
             });
 
             w.tag_str(b"UUID", "286a2373-3e6e-46b9-8294-3ef05e479503");
-            w.tag_u8(b"VOIP", 0x2);
-            w.tag_str(b"VSTR", VSTR);
+            // VOIP type
+            w.tag_alt(b"VOIP", VoipTopology::PeerToPeer);
+
+            // Game Protocol Version
+            w.tag_str(b"VSTR", GAME_PROTOCOL_VERSION);
+
             w.tag_blob_empty(b"XNNC");
             w.tag_blob_empty(b"XSES");
         });
@@ -760,35 +869,77 @@ impl TdfSerialize for GetGameDetails<'_> {
 
         w.tag_list_start(b"GDAT", TdfType::Group, 1);
         w.group_body(|w| {
+            // Admin player list
             w.tag_list_iter_owned(b"ADMN", game.players.iter().map(|player| player.player.id));
+            // Game attributes
             w.tag_ref(b"ATTR", &game.attributes);
-            w.tag_list_slice(b"CAP", &[4u8, 0u8]);
 
+            // Slot Capacities
+            w.tag_list_slice::<usize>(
+                b"CAP",
+                &[
+                    Game::MAX_PLAYERS, /* Public slots */
+                    0,                 /* Private slots */
+                ],
+            );
+
+            // Game ID
             w.tag_u32(b"GID", game.id);
+            // Game name
             w.tag_str(b"GNAM", &host.player.display_name);
+            // Game setting
             w.tag_u16(b"GSET", game.settings.bits());
+            // Game state
             w.tag_ref(b"GSTA", &game.state);
             {
+                // Topology host network list (The heat bug is present so this encoded as a group even though its a union)
                 w.tag_list_start(b"HNET", TdfType::Group, 1);
-                w.write_byte(2);
+
                 if let NetworkAddress::AddressPair(pair) = &host.net.addr {
+                    w.write_byte(2 /* Address pair type */);
                     TdfSerialize::serialize(pair, w)
+                } else {
+                    // Uh oh.. host networking is missing...?
+                    w.write_byte(TAGGED_UNSET_KEY);
+                    w.write_byte(0);
                 }
             }
+            // Host player ID
             w.tag_u32(b"HOST", host.player.id);
-            w.tag_zero(b"NTOP");
 
-            w.tag_list_slice(b"PCNT", &[1u8, 0u8]);
+            // Game network topology
+            w.tag_alt(b"NTOP", GameNetworkTopology::PeerHosted);
 
-            w.tag_u8(b"PRES", 0x2);
-            w.tag_str(b"PSAS", "ea-sjc");
-            w.tag_str_empty(b"PSID");
+            // Player counts by slot
+            w.tag_list_slice::<usize>(
+                b"PCNT",
+                &[
+                    game.players.len(), /* Public count */
+                    0,                  /* Private count */
+                ],
+            );
+
+            // Presence mode
+            w.tag_alt(b"PRES", PresenceMode::Standard);
+
+            // Ping site alias
+            w.tag_str(b"PSAS", PING_SITE_ALIAS);
+
+            // Persisted Game id for the game, used only when game setting's enablePersistedGameIds is true.
+            w.tag_str_empty(b"PGID");
+
+            // Max queue capacity.
             w.tag_zero(b"QCAP");
+            // Current number of player in the queue.
             w.tag_zero(b"QCNT");
+            // External session ID
             w.tag_zero(b"SID");
+            // Team capacity
             w.tag_zero(b"TCAP");
-            w.tag_u8(b"VOIP", 0x2);
-            w.tag_str(b"VSTR", VSTR);
+            // VOIP type
+            w.tag_alt(b"VOIP", VoipTopology::PeerToPeer);
+            // Game Protocol Version
+            w.tag_str(b"VSTR", GAME_PROTOCOL_VERSION);
         });
     }
 }

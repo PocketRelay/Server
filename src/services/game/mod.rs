@@ -204,7 +204,7 @@ pub enum GameJoinableState {
 impl Game {
     /// Constant for the maximum number of players allowed in
     /// a game at one time. Used to determine a games full state
-    const MAX_PLAYERS: usize = 4;
+    pub const MAX_PLAYERS: usize = 4;
 
     pub fn new(
         id: GameID,
