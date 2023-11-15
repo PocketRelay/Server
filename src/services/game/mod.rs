@@ -8,7 +8,7 @@ use crate::{
                 GameSetupContext, GameSetupResponse, GameState, GetGameDetails,
                 HostMigrateFinished, HostMigrateStart, JoinComplete, PlayerJoining,
                 PlayerNetConnectionStatus, PlayerRemoved, PlayerState, PlayerStateChange,
-                RemoveReason, SettingChange, StateChange,
+                RemoveReason, SettingChange, SlotType, StateChange, UNSPECIFIED_TEAM_INDEX,
             },
             util::LOCALE_NZ,
         },
@@ -172,12 +172,12 @@ impl GamePlayer {
             w.tag_ref(b"PNET", &self.net.addr);
             // Slot ID
             w.tag_owned(b"SID", slot);
-            // Slot type (0 = PUBLIC, 1 = PRIVATE)
-            w.tag_u8(b"SLOT", 0);
+            // Slot type
+            w.tag_alt(b"SLOT", SlotType::PublicParticipant);
             // Player state
             w.tag_ref(b"STAT", &self.state);
             // Team index
-            w.tag_u16(b"TIDX", 0xffff);
+            w.tag_u16(b"TIDX", UNSPECIFIED_TEAM_INDEX);
             // Unix millisecond timestamp of the player joined the game in
             w.tag_u8(b"TIME", 0);
             // User group ID

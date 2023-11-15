@@ -642,6 +642,9 @@ impl From<u16> for GameSettings {
 const GAME_PROTOCOL_VERSION: &str = "ME3-295976325-179181965240128";
 const GAME_PROTOCOL_VERSION_HASH: u64 = 0x5a4f2b378b715c6;
 
+/// UNSPECIFIED_TEAM_INDEX will assign the player to whichever team has room.
+pub const UNSPECIFIED_TEAM_INDEX: u16 = 0xffff;
+
 #[derive(TdfSerialize, TdfTyped)]
 pub enum GameSetupContext {
     /// Context without additional data
