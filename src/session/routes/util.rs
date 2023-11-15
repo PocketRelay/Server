@@ -552,15 +552,6 @@ pub async fn handle_set_client_metrics(
         ..
     }): Blaze<SetClientMetricsRequest>,
 ) {
-    let network_info = session.network_info().unwrap_or_default();
-    let ping_site_latency = network_info.ping_site_latency.clone();
-    let qos = network_info.qos;
-    let mut pair_addr = match &network_info.addr {
-        NetworkAddress::AddressPair(pair) => pair.clone(),
-        // Fallback handle behavior for unset or default address
-        _ => IpPairAddress::default(),
-    };
-
     debug!(
         "Handling UPNP (Device: {}, BlazeFlags: {:?} Flags: {:?}, NAT: {:?}, WAN: {}, STATUS: {:?})",
         device_info, blaze_flags, flags, nat_type, wan, status
@@ -572,17 +563,26 @@ pub async fn handle_set_client_metrics(
     }
 
     // Set external address using Upnp specified
-    if !wan.is_unspecified() {
+    if !wan.is_unspecified() && !blaze_flags.contains(UpnpFlags::DOUBLE_NAT) {
         debug!("Using client Upnp WAN address override: {}", wan);
+
+        let network_info = session.network_info().unwrap_or_default();
+        let ping_site_latency = network_info.ping_site_latency.clone();
+        let qos = network_info.qos;
+        let mut pair_addr = match &network_info.addr {
+            NetworkAddress::AddressPair(pair) => pair.clone(),
+            // Fallback handle behavior for unset or default address
+            _ => IpPairAddress::default(),
+        };
 
         // Update WAN address with Upnp address
         pair_addr.external.addr = wan;
-    }
 
-    // Update network info with new details
-    session.set_network_info(
-        NetworkAddress::AddressPair(pair_addr),
-        qos,
-        ping_site_latency,
-    );
+        // Update network info with new details
+        session.set_network_info(
+            NetworkAddress::AddressPair(pair_addr),
+            qos,
+            ping_site_latency,
+        );
+    }
 }
