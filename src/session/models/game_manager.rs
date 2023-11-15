@@ -648,12 +648,15 @@ pub const UNSPECIFIED_TEAM_INDEX: u16 = 0xffff;
 ///
 /// Credits to Aim4kill https://github.com/PocketRelay/Server/issues/59
 fn compute_version_hash(version: &str) -> u64 {
+    const OFFSET: u64 = 2166136261;
+    const PRIME: u64 = 16777619;
+
     version
         .as_bytes()
         .iter()
         .copied()
-        .fold(2166136261, |hash, byte| {
-            (hash.wrapping_mul(16777619)) ^ (byte as u64)
+        .fold(OFFSET, |hash, byte| {
+            (hash.wrapping_mul(PRIME)) ^ (byte as u64)
         })
 }
 
