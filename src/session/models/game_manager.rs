@@ -640,10 +640,22 @@ impl From<u16> for GameSettings {
 }
 
 const GAME_PROTOCOL_VERSION: &str = "ME3-295976325-179181965240128";
-const GAME_PROTOCOL_VERSION_HASH: u64 = 0x5a4f2b378b715c6;
 
 /// UNSPECIFIED_TEAM_INDEX will assign the player to whichever team has room.
 pub const UNSPECIFIED_TEAM_INDEX: u16 = 0xffff;
+
+/// Game version hashing
+///
+/// Credits to Aim4kill https://github.com/PocketRelay/Server/issues/59
+fn compute_version_hash(version: &str) -> u64 {
+    version
+        .as_bytes()
+        .iter()
+        .copied()
+        .fold(2166136261, |hash, byte| {
+            (hash.wrapping_mul(16777619)) ^ (byte as u64)
+        })
+}
 
 #[derive(TdfSerialize, TdfTyped)]
 pub enum GameSetupContext {
@@ -769,7 +781,7 @@ impl TdfSerialize for GameSetupResponse<'_> {
             // Game Name
             w.tag_str(b"GNAM", &host.player.display_name);
             // Game Protocol Version Hash
-            w.tag_u64(b"GPVH", GAME_PROTOCOL_VERSION_HASH);
+            w.tag_u64(b"GPVH", compute_version_hash(GAME_PROTOCOL_VERSION));
             // Game settings
             w.tag_owned(b"GSET", game.settings.bits());
             // Game Reporting ID
@@ -944,5 +956,19 @@ impl TdfSerialize for GetGameDetails<'_> {
             // Game Protocol Version
             w.tag_str(b"VSTR", GAME_PROTOCOL_VERSION);
         });
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::compute_version_hash;
+
+    /// Ensure the version hashing algorithm produces the correct result
+    #[test]
+    fn test_compute_version_hash() {
+        let input: &str = "ME3-295976325-179181965240128";
+        let expected: u64 = 0x5a4f2b378b715c6;
+        let output: u64 = compute_version_hash(input);
+        assert_eq!(output, expected);
     }
 }
