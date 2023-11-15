@@ -89,6 +89,10 @@ pub struct UserSessionExtendedData {
 
 impl TdfSerialize for UserSessionExtendedData {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        const DMAP_LEADERBOARD_N7_RATING: u32 = 0x70001;
+        // TODO: Maybe actually load this value
+        const DMAP_LEADERBOARD_N7_RATING_VALUE: u32 = 100;
+
         w.group_body(|w| {
             // Network address
             w.tag_ref(b"ADDR", &self.net.addr);
@@ -98,8 +102,14 @@ impl TdfSerialize for UserSessionExtendedData {
             w.tag_str_empty(b"CTY");
             // Client data
             w.tag_var_int_list_empty(b"CVAR");
-            // Data map (INVESTIGATE, seems to have many different possible values) 91940, 689, 16538
-            w.tag_map_tuples(b"DMAP", &[(0x70001, 0x409a)]);
+            // Data map (Custom player data integer keyed)
+            w.tag_map_tuples(
+                b"DMAP",
+                &[
+                    // The players n7 rating
+                    (DMAP_LEADERBOARD_N7_RATING, DMAP_LEADERBOARD_N7_RATING_VALUE),
+                ],
+            );
             // Hardware flags
             w.tag_owned(b"HWFG", self.net.hardware_flags.bits());
             // Ping server latency list
