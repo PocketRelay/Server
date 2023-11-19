@@ -105,7 +105,7 @@ impl OfficialInstance {
     ///    <connectionprofile>standardSecure_v3</connectionprofile>
     ///    <istrial>0</istrial>
     /// </serverinstancerequest>
-    const REDIRECTOR_HOST: &str = "gosredirector.ea.com";
+    const REDIRECTOR_HOST: &'static str = "gosredirector.ea.com";
     /// The port for the redirector server.
     const REDIRECT_PORT: Port = 42127;
 

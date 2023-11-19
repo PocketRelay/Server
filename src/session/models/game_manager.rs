@@ -1,8 +1,8 @@
 use bitflags::bitflags;
 use serde::Serialize;
 use tdf::{
-    types::tagged_union::TAGGED_UNSET_KEY, Blob, GroupSlice, TaggedUnion, TdfDeserialize,
-    TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped,
+    types::tagged_union::TAGGED_UNSET_KEY, Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned,
+    TdfSerialize, TdfType, TdfTyped,
 };
 
 use crate::{

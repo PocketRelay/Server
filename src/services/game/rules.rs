@@ -14,23 +14,23 @@ pub struct RuleSet {
 impl RuleSet {
     /// Attribute determining the game privacy for public
     /// match checking
-    const PRIVACY_ATTR: &str = "ME3privacy";
+    const PRIVACY_ATTR: &'static str = "ME3privacy";
 
     /// Map attribute and rule keys
-    const MAP_ATTR: &str = "ME3map";
-    const MAP_RULE: &str = "ME3_gameMapMatchRule";
+    const MAP_ATTR: &'static str = "ME3map";
+    const MAP_RULE: &'static str = "ME3_gameMapMatchRule";
 
     /// Enemy attribute and rule keys
-    const ENEMY_ATTR: &str = "ME3gameEnemyType";
-    const ENEMY_RULE: &str = "ME3_gameEnemyTypeRule";
+    const ENEMY_ATTR: &'static str = "ME3gameEnemyType";
+    const ENEMY_RULE: &'static str = "ME3_gameEnemyTypeRule";
 
     /// Difficulty attribute and rule keys
-    const DIFFICULTY_ATTR: &str = "ME3gameDifficulty";
-    const DIFFICULTY_RULE: &str = "ME3_gameDifficultyRule";
+    const DIFFICULTY_ATTR: &'static str = "ME3gameDifficulty";
+    const DIFFICULTY_RULE: &'static str = "ME3_gameDifficultyRule";
 
     /// Value for rules that have been abstained from matching
     /// when a rule is abstained it is ignored
-    const ABSTAIN: &str = "abstain";
+    const ABSTAIN: &'static str = "abstain";
 
     /// Creates a new rule set from the provided list
     /// of rule key values
