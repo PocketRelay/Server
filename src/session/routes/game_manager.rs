@@ -38,28 +38,28 @@ pub async fn handle_join_game(
         game.joinable_state(None)
     };
 
-    // Join the game
-    if let GameJoinableState::Joinable = join_state {
-        debug!("Joining game from invite (GID: {})", game_id);
-
-        game_manager
-            .add_to_game(
-                game_ref,
-                player,
-                session,
-                GameSetupContext::Dataless {
-                    context: DatalessContext::JoinGameSetup,
-                },
-            )
-            .await;
-
-        Ok(Blaze(JoinGameResponse {
-            game_id,
-            state: JoinGameState::JoinedGame,
-        }))
-    } else {
-        Err(GameManagerError::GameFull.into())
+    if !matches!(join_state, GameJoinableState::Joinable) {
+        return Err(GameManagerError::GameFull.into());
     }
+
+    // Join the game
+    debug!("Joining game from invite (GID: {})", game_id);
+
+    game_manager
+        .add_to_game(
+            game_ref,
+            player,
+            session,
+            GameSetupContext::Dataless {
+                context: DatalessContext::JoinGameSetup,
+            },
+        )
+        .await;
+
+    Ok(Blaze(JoinGameResponse {
+        game_id,
+        state: JoinGameState::JoinedGame,
+    }))
 }
 
 pub async fn handle_get_game_data(
@@ -485,7 +485,7 @@ pub async fn handle_start_matchmaking(
     Extension(game_manager): Extension<Arc<GameManager>>,
     Blaze(MatchmakingRequest { rules }): Blaze<MatchmakingRequest>,
 ) -> ServerResult<Blaze<MatchmakingResponse>> {
-    let session_id = player.player.id;
+    let player_id = player.player.id;
 
     info!("Player {} started matchmaking", player.player.display_name);
 
@@ -496,7 +496,7 @@ pub async fn handle_start_matchmaking(
         game_manager.queue(player, rule_set).await;
     }
 
-    Ok(Blaze(MatchmakingResponse { id: session_id }))
+    Ok(Blaze(MatchmakingResponse { id: player_id }))
 }
 
 /// Handles cancelling matchmaking for the current session removing

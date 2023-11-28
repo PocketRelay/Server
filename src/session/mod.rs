@@ -24,7 +24,7 @@ use crate::{
     utils::{
         components::{component_key, user_sessions, DEBUG_IGNORED_PACKETS},
         lock::{QueueLock, QueueLockGuard, TicketAquireFuture},
-        types::{GameID, PlayerID, SessionID},
+        types::{GameID, PlayerID},
     },
 };
 use futures_util::{future::BoxFuture, Sink, Stream};
@@ -55,7 +55,7 @@ pub type SessionLink = Arc<Session>;
 pub type WeakSessionLink = Weak<Session>;
 
 pub struct Session {
-    id: SessionID,
+    id: u32,
     addr: Ipv4Addr,
     busy_lock: QueueLock,
     tx: mpsc::UnboundedSender<Packet>,
@@ -455,7 +455,7 @@ impl Session {
 }
 
 struct DebugSessionData {
-    id: SessionID,
+    id: u32,
     auth: Option<Arc<Player>>,
     action: &'static str,
 }

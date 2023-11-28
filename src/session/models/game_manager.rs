@@ -7,7 +7,7 @@ use tdf::{
 
 use crate::{
     services::game::{rules::RuleSet, AttrMap, Game, GamePlayer},
-    utils::types::{GameID, PlayerID, SessionID},
+    utils::types::{GameID, PlayerID},
 };
 
 use super::{util::PING_SITE_ALIAS, NetworkAddress};
@@ -164,7 +164,7 @@ impl TdfDeserializeOwned for MatchmakingRequest {
 pub struct MatchmakingResponse {
     /// The current session ID
     #[tdf(tag = "MSID")]
-    pub id: SessionID,
+    pub id: PlayerID,
 }
 
 #[derive(TdfDeserialize)]
