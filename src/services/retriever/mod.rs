@@ -303,7 +303,7 @@ impl OfficialSession {
         let stream = BlazeStream::connect((host, port)).await?;
         Ok(Self {
             id: 0,
-            stream: Framed::new(stream, PacketCodec),
+            stream: Framed::new(stream, PacketCodec::default()),
         })
     }
 

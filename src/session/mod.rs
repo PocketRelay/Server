@@ -232,7 +232,7 @@ impl Session {
         });
 
         SessionFuture {
-            io: Framed::new(io, PacketCodec),
+            io: Framed::new(io, PacketCodec::default()),
             router: &router,
             rx,
             session: session.clone(),
