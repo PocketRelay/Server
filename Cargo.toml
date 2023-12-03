@@ -46,7 +46,7 @@ email_address = "0.2.4"
 # Codec utils for encoding and decoding packets
 tokio-util = { version = "0.7", features = ["codec"] }
 
-# Hyper for connection upgrades
+# Hyper for connection upgrades (TODO: Update to 1.0 once reqwest supports it)
 hyper = "0.14.25"
 tower = "0.4"
 
@@ -88,7 +88,7 @@ features = [
     "sync",
 ]
 
-# Axum web framework
+# Axum web framework (TODO: Update to 0.7 once once reqwest supports hyper 1.0)
 [dependencies.axum]
 version = "0.6.1"
 default-features = false
