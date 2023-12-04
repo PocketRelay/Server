@@ -35,8 +35,8 @@ the [Server Setup Guide](https://pocket-relay.pages.dev/guide/server/)
 
 Below is a table of the download links for the different platforms
 
-| Platform | Download                                                                                                |
-| -------- | ------------------------------------------------------------------------------------------------------- |
+| Platform | Download                                                                                            |
+| -------- | --------------------------------------------------------------------------------------------------- |
 | Windows  | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-windows.exe) |
 | Linux    | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-linux)       |
 
@@ -56,7 +56,7 @@ configuration documentation [Here (docs/CONFIG.md)](https://pocket-relay.pages.d
 - **Portable & Platform Independent** This server can be run on most hardware and software due to its low requirements and custom
 implementations of lots of required portions allowing you to run it
 on Windows, Linux, etc. *Note the server will store the player data and logging in a folder named `data` in the same folder as the exe*
-- **Cracked Support** This server supports cracked Mass Effect 3 copies so you can play on the server using them.
+- **Unofficial Support** This server unofficially licensed Mass Effect 3 copies so you can play on the server using them.
 - **Docker Support** This server includes a `Dockerfile` so that it can be run in a containerized environment. The server uses a small alpine linux container to run inside
 - **Dashboard** The server includes a management dashboard 
     - This includes leaderboards displays
