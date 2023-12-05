@@ -31,17 +31,6 @@ impl<'a> MEParser<'a> {
         next.parse::<F>().ok()
     }
 
-    pub fn next_bool(&mut self) -> Option<bool> {
-        let next = self.next()?;
-        if next == "True" {
-            Some(true)
-        } else if next == "False" {
-            Some(false)
-        } else {
-            None
-        }
-    }
-
     pub fn skip(&mut self, n: usize) -> Option<()> {
         for _ in 0..n {
             self.next()?;
@@ -81,27 +70,6 @@ impl PlayerClass<'_> {
             level,
             promotions,
         })
-    }
-}
-
-/// Structure for holding the parsed kit_name and deployed state
-/// for a player character as the result of parsing
-pub struct KitNameDeployed<'a> {
-    pub kit_name: &'a str,
-    pub deployed: bool,
-}
-
-impl KitNameDeployed<'_> {
-    pub fn parse(value: &str) -> Option<KitNameDeployed<'_>> {
-        let mut parser = MEParser::new(value)?;
-        let kit_name = parser.next()?;
-
-        // Skip the 17 other items
-        parser.skip(17)?;
-
-        let deployed: bool = parser.next_bool()?;
-
-        Some(KitNameDeployed { kit_name, deployed })
     }
 }
 

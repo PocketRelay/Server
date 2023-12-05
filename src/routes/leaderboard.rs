@@ -1,7 +1,8 @@
-use std::sync::Arc;
-
 use crate::{
-    services::leaderboard::{models::*, Leaderboard},
+    database::entities::{
+        leaderboard_data::{LeaderboardDataAndRank, LeaderboardType},
+        LeaderboardData,
+    },
     utils::types::PlayerID,
 };
 use axum::{
@@ -10,7 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -19,12 +20,13 @@ use thiserror::Error;
 /// searching for a specific player.
 #[derive(Debug, Error)]
 pub enum LeaderboardError {
-    /// The provided query range was out of bounds on the underlying query
-    #[error("Unacceptable query range")]
-    InvalidRange,
     /// The requested player was not found in the leaderboard
     #[error("Player not found")]
     PlayerNotFound,
+
+    /// Database error occurred
+    #[error("Internal server error")]
+    Database(#[from] DbErr),
 }
 
 /// Structure of a query requesting a specific leaderboard contains
@@ -34,7 +36,7 @@ pub enum LeaderboardError {
 pub struct LeaderboardQuery {
     /// The number of ranks to offset by
     #[serde(default)]
-    offset: usize,
+    offset: u32,
     /// The number of items to query for count has a maximum limit
     /// of 255 entries to prevent server strain from querying the
     /// entire list of leaderboard entries
@@ -44,11 +46,11 @@ pub struct LeaderboardQuery {
 /// The different types of respones that can be created
 /// from a leaderboard request
 #[derive(Serialize)]
-pub struct LeaderboardResponse<'a> {
+pub struct LeaderboardResponse {
     /// The total number of players in the entire leaderboard
     total: usize,
     /// The entries retrieved at the provided offset
-    entries: &'a [LeaderboardEntry],
+    entries: Vec<LeaderboardDataAndRank>,
     /// Whether there is more entries past the provided offset
     more: bool,
 }
@@ -63,32 +65,27 @@ pub struct LeaderboardResponse<'a> {
 pub async fn get_leaderboard(
     Path(ty): Path<LeaderboardType>,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Query(LeaderboardQuery { offset, count }): Query<LeaderboardQuery>,
-) -> Result<Response, LeaderboardError> {
+) -> Result<Json<LeaderboardResponse>, LeaderboardError> {
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
 
     // The number of entries to return
-    let count: usize = count.unwrap_or(DEFAULT_COUNT) as usize;
+    let count: u32 = count.unwrap_or(DEFAULT_COUNT) as u32;
     // Calculate the start and ending indexes
-    let start: usize = offset * count;
+    let start: u32 = offset * count;
 
-    let group = leaderboard.query(ty, &db).await;
+    let values = LeaderboardData::get_offset(&db, ty, start, count).await?;
+    let total = LeaderboardData::count(&db, ty).await? as u32;
 
-    let entries = group
-        .get_normal(start, count)
-        .ok_or(LeaderboardError::InvalidRange)?;
+    // There are more if the end < the total number of values
+    let more = (start + count) < (total + 1);
 
-    let more = group.has_more(start, count);
-
-    let response = Json(LeaderboardResponse {
-        total: group.values.len(),
-        entries,
+    Ok(Json(LeaderboardResponse {
+        total: total as usize,
+        entries: values,
         more,
-    });
-
-    Ok(response.into_response())
+    }))
 }
 
 /// GET /api/leaderboard/:name/:player_id
@@ -101,17 +98,13 @@ pub async fn get_leaderboard(
 pub async fn get_player_ranking(
     Path((ty, player_id)): Path<(LeaderboardType, PlayerID)>,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(leaderboard): Extension<Arc<Leaderboard>>,
-) -> Result<Response, LeaderboardError> {
-    let group = leaderboard.query(ty, &db).await;
-
-    let entry = match group.get_entry(player_id) {
+) -> Result<Json<LeaderboardDataAndRank>, LeaderboardError> {
+    let entry = match LeaderboardData::get_entry(&db, ty, player_id).await? {
         Some(value) => value,
         None => return Err(LeaderboardError::PlayerNotFound),
     };
 
-    let response = Json(entry);
-    Ok(response.into_response())
+    Ok(Json(entry))
 }
 
 /// IntoResponse implementation for LeaderboardError to allow it to be
@@ -121,7 +114,7 @@ impl IntoResponse for LeaderboardError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
-            Self::InvalidRange => StatusCode::BAD_REQUEST,
+            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, self.to_string()).into_response()
     }

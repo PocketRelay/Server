@@ -30,7 +30,17 @@ pub struct Model {
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(has_many = "super::leaderboard_data::Entity")]
+    LeaderboardData,
+}
+
+// `Related` trait has to be implemented by hand
+impl Related<super::leaderboard_data::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::LeaderboardData.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}
 
