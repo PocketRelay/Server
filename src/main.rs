@@ -1,3 +1,5 @@
+#![warn(unused_crate_dependencies)]
+
 use crate::{
     config::{RuntimeConfig, VERSION},
     services::{game::manager::GameManager, retriever::Retriever, sessions::Sessions},

@@ -643,7 +643,6 @@ checksum = "da0290714b38af9b4a7b094b8a37086d1b4e61f2df9122c3cad2577669145335"
 dependencies = [
  "futures-channel",
  "futures-core",
- "futures-executor",
  "futures-io",
  "futures-sink",
  "futures-task",
@@ -1506,7 +1505,6 @@ dependencies = [
  "email_address",
  "embeddy",
  "flate2",
- "futures",
  "futures-util",
  "hyper",
  "indoc",
