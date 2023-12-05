@@ -32,7 +32,7 @@ argon2 = { version = "0.5", features = ["std"] }
 
 base64ct = { version = "1.5", features = ["alloc"] }
 flate2 = { version = "1", features = ["zlib"], default-features = false }
-ring = "0.16"
+ring = "0.17"
 
 # Library for obtaining the local IP address of the device
 local-ip-address = "0.5"
