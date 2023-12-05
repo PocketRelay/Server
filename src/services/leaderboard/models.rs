@@ -119,24 +119,3 @@ impl LeaderboardGroup {
         self.values.get(start_index..end_index)
     }
 }
-
-/// Type of leaderboard entity
-#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, Deserialize)]
-pub enum LeaderboardType {
-    /// Leaderboard based on the player N7 ratings
-    #[serde(rename = "n7")]
-    N7Rating,
-    /// Leaderboard based on the player challenge point number
-    #[serde(rename = "cp")]
-    ChallengePoints,
-}
-
-impl From<&str> for LeaderboardType {
-    fn from(value: &str) -> Self {
-        if value.starts_with("N7Rating") {
-            Self::N7Rating
-        } else {
-            Self::ChallengePoints
-        }
-    }
-}

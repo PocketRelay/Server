@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
 use crate::{
+    database::entities::{
+        leaderboard_data::{LeaderboardDataAndRank, LeaderboardType},
+        LeaderboardData,
+    },
     services::leaderboard::{models::*, Leaderboard},
     utils::types::PlayerID,
 };
@@ -10,6 +14,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
+use log::debug;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -34,7 +39,7 @@ pub enum LeaderboardError {
 pub struct LeaderboardQuery {
     /// The number of ranks to offset by
     #[serde(default)]
-    offset: usize,
+    offset: u32,
     /// The number of items to query for count has a maximum limit
     /// of 255 entries to prevent server strain from querying the
     /// entire list of leaderboard entries
@@ -53,6 +58,18 @@ pub struct LeaderboardResponse<'a> {
     more: bool,
 }
 
+/// The different types of respones that can be created
+/// from a leaderboard request
+#[derive(Serialize)]
+pub struct LeaderboardResponse2 {
+    /// The total number of players in the entire leaderboard
+    total: usize,
+    /// The entries retrieved at the provided offset
+    entries: Vec<LeaderboardDataAndRank>,
+    /// Whether there is more entries past the provided offset
+    more: bool,
+}
+
 /// GET /api/leaderboard/:name
 ///
 /// Retrieves the leaderboard query for the provided leaderboard
@@ -63,32 +80,29 @@ pub struct LeaderboardResponse<'a> {
 pub async fn get_leaderboard(
     Path(ty): Path<LeaderboardType>,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Query(LeaderboardQuery { offset, count }): Query<LeaderboardQuery>,
-) -> Result<Response, LeaderboardError> {
+) -> Result<Json<LeaderboardResponse2>, LeaderboardError> {
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
 
     // The number of entries to return
-    let count: usize = count.unwrap_or(DEFAULT_COUNT) as usize;
+    let count: u32 = count.unwrap_or(DEFAULT_COUNT) as u32;
     // Calculate the start and ending indexes
-    let start: usize = offset * count;
+    let start: u32 = offset * count;
 
-    let group = leaderboard.query(ty, &db).await;
+    let values = LeaderboardData::get_offset(&db, ty, start, count)
+        .await
+        .expect("Ofs");
 
-    let entries = group
-        .get_normal(start, count)
-        .ok_or(LeaderboardError::InvalidRange)?;
+    let total = LeaderboardData::total(&db, ty).await.unwrap() as u64;
 
-    let more = group.has_more(start, count);
+    let more = false; /* Todo: more */
 
-    let response = Json(LeaderboardResponse {
-        total: group.values.len(),
-        entries,
+    Ok(Json(LeaderboardResponse2 {
+        total: total as usize,
+        entries: values,
         more,
-    });
-
-    Ok(response.into_response())
+    }))
 }
 
 /// GET /api/leaderboard/:name/:player_id

@@ -1,9 +1,54 @@
-use tdf::{TdfDeserialize, TdfSerialize, TdfType, TdfTyped};
-
 use crate::{
-    services::leaderboard::models::{LeaderboardEntry, LeaderboardType},
+    database::entities::leaderboard_data::LeaderboardType,
+    services::leaderboard::models::LeaderboardEntry,
     utils::{components::user_sessions::PLAYER_TYPE, types::PlayerID},
 };
+use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType, TdfTyped, VarIntList};
+
+#[derive(TdfDeserialize)]
+pub struct SubmitGameReportRequest {
+    #[tdf(tag = "RPRT")]
+    pub report: GameReport,
+}
+
+#[derive(TdfDeserialize, TdfTyped)]
+#[tdf(group)]
+pub struct GameReport {
+    // Must be read since it uses the same duplicate tag
+    #[tdf(tag = "GAME")]
+    pub game_ids: VarIntList,
+
+    #[tdf(tag = "GAME")]
+    pub game: GameReportGame,
+}
+
+#[derive(TdfDeserialize, TdfTyped)]
+#[tdf(group)]
+pub struct GameReportGame {
+    /// The details for each specific player
+    #[tdf(tag = "PLYR")]
+    pub players: TdfMap<PlayerID, GameReportPlayerData>,
+}
+
+#[derive(TdfDeserialize, TdfTyped)]
+#[tdf(group)]
+pub struct GameReportPlayerData {
+    /// Locale string encoded as int
+    #[tdf(tag = "CTRY")]
+    pub country: u32,
+    /// Number of challenge points the player has
+    #[tdf(tag = "NCHP")]
+    pub challenge_points: u32,
+    /// N7 Rating value for the player
+    #[tdf(tag = "NRAT")]
+    pub n7_rating: u32,
+}
+
+#[test]
+fn test() {
+    let bytes = 17477u32.to_be_bytes();
+    println!("{}", String::from_utf8_lossy(&bytes));
+}
 
 /// Structure for the request to retrieve the entity count
 /// of a leaderboard

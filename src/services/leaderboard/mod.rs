@@ -1,7 +1,7 @@
 use self::models::*;
 use crate::{
     database::{
-        entities::players,
+        entities::{leaderboard_data::LeaderboardType, players},
         entities::{Player, PlayerData},
         DatabaseConnection, DbResult,
     },
