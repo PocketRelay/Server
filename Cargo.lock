@@ -1513,6 +1513,7 @@ dependencies = [
  "log-panics",
  "log4rs",
  "parking_lot",
+ "rand",
  "reqwest",
  "ring",
  "sea-orm",

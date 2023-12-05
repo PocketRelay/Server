@@ -9,6 +9,10 @@ use std::{
 pub mod entities;
 mod migration;
 
+/// Testing seeding logic
+#[cfg(test)]
+mod seed;
+
 // Re-exports of database types
 pub use sea_orm::DatabaseConnection;
 pub use sea_orm::DbErr;
@@ -25,11 +29,21 @@ pub type DbResult<T> = Result<T, DbErr>;
 const DATABASE_PATH: &str = "data/app.db";
 const DATABASE_PATH_URL: &str = "sqlite:data/app.db";
 
-/// Connects to the database returning a Database connection
-/// which allows accessing the database without accessing sea_orm
+/// Connects to the database and applies the admin changes if
+/// required, returning the database connection
 pub async fn init(config: &RuntimeConfig) -> DatabaseConnection {
     info!("Connected to database..");
 
+    let connection = connect_database().await;
+
+    // Setup the super admin account
+    init_database_admin(&connection, config).await;
+
+    connection
+}
+
+/// Connects to the database
+async fn connect_database() -> DatabaseConnection {
     let path = Path::new(&DATABASE_PATH);
 
     // Create path to database file if missing
@@ -53,9 +67,6 @@ pub async fn init(config: &RuntimeConfig) -> DatabaseConnection {
     Migrator::up(&connection, None)
         .await
         .expect("Unable to run database migrations");
-
-    // Setup the super admin account
-    init_database_admin(&connection, config).await;
 
     connection
 }
