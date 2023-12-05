@@ -4,7 +4,7 @@ use crate::config::RuntimeConfig;
 use crate::database::DbResult;
 use crate::utils::hashing::hash_password;
 use futures_util::future::BoxFuture;
-use sea_orm::{prelude::*, FromQueryResult};
+use sea_orm::prelude::*;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DeleteResult, EntityTrait,
     IntoActiveModel, QueryFilter,

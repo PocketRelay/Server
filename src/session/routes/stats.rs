@@ -1,49 +1,43 @@
 use crate::{
-    services::leaderboard::Leaderboard,
+    database::entities::LeaderboardData,
     session::{
         models::stats::*,
-        packet::Packet,
-        router::{Blaze, BlazeWithHeader, Extension},
+        router::{Blaze, Extension},
     },
 };
 use sea_orm::DatabaseConnection;
-use std::sync::Arc;
 
 pub async fn handle_normal_leaderboard(
-    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Extension(db): Extension<DatabaseConnection>,
-    req: BlazeWithHeader<LeaderboardRequest>,
-) -> Packet {
-    let query = &req.req;
-    let group = leaderboard.query(query.name, &db).await;
-    let slice = group
-        .get_normal(query.start, query.count)
+    Blaze(query): Blaze<LeaderboardRequest>,
+) -> Blaze<LeaderboardResponse> {
+    let values = LeaderboardData::get_offset(&db, query.name, query.start, query.count)
+        .await
         .unwrap_or_default();
-    req.response(LeaderboardResponse::Borrowed(slice))
+    Blaze(LeaderboardResponse { values })
 }
 
 pub async fn handle_centered_leaderboard(
-    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Extension(db): Extension<DatabaseConnection>,
-    req: BlazeWithHeader<CenteredLeaderboardRequest>,
-) -> Packet {
-    let query = &req.req;
-    let group = leaderboard.query(query.name, &db).await;
-    let slice = group
-        .get_centered(query.center, query.count)
+    Blaze(query): Blaze<CenteredLeaderboardRequest>,
+) -> Blaze<LeaderboardResponse> {
+    let values = LeaderboardData::get_centered(&db, query.name, query.center, query.count)
+        .await
+        .unwrap_or_default()
         .unwrap_or_default();
-    req.response(LeaderboardResponse::Borrowed(slice))
+
+    Blaze(LeaderboardResponse { values })
 }
 
 pub async fn handle_filtered_leaderboard(
-    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Extension(db): Extension<DatabaseConnection>,
-    req: BlazeWithHeader<FilteredLeaderboardRequest>,
-) -> Packet {
-    let query = &req.req;
-    let group = leaderboard.query(query.name, &db).await;
-    let response = group.get_filtered(&query.ids);
-    req.response(LeaderboardResponse::Owned(response))
+    Blaze(query): Blaze<FilteredLeaderboardRequest>,
+) -> Blaze<LeaderboardResponse> {
+    let values = LeaderboardData::get_filtered(&db, query.name, query.ids)
+        .await
+        .unwrap_or_default();
+
+    Blaze(LeaderboardResponse { values })
 }
 
 /// Handles returning the number of leaderboard objects present.
@@ -62,13 +56,16 @@ pub async fn handle_filtered_leaderboard(
 /// }
 /// ```
 pub async fn handle_leaderboard_entity_count(
-    Extension(leaderboard): Extension<Arc<Leaderboard>>,
     Extension(db): Extension<DatabaseConnection>,
     Blaze(req): Blaze<EntityCountRequest>,
 ) -> Blaze<EntityCountResponse> {
-    let group = leaderboard.query(req.name, &db).await;
-    let count = group.values.len();
-    Blaze(EntityCountResponse { count })
+    let total = LeaderboardData::total(&db, req.name)
+        .await
+        .unwrap_or_default();
+
+    Blaze(EntityCountResponse {
+        count: total as usize,
+    })
 }
 
 fn get_locale_name(code: &str) -> &str {

@@ -1,9 +1,6 @@
 use crate::{
     config::{RuntimeConfig, VERSION},
-    services::{
-        game::manager::GameManager, leaderboard::Leaderboard, retriever::Retriever,
-        sessions::Sessions,
-    },
+    services::{game::manager::GameManager, retriever::Retriever, sessions::Sessions},
     utils::signing::SigningKey,
 };
 use axum::{Extension, Server};
@@ -57,7 +54,6 @@ async fn main() {
     );
 
     let game_manager = Arc::new(GameManager::new());
-    let leaderboard = Arc::new(Leaderboard::new());
     let sessions = Arc::new(Sessions::new(signing_key));
     let config = Arc::new(runtime_config);
     let retriever = Arc::new(retriever);
@@ -69,7 +65,6 @@ async fn main() {
     router.add_extension(config.clone());
     router.add_extension(retriever);
     router.add_extension(game_manager.clone());
-    router.add_extension(leaderboard.clone());
     router.add_extension(sessions.clone());
 
     let router = router.build();
@@ -81,7 +76,6 @@ async fn main() {
         .layer(Extension(config))
         .layer(Extension(router))
         .layer(Extension(game_manager))
-        .layer(Extension(leaderboard))
         .layer(Extension(sessions))
         .into_make_service_with_connect_info::<SocketAddr>();
 

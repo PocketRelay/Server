@@ -4,9 +4,7 @@ use crate::database::DbResult;
 use crate::utils::types::PlayerID;
 use sea_orm::sea_query::OnConflict;
 use sea_orm::ActiveValue::NotSet;
-use sea_orm::{
-    prelude::*, FromQueryResult, InsertResult, QueryOrder, QuerySelect, RelationBuilder,
-};
+use sea_orm::{prelude::*, FromQueryResult, InsertResult, QueryOrder, QuerySelect};
 use sea_orm::{ActiveValue::Set, DatabaseConnection, EntityTrait};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
@@ -87,16 +85,19 @@ pub struct LeaderboardDataAndRank {
 }
 
 impl Model {
-    pub async fn total(db: &DatabaseConnection, ty: LeaderboardType) -> DbResult<u64> {
-        Entity::find().filter(Column::Ty.eq(ty)).count(db).await
+    pub fn total(
+        db: &DatabaseConnection,
+        ty: LeaderboardType,
+    ) -> impl Future<Output = DbResult<u64>> + Send + '_ {
+        Entity::find().filter(Column::Ty.eq(ty)).count(db)
     }
 
-    pub async fn get_offset(
+    pub fn get_offset(
         db: &DatabaseConnection,
         ty: LeaderboardType,
         start: u32,
         count: u32,
-    ) -> DbResult<Vec<LeaderboardDataAndRank>> {
+    ) -> impl Future<Output = DbResult<Vec<LeaderboardDataAndRank>>> + Send + '_ {
         Entity::find()
             // Ranking by the values
             .expr(Expr::cust("RANK () OVER (ORDER BY value DESC) rank"))
@@ -116,27 +117,40 @@ impl Model {
             .into_model::<LeaderboardDataAndRank>()
             // Collect all the matching entities
             .all(db)
-            .await
     }
+
     pub async fn get_centered(
         db: &DatabaseConnection,
         ty: LeaderboardType,
         player_id: PlayerID,
         count: u32,
     ) -> DbResult<Option<Vec<LeaderboardDataAndRank>>> {
-        // let value = match Self::get_entry(db, ty, player_id).await? {
-        //     Some(value) => value,
-        //     None =>
-        // }
+        let value = match Self::get_entry(db, ty, player_id).await? {
+            Some(value) => value,
+            None => return Ok(None),
+        };
 
-        Ok(None)
+        if count == 0 {
+            return Ok(None);
+        }
+
+        // The number of items before the center index
+        let before = if count % 2 == 0 {
+            (count / 2).saturating_add(1)
+        } else {
+            count / 2
+        };
+
+        let start = value.rank.saturating_sub(before);
+        let values = Self::get_offset(db, ty, start, count).await?;
+        Ok(Some(values))
     }
 
-    pub async fn get_entry(
+    pub fn get_entry(
         db: &DatabaseConnection,
         ty: LeaderboardType,
         player_id: PlayerID,
-    ) -> DbResult<Option<LeaderboardDataAndRank>> {
+    ) -> impl Future<Output = DbResult<Option<LeaderboardDataAndRank>>> + Send + '_ {
         Entity::find()
             // Ranking by the values
             .expr(Expr::cust("RANK () OVER (ORDER BY value DESC) rank"))
@@ -152,14 +166,13 @@ impl Model {
             .into_model::<LeaderboardDataAndRank>()
             // Collect all the matching entities
             .one(db)
-            .await
     }
 
-    pub async fn get_filtered(
+    pub fn get_filtered(
         db: &DatabaseConnection,
         ty: LeaderboardType,
         player_ids: Vec<PlayerID>,
-    ) -> DbResult<Vec<LeaderboardDataAndRank>> {
+    ) -> impl Future<Output = DbResult<Vec<LeaderboardDataAndRank>>> + Send + '_ {
         Entity::find()
             // Ranking by the values
             .expr(Expr::cust("RANK () OVER (ORDER BY value DESC) rank"))
@@ -175,7 +188,6 @@ impl Model {
             .into_model::<LeaderboardDataAndRank>()
             // Collect all the matching entities
             .all(db)
-            .await
     }
 
     pub fn set(

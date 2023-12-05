@@ -1,11 +1,8 @@
-use std::sync::Arc;
-
 use crate::{
     database::entities::{
         leaderboard_data::{LeaderboardDataAndRank, LeaderboardType},
         LeaderboardData,
     },
-    services::leaderboard::{models::*, Leaderboard},
     utils::types::PlayerID,
 };
 use axum::{
@@ -14,8 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
-use log::debug;
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -24,12 +20,13 @@ use thiserror::Error;
 /// searching for a specific player.
 #[derive(Debug, Error)]
 pub enum LeaderboardError {
-    /// The provided query range was out of bounds on the underlying query
-    #[error("Unacceptable query range")]
-    InvalidRange,
     /// The requested player was not found in the leaderboard
     #[error("Player not found")]
     PlayerNotFound,
+
+    /// Database error occurred
+    #[error("Internal server error")]
+    Database(#[from] DbErr),
 }
 
 /// Structure of a query requesting a specific leaderboard contains
@@ -49,19 +46,7 @@ pub struct LeaderboardQuery {
 /// The different types of respones that can be created
 /// from a leaderboard request
 #[derive(Serialize)]
-pub struct LeaderboardResponse<'a> {
-    /// The total number of players in the entire leaderboard
-    total: usize,
-    /// The entries retrieved at the provided offset
-    entries: &'a [LeaderboardEntry],
-    /// Whether there is more entries past the provided offset
-    more: bool,
-}
-
-/// The different types of respones that can be created
-/// from a leaderboard request
-#[derive(Serialize)]
-pub struct LeaderboardResponse2 {
+pub struct LeaderboardResponse {
     /// The total number of players in the entire leaderboard
     total: usize,
     /// The entries retrieved at the provided offset
@@ -81,7 +66,7 @@ pub async fn get_leaderboard(
     Path(ty): Path<LeaderboardType>,
     Extension(db): Extension<DatabaseConnection>,
     Query(LeaderboardQuery { offset, count }): Query<LeaderboardQuery>,
-) -> Result<Json<LeaderboardResponse2>, LeaderboardError> {
+) -> Result<Json<LeaderboardResponse>, LeaderboardError> {
     /// The default number of entries to return in a leaderboard response
     const DEFAULT_COUNT: u8 = 40;
 
@@ -90,15 +75,13 @@ pub async fn get_leaderboard(
     // Calculate the start and ending indexes
     let start: u32 = offset * count;
 
-    let values = LeaderboardData::get_offset(&db, ty, start, count)
-        .await
-        .expect("Ofs");
+    let values = LeaderboardData::get_offset(&db, ty, start, count).await?;
+    let total = LeaderboardData::total(&db, ty).await? as u32;
 
-    let total = LeaderboardData::total(&db, ty).await.unwrap() as u64;
+    // There are more if the end < the total number of values
+    let more = (start + count) < (total + 1);
 
-    let more = false; /* Todo: more */
-
-    Ok(Json(LeaderboardResponse2 {
+    Ok(Json(LeaderboardResponse {
         total: total as usize,
         entries: values,
         more,
@@ -115,17 +98,13 @@ pub async fn get_leaderboard(
 pub async fn get_player_ranking(
     Path((ty, player_id)): Path<(LeaderboardType, PlayerID)>,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(leaderboard): Extension<Arc<Leaderboard>>,
-) -> Result<Response, LeaderboardError> {
-    let group = leaderboard.query(ty, &db).await;
-
-    let entry = match group.get_entry(player_id) {
+) -> Result<Json<LeaderboardDataAndRank>, LeaderboardError> {
+    let entry = match LeaderboardData::get_entry(&db, ty, player_id).await? {
         Some(value) => value,
         None => return Err(LeaderboardError::PlayerNotFound),
     };
 
-    let response = Json(entry);
-    Ok(response.into_response())
+    Ok(Json(entry))
 }
 
 /// IntoResponse implementation for LeaderboardError to allow it to be
@@ -135,7 +114,7 @@ impl IntoResponse for LeaderboardError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::PlayerNotFound => StatusCode::NOT_FOUND,
-            Self::InvalidRange => StatusCode::BAD_REQUEST,
+            Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, self.to_string()).into_response()
     }

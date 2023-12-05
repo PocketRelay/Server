@@ -1,11 +1,7 @@
 //! Router implementation for routing packet components to different functions
 //! and automatically decoding the packet contents to the function type
 
-use super::{
-    models::errors::BlazeError,
-    packet::{FireFrame, Packet},
-    SessionLink,
-};
+use super::{models::errors::BlazeError, packet::Packet, SessionLink};
 use crate::{
     database::entities::Player,
     services::game::GamePlayer,
@@ -26,7 +22,7 @@ use std::{
     marker::PhantomData,
     sync::Arc,
 };
-use tdf::{serialize_vec, TdfDeserialize, TdfDeserializer, TdfSerialize};
+use tdf::{serialize_vec, TdfDeserialize, TdfSerialize};
 
 pub trait Handler<Args, Res>: Send + Sync + 'static {
     fn handle(&self, req: PacketRequest) -> BoxFuture<'_, Packet>;
@@ -175,16 +171,6 @@ pub trait FromPacketRequest: Sized {
 /// serialization [IntoPacketResponse] for TDF contents
 pub struct Blaze<V>(pub V);
 
-/// Wrapper for providing deserialization [FromPacketRequest] and
-/// serialization [IntoPacketResponse] for TDF contents
-///
-/// Stores the packet header so that it can be used for generating
-/// responses
-pub struct BlazeWithHeader<V> {
-    pub req: V,
-    pub frame: FireFrame,
-}
-
 /// [Blaze] tdf type for contents that have already been
 /// serialized ahead of time
 pub struct RawBlaze(Bytes);
@@ -294,46 +280,6 @@ where
                     GlobalError::System.into()
                 })
                 .map(Blaze),
-        ))
-    }
-}
-
-impl<V> BlazeWithHeader<V> {
-    pub fn response<E>(&self, res: E) -> Packet
-    where
-        E: TdfSerialize,
-    {
-        Packet {
-            frame: self.frame.response(),
-            contents: Bytes::from(serialize_vec(&res)),
-        }
-    }
-}
-
-impl<V> FromPacketRequest for BlazeWithHeader<V>
-where
-    for<'a> V: TdfDeserialize<'a> + Send + 'a,
-{
-    type Rejection = BlazeError;
-
-    fn from_packet_request<'a>(
-        req: &'a mut PacketRequest,
-    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
-    where
-        Self: 'a,
-    {
-        let mut r = TdfDeserializer::new(&req.packet.contents);
-
-        Box::pin(ready(
-            V::deserialize(&mut r)
-                .map(|value| BlazeWithHeader {
-                    req: value,
-                    frame: req.packet.frame.clone(),
-                })
-                .map_err(|err| {
-                    error!("Error while decoding packet: {:?}", err);
-                    GlobalError::System.into()
-                }),
         ))
     }
 }
