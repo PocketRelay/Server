@@ -59,7 +59,7 @@ pub async fn handle_leaderboard_entity_count(
     Extension(db): Extension<DatabaseConnection>,
     Blaze(req): Blaze<EntityCountRequest>,
 ) -> Blaze<EntityCountResponse> {
-    let total = LeaderboardData::total(&db, req.name)
+    let total = LeaderboardData::count(&db, req.name)
         .await
         .unwrap_or_default();
 

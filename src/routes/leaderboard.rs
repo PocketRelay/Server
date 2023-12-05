@@ -76,7 +76,7 @@ pub async fn get_leaderboard(
     let start: u32 = offset * count;
 
     let values = LeaderboardData::get_offset(&db, ty, start, count).await?;
-    let total = LeaderboardData::total(&db, ty).await? as u32;
+    let total = LeaderboardData::count(&db, ty).await? as u32;
 
     // There are more if the end < the total number of values
     let more = (start + count) < (total + 1);

@@ -85,13 +85,29 @@ pub struct LeaderboardDataAndRank {
 }
 
 impl Model {
-    pub fn total(
+    /// Expression used to rank the leaderboard data
+    const RANK_EXPR: &'static str = "RANK() OVER (ORDER BY value DESC) rank";
+    /// The name of the column used for the rank value
+    const RANK_COL: &'static str = "rank";
+    /// The name of the column to store the loaded player name
+    const PLAYER_NAME_COL: &'static str = "player_name";
+
+    /// Counts the number of leaderboard data models for the
+    /// specific `ty` type of leaderboard
+    pub fn count(
         db: &DatabaseConnection,
         ty: LeaderboardType,
     ) -> impl Future<Output = DbResult<u64>> + Send + '_ {
-        Entity::find().filter(Column::Ty.eq(ty)).count(db)
+        Entity::find()
+            // Filter by the type
+            .filter(Column::Ty.eq(ty))
+            // Get the number of items
+            .count(db)
     }
 
+    /// Gets a collection of leaderboard data for the specific
+    /// `ty` type of leaderboard starting with the `start` rank
+    /// and including maximum of `count` entries
     pub fn get_offset(
         db: &DatabaseConnection,
         ty: LeaderboardType,
@@ -99,32 +115,85 @@ impl Model {
         count: u32,
     ) -> impl Future<Output = DbResult<Vec<LeaderboardDataAndRank>>> + Send + '_ {
         Entity::find()
-            // Ranking by the values
-            .expr(Expr::cust("RANK () OVER (ORDER BY value DESC) rank"))
+            // Add the ranking expression
+            .expr(Expr::cust(Self::RANK_EXPR))
             // Filter by the type
             .filter(Column::Ty.eq(ty))
-            // Order highest to lowest
-            .order_by_desc(Expr::cust("rank"))
+            // Order lowest to highest ranking
+            .order_by_asc(Expr::cust(Self::RANK_COL))
             // Offset to the starting position
             .offset(start as u64)
             // Only take the requested amouont
             .limit(count as u64)
-            // Join the playe rname
-            // Inner join on the player and use the player name
+            // Inner join on the players table
             .join(sea_orm::JoinType::InnerJoin, Relation::Player.def())
-            .column_as(super::players::Column::DisplayName, "player_name")
+            // Use the player name from the players table
+            .column_as(super::players::Column::DisplayName, Self::PLAYER_NAME_COL)
             // Turn it into the new model
             .into_model::<LeaderboardDataAndRank>()
             // Collect all the matching entities
             .all(db)
     }
 
+    /// Gets the leaderboard data for a specific player on a
+    /// specific leaderboard type
+    pub fn get_entry(
+        db: &DatabaseConnection,
+        ty: LeaderboardType,
+        player_id: PlayerID,
+    ) -> impl Future<Output = DbResult<Option<LeaderboardDataAndRank>>> + Send + '_ {
+        Entity::find()
+            // Add the ranking expression
+            .expr(Expr::cust(Self::RANK_EXPR))
+            // Filter by the type and the specific player ID
+            .filter(Column::Ty.eq(ty).and(Column::PlayerId.eq(player_id)))
+            // Order lowest to highest ranking
+            .order_by_asc(Expr::cust(Self::RANK_COL))
+            // Inner join on the players table
+            .join(sea_orm::JoinType::InnerJoin, Relation::Player.def())
+            // Use the player name from the players table
+            .column_as(super::players::Column::DisplayName, Self::PLAYER_NAME_COL)
+            // Turn it into the new model
+            .into_model::<LeaderboardDataAndRank>()
+            // Collect all the matching entities
+            .one(db)
+    }
+
+    /// Gets a collection of leaderboard data for the specific
+    /// `ty` type of leaderboard including only the players
+    /// in the provided `player_ids` collection
+    pub fn get_filtered(
+        db: &DatabaseConnection,
+        ty: LeaderboardType,
+        player_ids: Vec<PlayerID>,
+    ) -> impl Future<Output = DbResult<Vec<LeaderboardDataAndRank>>> + Send + '_ {
+        Entity::find()
+            // Add the ranking expression
+            .expr(Expr::cust(Self::RANK_EXPR))
+            // Filter by the type and the requested player IDs
+            .filter(Column::Ty.eq(ty).and(Column::PlayerId.is_in(player_ids)))
+            // Order lowest to highest ranking
+            .order_by_asc(Expr::cust(Self::RANK_COL))
+            // Inner join on the players table
+            .join(sea_orm::JoinType::InnerJoin, Relation::Player.def())
+            // Use the player name from the players table
+            .column_as(super::players::Column::DisplayName, Self::PLAYER_NAME_COL)
+            // Turn it into the new model
+            .into_model::<LeaderboardDataAndRank>()
+            // Collect all the matching entities
+            .all(db)
+    }
+
+    /// Gets a collection of leaderboard data for the specific
+    /// `ty` type of leaderboard including maximum of `count` entries
+    /// centering the results around the rank of the provided `player_id`
     pub async fn get_centered(
         db: &DatabaseConnection,
         ty: LeaderboardType,
         player_id: PlayerID,
         count: u32,
     ) -> DbResult<Option<Vec<LeaderboardDataAndRank>>> {
+        // Find the entry we are centering on
         let value = match Self::get_entry(db, ty, player_id).await? {
             Some(value) => value,
             None => return Ok(None),
@@ -146,50 +215,8 @@ impl Model {
         Ok(Some(values))
     }
 
-    pub fn get_entry(
-        db: &DatabaseConnection,
-        ty: LeaderboardType,
-        player_id: PlayerID,
-    ) -> impl Future<Output = DbResult<Option<LeaderboardDataAndRank>>> + Send + '_ {
-        Entity::find()
-            // Ranking by the values
-            .expr(Expr::cust("RANK () OVER (ORDER BY value DESC) rank"))
-            // Filter by the type
-            .filter(Column::Ty.eq(ty).and(Column::PlayerId.eq(player_id)))
-            // Order highest to lowest
-            .order_by_desc(Expr::cust("rank"))
-            // Join the playe rname
-            // Inner join on the player and use the player name
-            .join(sea_orm::JoinType::InnerJoin, Relation::Player.def())
-            .column_as(super::players::Column::DisplayName, "player_name")
-            // Turn it into the new model
-            .into_model::<LeaderboardDataAndRank>()
-            // Collect all the matching entities
-            .one(db)
-    }
-
-    pub fn get_filtered(
-        db: &DatabaseConnection,
-        ty: LeaderboardType,
-        player_ids: Vec<PlayerID>,
-    ) -> impl Future<Output = DbResult<Vec<LeaderboardDataAndRank>>> + Send + '_ {
-        Entity::find()
-            // Ranking by the values
-            .expr(Expr::cust("RANK () OVER (ORDER BY value DESC) rank"))
-            // Filter by the type
-            .filter(Column::Ty.eq(ty).and(Column::PlayerId.is_in(player_ids)))
-            // Order highest to lowest
-            .order_by_desc(Expr::cust("rank"))
-            // Join the playe rname
-            // Inner join on the player and use the player name
-            .join(sea_orm::JoinType::InnerJoin, Relation::Player.def())
-            .column_as(super::players::Column::DisplayName, "player_name")
-            // Turn it into the new model
-            .into_model::<LeaderboardDataAndRank>()
-            // Collect all the matching entities
-            .all(db)
-    }
-
+    /// Sets the leaderboard value for the specified `player_id` on
+    /// a specific leaderboard `ty` type to the provided `value`
     pub fn set(
         db: &DatabaseConnection,
         ty: LeaderboardType,
