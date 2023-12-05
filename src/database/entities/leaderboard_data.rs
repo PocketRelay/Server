@@ -196,23 +196,30 @@ impl Model {
         // Find the entry we are centering on
         let value = match Self::get_entry(db, ty, player_id).await? {
             Some(value) => value,
+            // The specified player hasn't been ranked
             None => return Ok(None),
         };
 
-        if count == 0 {
-            return Ok(None);
-        }
+        // The number of ranks to start at before the centered rank
+        let before = (count / 2)
+            // Add 1 when the count is even
+            .saturating_add((count % 2 == 0) as u32);
 
-        // The number of items before the center index
-        let before = if count % 2 == 0 {
-            (count / 2).saturating_add(1)
-        } else {
-            count / 2
-        };
-
+        // Determine the starting rank saturating zero bounds
         let start = value.rank.saturating_sub(before);
+
         let values = Self::get_offset(db, ty, start, count).await?;
         Ok(Some(values))
+    }
+
+    /// Function providing the conflict handling for upserting
+    /// values into the leaderboard data
+    #[inline(always)]
+    fn conflict_handle() -> OnConflict {
+        // Update the value column if the player ID in that type already exists
+        OnConflict::columns([Column::PlayerId, Column::Ty])
+            .update_column(Column::Value)
+            .to_owned()
     }
 
     /// Sets the leaderboard value for the specified `player_id` on
@@ -229,12 +236,7 @@ impl Model {
             player_id: Set(player_id),
             value: Set(value),
         })
-        .on_conflict(
-            // Update the value column if a key already exists
-            OnConflict::columns([Column::PlayerId, Column::Ty])
-                .update_column(Column::Value)
-                .to_owned(),
-        )
+        .on_conflict(Self::conflict_handle())
         .exec(db)
     }
 
@@ -255,12 +257,7 @@ impl Model {
                 value: Set(value),
             }),
         )
-        .on_conflict(
-            // Update the value column if a key already exists
-            OnConflict::columns([Column::PlayerId, Column::Ty])
-                .update_column(Column::Value)
-                .to_owned(),
-        )
+        .on_conflict(Self::conflict_handle())
         .exec(db)
     }
 }
