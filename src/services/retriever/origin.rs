@@ -4,9 +4,12 @@
 use super::{models::OriginLoginResponse, OfficialSession, RetrieverResult};
 use crate::{
     config::RuntimeConfig,
-    database::entities::{Player, PlayerData},
+    database::entities::{Player, PlayerData, PlayerRole},
     session::models::{auth::OriginLoginRequest, util::SettingsResponse},
-    utils::components::{authentication, util},
+    utils::{
+        components::{authentication, util},
+        hashing::hash_password,
+    },
 };
 use log::{debug, error, warn};
 use sea_orm::{DatabaseConnection, DbErr};
@@ -77,8 +80,24 @@ impl OriginFlow {
             return Ok(player);
         }
 
+        let mut role = PlayerRole::Default;
+        let mut password: Option<String> = None;
+
+        // If there is a super admin defined
+        if config.dashboard.is_super_email(&details.email) {
+            // Use the super admin role
+            role = PlayerRole::SuperAdmin;
+
+            // Update the password with the specified one
+            if let Some(super_password) = config.dashboard.super_password.as_ref() {
+                let password_hash =
+                    hash_password(super_password).expect("Failed to hash super user password");
+                password = Some(password_hash);
+            }
+        }
+
         let player: Player =
-            Player::create(db, details.email, details.display_name, None, config).await?;
+            Player::create(db, details.email, details.display_name, password, role).await?;
 
         // If data fetching is ena
         if self.data {

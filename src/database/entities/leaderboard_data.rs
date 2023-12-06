@@ -40,35 +40,6 @@ pub enum LeaderboardType {
     ChallengePoints = 1,
 }
 
-impl From<&str> for LeaderboardType {
-    fn from(value: &str) -> Self {
-        if value.starts_with("N7Rating") {
-            Self::N7Rating
-        } else {
-            Self::ChallengePoints
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::players::Entity",
-        from = "Column::PlayerId",
-        to = "super::players::Column::Id"
-    )]
-    Player,
-}
-
-// `Related` trait has to be implemented by hand
-impl Related<super::players::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Player.def()
-    }
-}
-
-impl ActiveModelBehavior for ActiveModel {}
-
 #[derive(FromQueryResult, Serialize)]
 pub struct LeaderboardDataAndRank {
     /// Unique Identifier for the entry
@@ -261,3 +232,32 @@ impl Model {
         .exec(db)
     }
 }
+
+impl From<&str> for LeaderboardType {
+    fn from(value: &str) -> Self {
+        if value.starts_with("N7Rating") {
+            Self::N7Rating
+        } else {
+            Self::ChallengePoints
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::players::Entity",
+        from = "Column::PlayerId",
+        to = "super::players::Column::Id"
+    )]
+    Player,
+}
+
+// `Related` trait has to be implemented by hand
+impl Related<super::players::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Player.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}

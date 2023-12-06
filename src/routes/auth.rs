@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     config::RuntimeConfig,
-    database::entities::Player,
+    database::entities::{Player, PlayerRole},
     services::sessions::Sessions,
     utils::hashing::{hash_password, verify_password},
 };
@@ -135,8 +135,15 @@ pub async fn create(
         return Err(AuthError::EmailTaken);
     }
 
+    // Use the super admin role if the email is the super admins
+    let role: PlayerRole = if config.dashboard.is_super_email(&email) {
+        PlayerRole::SuperAdmin
+    } else {
+        PlayerRole::Default
+    };
+
     let password: String = hash_password(&password)?;
-    let player: Player = Player::create(&db, email, username, Some(password), &config).await?;
+    let player: Player = Player::create(&db, email, username, Some(password), role).await?;
 
     let token = sessions.create_token(player.id);
     Ok(Json(TokenResponse { token }))

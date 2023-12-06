@@ -25,12 +25,6 @@ pub struct Model {
     pub value: String,
 }
 
-/// The relationships for the player data
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}
-
 impl Model {
     /// Retrieves all the player data for the desired player
     ///
@@ -154,3 +148,8 @@ impl Model {
             .all(db)
     }
 }
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {}

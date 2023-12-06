@@ -135,6 +135,14 @@ pub struct DashboardConfig {
     pub disable_registration: bool,
 }
 
+impl DashboardConfig {
+    pub fn is_super_email(&self, email: &str) -> bool {
+        self.super_email
+            .as_ref()
+            .is_some_and(|value| value.eq(email))
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(default)]
 pub struct RetrieverConfig {

@@ -1,6 +1,9 @@
 use crate::{
     config::RuntimeConfig,
-    database::{entities::Player, DatabaseConnection},
+    database::{
+        entities::{Player, PlayerRole},
+        DatabaseConnection,
+    },
     services::{
         retriever::Retriever,
         sessions::{Sessions, VerifyError},
@@ -305,9 +308,16 @@ pub async fn handle_create_account(
     // Create a default display name from the first 99 chars of the email
     let display_name: String = email.chars().take(99).collect::<String>();
 
+    // Use the super admin role if the email is the super admins
+    let role: PlayerRole = if config.dashboard.is_super_email(&email) {
+        PlayerRole::SuperAdmin
+    } else {
+        PlayerRole::Default
+    };
+
     // Create a new player
     let player: Player =
-        Player::create(&db, email, display_name, Some(hashed_password), &config).await?;
+        Player::create(&db, email, display_name, Some(hashed_password), role).await?;
 
     let player = session.set_player(player);
     sessions.add_session(player.id, Arc::downgrade(&session));
