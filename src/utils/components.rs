@@ -15,6 +15,9 @@ static COMPONENT_NAMES: &[(u16, &str)] = &[
     (game_reporting::COMPONENT, "GameReporting"),
     (user_sessions::COMPONENT, "UserSessions"),
 ];
+
+// TODO: Option can be replaced with static init after https://github.com/rust-lang/rust/issues/102575 is stablized
+// map creation becomes const stable
 static mut COMMANDS: Option<IntHashMap<ComponentKey, &'static str>> = None;
 static mut NOTIFICATIONS: Option<IntHashMap<ComponentKey, &'static str>> = None;
 
