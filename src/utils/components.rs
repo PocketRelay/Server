@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use super::hashing::IntHashMap;
 
 /// Key created from a component and command
 pub type ComponentKey = u32;
@@ -15,8 +15,8 @@ static COMPONENT_NAMES: &[(u16, &str)] = &[
     (game_reporting::COMPONENT, "GameReporting"),
     (user_sessions::COMPONENT, "UserSessions"),
 ];
-static mut COMMANDS: Option<HashMap<ComponentKey, &'static str>> = None;
-static mut NOTIFICATIONS: Option<HashMap<ComponentKey, &'static str>> = None;
+static mut COMMANDS: Option<IntHashMap<ComponentKey, &'static str>> = None;
+static mut NOTIFICATIONS: Option<IntHashMap<ComponentKey, &'static str>> = None;
 
 // Packets that will have their content omitted for debug logging
 #[rustfmt::skip]
@@ -74,7 +74,6 @@ pub mod authentication {
     pub const COMPONENT: u16 = 0x1;
 
     // Commands
-
     pub const CREATE_ACCOUNT: u16 = 0xA;
     pub const UPDATE_ACCOUNT: u16 = 0x14;
     pub const UPDATE_PARENTAL_EMAIL: u16 = 0x1C;
@@ -400,7 +399,7 @@ pub mod user_sessions {
 }
 
 #[rustfmt::skip]
-fn commands() -> HashMap<ComponentKey, &'static str> {
+fn commands() -> IntHashMap<ComponentKey, &'static str> {
     use authentication as a;
     use game_manager as g;
     use redirector as r;
@@ -617,7 +616,7 @@ fn commands() -> HashMap<ComponentKey, &'static str> {
 }
 
 #[rustfmt::skip]
-fn notifications() -> HashMap<ComponentKey, &'static str> {
+fn notifications() -> IntHashMap<ComponentKey, &'static str> {
     use game_manager as g;
     use messaging as m;
     use game_reporting as gr;

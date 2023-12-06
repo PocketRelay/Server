@@ -36,6 +36,7 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
     argon2.verify_password(password.as_bytes(), &hash).is_ok()
 }
 
+/// Alias for a [`HashMap`] that used [`IntHasher`] as its [`Hasher`]
 pub type IntHashMap<K, V> = HashMap<K, V, BuildHasherDefault<IntHasher>>;
 
 /// Hasher implementation that directly uses an integer value
