@@ -57,6 +57,12 @@ bytes = "1.4.0"
 indoc = "2"
 parking_lot = "0.12.1"
 
+# Const safe HashMaps (Can be replaced with std HashMap after https://github.com/rust-lang/rust/issues/102575 is resolved)
+hashbrown = { version = "0.14.3", default-features = false, features = [
+    "allocator-api2",
+    "inline-more",
+] }
+
 # SeaORM 
 [dependencies.sea-orm]
 version = "^0"

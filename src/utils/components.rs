@@ -1,4 +1,4 @@
-use super::hashing::IntHashMap;
+use super::hashing::{int_hash_map, IntHashMap};
 
 /// Key created from a component and command
 pub type ComponentKey = u32;
@@ -16,10 +16,8 @@ static COMPONENT_NAMES: &[(u16, &str)] = &[
     (user_sessions::COMPONENT, "UserSessions"),
 ];
 
-// TODO: Option can be replaced with static init after https://github.com/rust-lang/rust/issues/102575 is stablized
-// map creation becomes const stable
-static mut COMMANDS: Option<IntHashMap<ComponentKey, &'static str>> = None;
-static mut NOTIFICATIONS: Option<IntHashMap<ComponentKey, &'static str>> = None;
+static mut COMMANDS: IntHashMap<ComponentKey, &'static str> = int_hash_map();
+static mut NOTIFICATIONS: IntHashMap<ComponentKey, &'static str> = int_hash_map();
 
 // Packets that will have their content omitted for debug logging
 #[rustfmt::skip]
@@ -45,10 +43,8 @@ pub static DEBUG_IGNORED_PACKETS: &[ComponentKey] = &[
 /// Initializes the stored component state. Should only be
 /// called on initial startup
 pub fn initialize() {
-    unsafe {
-        COMMANDS = Some(commands());
-        NOTIFICATIONS = Some(notifications())
-    }
+    init_commands();
+    init_notifications();
 }
 
 pub fn get_component_name(component: u16) -> Option<&'static str> {
@@ -59,12 +55,14 @@ pub fn get_component_name(component: u16) -> Option<&'static str> {
 }
 
 pub fn get_command_name(key: ComponentKey, notify: bool) -> Option<&'static str> {
-    let map = if notify {
-        unsafe { NOTIFICATIONS.as_ref() }
-    } else {
-        unsafe { COMMANDS.as_ref() }
+    let map = unsafe {
+        if notify {
+            &NOTIFICATIONS
+        } else {
+            &COMMANDS
+        }
     };
-    map.and_then(|value| value.get(&key).copied())
+    map.get(&key).copied()
 }
 
 /// Creates an u32 value from the provided component
@@ -402,7 +400,7 @@ pub mod user_sessions {
 }
 
 #[rustfmt::skip]
-fn commands() -> IntHashMap<ComponentKey, &'static str> {
+fn init_commands() {
     use authentication as a;
     use game_manager as g;
     use redirector as r;
@@ -412,6 +410,8 @@ fn commands() -> IntHashMap<ComponentKey, &'static str> {
     use association_lists as al;
     use game_reporting as gr;
     use user_sessions as us;
+
+    let values = unsafe { &mut COMMANDS };
 
     [
         // Authentication
@@ -615,15 +615,19 @@ fn commands() -> IntHashMap<ComponentKey, &'static str> {
         (component_key(us::COMPONENT, us::RESUME_SESSION), "ResumeSession"),
     ]
     .into_iter()
-    .collect()
+    .for_each(|(k, v)| {
+        values.insert(k, v);
+    });
 }
 
 #[rustfmt::skip]
-fn notifications() -> IntHashMap<ComponentKey, &'static str> {
+fn init_notifications() {
     use game_manager as g;
     use messaging as m;
     use game_reporting as gr;
     use user_sessions as us;
+
+    let values = unsafe { &mut NOTIFICATIONS };
 
     [
         // Game Manager
@@ -675,5 +679,7 @@ fn notifications() -> IntHashMap<ComponentKey, &'static str> {
         (component_key(us::COMPONENT, us::USER_REMOVED), "UserRemoved"),
     ]
     .into_iter()
-    .collect()
+    .for_each(|(k, v)| {
+        values.insert(k, v);
+    });
 }

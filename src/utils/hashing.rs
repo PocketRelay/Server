@@ -1,14 +1,11 @@
 //! Hashing utility for hashing and verifying passwords
 
-use std::{
-    collections::HashMap,
-    hash::{BuildHasherDefault, Hasher},
-};
-
 use argon2::{
     password_hash::{self, rand_core::OsRng, PasswordVerifier, SaltString},
     Argon2, PasswordHash, PasswordHasher,
 };
+use hashbrown::HashMap;
+use std::hash::{BuildHasher, Hasher};
 
 /// Hashes the provided password using the Argon2 algorithm returning
 /// the generated hash in string form.
@@ -37,7 +34,26 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
 }
 
 /// Alias for a [`HashMap`] that used [`IntHasher`] as its [`Hasher`]
-pub type IntHashMap<K, V> = HashMap<K, V, BuildHasherDefault<IntHasher>>;
+pub type IntHashMap<K, V> = HashMap<K, V, BuildIntHasher>;
+
+/// Const safe [`BuildHasher`] implementation for [`IntHasher`]
+#[derive(Default)]
+pub struct BuildIntHasher;
+
+impl BuildHasher for BuildIntHasher {
+    type Hasher = IntHasher;
+
+    fn build_hasher(&self) -> Self::Hasher {
+        IntHasher(0)
+    }
+}
+
+/// Const safe init shorthand function for [`IntHashMap`] that
+/// doesn't allocate anything until used
+#[inline(always)]
+pub const fn int_hash_map<K, V>() -> IntHashMap<K, V> {
+    IntHashMap::with_hasher(BuildIntHasher)
+}
 
 /// Hasher implementation that directly uses an integer value
 /// instead of any specific hashing algorithm
