@@ -1,4 +1,5 @@
 use crate::{
+    config::{QosServerConfig, RuntimeConfig},
     database::entities::Player,
     services::sessions::{Sessions, VerifyError},
     session::{
@@ -38,13 +39,11 @@ pub async fn handle_lookup_user(
 
     let session = sessions
         .lookup_session(req.player_id)
-        .await
         .ok_or(UserSessionsError::UserNotFound)?;
 
     // Get the lookup response from the session
     let response = session
         .get_lookup()
-        .await
         .ok_or(UserSessionsError::UserNotFound)?;
 
     Ok(Blaze(response))
@@ -78,8 +77,8 @@ pub async fn handle_resume_session(
         .await?
         .ok_or(AuthenticationError::InvalidToken)?;
 
-    let player = session.set_player(player).await;
-    sessions.add_session(player.id, session).await;
+    let player = session.set_player(player);
+    sessions.add_session(player.id, Arc::downgrade(&session));
 
     Ok(Blaze(AuthResponse {
         player,
@@ -119,23 +118,47 @@ pub async fn handle_resume_session(
 /// ```
 pub async fn handle_update_network(
     session: SessionLink,
-    Blaze(UpdateNetworkRequest { mut address, qos }): Blaze<UpdateNetworkRequest>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Blaze(UpdateNetworkRequest {
+        mut address,
+        qos,
+        ping_site_latency,
+    }): Blaze<UpdateNetworkRequest>,
 ) {
-    // TODO: This won't be required after QoS servers are correctly functioning
-    if let NetworkAddress::AddressPair(pair) = &mut address {
-        let ext = &mut pair.external;
+    match &config.qos {
+        QosServerConfig::Disabled => {}
+        // Hamachi should override local addresses
+        QosServerConfig::Hamachi { host } => {
+            // TODO: This won't be required after QoS servers are correctly functioning
+            if let NetworkAddress::AddressPair(pair) = &mut address {
+                let int = &mut pair.internal;
 
-        // If address is missing
-        if ext.addr.is_unspecified() {
-            // Replace address with new address and port with same as local port
-            ext.addr = session.addr;
-            ext.port = pair.internal.port;
+                if session.addr.is_loopback() {
+                    int.addr = *host;
+                } else {
+                    int.addr = session.addr;
+                }
+            }
+        }
+
+        _ => {
+            // TODO: This won't be required after QoS servers are correctly functioning
+            if let NetworkAddress::AddressPair(pair) = &mut address {
+                let ext = &mut pair.external;
+
+                // If address is missing
+                if ext.addr.is_unspecified() {
+                    // Replace address with new address and port with same as local port
+                    ext.addr = session.addr;
+                    ext.port = pair.internal.port;
+                }
+            }
         }
     }
 
-    tokio::spawn(async move {
-        session.set_network_info(address, qos).await;
-    });
+    let ping_site_latency: Vec<u32> = ping_site_latency.values().copied().collect();
+
+    session.set_network_info(address, qos, ping_site_latency);
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
@@ -151,7 +174,5 @@ pub async fn handle_update_hardware_flag(
     session: SessionLink,
     Blaze(UpdateHardwareFlagsRequest { hardware_flags }): Blaze<UpdateHardwareFlagsRequest>,
 ) {
-    tokio::spawn(async move {
-        session.set_hardware_flags(hardware_flags).await;
-    });
+    session.set_hardware_flags(hardware_flags);
 }

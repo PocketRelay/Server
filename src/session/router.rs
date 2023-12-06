@@ -1,11 +1,7 @@
 //! Router implementation for routing packet components to different functions
 //! and automatically decoding the packet contents to the function type
 
-use super::{
-    models::errors::BlazeError,
-    packet::{FireFrame, Packet},
-    SessionLink,
-};
+use super::{models::errors::BlazeError, packet::Packet, SessionLink};
 use crate::{
     database::entities::Player,
     services::game::GamePlayer,
@@ -17,7 +13,7 @@ use crate::{
 };
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
-use log::error;
+use log::{debug, error};
 use std::{
     any::{Any, TypeId},
     convert::Infallible,
@@ -26,7 +22,7 @@ use std::{
     marker::PhantomData,
     sync::Arc,
 };
-use tdf::{serialize_vec, TdfDeserialize, TdfDeserializer, TdfSerialize};
+use tdf::{serialize_vec, TdfDeserialize, TdfSerialize};
 
 pub trait Handler<Args, Res>: Send + Sync + 'static {
     fn handle(&self, req: PacketRequest) -> BoxFuture<'_, Packet>;
@@ -64,12 +60,17 @@ where
 pub struct PacketRequest {
     pub state: SessionLink,
     pub packet: Packet,
-    pub extensions: Arc<AnyMap>,
+    pub extensions: Extensions,
 }
 
-impl PacketRequest {
-    pub fn extension<T: Send + Sync + 'static>(&self) -> Option<&T> {
-        self.extensions
+#[derive(Clone)]
+pub struct Extensions {
+    inner: Arc<AnyMap>,
+}
+
+impl Extensions {
+    pub fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        self.inner
             .get(&TypeId::of::<T>())
             .and_then(|boxed| (&**boxed as &(dyn Any + 'static)).downcast_ref())
     }
@@ -120,7 +121,9 @@ impl BlazeRouterBuilder {
     pub fn build(self) -> Arc<BlazeRouter> {
         Arc::new(BlazeRouter {
             routes: self.routes,
-            extensions: Arc::new(self.extensions),
+            extensions: Extensions {
+                inner: Arc::new(self.extensions),
+            },
         })
     }
 }
@@ -128,28 +131,29 @@ impl BlazeRouterBuilder {
 pub struct BlazeRouter {
     /// Map for looking up a route based on the component key
     routes: RouteMap,
-    extensions: Arc<AnyMap>,
+    pub extensions: Extensions,
 }
 
 impl BlazeRouter {
-    pub fn handle(
-        &self,
-        state: SessionLink,
-        packet: Packet,
-    ) -> Result<BoxFuture<'_, Packet>, Packet> {
-        let route = match self
+    pub fn handle(&self, state: SessionLink, packet: Packet) -> BoxFuture<'_, Packet> {
+        match self
             .routes
             .get(&component_key(packet.frame.component, packet.frame.command))
         {
-            Some(value) => value,
-            None => return Err(packet),
-        };
-
-        Ok(route.handle(PacketRequest {
-            state,
-            packet,
-            extensions: self.extensions.clone(),
-        }))
+            Some(route) => route.handle(PacketRequest {
+                state,
+                packet,
+                extensions: self.extensions.clone(),
+            }),
+            // Respond with a default empty packet
+            None => {
+                debug!(
+                    "Missing packet handler for {:#06x}->{:#06x}",
+                    packet.frame.component, packet.frame.command
+                );
+                Box::pin(ready(Packet::response_empty(&packet)))
+            }
+        }
     }
 }
 
@@ -166,16 +170,6 @@ pub trait FromPacketRequest: Sized {
 /// Wrapper for providing deserialization [FromPacketRequest] and
 /// serialization [IntoPacketResponse] for TDF contents
 pub struct Blaze<V>(pub V);
-
-/// Wrapper for providing deserialization [FromPacketRequest] and
-/// serialization [IntoPacketResponse] for TDF contents
-///
-/// Stores the packet header so that it can be used for generating
-/// responses
-pub struct BlazeWithHeader<V> {
-    pub req: V,
-    pub frame: FireFrame,
-}
 
 /// [Blaze] tdf type for contents that have already been
 /// serialized ahead of time
@@ -200,7 +194,8 @@ where
         Self: 'a,
     {
         Box::pin(ready(
-            req.extension()
+            req.extensions
+                .get()
                 .ok_or_else(|| {
                     error!(
                         "Attempted to extract missing extension {}",
@@ -224,12 +219,13 @@ impl FromPacketRequest for GamePlayer {
         Self: 'a,
     {
         Box::pin(async move {
-            let data = &*req.state.data.read().await;
+            let data = &*req.state.data.lock();
             let data = data.as_ref().ok_or(GlobalError::AuthenticationRequired)?;
             Ok(GamePlayer::new(
                 data.player.clone(),
                 data.net.clone(),
-                req.state.clone(),
+                Arc::downgrade(&req.state),
+                req.state.notify_handle(),
             ))
         })
     }
@@ -245,7 +241,7 @@ impl FromPacketRequest for SessionAuth {
         Self: 'a,
     {
         Box::pin(async move {
-            let data = &*req.state.data.read().await;
+            let data = &*req.state.data.lock();
             let data = data.as_ref().ok_or(GlobalError::AuthenticationRequired)?;
             let player = data.player.clone();
             Ok(SessionAuth(player))
@@ -284,46 +280,6 @@ where
                     GlobalError::System.into()
                 })
                 .map(Blaze),
-        ))
-    }
-}
-
-impl<V> BlazeWithHeader<V> {
-    pub fn response<E>(&self, res: E) -> Packet
-    where
-        E: TdfSerialize,
-    {
-        Packet {
-            frame: self.frame.response(),
-            contents: Bytes::from(serialize_vec(&res)),
-        }
-    }
-}
-
-impl<V> FromPacketRequest for BlazeWithHeader<V>
-where
-    for<'a> V: TdfDeserialize<'a> + Send + 'a,
-{
-    type Rejection = BlazeError;
-
-    fn from_packet_request<'a>(
-        req: &'a mut PacketRequest,
-    ) -> BoxFuture<'a, Result<Self, Self::Rejection>>
-    where
-        Self: 'a,
-    {
-        let mut r = TdfDeserializer::new(&req.packet.contents);
-
-        Box::pin(ready(
-            V::deserialize(&mut r)
-                .map(|value| BlazeWithHeader {
-                    req: value,
-                    frame: req.packet.frame.clone(),
-                })
-                .map_err(|err| {
-                    error!("Error while decoding packet: {:?}", err);
-                    GlobalError::System.into()
-                }),
         ))
     }
 }

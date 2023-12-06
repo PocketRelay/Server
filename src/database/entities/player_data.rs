@@ -97,7 +97,7 @@ impl Model {
             }),
         )
         .on_conflict(
-            // Update the valume column if a key already exists
+            // Update the value column if a key already exists
             OnConflict::columns([Column::PlayerId, Column::Key])
                 .update_column(Column::Value)
                 .to_owned(),

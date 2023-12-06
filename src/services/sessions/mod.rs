@@ -1,18 +1,25 @@
 //! Service for storing links to all the currenly active
 //! authenticated sessions on the server
 
+use crate::session::{SessionLink, WeakSessionLink};
 use crate::utils::hashing::IntHashMap;
+use crate::utils::signing::SigningKey;
 use crate::utils::types::PlayerID;
-use crate::{session::SessionLink, utils::signing::SigningKey};
 use base64ct::{Base64UrlUnpadded, Encoding};
+use parking_lot::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::RwLock;
+
+type SessionMap = IntHashMap<PlayerID, WeakSessionLink>;
 
 /// Service for storing links to authenticated sessions and
 /// functionality for authenticating sessions
 pub struct Sessions {
-    /// Map of the authenticated players to their session links
-    sessions: RwLock<IntHashMap<PlayerID, SessionLink>>,
+    /// Lookup mapping between player IDs and their session links
+    ///
+    /// This uses a blocking mutex as there is little to no overhead
+    /// since all operations are just map read and writes which don't
+    /// warrant the need for the async variant
+    sessions: Mutex<SessionMap>,
 
     /// HMAC key used for computing signatures
     key: SigningKey,
@@ -98,19 +105,29 @@ impl Sessions {
         Ok(id)
     }
 
-    pub async fn remove_session(&self, player_id: PlayerID) {
-        let sessions = &mut *self.sessions.write().await;
+    pub fn remove_session(&self, player_id: PlayerID) {
+        let sessions = &mut *self.sessions.lock();
         sessions.remove(&player_id);
     }
 
-    pub async fn add_session(&self, player_id: PlayerID, link: SessionLink) {
-        let sessions = &mut *self.sessions.write().await;
+    pub fn add_session(&self, player_id: PlayerID, link: WeakSessionLink) {
+        let sessions = &mut *self.sessions.lock();
         sessions.insert(player_id, link);
     }
 
-    pub async fn lookup_session(&self, player_id: PlayerID) -> Option<SessionLink> {
-        let sessions = &*self.sessions.read().await;
-        sessions.get(&player_id).cloned()
+    pub fn lookup_session(&self, player_id: PlayerID) -> Option<SessionLink> {
+        let sessions = &mut *self.sessions.lock();
+        let session = sessions.get(&player_id)?;
+        let session = match session.upgrade() {
+            Some(value) => value,
+            // Session has stopped remove it from the map
+            None => {
+                sessions.remove(&player_id);
+                return None;
+            }
+        };
+
+        Some(session)
     }
 }
 

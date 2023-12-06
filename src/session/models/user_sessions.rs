@@ -7,7 +7,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use serde::Serialize;
-use tdf::{ObjectId, TdfDeserialize, TdfSerialize, TdfTyped};
+use tdf::{ObjectId, TdfDeserialize, TdfMap, TdfSerialize, TdfTyped};
 
 use super::{util::PING_SITE_ALIAS, NetworkAddress, QosNetworkData};
 
@@ -32,6 +32,9 @@ pub struct UpdateNetworkRequest {
     /// The client address net groups
     #[tdf(tag = "ADDR")]
     pub address: NetworkAddress,
+    /// Latency to the different ping sites
+    #[tdf(tag = "NLMP")]
+    pub ping_site_latency: TdfMap<String, u32>,
     /// The client Quality of Service data
     #[tdf(tag = "NQOS")]
     pub qos: QosNetworkData,
@@ -86,6 +89,10 @@ pub struct UserSessionExtendedData {
 
 impl TdfSerialize for UserSessionExtendedData {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
+        const DMAP_LEADERBOARD_N7_RATING: u32 = 0x70001;
+        // TODO: Maybe actually load this value
+        const DMAP_LEADERBOARD_N7_RATING_VALUE: u32 = 100;
+
         w.group_body(|w| {
             // Network address
             w.tag_ref(b"ADDR", &self.net.addr);
@@ -95,12 +102,18 @@ impl TdfSerialize for UserSessionExtendedData {
             w.tag_str_empty(b"CTY");
             // Client data
             w.tag_var_int_list_empty(b"CVAR");
-            // Data map
-            w.tag_map_tuples(b"DMAP", &[(0x70001, 0x409a)]);
+            // Data map (Custom player data integer keyed)
+            w.tag_map_tuples(
+                b"DMAP",
+                &[
+                    // The players n7 rating
+                    (DMAP_LEADERBOARD_N7_RATING, DMAP_LEADERBOARD_N7_RATING_VALUE),
+                ],
+            );
             // Hardware flags
             w.tag_owned(b"HWFG", self.net.hardware_flags.bits());
             // Ping server latency list
-            w.tag_list_slice(b"PSLM", &[0xfff0fff]);
+            w.tag_list_slice(b"PSLM", &self.net.ping_site_latency);
             // Quality of service data
             w.tag_ref(b"QDAT", &self.net.qos);
             // User info attributes

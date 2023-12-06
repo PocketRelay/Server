@@ -1,6 +1,11 @@
 use log::LevelFilter;
 use serde::Deserialize;
-use std::{env, fs::read_to_string, path::Path};
+use std::{
+    env,
+    fs::read_to_string,
+    net::{IpAddr, Ipv4Addr},
+    path::Path,
+};
 
 use crate::session::models::Port;
 
@@ -60,6 +65,7 @@ pub fn load_config() -> Option<Config> {
 #[derive(Deserialize)]
 #[serde(default)]
 pub struct Config {
+    pub host: IpAddr,
     pub port: Port,
     pub qos: QosServerConfig,
     pub reverse_proxy: bool,
@@ -73,6 +79,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            host: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: 80,
             qos: QosServerConfig::default(),
             reverse_proxy: false,
@@ -95,6 +102,13 @@ pub enum QosServerConfig {
     Local,
     /// Use a custom QoS server
     Custom { host: String, port: u16 },
+    /// Disable the QoS server (Public IP *wont* be resolved)
+    Disabled,
+    /// Configuration to use when using hamachi
+    Hamachi {
+        /// The address of the host computer (Required for 127.0.0.1 resolution)
+        host: Ipv4Addr,
+    },
 }
 
 #[derive(Deserialize)]

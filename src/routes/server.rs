@@ -102,7 +102,7 @@ pub async fn handle_upgrade(
         }
     };
 
-    Session::start(upgraded, addr, router, sessions);
+    Session::start(upgraded, addr, router, sessions).await;
 }
 
 /// GET /api/server/log

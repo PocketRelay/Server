@@ -62,6 +62,17 @@ pub struct FireFrame {
     pub seq: u16,
 }
 
+/// Represents a frame thats been partially decoded but is
+/// still waiting on more data
+pub struct PartialFrame {
+    /// The length of the frame bytes
+    length: usize,
+    // Whether the jump length still needs to be read
+    need_jumbo: bool,
+    // The initial frame heading
+    frame: FireFrame,
+}
+
 impl FireFrame {
     const MIN_HEADER_SIZE: usize = 12;
     const JUMBO_SIZE: usize = std::mem::size_of::<u16>();
@@ -120,7 +131,9 @@ impl FireFrame {
 
     pub fn write(&self, dst: &mut BytesMut, length: usize) {
         let mut options = self.options;
-        if length > 0xFFFF {
+
+        // If the length cannot be represented by a u16 then the frame is a jumbo frame
+        if length > u16::MAX as usize {
             options |= PacketOptions::JUMBO_FRAME;
         }
 
@@ -138,39 +151,26 @@ impl FireFrame {
         }
     }
 
-    pub fn read(src: &mut BytesMut) -> Option<(FireFrame, usize)> {
-        if src.len() < Self::MIN_HEADER_SIZE {
-            return None;
-        }
-
-        let mut length = src.get_u16() as usize;
+    /// Reads the initial header portion of the frame returning both the
+    /// frame itself and the length of the frames contents
+    pub fn read(src: &mut BytesMut) -> FireFrame {
         let component = src.get_u16();
         let command = src.get_u16();
         let error = src.get_u16();
         let ty = src.get_u8() >> 4;
+        let ty = FrameType::from(ty);
         let options = src.get_u8() >> 4;
         let options = PacketOptions::from_bits_retain(options);
         let seq = src.get_u16();
 
-        if options.contains(PacketOptions::JUMBO_FRAME) {
-            // We need another two bytes for the extended length
-            if src.len() < Self::JUMBO_SIZE {
-                return None;
-            }
-            let ext_length = (src.get_u16() as usize) << 16;
-            length |= ext_length;
-        }
-
-        let ty = FrameType::from(ty);
-        let header = FireFrame {
+        FireFrame {
             component,
             command,
             error,
             ty,
             options,
             seq,
-        };
-        Some((header, length))
+        }
     }
 }
 
@@ -285,44 +285,76 @@ impl Packet {
         let mut r = TdfDeserializer::new(&self.contents);
         V::deserialize(&mut r)
     }
-
-    pub fn read(src: &mut BytesMut) -> Option<Self> {
-        let (frame, length) = FireFrame::read(src)?;
-
-        if src.len() < length {
-            return None;
-        }
-
-        let contents = src.split_to(length);
-        Some(Self {
-            frame,
-            contents: contents.freeze(),
-        })
-    }
-
-    pub fn write(&self, dst: &mut BytesMut) {
-        let contents = &self.contents;
-        self.frame.write(dst, contents.len());
-        dst.extend_from_slice(contents);
-    }
 }
 
 /// Tokio codec for encoding and decoding packets
-pub struct PacketCodec;
+#[derive(Default)]
+pub struct PacketCodec {
+    /// The current partially decoded frame
+    partial: Option<PartialFrame>,
+}
 
 impl Decoder for PacketCodec {
     type Error = io::Error;
     type Item = Packet;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        let mut read_src = src.clone();
-        let result = Packet::read(&mut read_src);
+        let partial = match self.partial.as_mut() {
+            // We are already processing a partial frame
+            Some(value) => value,
+            // We need to start processing a frame
+            None => {
+                // Don't attempt reading unless we have atleast the required header length
+                if src.len() < FireFrame::MIN_HEADER_SIZE {
+                    return Ok(None);
+                }
 
-        if result.is_some() {
-            *src = read_src;
+                // Read the length bytes
+                let length = src.get_u16() as usize;
+                // Read the inital frame
+                let frame = FireFrame::read(src);
+                // Whether the length needs the jumbo frame to be loaded
+                let need_jumbo = frame.options.contains(PacketOptions::JUMBO_FRAME);
+
+                self.partial.insert(PartialFrame {
+                    length,
+                    need_jumbo,
+                    frame,
+                })
+            }
+        };
+
+        if partial.need_jumbo {
+            // We need another two bytes for the extended length
+            if src.len() < FireFrame::JUMBO_SIZE {
+                return Ok(None);
+            }
+
+            let ext_length = (src.get_u16() as usize) << 16;
+
+            // Extend the frame length with the new value
+            partial.length |= ext_length;
+
+            // We no longer need the jumbo frame bytes
+            partial.need_jumbo = false;
         }
 
-        Ok(result)
+        // We don't have enough bytes for the content yet
+        if src.len() < partial.length {
+            return Ok(None);
+        }
+
+        let partial = self
+            .partial
+            .take()
+            .expect("Current frame partial was missing");
+
+        let contents = src.split_to(partial.length);
+
+        Ok(Some(Packet {
+            contents: contents.freeze(),
+            frame: partial.frame,
+        }))
     }
 }
 
@@ -330,7 +362,10 @@ impl Encoder<Packet> for PacketCodec {
     type Error = io::Error;
 
     fn encode(&mut self, item: Packet, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        item.write(dst);
+        let contents = &item.contents;
+        item.frame.write(dst, contents.len());
+        dst.extend_from_slice(contents);
+
         Ok(())
     }
 }

@@ -1,18 +1,14 @@
+#![warn(unused_crate_dependencies)]
+
 use crate::{
     config::{RuntimeConfig, VERSION},
-    services::{
-        game::manager::GameManager, leaderboard::Leaderboard, retriever::Retriever,
-        sessions::Sessions,
-    },
+    services::{game::manager::GameManager, retriever::Retriever, sessions::Sessions},
     utils::signing::SigningKey,
 };
 use axum::{Extension, Server};
 use config::load_config;
 use log::{debug, error, info, LevelFilter};
-use std::{
-    net::{Ipv4Addr, SocketAddr},
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::{join, signal};
 use utils::logging;
 
@@ -37,7 +33,7 @@ async fn main() {
     logging::setup(config.logging);
 
     // Create the server socket address while the port is still available
-    let addr: SocketAddr = (Ipv4Addr::UNSPECIFIED, config.port).into();
+    let addr: SocketAddr = SocketAddr::new(config.host, config.port);
 
     // Config data persisted to runtime
     let runtime_config = RuntimeConfig {
@@ -60,7 +56,6 @@ async fn main() {
     );
 
     let game_manager = Arc::new(GameManager::new());
-    let leaderboard = Arc::new(Leaderboard::new());
     let sessions = Arc::new(Sessions::new(signing_key));
     let config = Arc::new(runtime_config);
     let retriever = Arc::new(retriever);
@@ -72,7 +67,6 @@ async fn main() {
     router.add_extension(config.clone());
     router.add_extension(retriever);
     router.add_extension(game_manager.clone());
-    router.add_extension(leaderboard.clone());
     router.add_extension(sessions.clone());
 
     let router = router.build();
@@ -84,7 +78,6 @@ async fn main() {
         .layer(Extension(config))
         .layer(Extension(router))
         .layer(Extension(game_manager))
-        .layer(Extension(leaderboard))
         .layer(Extension(sessions))
         .into_make_service_with_connect_info::<SocketAddr>();
 

@@ -1,9 +1,53 @@
-use tdf::{TdfDeserialize, TdfSerialize, TdfType, TdfTyped};
-
 use crate::{
-    services::leaderboard::models::{LeaderboardEntry, LeaderboardType},
+    database::entities::leaderboard_data::{LeaderboardDataAndRank, LeaderboardType},
     utils::{components::user_sessions::PLAYER_TYPE, types::PlayerID},
 };
+use tdf::{TdfDeserialize, TdfMap, TdfSerialize, TdfType, TdfTyped, VarIntList};
+
+#[derive(TdfDeserialize)]
+pub struct SubmitGameReportRequest {
+    #[tdf(tag = "RPRT")]
+    pub report: GameReport,
+}
+
+#[derive(TdfDeserialize, TdfTyped)]
+#[tdf(group)]
+pub struct GameReport {
+    // Must be read since it uses the same duplicate tag
+    #[tdf(tag = "GAME")]
+    pub game_ids: VarIntList,
+
+    #[tdf(tag = "GAME")]
+    pub game: GameReportGame,
+}
+
+#[derive(TdfDeserialize, TdfTyped)]
+#[tdf(group)]
+pub struct GameReportGame {
+    /// The details for each specific player
+    #[tdf(tag = "PLYR")]
+    pub players: TdfMap<PlayerID, GameReportPlayerData>,
+}
+
+#[derive(TdfDeserialize, TdfTyped)]
+#[tdf(group)]
+pub struct GameReportPlayerData {
+    /// Locale string encoded as int
+    #[tdf(tag = "CTRY")]
+    pub country: u32,
+    /// Number of challenge points the player has
+    #[tdf(tag = "NCHP")]
+    pub challenge_points: u32,
+    /// N7 Rating value for the player
+    #[tdf(tag = "NRAT")]
+    pub n7_rating: u32,
+}
+
+#[test]
+fn test() {
+    let bytes = 17477u32.to_be_bytes();
+    println!("{}", String::from_utf8_lossy(&bytes));
+}
 
 /// Structure for the request to retrieve the entity count
 /// of a leaderboard
@@ -51,23 +95,22 @@ pub struct CenteredLeaderboardRequest {
     pub center: PlayerID,
     /// The entity count
     #[tdf(tag = "COUN")]
-    pub count: usize,
+    pub count: u32,
     /// The leaderboard name
     #[tdf(tag = "NAME", into = &str)]
     pub name: LeaderboardType,
 }
 
-pub enum LeaderboardResponse<'a> {
-    Owned(Vec<&'a LeaderboardEntry>),
-    Borrowed(&'a [LeaderboardEntry]),
+pub struct LeaderboardResponse {
+    pub values: Vec<LeaderboardDataAndRank>,
 }
 
-impl TdfSerialize for LeaderboardEntry {
+impl TdfSerialize for LeaderboardDataAndRank {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         w.group_body(|w| {
             w.tag_str(b"ENAM", &self.player_name);
             w.tag_u32(b"ENID", self.player_id);
-            w.tag_usize(b"RANK", self.rank);
+            w.tag_u32(b"RANK", self.rank);
 
             let value_str = self.value.to_string();
             w.tag_str(b"RSTA", &value_str);
@@ -81,20 +124,13 @@ impl TdfSerialize for LeaderboardEntry {
     }
 }
 
-impl TdfTyped for LeaderboardEntry {
+impl TdfTyped for LeaderboardDataAndRank {
     const TYPE: TdfType = TdfType::Group;
 }
 
-impl TdfSerialize for LeaderboardResponse<'_> {
+impl TdfSerialize for LeaderboardResponse {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
-        match self {
-            LeaderboardResponse::Owned(value) => {
-                w.tag_list_slice_ref(b"LDLS", value);
-            }
-            LeaderboardResponse::Borrowed(value) => {
-                w.tag_list_slice(b"LDLS", value);
-            }
-        }
+        w.tag_list_slice(b"LDLS", &self.values);
     }
 }
 
@@ -122,13 +158,13 @@ impl TdfSerialize for LeaderboardResponse<'_> {
 pub struct LeaderboardRequest {
     /// The entity count
     #[tdf(tag = "COUN")]
-    pub count: usize,
+    pub count: u32,
     /// The leaderboard name
     #[tdf(tag = "NAME", into = &str)]
     pub name: LeaderboardType,
     /// The rank offset to start at
     #[tdf(tag = "STRT")]
-    pub start: usize,
+    pub start: u32,
 }
 
 /// Structure for a request to get a leaderboard only

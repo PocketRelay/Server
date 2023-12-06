@@ -1,3 +1,4 @@
+use futures_util::TryFutureExt;
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -100,17 +101,22 @@ pub async fn public_address() -> Option<Ipv4Addr> {
 
     // Try all addresses using the first valid value
     for address in addresses {
-        let response = match reqwest::get(address).await {
+        let addr = match reqwest::get(address)
+            // Read the response as text
+            .and_then(reqwest::Response::text)
+            .await
+        {
             Ok(value) => value,
             Err(_) => continue,
         };
 
-        let ip = match response.text().await {
-            Ok(value) => value.trim().replace('\n', ""),
-            Err(_) => continue,
-        };
+        let addr = addr
+            // Trim whitespace and new lines
+            .trim_matches(|c: char| c == '\n' || c.is_whitespace())
+            // Attempt to parse as an IPv4 address
+            .parse::<Ipv4Addr>();
 
-        if let Ok(parsed) = ip.parse() {
+        if let Ok(parsed) = addr {
             return Some(parsed);
         }
     }

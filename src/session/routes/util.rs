@@ -5,6 +5,7 @@ use crate::{
         models::{
             errors::{BlazeError, GlobalError, ServerResult},
             util::*,
+            IpPairAddress, NetworkAddress,
         },
         router::{Blaze, Extension, SessionAuth},
         SessionLink,
@@ -13,7 +14,7 @@ use crate::{
 use base64ct::{Base64, Encoding};
 use embeddy::Embedded;
 use flate2::{write::ZlibEncoder, Compression};
-use log::error;
+use log::{debug, error};
 use sea_orm::DatabaseConnection;
 use std::{
     cmp::Ordering,
@@ -99,7 +100,7 @@ pub async fn handle_post_auth(
     SessionAuth(player): SessionAuth,
 ) -> ServerResult<Blaze<PostAuthResponse>> {
     // Subscribe to the session with itself
-    session.add_subscriber(player.id, session.clone()).await;
+    session.add_subscriber(player.id, session.notify_handle());
 
     Ok(Blaze(PostAuthResponse {
         telemetry: TelemetryServer,
@@ -523,4 +524,65 @@ pub async fn handle_load_settings(
         .collect();
 
     Ok(Blaze(SettingsResponse { settings }))
+}
+
+/// Handles client updating networking through Upnp changes
+///
+/// ```
+/// Request (27): Util->SetClientMetrics (0x0009->0x0016)
+/// Content: {
+///     "UBFL": 2,
+///     "UDEV": "DEVICE NAME",
+///     "UFLG": 31,
+///     "ULRC": 0,
+///     "UNAT": 4,
+///     "USTA": 2,
+///     "UWAN": 0 /* WAN IP ADDRESS FROM UPNP */,
+/// }
+/// ```
+pub async fn handle_set_client_metrics(
+    session: SessionLink,
+    Blaze(SetClientMetricsRequest {
+        blaze_flags,
+        device_info,
+        flags,
+        nat_type,
+        status,
+        wan,
+        ..
+    }): Blaze<SetClientMetricsRequest>,
+) {
+    debug!(
+        "Handling UPNP (Device: {}, BlazeFlags: {:?} Flags: {:?}, NAT: {:?}, WAN: {}, STATUS: {:?})",
+        device_info, blaze_flags, flags, nat_type, wan, status
+    );
+
+    // Don't do anything if Upnp failed
+    if !matches!(status, UpnpStatus::Enabled) {
+        return;
+    }
+
+    // Set external address using Upnp specified
+    if !wan.is_unspecified() && !blaze_flags.contains(UpnpFlags::DOUBLE_NAT) {
+        debug!("Using client Upnp WAN address override: {}", wan);
+
+        let network_info = session.network_info().unwrap_or_default();
+        let ping_site_latency = network_info.ping_site_latency.clone();
+        let qos = network_info.qos;
+        let mut pair_addr = match &network_info.addr {
+            NetworkAddress::AddressPair(pair) => pair.clone(),
+            // Fallback handle behavior for unset or default address
+            _ => IpPairAddress::default(),
+        };
+
+        // Update WAN address with Upnp address
+        pair_addr.external.addr = wan;
+
+        // Update network info with new details
+        session.set_network_info(
+            NetworkAddress::AddressPair(pair_addr),
+            qos,
+            ping_site_latency,
+        );
+    }
 }

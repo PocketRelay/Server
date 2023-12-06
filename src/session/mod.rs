@@ -17,35 +17,33 @@ use self::{
 use crate::{
     database::entities::Player,
     services::{
-        game::{Game, GameRef},
+        game::{GameRef, WeakGameRef},
         sessions::Sessions,
     },
     session::models::{NetworkAddress, QosNetworkData},
     utils::{
         components::{component_key, user_sessions, DEBUG_IGNORED_PACKETS},
-        types::{GameID, PlayerID, SessionID},
+        lock::{QueueLock, QueueLockGuard, TicketAquireFuture},
+        types::{GameID, PlayerID},
     },
 };
-use futures_util::{
-    stream::{SplitSink, SplitStream},
-    SinkExt, StreamExt,
-};
+use futures_util::{future::BoxFuture, Sink, Stream};
 use hyper::upgrade::Upgraded;
 use log::{debug, log_enabled, warn};
+use parking_lot::Mutex;
 use serde::Serialize;
 use std::{
     fmt::Debug,
     net::Ipv4Addr,
+    pin::Pin,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
     },
-    time::Duration,
+    task::{ready, Context, Poll},
 };
-use tokio::{
-    sync::{mpsc, RwLock},
-    task::JoinSet,
-};
+use std::{future::Future, sync::Weak};
+use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 
 pub mod models;
@@ -54,26 +52,46 @@ pub mod router;
 pub mod routes;
 
 pub type SessionLink = Arc<Session>;
+pub type WeakSessionLink = Weak<Session>;
 
 pub struct Session {
-    id: SessionID,
+    id: u32,
     addr: Ipv4Addr,
-    writer: mpsc::UnboundedSender<WriteMessage>,
-    data: RwLock<Option<SessionExtData>>,
-    router: Arc<BlazeRouter>,
+    busy_lock: QueueLock,
+    tx: mpsc::UnboundedSender<Packet>,
+    data: Mutex<Option<SessionExtData>>,
     sessions: Arc<Sessions>,
+}
+
+#[derive(Clone)]
+pub struct SessionNotifyHandle {
+    busy_lock: QueueLock,
+    tx: mpsc::UnboundedSender<Packet>,
+}
+
+impl SessionNotifyHandle {
+    /// Pushes a new notification packet, this will aquire a queue position
+    /// waiting until the current response is handled before sending
+    pub fn notify(&self, packet: Packet) {
+        let tx = self.tx.clone();
+        let busy_lock = self.busy_lock.aquire();
+        tokio::spawn(async move {
+            let _guard = busy_lock.await;
+            let _ = tx.send(packet);
+        });
+    }
 }
 
 pub struct SessionExtData {
     player: Arc<Player>,
     net: Arc<NetData>,
     game: Option<SessionGameData>,
-    subscribers: Vec<(PlayerID, SessionLink)>,
+    subscribers: Vec<(PlayerID, SessionNotifyHandle)>,
 }
 
 struct SessionGameData {
     game_id: GameID,
-    game_ref: Arc<RwLock<Game>>,
+    game_ref: WeakGameRef,
 }
 
 impl SessionExtData {
@@ -93,48 +111,48 @@ impl SessionExtData {
         }
     }
 
-    fn add_subscriber(&mut self, player_id: PlayerID, subscriber: SessionLink) {
-        // Create the details packets
-        let added_notify = Packet::notify(
+    fn add_subscriber(&mut self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
+        // Notify the addition of this user data to the subscriber
+        subscriber.notify(Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_ADDED,
             NotifyUserAdded {
                 session_data: self.ext(),
                 user: UserIdentification::from_player(&self.player),
             },
-        );
+        ));
 
-        // Create update notifying the user of the subscription
-        let update_notify = Packet::notify(
+        // Notify the user that they are now subscribed to this user
+        subscriber.notify(Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_UPDATED,
             NotifyUserUpdated {
                 flags: UserDataFlags::SUBSCRIBED | UserDataFlags::ONLINE,
                 player_id: self.player.id,
             },
-        );
+        ));
 
-        self.subscribers.push((player_id, subscriber.clone()));
-        subscriber.push(added_notify);
-        subscriber.push(update_notify);
+        // Add the subscriber
+        self.subscribers.push((player_id, subscriber));
     }
 
     fn remove_subscriber(&mut self, player_id: PlayerID) {
-        let index = match self.subscribers.iter().position(|(id, _)| player_id.eq(id)) {
-            Some(value) => value,
-            None => return,
-        };
+        let subscriber = self
+            .subscribers
+            .iter()
+            // Find the subscriber to remove
+            .position(|(id, _sub)| player_id.eq(id))
+            // Remove the subscriber
+            .map(|index| self.subscribers.swap_remove(index));
 
-        let (_, subscriber) = self.subscribers.swap_remove(index);
-
-        // Create the details packets
-        let removed_notify = Packet::notify(
-            user_sessions::COMPONENT,
-            user_sessions::USER_REMOVED,
-            NotifyUserRemoved { player_id },
-        );
-
-        subscriber.push(removed_notify)
+        if let Some((_, subscriber)) = subscriber {
+            // Notify the subscriber they've removed the user subcription
+            subscriber.notify(Packet::notify(
+                user_sessions::COMPONENT,
+                user_sessions::USER_REMOVED,
+                NotifyUserRemoved { player_id },
+            ))
+        }
     }
 
     /// Publishes changes of the session data to all the
@@ -149,9 +167,9 @@ impl SessionExtData {
             },
         );
 
-        for (_, subscriber) in &self.subscribers {
-            subscriber.push(packet.clone());
-        }
+        self.subscribers
+            .iter()
+            .for_each(|(_, sub)| sub.notify(packet.clone()));
     }
 }
 
@@ -160,15 +178,22 @@ pub struct NetData {
     pub addr: NetworkAddress,
     pub qos: QosNetworkData,
     pub hardware_flags: HardwareFlags,
+    pub ping_site_latency: Vec<u32>,
 }
 
 impl NetData {
     // Re-creates the current net data using the provided address and QOS data
-    pub fn with_basic(&self, addr: NetworkAddress, qos: QosNetworkData) -> Self {
+    pub fn with_basic(
+        &self,
+        addr: NetworkAddress,
+        qos: QosNetworkData,
+        ping_site_latency: Vec<u32>,
+    ) -> Self {
         Self {
             addr,
             qos,
             hardware_flags: self.hardware_flags,
+            ping_site_latency,
         }
     }
 
@@ -178,6 +203,7 @@ impl NetData {
             addr: self.addr.clone(),
             qos: self.qos,
             hardware_flags: flags,
+            ping_site_latency: self.ping_site_latency.clone(),
         }
     }
 }
@@ -185,77 +211,57 @@ impl NetData {
 static SESSION_IDS: AtomicU32 = AtomicU32::new(1);
 
 impl Session {
-    /// Max number of times to poll a session for shutdown before erroring
-    const MAX_RELEASE_ATTEMPTS: u8 = 5;
-
-    pub fn start(io: Upgraded, addr: Ipv4Addr, router: Arc<BlazeRouter>, sessions: Arc<Sessions>) {
+    pub async fn start(
+        io: Upgraded,
+        addr: Ipv4Addr,
+        router: Arc<BlazeRouter>,
+        sessions: Arc<Sessions>,
+    ) {
         // Obtain a session ID
         let id = SESSION_IDS.fetch_add(1, Ordering::AcqRel);
 
-        let framed = Framed::new(io, PacketCodec);
-        let (write, read) = framed.split();
         let (tx, rx) = mpsc::unbounded_channel();
 
         let session = Arc::new(Self {
             id,
-            writer: tx,
+            busy_lock: QueueLock::new(),
+            tx,
             data: Default::default(),
             addr,
-            router,
             sessions,
         });
 
-        let reader = SessionReader {
-            link: session.clone(),
-            inner: read,
-        };
-
-        let writer = SessionWriter {
-            link: session.clone(),
+        SessionFuture {
+            io: Framed::new(io, PacketCodec::default()),
+            router: &router,
             rx,
-            inner: write,
-        };
+            session: session.clone(),
+            read_state: ReadState::Recv,
+            write_state: WriteState::Recv,
+            stop: false,
+        }
+        .await;
 
-        tokio::spawn(reader.process());
-        tokio::spawn(writer.process());
+        session.stop();
     }
 
-    /// Handles routing a packet
-    async fn handle_packet(self: Arc<Self>, packet: Packet) {
-        let route_link = self.clone();
-        let this = &*self;
-
-        this.debug_log_packet("Receive", &packet).await;
-        let response = match this.router.handle(route_link, packet) {
-            // Await the handler response future
-            Ok(fut) => fut.await,
-
-            // Handle no handler for packet
-            Err(packet) => {
-                debug!("Missing packet handler");
-                Packet::response_empty(&packet)
-            }
-        };
-        // Push the response to the client
-        this.push(response);
+    pub fn notify_handle(&self) -> SessionNotifyHandle {
+        SessionNotifyHandle {
+            busy_lock: self.busy_lock.clone(),
+            tx: self.tx.clone(),
+        }
     }
 
-    /// Internal session stopped function called by the reader when
-    /// the connection is terminated, cleans up any references and
-    /// asserts only 1 strong reference exists
-    async fn stop(self: Arc<Self>) {
-        // Tell the write half to close and wait until its closed
-        _ = self.writer.send(WriteMessage::Close);
-        self.writer.closed().await;
-
+    /// Called when the session is considered stopped (Reader/Writer future has completed)
+    /// in order to clean up any remaining references to the session before dropping
+    fn stop(self: Arc<Self>) {
         // Clear authentication
-        self.clear_player().await;
+        self.clear_player();
 
-        let mut attempt: u8 = 1;
-
-        let mut arc = self;
-        let session = loop {
-            if attempt > Self::MAX_RELEASE_ATTEMPTS {
+        // Session should now be the sole owner
+        let session = match Arc::try_unwrap(self) {
+            Ok(value) => value,
+            Err(arc) => {
                 let references = Arc::strong_count(&arc);
                 warn!(
                     "Failed to stop session {} there are still {} references to it",
@@ -263,51 +269,29 @@ impl Session {
                 );
                 return;
             }
-            match Arc::try_unwrap(arc) {
-                Ok(value) => break value,
-                Err(value) => {
-                    let wait = 5 * attempt as u64;
-                    let references = Arc::strong_count(&value);
-                    debug!(
-                        "Session {} still has {} references to it, waiting {}s",
-                        value.id, references, wait
-                    );
-                    tokio::time::sleep(Duration::from_secs(wait)).await;
-                    arc = value;
-                    attempt += 1;
-                    continue;
-                }
-            }
         };
 
         debug!("Session stopped (SID: {})", session.id);
     }
 
-    pub async fn add_subscriber(&self, player_id: PlayerID, subscriber: SessionLink) {
-        let data = &mut *self.data.write().await;
-        let data = match data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-        data.add_subscriber(player_id, subscriber);
+    pub fn add_subscriber(&self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
+        let data = &mut *self.data.lock();
+        if let Some(data) = data {
+            data.add_subscriber(player_id, subscriber);
+        }
+    }
+    pub fn remove_subscriber(&self, player_id: PlayerID) {
+        let data = &mut *self.data.lock();
+        if let Some(data) = data {
+            data.remove_subscriber(player_id)
+        }
     }
 
-    pub async fn remove_subscriber(&self, player_id: PlayerID) {
-        let data = &mut *self.data.write().await;
-        let data = match data {
-            Some(value) => value,
-            // TODO: Handle this as an error for unauthenticated
-            None => return,
-        };
-        data.remove_subscriber(player_id);
-    }
-
-    pub async fn set_player(&self, player: Player) -> Arc<Player> {
+    pub fn set_player(&self, player: Player) -> Arc<Player> {
         // Clear the current authentication
-        self.clear_player().await;
+        self.clear_player();
 
-        let data = &mut *self.data.write().await;
+        let data = &mut *self.data.lock();
         let data = data.insert(SessionExtData::new(player));
 
         data.player.clone()
@@ -317,30 +301,47 @@ impl Session {
     /// the player was in a game
     ///
     /// Called by the game itself when the player has been removed
-    pub async fn clear_game(&self) -> Option<(PlayerID, GameRef)> {
-        // Check that theres authentication
-        let data = &mut *self.data.write().await;
-        let data = data.as_mut()?;
-        let game = data.game.take();
-        data.publish_update();
-        let game = game?;
+    pub fn clear_game(&self) -> Option<(PlayerID, WeakGameRef)> {
+        let mut game: Option<SessionGameData> = None;
+        let mut player_id: Option<PlayerID> = None;
 
-        Some((data.player.id, game.game_ref))
+        self.update_data(|data| {
+            game = data.game.take();
+            player_id = Some(data.player.id);
+        });
+
+        let game = game?;
+        let player_id = player_id?;
+
+        Some((player_id, game.game_ref))
     }
 
     /// Called to remove the player from its current game
-    pub async fn remove_from_game(&self) {
-        if let Some((player_id, game_ref)) = self.clear_game().await {
+    pub fn remove_from_game(&self) {
+        let (player_id, game_ref) = match self.clear_game() {
+            Some(value) => value,
+            // Player isn't in a game
+            None => return,
+        };
+
+        let game_ref = match game_ref.upgrade() {
+            Some(value) => value,
+            // Game doesn't exist anymore
+            None => return,
+        };
+
+        // Spawn an async task to handle removing the player
+        tokio::spawn(async move {
             let game = &mut *game_ref.write().await;
             game.remove_player(player_id, RemoveReason::PlayerLeft);
-        }
+        });
     }
 
-    pub async fn clear_player(&self) {
-        self.remove_from_game().await;
+    pub fn clear_player(&self) {
+        self.remove_from_game();
 
         // Check that theres authentication
-        let data = &mut *self.data.write().await;
+        let data = &mut *self.data.lock();
         let data = match data {
             Some(value) => value,
             None => return,
@@ -350,18 +351,24 @@ impl Session {
         data.subscribers.clear();
 
         // Remove the session from the sessions service
-        self.sessions.remove_session(data.player.id).await;
+        self.sessions.remove_session(data.player.id);
     }
 
-    pub async fn get_game(&self) -> Option<(GameID, GameRef)> {
-        let data = &*self.data.read().await;
+    pub fn get_game(&self) -> Option<(GameID, GameRef)> {
+        let data = &*self.data.lock();
         data.as_ref()
             .and_then(|value| value.game.as_ref())
-            .map(|value| (value.game_id, value.game_ref.clone()))
+            // Try upgrading the reference to get an actual game
+            .and_then(|value| {
+                value
+                    .game_ref
+                    .upgrade()
+                    .map(|game_ref| (value.game_id, game_ref))
+            })
     }
 
-    pub async fn get_lookup(&self) -> Option<LookupResponse> {
-        let data = &*self.data.read().await;
+    pub fn get_lookup(&self) -> Option<LookupResponse> {
+        let data = &*self.data.lock();
         data.as_ref().map(|data| LookupResponse {
             player: data.player.clone(),
             extended_data: data.ext(),
@@ -369,57 +376,49 @@ impl Session {
     }
 
     #[inline]
-    async fn update_data<F>(&self, update: F)
+    fn update_data<F>(&self, update: F)
     where
         F: FnOnce(&mut SessionExtData),
     {
-        let data = &mut *self.data.write().await;
+        let data = &mut *self.data.lock();
         if let Some(data) = data {
             update(data);
             data.publish_update();
         }
     }
 
-    pub async fn set_game(&self, game_id: GameID, game_ref: GameRef) {
+    pub fn set_game(&self, game_id: GameID, game_ref: WeakGameRef) {
+        // Remove the player from the game if they are already present in one
+        self.remove_from_game();
+
         // Set the current game
         self.update_data(|data| {
-            // Remove the player from the game if they are already present in one
-            if let Some(game) = data.game.take() {
-                let player_id = data.player.id;
-                tokio::spawn(async move {
-                    let game = &mut *game.game_ref.write().await;
-                    game.remove_player(player_id, RemoveReason::PlayerLeft);
-                });
-            }
-
             data.game = Some(SessionGameData { game_id, game_ref });
-        })
-        .await;
+        });
     }
 
     #[inline]
-    pub async fn set_hardware_flags(&self, value: HardwareFlags) {
+    pub fn set_hardware_flags(&self, value: HardwareFlags) {
         self.update_data(|data| {
             data.net = Arc::new(data.net.with_hardware_flags(value));
-        })
-        .await;
+        });
+    }
+
+    pub fn network_info(&self) -> Option<Arc<NetData>> {
+        let data = &mut *self.data.lock();
+        data.as_ref().map(|value| value.net.clone())
     }
 
     #[inline]
-    pub async fn set_network_info(&self, address: NetworkAddress, qos: QosNetworkData) {
+    pub fn set_network_info(
+        &self,
+        address: NetworkAddress,
+        qos: QosNetworkData,
+        ping_site_latency: Vec<u32>,
+    ) {
         self.update_data(|data| {
-            data.net = Arc::new(data.net.with_basic(address, qos));
-        })
-        .await;
-    }
-
-    /// Pushes a new packet to the back of the packet buffer
-    /// and sends a flush notification
-    ///
-    /// `packet` The packet to push to the buffer
-    pub fn push(&self, packet: Packet) {
-        _ = self.writer.send(WriteMessage::Write(packet))
-        // TODO: Handle failing to send contents to writer
+            data.net = Arc::new(data.net.with_basic(address, qos, ping_site_latency));
+        });
     }
 
     /// Logs the contents of the provided packet to the debug output along with
@@ -428,23 +427,26 @@ impl Session {
     /// `action` The name of the action this packet is undergoing.
     ///          (e.g. Writing or Reading)
     /// `packet` The packet that is being logged
-    async fn debug_log_packet(&self, action: &'static str, packet: &Packet) {
+    fn debug_log_packet(&self, action: &'static str, packet: &Packet) {
         // Skip if debug logging is disabled
         if !log_enabled!(log::Level::Debug) {
             return;
         }
 
         let key = component_key(packet.frame.component, packet.frame.command);
-        let ignored = DEBUG_IGNORED_PACKETS.contains(&key);
-        if ignored {
+
+        // Don't log the packet if its debug ignored
+        if DEBUG_IGNORED_PACKETS.contains(&key) {
             return;
         }
 
-        let data = &*self.data.read().await;
+        // Get the authenticated player to include in the debug message
+        let auth = self.data.lock().as_ref().map(|data| data.player.clone());
+
         let debug_data = DebugSessionData {
             action,
             id: self.id,
-            data,
+            auth,
         };
         let debug_packet = PacketDebug { packet };
 
@@ -452,71 +454,188 @@ impl Session {
     }
 }
 
-struct DebugSessionData<'a> {
-    id: SessionID,
-    data: &'a Option<SessionExtData>,
+struct DebugSessionData {
+    id: u32,
+    auth: Option<Arc<Player>>,
     action: &'static str,
 }
 
-impl Debug for DebugSessionData<'_> {
+impl Debug for DebugSessionData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Session ({}): {}", self.id, self.action)?;
 
-        if let Some(data) = self.data.as_ref() {
-            writeln!(
-                f,
-                "Auth ({}): (Name: {})",
-                data.player.id, &data.player.display_name,
-            )?;
+        if let Some(auth) = &self.auth {
+            writeln!(f, "Auth ({}): (Name: {})", auth.id, &auth.display_name,)?;
         }
 
         Ok(())
     }
 }
 
-// Writer for writing packets
-struct SessionWriter {
-    inner: SplitSink<Framed<Upgraded, PacketCodec>, Packet>,
-    rx: mpsc::UnboundedReceiver<WriteMessage>,
-    link: SessionLink,
+/// Future for processing a session
+struct SessionFuture<'a> {
+    /// The IO for reading and writing
+    io: Framed<Upgraded, PacketCodec>,
+    /// Receiver for packets to write
+    rx: mpsc::UnboundedReceiver<Packet>,
+    /// The session this link is for
+    session: SessionLink,
+    /// The router to use
+    router: &'a BlazeRouter,
+    /// The reading state
+    read_state: ReadState<'a>,
+    /// The writing state
+    write_state: WriteState,
+    /// Whether the future has been stopped
+    stop: bool,
 }
 
-pub enum WriteMessage {
-    Write(Packet),
-    Close,
+/// Session future writing state
+enum WriteState {
+    /// Waiting for a packet to write
+    Recv,
+    /// Waiting for the framed to become read
+    Write { packet: Option<Packet> },
+    /// Flushing the framed
+    Flush,
 }
 
-impl SessionWriter {
-    pub async fn process(mut self) {
-        while let Some(msg) = self.rx.recv().await {
-            let packet = match msg {
-                WriteMessage::Write(packet) => packet,
-                WriteMessage::Close => break,
-            };
+/// Session future reading state
+enum ReadState<'a> {
+    /// Waiting for a packet
+    Recv,
+    /// Aquiring a lock guard
+    Aquire {
+        /// Future for the locking guard
+        ticket: TicketAquireFuture,
+        /// The packet that was read
+        packet: Option<Packet>,
+    },
+    /// Future for a handler is being polled
+    Handle {
+        /// Locking guard
+        guard: QueueLockGuard,
+        /// Handle future
+        future: BoxFuture<'a, Packet>,
+    },
+}
 
-            self.link.debug_log_packet("Send", &packet).await;
-            if self.inner.send(packet).await.is_err() {
-                break;
+impl SessionFuture<'_> {
+    /// Polls the write state, the poll ready state returns whether
+    /// the future should continue
+    fn poll_write_state(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        match &mut self.write_state {
+            WriteState::Recv => {
+                // Try receive a packet from the write channel
+                let result = ready!(Pin::new(&mut self.rx).poll_recv(cx));
+
+                if let Some(packet) = result {
+                    self.write_state = WriteState::Write {
+                        packet: Some(packet),
+                    };
+                } else {
+                    // All writers have closed, session must be closed (Future end)
+                    self.stop = true;
+                }
+            }
+            WriteState::Write { packet } => {
+                // Wait until the inner is ready
+                if ready!(Pin::new(&mut self.io).poll_ready(cx)).is_ok() {
+                    let packet = packet
+                        .take()
+                        .expect("Unexpected write state without packet");
+
+                    self.session.debug_log_packet("Send", &packet);
+
+                    // Write the packet to the buffer
+                    Pin::new(&mut self.io)
+                        .start_send(packet)
+                        // Packet encoder impl shouldn't produce errors
+                        .expect("Packet encoder errored");
+
+                    self.write_state = WriteState::Flush;
+                } else {
+                    // Failed to ready, session must be closed
+                    self.stop = true;
+                }
+            }
+            WriteState::Flush => {
+                // Wait until the flush is complete
+                if ready!(Pin::new(&mut self.io).poll_flush(cx)).is_ok() {
+                    self.write_state = WriteState::Recv;
+                } else {
+                    // Failed to flush, session must be closed
+                    self.stop = true
+                }
             }
         }
+
+        Poll::Ready(())
+    }
+
+    /// Polls the read state, the poll ready state returns whether
+    /// the future should continue
+    fn poll_read_state(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        match &mut self.read_state {
+            ReadState::Recv => {
+                // Try receive a packet from the write channel
+                let result = ready!(Pin::new(&mut self.io).poll_next(cx));
+
+                if let Some(Ok(packet)) = result {
+                    let ticket = self.session.busy_lock.aquire();
+                    self.read_state = ReadState::Aquire {
+                        ticket,
+                        packet: Some(packet),
+                    }
+                } else {
+                    // Reader has closed or reading encountered an error (Either way stop reading)
+                    self.stop = true;
+                }
+            }
+            ReadState::Aquire { ticket, packet } => {
+                let guard = ready!(Pin::new(ticket).poll(cx));
+                let packet = packet
+                    .take()
+                    .expect("Unexpected aquire state without packet");
+
+                self.session.debug_log_packet("Receive", &packet);
+
+                let future = self.router.handle(self.session.clone(), packet);
+
+                // Move onto a handling state
+                self.read_state = ReadState::Handle { guard, future };
+            }
+            ReadState::Handle {
+                guard: _gaurd,
+                future,
+            } => {
+                // Poll the handler until completion
+                let response = ready!(Pin::new(future).poll(cx));
+
+                // Send the response to the writer
+                _ = self.session.tx.send(response);
+
+                // Reset back to the reading state
+                self.read_state = ReadState::Recv;
+            }
+        }
+        Poll::Ready(())
     }
 }
 
-struct SessionReader {
-    inner: SplitStream<Framed<Upgraded, PacketCodec>>,
-    link: SessionLink,
-}
+impl Future for SessionFuture<'_> {
+    type Output = ();
 
-impl SessionReader {
-    pub async fn process(mut self) {
-        let mut tasks = JoinSet::new();
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
 
-        while let Some(Ok(packet)) = self.inner.next().await {
-            let link = self.link.clone();
-            tasks.spawn(link.handle_packet(packet));
+        while this.poll_write_state(cx).is_ready() {}
+        while this.poll_read_state(cx).is_ready() {}
+
+        if this.stop {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
         }
-
-        tasks.shutdown().await;
-        self.link.stop().await;
     }
 }

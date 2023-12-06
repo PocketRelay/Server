@@ -5,6 +5,7 @@ use crate::{
             AsyncMatchmakingStatus, GameSettings, GameSetupContext, MatchmakingResult,
         },
         packet::Packet,
+        SessionLink,
     },
     utils::{
         components::game_manager,
@@ -21,7 +22,10 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
-use tokio::{sync::RwLock, task::JoinSet};
+use tokio::{
+    sync::{Mutex, RwLock},
+    task::JoinSet,
+};
 
 /// Manager which controls all the active games on the server
 /// commanding them to do different actions and removing them
@@ -32,7 +36,7 @@ pub struct GameManager {
     /// Stored value for the ID to give the next game
     next_id: AtomicU32,
     /// Matchmaking entry queue
-    queue: RwLock<VecDeque<MatchmakingEntry>>,
+    queue: Mutex<VecDeque<MatchmakingEntry>>,
 }
 
 /// Entry into the matchmaking queue
@@ -49,7 +53,7 @@ const DEFAULT_FIT: u16 = 21600;
 
 impl GameManager {
     /// Max number of times to poll a game for shutdown before erroring
-    const MAX_RELEASE_ATTEMPTS: u8 = 5;
+    const MAX_RELEASE_ATTEMPTS: u8 = 20;
 
     /// Starts a new game manager service returning its link
     pub fn new() -> Self {
@@ -114,13 +118,13 @@ impl GameManager {
     }
 
     pub async fn remove_queue(&self, player_id: PlayerID) {
-        let queue = &mut *self.queue.write().await;
+        let queue = &mut *self.queue.lock().await;
         queue.retain(|value| value.player.player.id != player_id);
     }
 
     pub async fn queue(&self, player: GamePlayer, rule_set: Arc<RuleSet>) {
         let started = SystemTime::now();
-        let queue = &mut *self.queue.write().await;
+        let queue = &mut *self.queue.lock().await;
         queue.push_back(MatchmakingEntry {
             player,
             rule_set,
@@ -132,10 +136,9 @@ impl GameManager {
         &self,
         game_ref: GameRef,
         player: GamePlayer,
+        session: SessionLink,
         context: GameSetupContext,
     ) {
-        let player_link = player.link.clone();
-
         // Add the player to the game
         let game_id = {
             let game = &mut *game_ref.write().await;
@@ -144,14 +147,20 @@ impl GameManager {
         };
 
         // Update the player current game
-        player_link.set_game(game_id, game_ref).await;
+        session.set_game(game_id, Arc::downgrade(&game_ref));
     }
 
     pub async fn add_from_matchmaking(&self, game_ref: GameRef, player: GamePlayer) {
+        let session = match player.link.upgrade() {
+            Some(value) => value,
+            // Session was dropped
+            None => return,
+        };
+
         let msid = player.player.id;
 
         // MUST be sent to players atleast once when matchmaking otherwise it may fail
-        player.link.push(Packet::notify(
+        player.notify_handle.notify(Packet::notify(
             game_manager::COMPONENT,
             game_manager::MATCHMAKING_ASYNC_STATUS,
             AsyncMatchmakingStatus { player_id: msid },
@@ -161,6 +170,7 @@ impl GameManager {
         self.add_to_game(
             game_ref,
             player,
+            session,
             GameSetupContext::Matchmaking {
                 fit_score: DEFAULT_FIT,
                 max_fit_score: DEFAULT_FIT,
@@ -256,7 +266,7 @@ impl GameManager {
     }
 
     pub async fn process_queue(&self, link: GameRef, game_id: GameID) {
-        let queue = &mut *self.queue.write().await;
+        let queue = &mut *self.queue.lock().await;
         if queue.is_empty() {
             return;
         }

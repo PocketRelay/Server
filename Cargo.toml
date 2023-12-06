@@ -1,6 +1,6 @@
 [package]
 name = "pocket-relay"
-version = "0.5.10"
+version = "0.6.0-beta"
 description = "Pocket Relay Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
@@ -32,7 +32,7 @@ argon2 = { version = "0.5", features = ["std"] }
 
 base64ct = { version = "1.5", features = ["alloc"] }
 flate2 = { version = "1", features = ["zlib"], default-features = false }
-ring = "0.16"
+ring = "0.17"
 
 # Library for obtaining the local IP address of the device
 local-ip-address = "0.5"
@@ -46,16 +46,16 @@ email_address = "0.2.4"
 # Codec utils for encoding and decoding packets
 tokio-util = { version = "0.7", features = ["codec"] }
 
-# Hyper for connection upgrades
+# Hyper for connection upgrades (TODO: Update to 1.0 once reqwest supports it)
 hyper = "0.14.25"
 tower = "0.4"
 
 bitflags = { version = "2.3.1", features = ["serde"] }
 tdf = { version = "0.1" }
 bytes = "1.4.0"
-futures = "0.3"
 
 indoc = "2"
+parking_lot = "0.12.1"
 
 # SeaORM 
 [dependencies.sea-orm]
@@ -87,7 +87,7 @@ features = [
     "sync",
 ]
 
-# Axum web framework
+# Axum web framework (TODO: Update to 0.7 once once reqwest supports hyper 1.0)
 [dependencies.axum]
 version = "0.6.1"
 default-features = false
@@ -110,6 +110,10 @@ features = ["console_appender", "file_appender"]
 version = "0.4"
 default-features = false
 features = ["std", "serde"]
+
+[dev-dependencies]
+# Random numbers for seeding
+rand = "0.8"
 
 [profile.release]
 strip = true

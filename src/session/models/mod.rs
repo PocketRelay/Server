@@ -123,13 +123,13 @@ pub enum InstanceNet {
 #[derive(Debug, Copy, Clone, Default, Serialize, TdfSerialize, TdfDeserialize, TdfTyped)]
 #[tdf(group)]
 pub struct QosNetworkData {
-    /// Downstream bits per second
+    /// The client's downstream network bandwidth (in bits per second).
     #[tdf(tag = "DBPS")]
     pub dbps: u32,
-    /// Natt type
+    /// The client's network address translation type (aka firewall/router type).
     #[tdf(tag = "NATT")]
     pub natt: NatType,
-    /// Upstream bits per second
+    /// The client's upstream network bandwidth (in bits per second).
     #[tdf(tag = "UBPS")]
     pub ubps: u32,
 }
@@ -138,11 +138,16 @@ pub struct QosNetworkData {
 #[derive(Debug, Default, Copy, Clone, Serialize, TdfDeserialize, TdfSerialize, TdfTyped)]
 #[repr(u8)]
 pub enum NatType {
+    /// Players behind an open NAT can usually connect to any other player and are ideal game hosts.
     #[default]
     Open = 0x0,
+    /// Players behind a moderate NAT can usually connect to other open or moderate players.
     Moderate = 0x1,
-    Sequential = 0x2,
+    /// Players behind a strict (but sequential) NAT can usually only connect to open players and are poor game hosts.
+    StrictSequential = 0x2,
+    /// Players behind a strict (unsequential) NAT can usually only connect to open players and are the worst game hosts.
     Strict = 0x3,
+    /// unknown NAT type; possibly timed out trying to detect NAT.
     #[tdf(default)]
     Unknown = 0x4,
 }
@@ -168,7 +173,7 @@ pub enum NetworkAddress {
 pub type Port = u16;
 
 /// Pair of socket addresses
-#[derive(Debug, Clone, TdfDeserialize, TdfSerialize, TdfTyped, Serialize)]
+#[derive(Debug, Default, Clone, TdfDeserialize, TdfSerialize, TdfTyped, Serialize)]
 #[tdf(group)]
 pub struct IpPairAddress {
     #[tdf(tag = "EXIP")]
@@ -185,4 +190,13 @@ pub struct PairAddress {
     pub addr: Ipv4Addr,
     #[tdf(tag = "PORT")]
     pub port: u16,
+}
+
+impl Default for PairAddress {
+    fn default() -> Self {
+        Self {
+            addr: Ipv4Addr::UNSPECIFIED,
+            port: 0,
+        }
+    }
 }
