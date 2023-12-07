@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use bitflags::bitflags;
 use serde::Serialize;
 use tdf::{
@@ -798,14 +800,22 @@ impl TdfSerialize for GameSetupResponse<'_> {
                 // Topology host network list (The heat bug is present so this encoded as a group even though its a union)
                 w.tag_list_start(b"HNET", TdfType::Group, 1);
 
-                if let NetworkAddress::AddressPair(pair) = &host.net.addr {
-                    w.write_byte(2 /* Address pair type */);
-                    TdfSerialize::serialize(pair, w)
-                } else {
-                    // Uh oh.. host networking is missing...?
-                    w.write_byte(TAGGED_UNSET_KEY);
-                    w.write_byte(0);
-                }
+                // Forced local host for test dedicated server
+                w.write_byte(3);
+                let v = super::PairAddress {
+                    addr: Ipv4Addr::LOCALHOST,
+                    port: 5679,
+                };
+                TdfSerialize::serialize(&v, w);
+
+                // if let NetworkAddress::AddressPair(pair) = &host.net.addr {
+                //     w.write_byte(2 /* Address pair type */);
+                //     TdfSerialize::serialize(pair, w)
+                // } else {
+                //     // Uh oh.. host networking is missing...?
+                //     w.write_byte(TAGGED_UNSET_KEY);
+                //     w.write_byte(0);
+                // }
             }
 
             // Host session ID
@@ -822,7 +832,7 @@ impl TdfSerialize for GameSetupResponse<'_> {
             w.tag_bool(b"NRES", false);
 
             // Game network topology
-            w.tag_alt(b"NTOP", GameNetworkTopology::PeerHosted);
+            w.tag_alt(b"NTOP", GameNetworkTopology::Dedicated);
 
             // Persisted Game id for the game, used only when game setting's enablePersistedGameIds is true.
             w.tag_str_empty(b"PGID");
