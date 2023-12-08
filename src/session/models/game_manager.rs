@@ -804,7 +804,7 @@ impl TdfSerialize for GameSetupResponse<'_> {
                 w.write_byte(3);
                 let v = super::PairAddress {
                     addr: Ipv4Addr::LOCALHOST,
-                    port: 5679,
+                    port: 42132,
                 };
                 TdfSerialize::serialize(&v, w);
 

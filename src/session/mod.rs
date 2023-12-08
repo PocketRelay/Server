@@ -56,7 +56,7 @@ pub type WeakSessionLink = Weak<Session>;
 
 pub struct Session {
     id: u32,
-    addr: Ipv4Addr,
+    pub addr: Ipv4Addr,
     busy_lock: QueueLock,
     tx: mpsc::UnboundedSender<Packet>,
     data: Mutex<Option<SessionExtData>>,

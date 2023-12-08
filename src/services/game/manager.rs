@@ -1,5 +1,6 @@
 use super::{rules::RuleSet, AttrMap, Game, GameJoinableState, GamePlayer, GameRef, GameSnapshot};
 use crate::{
+    services::tunnel::TunnelService,
     session::{
         models::game_manager::{
             AsyncMatchmakingStatus, GameSettings, GameSetupContext, MatchmakingResult,
@@ -37,6 +38,7 @@ pub struct GameManager {
     next_id: AtomicU32,
     /// Matchmaking entry queue
     queue: Mutex<VecDeque<MatchmakingEntry>>,
+    tunnel_service: Arc<TunnelService>,
 }
 
 /// Entry into the matchmaking queue
@@ -56,11 +58,12 @@ impl GameManager {
     const MAX_RELEASE_ATTEMPTS: u8 = 20;
 
     /// Starts a new game manager service returning its link
-    pub fn new() -> Self {
+    pub fn new(tunnel_service: Arc<TunnelService>) -> Self {
         Self {
             games: Default::default(),
             next_id: AtomicU32::new(1),
             queue: Default::default(),
+            tunnel_service,
         }
     }
 
@@ -140,10 +143,16 @@ impl GameManager {
         context: GameSetupContext,
     ) {
         // Add the player to the game
-        let game_id = {
+        let (game_id, index) = {
             let game = &mut *game_ref.write().await;
-            game.add_player(player, context);
-            game.id
+            let slot = game.add_player(player, context);
+            (game.id, slot)
+        };
+
+        let addr = session.addr.clone();
+        let handle = self.tunnel_service.get_tunnel(addr);
+        if let Some(handle) = handle {
+            self.tunnel_service.set_pool_handle(game_id, index, handle);
         };
 
         // Update the player current game
@@ -188,7 +197,13 @@ impl GameManager {
         setting: GameSettings,
     ) -> (GameRef, GameID) {
         let id = self.next_id.fetch_add(1, Ordering::AcqRel);
-        let game = Game::new(id, attributes, setting, self.clone());
+        let game = Game::new(
+            id,
+            attributes,
+            setting,
+            self.clone(),
+            self.tunnel_service.clone(),
+        );
         let link = Arc::new(RwLock::new(game));
         {
             let games = &mut *self.games.write().await;

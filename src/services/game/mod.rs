@@ -27,6 +27,8 @@ use std::sync::{Arc, Weak};
 use tdf::{ObjectId, TdfMap, TdfSerializer};
 use tokio::sync::RwLock;
 
+use super::tunnel::TunnelService;
+
 pub mod manager;
 pub mod rules;
 
@@ -49,6 +51,8 @@ pub struct Game {
 
     /// Services access
     pub game_manager: Arc<GameManager>,
+
+    pub tunnel_service: Arc<TunnelService>,
 }
 
 /// Snapshot of the current game state and players
@@ -211,6 +215,7 @@ impl Game {
         attributes: AttrMap,
         settings: GameSettings,
         game_manager: Arc<GameManager>,
+        tunnel_service: Arc<TunnelService>,
     ) -> Game {
         Game {
             id,
@@ -219,6 +224,7 @@ impl Game {
             state: Default::default(),
             players: Default::default(),
             game_manager,
+            tunnel_service,
         }
     }
 
@@ -227,7 +233,7 @@ impl Game {
         data.into()
     }
 
-    pub fn add_player(&mut self, player: GamePlayer, context: GameSetupContext) {
+    pub fn add_player(&mut self, player: GamePlayer, context: GameSetupContext) -> usize {
         let slot = self.players.len();
 
         // Update other players with the client details
@@ -261,6 +267,8 @@ impl Game {
                 context,
             },
         ));
+
+        slot
     }
 
     pub fn add_admin_player(&mut self, target_id: PlayerID) {

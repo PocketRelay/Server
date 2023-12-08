@@ -5,7 +5,10 @@ use crate::{
     config::{RuntimeConfig, VERSION},
     database::entities::players::PlayerRole,
     middleware::{auth::AdminAuth, ip_address::IpAddress, upgrade::Upgrade},
-    services::sessions::Sessions,
+    services::{
+        sessions::Sessions,
+        tunnel::{Tunnel, TunnelCodec, TunnelService},
+    },
     session::{router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
 };
@@ -19,6 +22,7 @@ use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::{net::Ipv4Addr, sync::Arc};
 use tokio::fs::{read_to_string, OpenOptions};
+use tokio_util::codec::Framed;
 
 /// Response detailing the information about this Pocket Relay server
 /// contains the version information as well as the server information
@@ -103,6 +107,53 @@ pub async fn handle_upgrade(
     };
 
     Session::start(upgraded, addr, router, sessions).await;
+}
+
+/// GET /api/server/tunnel
+///
+/// Handles upgrading connections from the Pocket Relay Client tool
+/// from HTTP over to the Blaze protocol for proxing the game traffic
+/// as blaze sessions using HTTP Upgrade
+pub async fn tunnel(
+    IpAddress(addr): IpAddress,
+    Extension(router): Extension<Arc<BlazeRouter>>,
+    Extension(tunnel_service): Extension<Arc<TunnelService>>,
+    Upgrade(upgrade): Upgrade,
+) -> Response {
+    // Spawn the upgrading process to its own task
+    tokio::spawn(handle_upgrade_tunnel(upgrade, addr, router, tunnel_service));
+
+    // Let the client know to upgrade its connection
+    (
+        // Switching protocols status code
+        StatusCode::SWITCHING_PROTOCOLS,
+        // Headers required for upgrading
+        [(header::CONNECTION, "upgrade"), (header::UPGRADE, "tunnel")],
+    )
+        .into_response()
+}
+
+/// Handles upgrading a connection and starting a new session
+/// from the connection
+pub async fn handle_upgrade_tunnel(
+    upgrade: OnUpgrade,
+    addr: Ipv4Addr,
+    router: Arc<BlazeRouter>,
+    tunnel_service: Arc<TunnelService>,
+) {
+    let upgraded = match upgrade.await {
+        Ok(upgraded) => upgraded,
+        Err(err) => {
+            error!("Failed to upgrade client connection: {}", err);
+            return;
+        }
+    };
+
+    let handle = Tunnel::start(
+        tunnel_service.clone(),
+        Framed::new(upgraded, TunnelCodec::default()),
+    );
+    tunnel_service.set_tunnel(addr, handle);
 }
 
 /// GET /api/server/log

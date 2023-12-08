@@ -96,6 +96,7 @@ pub fn router() -> Router {
                         .route("/", get(server::server_details))
                         .route("/log", get(server::get_log).delete(clear_log))
                         .route("/upgrade", get(server::upgrade))
+                        .route("/tunnel", get(server::tunnel))
                         .route("/telemetry", post(server::submit_telemetry))
                         .route("/dashboard", get(server::dashboard_details)),
                 )
