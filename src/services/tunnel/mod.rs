@@ -68,7 +68,10 @@ pub struct TunnelPool {
 
 /// Handle for sending messages to a tunnel
 #[derive(Clone)]
-pub struct TunnelHandle(mpsc::UnboundedSender<TunnelMessage>);
+pub struct TunnelHandle {
+    id: u32,
+    tx: mpsc::UnboundedSender<TunnelMessage>,
+}
 
 pub struct Tunnel {
     service: Arc<TunnelService>,
@@ -96,36 +99,47 @@ impl Tunnel {
             tunnel.handle().await;
         });
 
-        TunnelHandle(tx)
+        TunnelHandle { id, tx }
     }
 
     pub async fn handle(mut self) {
         loop {
             select! {
-                        message = self.io.next() => {
-                            if let Some(Ok(message)) = message {
+                message = self.io.next() => {
+                    if let Some(Ok(mut message)) = message {
 
-                            let index =message.index as usize;
-            debug!("Message for {index}");
-                            if let Some(pool) = self.service.get_pool_for(self.id) {
-                                let pool = &mut *pool.lock();
-                                if let Some(Some(handle)) = pool.handles.get(index) {
-                                    handle.0.send(message).unwrap();
-                                }
+                        let index =message.index as usize;
+                        debug!("Message for {index}");
+                        if let Some(pool) = self.service.get_pool_for(self.id) {
+                            let pool = &mut *pool.lock();
+                            let self_handle_index = pool.handles
+                            .iter()
+                            .flatten()
+                            .position(|handle| handle.id == self.id)
+                            .unwrap();
+                            if let Some(Some(handle)) = pool.handles.get(index) {
+                                debug!("Sending message as {}", self_handle_index as u8);
+                                message.index = self_handle_index as u8;
+                                handle.tx.send(message).unwrap();
+                            } else {
+                                debug!("Handle not found");
                             }
                         } else {
-                            debug!("Dropping tunnel");
-                            break;
+                            debug!("Pool not found");
                         }
-                        }
-
-                        message = self.rx.recv() => {
-                            if let Some(message) = message {
-                                debug!("Outgoing message");
-                            self.io.send(message).await.unwrap();
-                            }
-                        }
+                    } else {
+                        debug!("Dropping tunnel");
+                        break;
                     }
+                }
+
+                message = self.rx.recv() => {
+                    if let Some(message) = message {
+                        debug!("Outgoing message");
+                        self.io.send(message).await.unwrap();
+                    }
+                }
+            }
         }
     }
 }
@@ -164,7 +178,15 @@ impl TunnelService {
 
         let pool = &mut *pool.lock();
         if let Some(pool_handle) = pool.handles.get_mut(index) {
+            // Assocate the handle with the game
+            {
+                let mapping = &mut *self.mapping.lock();
+                mapping.insert(handle.id, game_id);
+            }
+
             *pool_handle = Some(handle);
+        } else {
+            debug!("Tried to set unknown pool handle");
         }
     }
 }
