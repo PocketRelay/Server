@@ -57,7 +57,7 @@ async fn main() {
         SigningKey::global()
     );
 
-    let tunnel_service = Arc::new(TunnelService::new());
+    let tunnel_service = Arc::new(TunnelService::default());
     let game_manager = Arc::new(GameManager::new(tunnel_service.clone()));
     let sessions = Arc::new(Sessions::new(signing_key));
     let config = Arc::new(runtime_config);
