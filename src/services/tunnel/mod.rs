@@ -412,22 +412,22 @@ mod codec {
     //! Tunnel message frames are as follows:
     //!
     //! ```norun
-    //!  0                   1                   2                   3                  
-    //!  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9
-    //! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    //! |     Index     |                          Length                               |
-    //! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    //! |                                                                               :
-    //! :                                Payload                                        :
-    //! :                                                                               |
-    //! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //!  0                   1                   2                      
+    //!  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3
+    //! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //! |     Index     |            Length             |
+    //! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //! |                                               :
+    //! :                    Payload                    :
+    //! :                                               |
+    //! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     //! ```
     //!
     //! Tunnel message frames contain the following fields:
     //!
-    //! Index: 8 bits. Determines the destination of the message within the current pool.
+    //! Index: 8-bits. Determines the destination of the message within the current pool.
     //!
-    //! Length: 32 bits. Determines the size in bytes of the payload that follows
+    //! Length: 16-bits. Determines the size in bytes of the payload that follows
     //!
     //! Payload: Variable length. The message bytes payload of `Length`
 
@@ -440,7 +440,7 @@ mod codec {
         /// Socket index to use
         index: u8,
         /// The length of the tunnel message bytes
-        length: u32,
+        length: u16,
     }
 
     /// Message sent through the tunnel
@@ -472,7 +472,7 @@ mod codec {
                         return Ok(None);
                     }
                     let index = src.get_u8();
-                    let length = src.get_u32();
+                    let length = src.get_u16();
 
                     self.partial.insert(TunnelMessageHeader { index, length })
                 }
@@ -502,7 +502,7 @@ mod codec {
             dst: &mut bytes::BytesMut,
         ) -> Result<(), Self::Error> {
             dst.put_u8(item.index);
-            dst.put_u32(item.message.len() as u32);
+            dst.put_u16(item.message.len() as u16);
             dst.extend_from_slice(&item.message);
             Ok(())
         }
