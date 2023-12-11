@@ -113,8 +113,11 @@ impl TunnelMappings {
         self.index_to_tunnel.insert(key, tunnel_id);
     }
 
-    /// Uses the lookup maps to find the [TunnelHandle] at the provided `pool_index`
-    /// within the current pool of the provided `tunnel_id` if it is apart of a pool
+    /// Uses the lookup maps to find the [TunnelHandle] of another tunnel within the same
+    /// pool as `tunnel_id` at the provided `pool_index`.
+    ///
+    /// Returns both the [TunnelHandle] at `pool_index` and the [PoolIndex] of the
+    /// provided `tunnel_id`
     fn get_tunnel_route(
         &self,
         tunnel_id: TunnelId,
@@ -212,7 +215,7 @@ pub struct TunnelHandle {
     tx: mpsc::UnboundedSender<TunnelMessage>,
 }
 
-/// Represents a connection to a client tunnel
+/// Tunnel connection to a client
 pub struct Tunnel {
     /// ID for this tunnel
     id: TunnelId,
@@ -363,7 +366,7 @@ impl Tunnel {
             None => return Poll::Ready(TunnelReadState::Continue),
         };
 
-        // Update the message source index using the sender
+        // Update the message target index to be from the correct index
         message.index = index;
 
         // Send the message to the tunnel
@@ -401,17 +404,43 @@ impl Future for Tunnel {
     }
 }
 
-/// Encoding an decoding logic for tunnel packet messages
 mod codec {
+    //! This modules contains the codec and message structures for [TunnelMessage]s
+    //!
+    //! # Tunnel Messages
+    //!
+    //! Tunnel message frames are as follows:
+    //!
+    //! ```norun
+    //!  0                   1                   2                   3                  
+    //!  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9
+    //! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //! |     Index     |                          Length                               |
+    //! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //! |                                                                               :
+    //! :                                Payload                                        :
+    //! :                                                                               |
+    //! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    //! ```
+    //!
+    //! Tunnel message frames contain the following fields:
+    //!
+    //! Index: 8 bits. Determines the destination of the message within the current pool.
+    //!
+    //! Length: 32 bits. Determines the size in bytes of the payload that follows
+    //!
+    //! Payload: Variable length. The message bytes payload of `Length`
+
     use bytes::{Buf, BufMut, Bytes};
     use tokio_util::codec::{Decoder, Encoder};
 
-    /// Partially decoded [TunnelMessage]
-    pub struct TunnelMessagePartial {
+    /// Header portion of a [TunnelMessage] that contains the
+    /// index of the message and the length of the expected payload
+    struct TunnelMessageHeader {
         /// Socket index to use
-        pub index: u8,
+        index: u8,
         /// The length of the tunnel message bytes
-        pub length: u32,
+        length: u32,
     }
 
     /// Message sent through the tunnel
@@ -425,8 +454,9 @@ mod codec {
     /// Codec for encoding and decoding tunnel messages
     #[derive(Default)]
     pub struct TunnelCodec {
-        /// Stores a partially decoded frame if one is present
-        partial: Option<TunnelMessagePartial>,
+        /// Stores the current message header while its waiting
+        /// for the full payload to become available
+        partial: Option<TunnelMessageHeader>,
     }
 
     impl Decoder for TunnelCodec {
@@ -444,7 +474,7 @@ mod codec {
                     let index = src.get_u8();
                     let length = src.get_u32();
 
-                    self.partial.insert(TunnelMessagePartial { index, length })
+                    self.partial.insert(TunnelMessageHeader { index, length })
                 }
             };
 
