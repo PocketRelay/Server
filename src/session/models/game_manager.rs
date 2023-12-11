@@ -12,7 +12,7 @@ use crate::{
     utils::types::{GameID, PlayerID},
 };
 
-use super::{util::PING_SITE_ALIAS, NetworkAddress};
+use super::{util::PING_SITE_ALIAS, NatType, NetworkAddress};
 
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -800,22 +800,26 @@ impl TdfSerialize for GameSetupResponse<'_> {
                 // Topology host network list (The heat bug is present so this encoded as a group even though its a union)
                 w.tag_list_start(b"HNET", TdfType::Group, 1);
 
-                // Forced local host for test dedicated server
-                w.write_byte(3);
-                let v = super::PairAddress {
-                    addr: Ipv4Addr::LOCALHOST,
-                    port: 42132,
-                };
-                TdfSerialize::serialize(&v, w);
-
-                // if let NetworkAddress::AddressPair(pair) = &host.net.addr {
-                //     w.write_byte(2 /* Address pair type */);
-                //     TdfSerialize::serialize(pair, w)
-                // } else {
-                //     // Uh oh.. host networking is missing...?
-                //     w.write_byte(TAGGED_UNSET_KEY);
-                //     w.write_byte(0);
-                // }
+                // Override to sever tunnel for stricter NATs
+                if !matches!(host.net.qos.natt, NatType::Open) {
+                    // Forced local host for test dedicated server
+                    w.write_byte(3);
+                    let v = super::PairAddress {
+                        addr: Ipv4Addr::LOCALHOST,
+                        port: 42132,
+                    };
+                    TdfSerialize::serialize(&v, w);
+                } else {
+                    // Open NATs can directly have players connect normally
+                    if let NetworkAddress::AddressPair(pair) = &host.net.addr {
+                        w.write_byte(2 /* Address pair type */);
+                        TdfSerialize::serialize(pair, w)
+                    } else {
+                        // Uh oh.. host networking is missing...?
+                        w.write_byte(TAGGED_UNSET_KEY);
+                        w.write_byte(0);
+                    }
+                }
             }
 
             // Host session ID
