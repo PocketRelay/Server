@@ -154,10 +154,8 @@ impl GameManager {
             (game.id, slot)
         };
 
-        let handle = self.tunnel_service.get_tunnel(session.addr.into());
-        if let Some(handle) = handle {
-            self.tunnel_service.set_pool_handle(game_id, index, handle);
-        };
+        self.tunnel_service
+            .associate_pool(session.addr.into(), game_id, index as u8);
 
         // Update the player current game
         session.set_game(game_id, Arc::downgrade(&game_ref));

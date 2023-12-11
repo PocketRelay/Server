@@ -350,7 +350,7 @@ impl Game {
         };
 
         // Remove the tunnel
-        self.tunnel_service.remove_by_slot(self.id, index as u8);
+        self.tunnel_service.dissocate_by_pool(self.id, index as u8);
 
         // Remove the player
         let player = self.players.remove(index);
@@ -390,9 +390,6 @@ impl Game {
     fn stop(&mut self) {
         // Mark the game as stopping
         self.state = GameState::Destructing;
-
-        // Remove the tunnel pool
-        self.tunnel_service.remove_pool(self.id);
 
         if !self.players.is_empty() {
             warn!("Game {} was stopped with players still present", self.id);
