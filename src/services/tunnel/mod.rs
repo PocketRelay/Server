@@ -7,7 +7,7 @@ use crate::utils::{hashing::IntHashMap, types::GameID};
 use futures_util::{Sink, Stream};
 use hashbrown::HashMap;
 use hyper::upgrade::Upgraded;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use std::{
     future::Future,
     pin::Pin,
@@ -37,9 +37,9 @@ pub struct TunnelService {
     /// Mapping between host addreses and access to their tunnel
     tunnels: Mutex<IntHashMap<Ipv4Int, TunnelHandle>>,
     /// Tunnel pooling allocated for games
-    pools: Mutex<IntHashMap<GameID, TunnelPool>>,
+    pools: RwLock<IntHashMap<GameID, TunnelPool>>,
     /// Mapping for which game a tunnel is connected to
-    mapping: Mutex<TunnelMapping>,
+    mapping: RwLock<TunnelMapping>,
 }
 
 /// Stores mappings between tunnels and game slots and
@@ -91,26 +91,37 @@ impl TunnelMapping {
 }
 
 impl TunnelService {
+    /// Gets the tunnel for the provided IP address if one is present
+    pub fn get_tunnel(&self, addr: Ipv4Int) -> Option<TunnelHandle> {
+        self.tunnels.lock().get(&addr).cloned()
+    }
+
+    /// Sets the [`TunnelHandle`] for a specific [`Ipv4Addr`] updates
+    /// existing tunnel mappings if they are present
+    pub fn set_tunnel(&self, addr: Ipv4Int, tunnel: TunnelHandle) {
+        self.tunnels.lock().insert(addr, tunnel);
+    }
+
     /// Removes a game from the pool using its [`GameID`]
     #[inline]
     pub fn remove_pool(&self, pool: GameID) {
-        self.pools.lock().remove(&pool);
+        self.pools.write().remove(&pool);
     }
 
     /// Finds the [`GameID`] and [`PoolIndex`] that are associated to
     /// the provided [`TunnelId`] if one is present
     #[inline]
     pub fn get_by_tunnel(&self, tunnel_id: TunnelId) -> Option<(GameID, PoolIndex)> {
-        self.mapping.lock().get_by_tunnel(tunnel_id)
+        self.mapping.read().get_by_tunnel(tunnel_id)
     }
 
     /// Removes a tunnel mapping and its handle from the game pool using the
     /// [`GameID`] and the [`PoolIndex`] for the mapping
     pub fn remove_by_slot(&self, game_id: GameID, pool_index: PoolIndex) {
-        self.mapping.lock().remove_by_slot(game_id, pool_index);
+        self.mapping.write().remove_by_slot(game_id, pool_index);
 
         // Remove the handle from its associated pool
-        let pools = &mut *self.pools.lock();
+        let pools = &mut *self.pools.write();
         if let Some(pool) = pools.get_mut(&game_id) {
             if let Some(handle) = pool.handles.get_mut(pool_index as usize) {
                 *handle = None;
@@ -120,9 +131,9 @@ impl TunnelService {
     /// Removes a tunnel mapping and its handle from the game pool using the
     /// [`TunnelId`] for the mapping
     pub fn remove_by_tunnel(&self, tunnel_id: TunnelId) {
-        if let Some((game_id, pool_index)) = self.mapping.lock().remove_by_tunnel(tunnel_id) {
+        if let Some((game_id, pool_index)) = self.mapping.write().remove_by_tunnel(tunnel_id) {
             // Remove the handle from its associated pool
-            let pools = &mut *self.pools.lock();
+            let pools = &mut *self.pools.write();
             if let Some(pool) = pools.get_mut(&game_id) {
                 if let Some(handle) = pool.handles.get_mut(pool_index as usize) {
                     *handle = None;
@@ -135,22 +146,11 @@ impl TunnelService {
     /// if there is a [`TunnelHandle`] present at the provided index
     pub fn get_pool_handle(&self, pool: GameID, index: PoolIndex) -> Option<TunnelHandle> {
         // Access the pools map
-        let pools = &*self.pools.lock();
+        let pools = &*self.pools.read();
         // Ge the pool for the `pool`
         let pool = pools.get(&pool)?;
         // Get the handle
         pool.handles.get(index as usize)?.clone()
-    }
-
-    /// Gets the tunnel for the provided IP address if one is present
-    pub fn get_tunnel(&self, addr: Ipv4Int) -> Option<TunnelHandle> {
-        self.tunnels.lock().get(&addr).cloned()
-    }
-
-    /// Sets the [`TunnelHandle`] for a specific [`Ipv4Addr`] updates
-    /// existing tunnel mappings if they are present
-    pub fn set_tunnel(&self, addr: Ipv4Int, tunnel: TunnelHandle) {
-        self.tunnels.lock().insert(addr, tunnel);
     }
 
     /// Associates the provided `handle` with the `index` inside the provided
@@ -161,12 +161,12 @@ impl TunnelService {
         // Assocate the handle with the game
         {
             self.mapping
-                .lock()
+                .write()
                 // Map the handle to its game
                 .insert(handle.id, game_id, index as PoolIndex);
         }
 
-        let pools = &mut *self.pools.lock();
+        let pools = &mut *self.pools.write();
 
         // Get the existing pool or insert a new one
         let pool = pools.entry(game_id).or_default();
@@ -282,6 +282,7 @@ impl Tunnel {
                     TunnelWriteState::Stop
                 }
             }
+
             TunnelWriteState::Write(message) => {
                 // Wait until the `io` is ready
                 if ready!(Pin::new(&mut self.io).poll_ready(cx)).is_ok() {
@@ -301,6 +302,7 @@ impl Tunnel {
                     TunnelWriteState::Stop
                 }
             }
+
             TunnelWriteState::Flush => {
                 // Poll flushing `io`
                 if ready!(Pin::new(&mut self.io).poll_flush(cx)).is_ok() {
@@ -385,7 +387,7 @@ mod codec {
     use bytes::{Buf, BufMut, Bytes};
     use tokio_util::codec::{Decoder, Encoder};
 
-    /// Partially decoded tunnnel message
+    /// Partially decoded [TunnelMessage]
     pub struct TunnelMessagePartial {
         /// Socket index to use
         pub index: u8,
@@ -426,6 +428,7 @@ mod codec {
                     self.partial.insert(TunnelMessagePartial { index, length })
                 }
             };
+
             // Not enough data for the partial frame
             if src.len() < partial.length as usize {
                 return Ok(None);
