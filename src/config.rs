@@ -12,6 +12,8 @@ use crate::session::models::Port;
 /// The server version extracted from the Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Config variables that are required to always exist during
+/// runtime for various tasks
 #[derive(Default)]
 pub struct RuntimeConfig {
     pub qos: QosServerConfig,
@@ -19,6 +21,7 @@ pub struct RuntimeConfig {
     pub galaxy_at_war: GalaxyAtWarConfig,
     pub menu_message: String,
     pub dashboard: DashboardConfig,
+    pub tunnel: TunnelConfig,
 }
 
 /// Environment variable key to load the config from
@@ -74,6 +77,7 @@ pub struct Config {
     pub galaxy_at_war: GalaxyAtWarConfig,
     pub logging: LevelFilter,
     pub retriever: RetrieverConfig,
+    pub tunnel: TunnelConfig,
 }
 
 impl Default for Config {
@@ -88,16 +92,34 @@ impl Default for Config {
             galaxy_at_war: Default::default(),
             logging: LevelFilter::Info,
             retriever: Default::default(),
+            tunnel: Default::default()
         }
     }
 }
 
+/// Configuration for how the server should use tunneling
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TunnelConfig {
+    /// Only tunnel players with non "Open" NAT types if the QoS
+    /// server is set to [`QosServerConfig::Disabled`] this is
+    /// equivilent to [`TunnelConfig::Always`]
+    #[default]
+    Stricter,
+    /// Always tunnel connections through the server regardless
+    /// of NAT type
+    Always,
+    /// Never tunnel connections through the server
+    Disabled,
+}
+
+/// Configuration for the server QoS setup
 #[derive(Debug, Default, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum QosServerConfig {
     /// Use the official QoS server
     Official,
-    /// Use the local QoS server (might cause issues)
+    /// Use the local QoS server (might cause issues with WAN)
     #[default]
     Local,
     /// Use a custom QoS server

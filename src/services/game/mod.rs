@@ -1,5 +1,6 @@
 use self::{manager::GameManager, rules::RuleSet};
 use crate::{
+    config::RuntimeConfig,
     database::entities::Player,
     session::{
         models::{
@@ -233,7 +234,12 @@ impl Game {
         data.into()
     }
 
-    pub fn add_player(&mut self, player: GamePlayer, context: GameSetupContext) -> usize {
+    pub fn add_player(
+        &mut self,
+        player: GamePlayer,
+        context: GameSetupContext,
+        config: Arc<RuntimeConfig>,
+    ) -> usize {
         let slot = self.players.len();
 
         // Update other players with the client details
@@ -265,6 +271,7 @@ impl Game {
             GameSetupResponse {
                 game: self,
                 context,
+                config,
             },
         ));
 

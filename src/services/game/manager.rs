@@ -1,5 +1,6 @@
 use super::{rules::RuleSet, AttrMap, Game, GameJoinableState, GamePlayer, GameRef, GameSnapshot};
 use crate::{
+    config::RuntimeConfig,
     services::tunnel::TunnelService,
     session::{
         models::game_manager::{
@@ -38,7 +39,10 @@ pub struct GameManager {
     next_id: AtomicU32,
     /// Matchmaking entry queue
     queue: Mutex<VecDeque<MatchmakingEntry>>,
+    /// Tunneling service
     tunnel_service: Arc<TunnelService>,
+    /// Runtime configuration
+    config: Arc<RuntimeConfig>,
 }
 
 /// Entry into the matchmaking queue
@@ -58,12 +62,13 @@ impl GameManager {
     const MAX_RELEASE_ATTEMPTS: u8 = 20;
 
     /// Starts a new game manager service returning its link
-    pub fn new(tunnel_service: Arc<TunnelService>) -> Self {
+    pub fn new(tunnel_service: Arc<TunnelService>, config: Arc<RuntimeConfig>) -> Self {
         Self {
             games: Default::default(),
             next_id: AtomicU32::new(1),
             queue: Default::default(),
             tunnel_service,
+            config,
         }
     }
 
@@ -145,7 +150,7 @@ impl GameManager {
         // Add the player to the game
         let (game_id, index) = {
             let game = &mut *game_ref.write().await;
-            let slot = game.add_player(player, context);
+            let slot = game.add_player(player, context, self.config.clone());
             (game.id, slot)
         };
 

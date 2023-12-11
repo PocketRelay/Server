@@ -44,6 +44,7 @@ async fn main() {
         menu_message: config.menu_message,
         dashboard: config.dashboard,
         qos: config.qos,
+        tunnel: config.tunnel,
     };
 
     debug!("QoS server: {:?}", &runtime_config.qos);
@@ -57,10 +58,10 @@ async fn main() {
         SigningKey::global()
     );
 
-    let tunnel_service = Arc::new(TunnelService::default());
-    let game_manager = Arc::new(GameManager::new(tunnel_service.clone()));
-    let sessions = Arc::new(Sessions::new(signing_key));
     let config = Arc::new(runtime_config);
+    let tunnel_service = Arc::new(TunnelService::default());
+    let game_manager = Arc::new(GameManager::new(tunnel_service.clone(), config.clone()));
+    let sessions = Arc::new(Sessions::new(signing_key));
     let retriever = Arc::new(retriever);
 
     // Initialize session router

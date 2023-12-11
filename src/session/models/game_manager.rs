@@ -1,4 +1,4 @@
-use std::net::Ipv4Addr;
+use std::{net::Ipv4Addr, sync::Arc};
 
 use bitflags::bitflags;
 use serde::Serialize;
@@ -8,6 +8,7 @@ use tdf::{
 };
 
 use crate::{
+    config::{RuntimeConfig, TunnelConfig},
     services::{
         game::{rules::RuleSet, AttrMap, Game, GamePlayer},
         tunnel::TUNNEL_HOST_LOCAL_PORT,
@@ -764,6 +765,7 @@ pub enum SlotType {
 pub struct GameSetupResponse<'a> {
     pub game: &'a Game,
     pub context: GameSetupContext,
+    pub config: Arc<RuntimeConfig>,
 }
 
 impl TdfSerialize for GameSetupResponse<'_> {
@@ -799,12 +801,19 @@ impl TdfSerialize for GameSetupResponse<'_> {
             // Game Type used for game reporting as passed up in the request.
             w.tag_str_empty(b"GTYP");
 
+            // Whether to tunnel the connection
+            let tunnel = match &self.config.tunnel {
+                TunnelConfig::Stricter => !matches!(host.net.qos.natt, NatType::Open),
+                TunnelConfig::Always => true,
+                TunnelConfig::Disabled => false,
+            };
+
             {
                 // Topology host network list (The heat bug is present so this encoded as a group even though its a union)
                 w.tag_list_start(b"HNET", TdfType::Group, 1);
 
-                // Override to sever tunnel for stricter NATs
-                if !matches!(host.net.qos.natt, NatType::Open) {
+                // Override for tunneling
+                if tunnel {
                     // Forced local host for test dedicated server
                     w.write_byte(3);
                     TdfSerialize::serialize(
@@ -841,7 +850,14 @@ impl TdfSerialize for GameSetupResponse<'_> {
             w.tag_bool(b"NRES", false);
 
             // Game network topology
-            w.tag_alt(b"NTOP", GameNetworkTopology::Dedicated);
+            w.tag_alt(
+                b"NTOP",
+                if tunnel {
+                    GameNetworkTopology::Dedicated
+                } else {
+                    GameNetworkTopology::PeerHosted
+                },
+            );
 
             // Persisted Game id for the game, used only when game setting's enablePersistedGameIds is true.
             w.tag_str_empty(b"PGID");
