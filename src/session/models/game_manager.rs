@@ -8,7 +8,10 @@ use tdf::{
 };
 
 use crate::{
-    services::game::{rules::RuleSet, AttrMap, Game, GamePlayer},
+    services::{
+        game::{rules::RuleSet, AttrMap, Game, GamePlayer},
+        tunnel::TUNNEL_HOST_LOCAL_PORT,
+    },
     utils::types::{GameID, PlayerID},
 };
 
@@ -804,11 +807,13 @@ impl TdfSerialize for GameSetupResponse<'_> {
                 if !matches!(host.net.qos.natt, NatType::Open) {
                     // Forced local host for test dedicated server
                     w.write_byte(3);
-                    let v = super::PairAddress {
-                        addr: Ipv4Addr::LOCALHOST,
-                        port: 42132,
-                    };
-                    TdfSerialize::serialize(&v, w);
+                    TdfSerialize::serialize(
+                        &super::PairAddress {
+                            addr: Ipv4Addr::LOCALHOST,
+                            port: TUNNEL_HOST_LOCAL_PORT,
+                        },
+                        w,
+                    );
                 } else {
                     // Open NATs can directly have players connect normally
                     if let NetworkAddress::AddressPair(pair) = &host.net.addr {

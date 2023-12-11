@@ -20,6 +20,9 @@ use std::{
 use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 
+/// The port bound on clients representing the host player within the socket poool
+pub const TUNNEL_HOST_LOCAL_PORT: u16 = 42132;
+
 /// ID for a tunnel
 type TunnelId = u32;
 /// Index into a pool of tunnels
