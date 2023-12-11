@@ -146,8 +146,8 @@ pub async fn handle_upgrade_tunnel(
         }
     };
 
-    let handle = Tunnel::start(tunnel_service.clone(), upgraded);
-    tunnel_service.associate_tunnel(addr.into(), handle);
+    let tunnel_id = Tunnel::start(tunnel_service.clone(), upgraded);
+    tunnel_service.associate_tunnel(addr.into(), tunnel_id);
 }
 
 /// GET /api/server/log

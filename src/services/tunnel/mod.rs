@@ -46,13 +46,17 @@ struct TunnelMappings {
     /// Mapping from [TunnelId]s to the actual [TunnelHandle] for communicating
     /// with the tunnel
     id_to_tunnel: IntHashMap<TunnelId, TunnelHandle>,
+
     /// Mapping from [Ipv4Int] (IPv4 addresses) to [TunnelHandle] for finding
     /// the tunnel associated with an IP  
     ip_to_tunnel: IntHashMap<Ipv4Int, TunnelId>,
+    /// Inverse mapping of `ip_to_tunnel` for finding a IPv4 address
+    /// associated to a [TunnelId]    
+    tunnel_to_ip: IntHashMap<TunnelId, Ipv4Int>,
 
     /// Mapping assocating a [TunnelId] with a [PoolIndex] within a [PoolId]
     /// that it is apart of
-    tunnel_to_index: IntHashMap<TunnelId, (PoolId, PoolIndex)>,
+    tunnel_to_index: IntHashMap<TunnelId, PoolKey>,
     /// Inverse mapping of `tunnel_to_index` for finding the handle
     /// assocated to a specific pool and slot
     index_to_tunnel: IntHashMap<PoolKey, TunnelId>,
@@ -62,7 +66,7 @@ struct TunnelMappings {
 /// into a single value.
 ///
 /// This allows it to be used as a key in the [IntHashMap]
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq, Clone, Copy)]
 struct PoolKey(u64);
 
 impl PoolKey {
@@ -70,17 +74,28 @@ impl PoolKey {
     const fn new(pool_id: PoolId, pool_index: PoolIndex) -> Self {
         Self(((pool_id as u64) << 32) | pool_index as u64)
     }
+
+    /// Converts the key into its underlying parts
+    const fn parts(&self) -> (PoolId, PoolIndex) {
+        ((self.0 >> 32) as PoolId, self.0 as PoolIndex)
+    }
 }
 
 impl TunnelMappings {
-    /// Assocates the provided `tunnel` to the provided `address`
-    ///
-    /// Creates a mapping for the [TunnelId] to [TunnelHandle] along
-    /// with [Ipv4Int] to [TunnelHandle]
-    fn associate_tunnel(&mut self, address: Ipv4Int, tunnel: TunnelHandle) {
-        let tunnel_id = tunnel.id;
+    // Inserts a new tunnel into the mappings
+    fn insert_tunnel(&mut self, tunnel_id: TunnelId, tunnel: TunnelHandle) {
+        // Insert the tunnel into the mappings
         self.id_to_tunnel.insert(tunnel_id, tunnel);
+    }
+
+    /// Assocates the provided `address` to the provided `tunnel`
+    ///
+    /// Creates a mapping for the [Ipv4Int] to [TunnelHandle] along
+    /// with [TunnelHandle] to [Ipv4Int]
+    fn associate_tunnel(&mut self, address: Ipv4Int, tunnel_id: TunnelId) {
+        // Create the IP relationship
         self.ip_to_tunnel.insert(address, tunnel_id);
+        self.tunnel_to_ip.insert(tunnel_id, address);
     }
 
     /// Attempts to associate the tunnel from `address` to the provided
@@ -92,10 +107,10 @@ impl TunnelMappings {
             None => return,
         };
 
-        self.tunnel_to_index
-            .insert(tunnel_id, (pool_id, pool_index));
-        self.index_to_tunnel
-            .insert(PoolKey::new(pool_id, pool_index), tunnel_id);
+        let key = PoolKey::new(pool_id, pool_index);
+
+        self.tunnel_to_index.insert(tunnel_id, key);
+        self.index_to_tunnel.insert(key, tunnel_id);
     }
 
     /// Uses the lookup maps to find the [TunnelHandle] at the provided `pool_index`
@@ -105,7 +120,7 @@ impl TunnelMappings {
         tunnel_id: TunnelId,
         pool_index: PoolIndex,
     ) -> Option<(TunnelHandle, PoolIndex)> {
-        let (game_id, self_index) = *self.tunnel_to_index.get(&tunnel_id)?;
+        let (game_id, self_index) = self.tunnel_to_index.get(&tunnel_id)?.parts();
         let other_tunnel = self
             .index_to_tunnel
             .get(&PoolKey::new(game_id, pool_index))?;
@@ -114,31 +129,36 @@ impl TunnelMappings {
         Some((tunnel.clone(), self_index))
     }
 
-    /// Removes the association between the `tunnel_id` and any games
+    /// Removes the association between the `tunnel_id` and any games and
+    /// removes the tunnel itself.
     ///
-    /// Returns the [PoolId] and [PoolIndex] of the pool if the tunnel
-    /// was present in one
-    fn dissociate_by_tunnel(&mut self, tunnel_id: TunnelId) -> Option<(PoolId, PoolIndex)> {
-        let (pool_id, pool_index) = self.tunnel_to_index.remove(&tunnel_id)?;
+    /// Used when a tunnel disconnects to remove any associations
+    /// related to the tunnel
+    fn dissociate_tunnel(&mut self, tunnel_id: TunnelId) {
+        // Remove tunnel itself
+        _ = self.id_to_tunnel.remove(&tunnel_id);
 
-        // Remove the inverse relationship
-        self.index_to_tunnel
-            .remove(&PoolKey::new(pool_id, pool_index));
+        // Remove the IP association
+        if let Some(ip) = self.tunnel_to_ip.remove(&tunnel_id) {
+            self.ip_to_tunnel.remove(&ip);
+        }
 
-        Some((pool_id, pool_index))
+        // Remove the slot association
+        if let Some(key) = self.tunnel_to_index.remove(&tunnel_id) {
+            // Remove the inverse relationship
+            self.index_to_tunnel.remove(&key);
+        }
     }
 
     /// Removes the association between a [PoolKey] and a [TunnelId] if
     /// one is present
-    ///
-    /// Returns the [TunnelId] if one was present at the [PoolIndex] with the [PoolId]
-    fn dissocate_by_pool(&mut self, pool_id: PoolId, pool_index: PoolIndex) -> Option<TunnelId> {
-        let tunnel_id = self
+    fn dissocate_pool(&mut self, pool_id: PoolId, pool_index: PoolIndex) {
+        if let Some(tunnel_id) = self
             .index_to_tunnel
-            .remove(&PoolKey::new(pool_id, pool_index))?;
-        self.tunnel_to_index.remove(&tunnel_id);
-
-        Some(tunnel_id)
+            .remove(&PoolKey::new(pool_id, pool_index))
+        {
+            self.tunnel_to_index.remove(&tunnel_id);
+        }
     }
 }
 
@@ -146,8 +166,8 @@ impl TunnelService {
     /// Wrapper around [`TunnelMappings::associate_tunnel`] that holds the service
     /// write lock before operating
     #[inline]
-    pub fn associate_tunnel(&self, address: Ipv4Int, tunnel: TunnelHandle) {
-        self.mappings.write().associate_tunnel(address, tunnel)
+    pub fn associate_tunnel(&self, address: Ipv4Int, tunnel_id: TunnelId) {
+        self.mappings.write().associate_tunnel(address, tunnel_id)
     }
 
     /// Wrapper around [`TunnelMappings::associate_pool`] that holds the service
@@ -170,26 +190,24 @@ impl TunnelService {
         self.mappings.read().get_tunnel_route(tunnel_id, pool_index)
     }
 
-    /// Wrapper around [`TunnelMappings::dissociate_by_tunnel`] that holds the service
+    /// Wrapper around [`TunnelMappings::dissociate_tunnel`] that holds the service
     /// write lock before operating
     #[inline]
-    pub fn dissociate_by_tunnel(&self, tunnel_id: TunnelId) -> Option<(PoolId, PoolIndex)> {
-        self.mappings.write().dissociate_by_tunnel(tunnel_id)
+    pub fn dissociate_tunnel(&self, tunnel_id: TunnelId) {
+        self.mappings.write().dissociate_tunnel(tunnel_id);
     }
 
-    /// Wrapper around [`TunnelMappings::dissocate_by_pool`] that holds the service
+    /// Wrapper around [`TunnelMappings::dissocate_pool`] that holds the service
     /// write lock before operating
     #[inline]
-    pub fn dissocate_by_pool(&self, pool_id: PoolId, pool_index: PoolIndex) -> Option<TunnelId> {
-        self.mappings.write().dissocate_by_pool(pool_id, pool_index)
+    pub fn dissocate_pool(&self, pool_id: PoolId, pool_index: PoolIndex) {
+        self.mappings.write().dissocate_pool(pool_id, pool_index);
     }
 }
 
 /// Handle for sending messages to a tunnel
 #[derive(Clone)]
 pub struct TunnelHandle {
-    /// The ID of the tunnel
-    id: TunnelId,
     /// The sender for sending messages to the tunnel
     tx: mpsc::UnboundedSender<TunnelMessage>,
 }
@@ -212,7 +230,7 @@ pub struct Tunnel {
 impl Drop for Tunnel {
     fn drop(&mut self) {
         // Remove the tunnel from the service
-        self.service.dissociate_by_tunnel(self.id);
+        self.service.dissociate_tunnel(self.id);
     }
 }
 
@@ -243,9 +261,9 @@ impl Tunnel {
     /// Starts a new tunnel on `io` using the tunnel `service`
     ///
     /// ## Arguments
-    /// * `service` - The server to add the tunnel to
+    /// * `service` - The service to add the tunnel to
     /// * `io`      - The underlying tunnel IO
-    pub fn start(service: Arc<TunnelService>, io: Upgraded) -> TunnelHandle {
+    pub fn start(service: Arc<TunnelService>, io: Upgraded) -> TunnelId {
         let (tx, rx) = mpsc::unbounded_channel();
 
         // Wrap the `io` with the [`TunnelCodec`] for framing
@@ -254,6 +272,13 @@ impl Tunnel {
         // Aquire the tunnel ID
         let id = service.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
 
+        // Store the tunnel mapping
+        service
+            .mappings
+            .write()
+            .insert_tunnel(id, TunnelHandle { tx });
+
+        // Spawn the tunnel task
         tokio::spawn(Tunnel {
             service,
             id,
@@ -262,7 +287,7 @@ impl Tunnel {
             write_state: Default::default(),
         });
 
-        TunnelHandle { id, tx }
+        id
     }
 
     /// Polls accepting messages from [`Tunnel::rx`] then writing them to [`Tunnel::io`] and

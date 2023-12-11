@@ -350,7 +350,7 @@ impl Game {
         };
 
         // Remove the tunnel
-        self.tunnel_service.dissocate_by_pool(self.id, index as u8);
+        self.tunnel_service.dissocate_pool(self.id, index as u8);
 
         // Remove the player
         let player = self.players.remove(index);
