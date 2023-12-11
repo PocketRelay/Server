@@ -149,8 +149,7 @@ impl GameManager {
             (game.id, slot)
         };
 
-        let addr = session.addr;
-        let handle = self.tunnel_service.get_tunnel(addr);
+        let handle = self.tunnel_service.get_tunnel(session.addr.into());
         if let Some(handle) = handle {
             self.tunnel_service.set_pool_handle(game_id, index, handle);
         };

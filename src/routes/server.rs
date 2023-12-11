@@ -147,7 +147,7 @@ pub async fn handle_upgrade_tunnel(
     };
 
     let handle = Tunnel::start(tunnel_service.clone(), upgraded);
-    tunnel_service.set_tunnel(addr, handle);
+    tunnel_service.set_tunnel(addr.into(), handle);
 }
 
 /// GET /api/server/log
