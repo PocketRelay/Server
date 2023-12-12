@@ -7,7 +7,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use serde::Serialize;
-use tdf::{ObjectId, TdfDeserialize, TdfMap, TdfSerialize, TdfTyped};
+use tdf::{ObjectId, TdfDeserialize, TdfDeserializeOwned, TdfMap, TdfSerialize, TdfTyped};
 
 use super::{util::PING_SITE_ALIAS, NetworkAddress, QosNetworkData};
 
@@ -27,17 +27,30 @@ pub struct ResumeSessionRequest {
 }
 
 /// Request to update the stored networking information for a session
-#[derive(TdfDeserialize)]
 pub struct UpdateNetworkRequest {
     /// The client address net groups
-    #[tdf(tag = "ADDR")]
     pub address: NetworkAddress,
     /// Latency to the different ping sites
-    #[tdf(tag = "NLMP")]
-    pub ping_site_latency: TdfMap<String, u32>,
+    pub ping_site_latency: Option<TdfMap<String, u32>>,
     /// The client Quality of Service data
-    #[tdf(tag = "NQOS")]
     pub qos: QosNetworkData,
+}
+
+// Contains optional field so must manually deserialize
+impl TdfDeserializeOwned for UpdateNetworkRequest {
+    fn deserialize_owned(
+        r: &mut tdf::prelude::TdfDeserializer<'_>,
+    ) -> tdf::prelude::DecodeResult<Self> {
+        let address: NetworkAddress = r.tag(b"ADDR")?;
+        let ping_site_latency: Option<TdfMap<String, u32>> = r.try_tag(b"NLMP")?;
+        let qos: QosNetworkData = r.tag(b"NQOS")?;
+
+        Ok(Self {
+            address,
+            ping_site_latency,
+            qos,
+        })
+    }
 }
 
 /// Request to update the stored hardware flags for a session
