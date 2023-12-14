@@ -150,7 +150,7 @@ impl GameManager {
         // Add the player to the game
         let (game_id, index) = {
             let game = &mut *game_ref.write().await;
-            let slot = game.add_player(player, context, self.config.clone());
+            let slot = game.add_player(player, context, &self.config);
             (game.id, slot)
         };
 

@@ -238,7 +238,7 @@ impl Game {
         &mut self,
         player: GamePlayer,
         context: GameSetupContext,
-        config: Arc<RuntimeConfig>,
+        config: &RuntimeConfig,
     ) -> usize {
         let slot = self.players.len();
 

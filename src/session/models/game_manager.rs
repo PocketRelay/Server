@@ -1,12 +1,4 @@
-use std::{net::Ipv4Addr, sync::Arc};
-
-use bitflags::bitflags;
-use serde::Serialize;
-use tdf::{
-    types::tagged_union::TAGGED_UNSET_KEY, Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned,
-    TdfSerialize, TdfType, TdfTyped,
-};
-
+use super::{util::PING_SITE_ALIAS, NatType, NetworkAddress};
 use crate::{
     config::{RuntimeConfig, TunnelConfig},
     services::{
@@ -15,8 +7,13 @@ use crate::{
     },
     utils::types::{GameID, PlayerID},
 };
-
-use super::{util::PING_SITE_ALIAS, NatType, NetworkAddress};
+use bitflags::bitflags;
+use serde::Serialize;
+use std::net::Ipv4Addr;
+use tdf::{
+    types::tagged_union::TAGGED_UNSET_KEY, Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned,
+    TdfSerialize, TdfType, TdfTyped,
+};
 
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -765,7 +762,7 @@ pub enum SlotType {
 pub struct GameSetupResponse<'a> {
     pub game: &'a Game,
     pub context: GameSetupContext,
-    pub config: Arc<RuntimeConfig>,
+    pub config: &'a RuntimeConfig,
 }
 
 impl TdfSerialize for GameSetupResponse<'_> {
