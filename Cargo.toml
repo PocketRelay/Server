@@ -63,6 +63,8 @@ hashbrown = { version = "0.14.3", default-features = false, features = [
     "inline-more",
 ] }
 
+uuid = { version = "^1", features = ["v4", "serde", "fast-rng"] }
+
 # SeaORM 
 [dependencies.sea-orm]
 version = "^0"

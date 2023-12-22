@@ -8,6 +8,7 @@ use futures_util::{Sink, Stream};
 use hyper::upgrade::Upgraded;
 use parking_lot::RwLock;
 use std::{
+    collections::HashMap,
     future::Future,
     pin::Pin,
     sync::{
@@ -19,6 +20,8 @@ use std::{
 use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 
+use super::sessions::AssociationId;
+
 /// The port bound on clients representing the host player within the socket poool
 pub const TUNNEL_HOST_LOCAL_PORT: u16 = 42132;
 
@@ -28,9 +31,6 @@ type TunnelId = u32;
 type PoolIndex = u8;
 /// ID of a pool
 type PoolId = GameID;
-
-/// Int created from an IPv4 address bytes
-type Ipv4Int = u32;
 
 #[derive(Default)]
 pub struct TunnelService {
@@ -47,12 +47,11 @@ struct TunnelMappings {
     /// with the tunnel
     id_to_tunnel: IntHashMap<TunnelId, TunnelHandle>,
 
-    /// Mapping from [Ipv4Int] (IPv4 addresses) to [TunnelHandle] for finding
-    /// the tunnel associated with an IP  
-    ip_to_tunnel: IntHashMap<Ipv4Int, TunnelId>,
-    /// Inverse mapping of `ip_to_tunnel` for finding a IPv4 address
+    /// Mapping from [AssociationId] (Client association) to [TunnelHandle]
+    association_to_tunnel: HashMap<AssociationId, TunnelId>,
+    /// Inverse mapping of `association_to_tunnel` for finding a [AssociationId]
     /// associated to a [TunnelId]    
-    tunnel_to_ip: IntHashMap<TunnelId, Ipv4Int>,
+    tunnel_to_association: HashMap<TunnelId, AssociationId>,
 
     /// Mapping assocating a [TunnelId] with a [PoolIndex] within a [PoolId]
     /// that it is apart of
@@ -88,21 +87,26 @@ impl TunnelMappings {
         self.id_to_tunnel.insert(tunnel_id, tunnel);
     }
 
-    /// Assocates the provided `address` to the provided `tunnel`
+    /// Assocates the provided `association` to the provided `tunnel`
     ///
-    /// Creates a mapping for the [Ipv4Int] to [TunnelHandle] along
-    /// with [TunnelHandle] to [Ipv4Int]
-    fn associate_tunnel(&mut self, address: Ipv4Int, tunnel_id: TunnelId) {
+    /// Creates a mapping for the [AssociationId] to [TunnelHandle] along
+    /// with [TunnelHandle] to [AssociationId]
+    fn associate_tunnel(&mut self, association: AssociationId, tunnel_id: TunnelId) {
         // Create the IP relationship
-        self.ip_to_tunnel.insert(address, tunnel_id);
-        self.tunnel_to_ip.insert(tunnel_id, address);
+        self.association_to_tunnel.insert(association, tunnel_id);
+        self.tunnel_to_association.insert(tunnel_id, association);
     }
 
     /// Attempts to associate the tunnel from `address` to the provided
     /// `pool_id` and `pool_index` if there is a tunnel connected to
     /// `address`
-    fn associate_pool(&mut self, address: Ipv4Int, pool_id: PoolId, pool_index: PoolIndex) {
-        let tunnel_id = match self.ip_to_tunnel.get(&address) {
+    fn associate_pool(
+        &mut self,
+        association: AssociationId,
+        pool_id: PoolId,
+        pool_index: PoolIndex,
+    ) {
+        let tunnel_id = match self.association_to_tunnel.get(&association) {
             Some(value) => *value,
             None => return,
         };
@@ -142,8 +146,8 @@ impl TunnelMappings {
         _ = self.id_to_tunnel.remove(&tunnel_id);
 
         // Remove the IP association
-        if let Some(ip) = self.tunnel_to_ip.remove(&tunnel_id) {
-            self.ip_to_tunnel.remove(&ip);
+        if let Some(association) = self.tunnel_to_association.remove(&tunnel_id) {
+            self.association_to_tunnel.remove(&association);
         }
 
         // Remove the slot association
@@ -169,17 +173,24 @@ impl TunnelService {
     /// Wrapper around [`TunnelMappings::associate_tunnel`] that holds the service
     /// write lock before operating
     #[inline]
-    pub fn associate_tunnel(&self, address: Ipv4Int, tunnel_id: TunnelId) {
-        self.mappings.write().associate_tunnel(address, tunnel_id)
+    pub fn associate_tunnel(&self, association: AssociationId, tunnel_id: TunnelId) {
+        self.mappings
+            .write()
+            .associate_tunnel(association, tunnel_id)
     }
 
     /// Wrapper around [`TunnelMappings::associate_pool`] that holds the service
     /// write lock before operating
     #[inline]
-    pub fn associate_pool(&self, address: Ipv4Int, pool_id: PoolId, pool_index: PoolIndex) {
+    pub fn associate_pool(
+        &self,
+        association: AssociationId,
+        pool_id: PoolId,
+        pool_index: PoolIndex,
+    ) {
         self.mappings
             .write()
-            .associate_pool(address, pool_id, pool_index)
+            .associate_pool(association, pool_id, pool_index)
     }
 
     /// Wrapper around [`TunnelMappings::get_tunnel_route`] that holds the service
@@ -264,8 +275,9 @@ impl Tunnel {
     /// Starts a new tunnel on `io` using the tunnel `service`
     ///
     /// ## Arguments
-    /// * `service` - The service to add the tunnel to
-    /// * `io`      - The underlying tunnel IO
+    /// * `service`     - The service to add the tunnel to
+    /// * `io`          - The underlying tunnel IO
+    /// * `association` - The client association ID for this tunnel
     pub fn start(service: Arc<TunnelService>, io: Upgraded) -> TunnelId {
         let (tx, rx) = mpsc::unbounded_channel();
 

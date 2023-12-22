@@ -1,3 +1,5 @@
+/// Extractor for association tokens
+pub mod association;
 /// Middleware functions an enums related to token authentication
 pub mod auth;
 /// Middleware functions related to CORS implementation

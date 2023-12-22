@@ -154,8 +154,11 @@ impl GameManager {
             (game.id, slot)
         };
 
-        self.tunnel_service
-            .associate_pool(session.addr.into(), game_id, index as u8);
+        // Allocate tunnel if supported by client
+        if let Some(association) = session.association {
+            self.tunnel_service
+                .associate_pool(association, game_id, index as u8);
+        }
 
         // Update the player current game
         session.set_game(game_id, Arc::downgrade(&game_ref));
