@@ -22,7 +22,7 @@ log = { version = "0.4", features = ["serde"] }
 log-panics = { version = "2", features = ["with-backtrace"] }
 
 # SSLv3 async impl
-blaze-ssl-async = "^0.3"
+blaze-ssl-async = "^0.4"
 
 # Resource embedding
 embeddy = "0.1"

@@ -10,7 +10,7 @@ use crate::{
     },
     utils::components::redirector,
 };
-use blaze_ssl_async::{stream::BlazeStream, BlazeError};
+use blaze_ssl_async::BlazeStream;
 use futures_util::{SinkExt, StreamExt};
 use log::{debug, error, log_enabled};
 use models::InstanceRequest;
@@ -71,7 +71,7 @@ pub enum InstanceError {
     #[error("Failed to lookup server response empty")]
     MissingValue,
     #[error("Failed to connect to server: {0}")]
-    Blaze(#[from] BlazeError),
+    Io(#[from] std::io::Error),
     #[error("Failed to retrieve instance: {0}")]
     InstanceRequest(#[from] RetrieverError),
     #[error("Server response missing address")]
@@ -299,7 +299,7 @@ pub type RetrieverResult<T> = Result<T, RetrieverError>;
 impl OfficialSession {
     /// Creates a session with an official server at the provided
     /// `host` and `port`
-    async fn connect(host: &str, port: Port) -> Result<OfficialSession, BlazeError> {
+    async fn connect(host: &str, port: Port) -> std::io::Result<OfficialSession> {
         let stream = BlazeStream::connect((host, port)).await?;
         Ok(Self {
             id: 0,
