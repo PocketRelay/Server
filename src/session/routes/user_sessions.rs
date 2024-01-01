@@ -156,7 +156,11 @@ pub async fn handle_update_network(
         }
     }
 
-    let ping_site_latency: Vec<u32> = ping_site_latency.values().copied().collect();
+    let ping_site_latency: Vec<u32> = if let Some(ping_site_latency) = ping_site_latency {
+        ping_site_latency.values().copied().collect()
+    } else {
+        Vec::new()
+    };
 
     session.set_network_info(address, qos, ping_site_latency);
 }

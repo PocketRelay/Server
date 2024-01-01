@@ -139,7 +139,6 @@ pub struct QosNetworkData {
 #[repr(u8)]
 pub enum NatType {
     /// Players behind an open NAT can usually connect to any other player and are ideal game hosts.
-    #[default]
     Open = 0x0,
     /// Players behind a moderate NAT can usually connect to other open or moderate players.
     Moderate = 0x1,
@@ -148,6 +147,7 @@ pub enum NatType {
     /// Players behind a strict (unsequential) NAT can usually only connect to open players and are the worst game hosts.
     Strict = 0x3,
     /// unknown NAT type; possibly timed out trying to detect NAT.
+    #[default]
     #[tdf(default)]
     Unknown = 0x4,
 }

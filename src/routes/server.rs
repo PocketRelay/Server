@@ -4,8 +4,13 @@
 use crate::{
     config::{RuntimeConfig, VERSION},
     database::entities::players::PlayerRole,
-    middleware::{auth::AdminAuth, ip_address::IpAddress, upgrade::Upgrade},
-    services::sessions::Sessions,
+    middleware::{
+        association::Association, auth::AdminAuth, ip_address::IpAddress, upgrade::Upgrade,
+    },
+    services::{
+        sessions::{AssociationId, Sessions},
+        tunnel::{Tunnel, TunnelService},
+    },
     session::{router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
 };
@@ -22,12 +27,17 @@ use tokio::fs::{read_to_string, OpenOptions};
 
 /// Response detailing the information about this Pocket Relay server
 /// contains the version information as well as the server information
+///
+/// As of v0.6.0 it also includes an association token for the client
+/// to use in order to associate multiple connections
 #[derive(Serialize)]
 pub struct ServerDetails {
     /// Identifier used to ensure the server is a Pocket Relay server
     ident: &'static str,
     /// The server version
     version: &'static str,
+    /// Random association token for the client to use
+    association: String,
 }
 
 /// GET /api/server
@@ -35,10 +45,12 @@ pub struct ServerDetails {
 /// Handles providing the server details. The Pocket Relay client tool
 /// uses this endpoint to validate that the provided host is a valid
 /// Pocket Relay server.
-pub async fn server_details() -> Json<ServerDetails> {
+pub async fn server_details(Extension(sessions): Extension<Arc<Sessions>>) -> Json<ServerDetails> {
+    let association = sessions.create_assoc_token();
     Json(ServerDetails {
         ident: "POCKET_RELAY_SERVER",
         version: VERSION,
+        association,
     })
 }
 
@@ -69,12 +81,19 @@ pub async fn dashboard_details(
 /// as blaze sessions using HTTP Upgrade
 pub async fn upgrade(
     IpAddress(addr): IpAddress,
+    Association(association_id): Association,
     Extension(router): Extension<Arc<BlazeRouter>>,
     Extension(sessions): Extension<Arc<Sessions>>,
     Upgrade(upgrade): Upgrade,
 ) -> Response {
     // Spawn the upgrading process to its own task
-    tokio::spawn(handle_upgrade(upgrade, addr, router, sessions));
+    tokio::spawn(handle_upgrade(
+        upgrade,
+        addr,
+        association_id,
+        router,
+        sessions,
+    ));
 
     // Let the client know to upgrade its connection
     (
@@ -91,6 +110,7 @@ pub async fn upgrade(
 pub async fn handle_upgrade(
     upgrade: OnUpgrade,
     addr: Ipv4Addr,
+    association_id: Option<AssociationId>,
     router: Arc<BlazeRouter>,
     sessions: Arc<Sessions>,
 ) {
@@ -102,7 +122,58 @@ pub async fn handle_upgrade(
         }
     };
 
-    Session::start(upgraded, addr, router, sessions).await;
+    Session::start(upgraded, addr, association_id, router, sessions).await;
+}
+
+/// GET /api/server/tunnel
+///
+/// Handles upgrading connections from the Pocket Relay Client tool
+/// from HTTP over to the Blaze protocol for proxing the game traffic
+/// as blaze sessions using HTTP Upgrade
+pub async fn tunnel(
+    Association(association_id): Association,
+    Extension(tunnel_service): Extension<Arc<TunnelService>>,
+    Upgrade(upgrade): Upgrade,
+) -> Response {
+    // Handle missing token
+    let Some(association_id) = association_id else {
+        return (StatusCode::BAD_REQUEST, "Missing association token").into_response();
+    };
+
+    // Spawn the upgrading process to its own task
+    tokio::spawn(handle_upgrade_tunnel(
+        upgrade,
+        association_id,
+        tunnel_service,
+    ));
+
+    // Let the client know to upgrade its connection
+    (
+        // Switching protocols status code
+        StatusCode::SWITCHING_PROTOCOLS,
+        // Headers required for upgrading
+        [(header::CONNECTION, "upgrade"), (header::UPGRADE, "tunnel")],
+    )
+        .into_response()
+}
+
+/// Handles upgrading a connection and starting a new session
+/// from the connection
+pub async fn handle_upgrade_tunnel(
+    upgrade: OnUpgrade,
+    association: AssociationId,
+    tunnel_service: Arc<TunnelService>,
+) {
+    let upgraded = match upgrade.await {
+        Ok(upgraded) => upgraded,
+        Err(err) => {
+            error!("Failed to upgrade client connection: {}", err);
+            return;
+        }
+    };
+
+    let tunnel_id = Tunnel::start(tunnel_service.clone(), upgraded);
+    tunnel_service.associate_tunnel(association, tunnel_id);
 }
 
 /// GET /api/server/log

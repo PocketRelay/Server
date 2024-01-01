@@ -204,7 +204,7 @@ impl Retriever {
             match OfficialInstance::obtain().await {
                 Ok(value) => Some(value),
                 Err(error) => {
-                    error!("Failed to setup redirector: {}", error);
+                    error!("Failed to setup retriever: {}", error);
                     None
                 }
             }

@@ -18,7 +18,7 @@ use crate::{
     database::entities::Player,
     services::{
         game::{GameRef, WeakGameRef},
-        sessions::Sessions,
+        sessions::{AssociationId, Sessions},
     },
     session::models::{NetworkAddress, QosNetworkData},
     utils::{
@@ -56,7 +56,12 @@ pub type WeakSessionLink = Weak<Session>;
 
 pub struct Session {
     id: u32,
-    addr: Ipv4Addr,
+    pub addr: Ipv4Addr,
+
+    /// User will not have an association if they are using an outdated
+    /// client version.
+    pub association: Option<AssociationId>,
+
     busy_lock: QueueLock,
     tx: mpsc::UnboundedSender<Packet>,
     data: Mutex<Option<SessionExtData>>,
@@ -214,6 +219,7 @@ impl Session {
     pub async fn start(
         io: Upgraded,
         addr: Ipv4Addr,
+        association: Option<AssociationId>,
         router: Arc<BlazeRouter>,
         sessions: Arc<Sessions>,
     ) {
@@ -224,6 +230,7 @@ impl Session {
 
         let session = Arc::new(Self {
             id,
+            association,
             busy_lock: QueueLock::new(),
             tx,
             data: Default::default(),

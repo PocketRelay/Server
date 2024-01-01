@@ -1,16 +1,19 @@
+use super::{util::PING_SITE_ALIAS, NatType, NetworkAddress};
+use crate::{
+    config::{RuntimeConfig, TunnelConfig},
+    services::{
+        game::{rules::RuleSet, AttrMap, Game, GamePlayer},
+        tunnel::TUNNEL_HOST_LOCAL_PORT,
+    },
+    utils::types::{GameID, PlayerID},
+};
 use bitflags::bitflags;
 use serde::Serialize;
+use std::net::Ipv4Addr;
 use tdf::{
     types::tagged_union::TAGGED_UNSET_KEY, Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned,
     TdfSerialize, TdfType, TdfTyped,
 };
-
-use crate::{
-    services::game::{rules::RuleSet, AttrMap, Game, GamePlayer},
-    utils::types::{GameID, PlayerID},
-};
-
-use super::{util::PING_SITE_ALIAS, NetworkAddress};
 
 #[derive(Debug, Clone)]
 #[repr(u16)]
@@ -759,6 +762,7 @@ pub enum SlotType {
 pub struct GameSetupResponse<'a> {
     pub game: &'a Game,
     pub context: GameSetupContext,
+    pub config: &'a RuntimeConfig,
 }
 
 impl TdfSerialize for GameSetupResponse<'_> {
@@ -794,17 +798,38 @@ impl TdfSerialize for GameSetupResponse<'_> {
             // Game Type used for game reporting as passed up in the request.
             w.tag_str_empty(b"GTYP");
 
+            // Whether to tunnel the connection
+            let tunnel = match &self.config.tunnel {
+                TunnelConfig::Stricter => !matches!(host.net.qos.natt, NatType::Open),
+                TunnelConfig::Always => true,
+                TunnelConfig::Disabled => false,
+            };
+
             {
                 // Topology host network list (The heat bug is present so this encoded as a group even though its a union)
                 w.tag_list_start(b"HNET", TdfType::Group, 1);
 
-                if let NetworkAddress::AddressPair(pair) = &host.net.addr {
-                    w.write_byte(2 /* Address pair type */);
-                    TdfSerialize::serialize(pair, w)
+                // Override for tunneling
+                if tunnel {
+                    // Forced local host for test dedicated server
+                    w.write_byte(3);
+                    TdfSerialize::serialize(
+                        &super::PairAddress {
+                            addr: Ipv4Addr::LOCALHOST,
+                            port: TUNNEL_HOST_LOCAL_PORT,
+                        },
+                        w,
+                    );
                 } else {
-                    // Uh oh.. host networking is missing...?
-                    w.write_byte(TAGGED_UNSET_KEY);
-                    w.write_byte(0);
+                    // Open NATs can directly have players connect normally
+                    if let NetworkAddress::AddressPair(pair) = &host.net.addr {
+                        w.write_byte(2 /* Address pair type */);
+                        TdfSerialize::serialize(pair, w)
+                    } else {
+                        // Uh oh.. host networking is missing...?
+                        w.write_byte(TAGGED_UNSET_KEY);
+                        w.write_byte(0);
+                    }
                 }
             }
 
@@ -822,7 +847,14 @@ impl TdfSerialize for GameSetupResponse<'_> {
             w.tag_bool(b"NRES", false);
 
             // Game network topology
-            w.tag_alt(b"NTOP", GameNetworkTopology::PeerHosted);
+            w.tag_alt(
+                b"NTOP",
+                if tunnel {
+                    GameNetworkTopology::Dedicated
+                } else {
+                    GameNetworkTopology::PeerHosted
+                },
+            );
 
             // Persisted Game id for the game, used only when game setting's enablePersistedGameIds is true.
             w.tag_str_empty(b"PGID");

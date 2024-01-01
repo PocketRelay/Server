@@ -51,7 +51,7 @@ hyper = "0.14.25"
 tower = "0.4"
 
 bitflags = { version = "2.3.1", features = ["serde"] }
-tdf = { version = "0.1" }
+tdf = { version = "0.4" }
 bytes = "1.4.0"
 
 indoc = "2"
@@ -62,6 +62,8 @@ hashbrown = { version = "0.14.3", default-features = false, features = [
     "allocator-api2",
     "inline-more",
 ] }
+
+uuid = { version = "^1", features = ["v4", "serde", "fast-rng"] }
 
 # SeaORM 
 [dependencies.sea-orm]

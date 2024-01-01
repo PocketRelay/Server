@@ -65,7 +65,7 @@ impl<S> FromRequestParts<S> for Auth {
         let sessions = parts
             .extensions
             .get::<Arc<Sessions>>()
-            .expect("Database connection extension missing");
+            .expect("Sessions extension missing");
 
         // Extract the token from the headers and verify it as a player id
         let player_id = parts
