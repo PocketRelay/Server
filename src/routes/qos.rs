@@ -76,12 +76,7 @@ pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
 }
 
 /// GET /qos/firewall
-///
-/// Called by game: /qos/firewall?vers=1&nint=2
 pub async fn firewall() -> Xml {
-    // TODO: Appears to point to two other servers
-    // 162.244.53.174
-    // 162.244.53.175
     Xml(formatdoc! {r#"
         <?xml version="1.0" encoding="UTF-8"?>
         <firewall>
@@ -102,11 +97,7 @@ pub async fn firewall() -> Xml {
 }
 
 /// GET /qos/firetype
-///
-/// Called by game: /qos/firetype?vers=1&rqid=768&rqsc=526&inip=-1062708997&inpt=3659
 pub async fn firetype() -> Xml {
-    // TODO: Firetype
-    // my wifi is: 2 cloudflare vpn is: 4
     Xml(formatdoc! {r#"
         <?xml version="1.0" encoding="UTF-8"?>
         <firetype>
