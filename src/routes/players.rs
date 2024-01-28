@@ -196,7 +196,7 @@ pub async fn set_details(
 /// PUT /api/players/self/details
 ///
 /// Route for updating the basic account details for the
-/// currenlty authenticated account. WIll ignore any fields
+/// currently authenticated account. WIll ignore any fields
 /// that are already up to date
 ///
 /// `auth` The currently authenticated player

@@ -14,7 +14,7 @@ use std::{
 use tower::Service;
 
 /// Resources embedded from the public data folder such as the
-/// dashboard static assets and the content for the ingame store.
+/// dashboard static assets and the content for the in-game store.
 ///
 /// Also acts a service for publicly sharing the content
 ///
@@ -57,7 +57,7 @@ impl<T> Service<Request<T>> for PublicContent {
 
         // Determine type using extension
         let extension: String = match std_path.extension() {
-            // Extract the extension lossily
+            // Extract the extension
             Some(value) => value.to_string_lossy().to_string(),
             // Use the index file when responding to paths (For SPA dashboard support)
             None => {
@@ -97,7 +97,7 @@ impl<T> Service<Request<T>> for PublicContent {
 
             // File exists within binary serve that
             if let Some(contents) = Self::get(&path) {
-                // Create byte reponse from the embedded file
+                // Create byte response from the embedded file
                 let mut response = Full::from(contents).into_response();
                 response
                     .headers_mut()

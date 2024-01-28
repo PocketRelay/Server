@@ -3,7 +3,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-/// Wrapping structure for creating XML respones from
+/// Wrapping structure for creating XML response from
 /// a string value
 pub struct Xml(pub String);
 

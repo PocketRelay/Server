@@ -176,7 +176,7 @@ impl FireFrame {
 
 #[derive(Debug, Clone)]
 pub struct Packet {
-    /// The frame preceeding this packet
+    /// The frame preceding this packet
     pub frame: FireFrame,
     /// The encoded contents of the packet
     pub contents: Bytes,
@@ -304,14 +304,14 @@ impl Decoder for PacketCodec {
             Some(value) => value,
             // We need to start processing a frame
             None => {
-                // Don't attempt reading unless we have atleast the required header length
+                // Don't attempt reading unless we have at least the required header length
                 if src.len() < FireFrame::MIN_HEADER_SIZE {
                     return Ok(None);
                 }
 
                 // Read the length bytes
                 let length = src.get_u16() as usize;
-                // Read the inital frame
+                // Read the initial frame
                 let frame = FireFrame::read(src);
                 // Whether the length needs the jumbo frame to be loaded
                 let need_jumbo = frame.options.contains(PacketOptions::JUMBO_FRAME);
@@ -370,7 +370,7 @@ impl Encoder<Packet> for PacketCodec {
     }
 }
 
-/// Wrapper over a packet structure to provde debug logging
+/// Wrapper over a packet structure to provide debug logging
 /// with names resolved for the component
 pub struct PacketDebug<'a> {
     /// Reference to the packet itself
@@ -388,7 +388,7 @@ impl<'a> Debug for PacketDebug<'a> {
         let is_error = matches!(&header.ty, FrameType::Error);
 
         let component_name = get_component_name(header.component).unwrap_or("Unknown");
-        let command_name = get_command_name(key, is_notify).unwrap_or("Unkown");
+        let command_name = get_command_name(key, is_notify).unwrap_or("Unknown");
 
         write!(f, "{:?}", header.ty)?;
 

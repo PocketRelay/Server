@@ -308,7 +308,7 @@ impl OfficialSession {
     }
 
     /// Writes a request packet and waits until the response packet is
-    /// recieved returning the contents of that response packet.
+    /// received returning the contents of that response packet.
     pub async fn request<Req, Res>(
         &mut self,
         component: u16,
@@ -344,7 +344,7 @@ impl OfficialSession {
     }
 
     /// Writes a request packet and waits until the response packet is
-    /// recieved returning the contents of that response packet. The
+    /// received returning the contents of that response packet. The
     /// request will have no content
     pub async fn request_empty<Res>(&mut self, component: u16, command: u16) -> RetrieverResult<Res>
     where
@@ -356,7 +356,7 @@ impl OfficialSession {
     }
 
     /// Writes a request packet and waits until the response packet is
-    /// recieved returning the raw response packet
+    /// received returning the raw response packet
     pub async fn request_empty_raw(
         &mut self,
         component: u16,
@@ -370,8 +370,8 @@ impl OfficialSession {
         self.expect_response(&header).await
     }
 
-    /// Waits for a response packet to be recieved any notification packets
-    /// that are recieved are handled in the handle_notify function.
+    /// Waits for a response packet to be received any notification packets
+    /// that are received are handled in the handle_notify function.
     async fn expect_response(&mut self, request: &FireFrame) -> RetrieverResult<Packet> {
         loop {
             let response = match self.stream.next().await {

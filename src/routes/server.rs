@@ -234,7 +234,7 @@ pub struct TelemetryMessage {
 
 /// GET /api/server/telemetry
 ///
-/// Handles the incoming telemetry messages recieved
+/// Handles the incoming telemetry messages received
 /// from Pocket Relay clients
 pub async fn submit_telemetry(Json(data): Json<TelemetryMessage>) -> StatusCode {
     debug!("[TELEMETRY] {:?}", data);

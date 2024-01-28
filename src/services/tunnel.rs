@@ -22,7 +22,7 @@ use tokio_util::codec::Framed;
 
 use super::sessions::AssociationId;
 
-/// The port bound on clients representing the host player within the socket poool
+/// The port bound on clients representing the host player within the socket pool
 pub const TUNNEL_HOST_LOCAL_PORT: u16 = 42132;
 
 /// ID for a tunnel
@@ -36,7 +36,7 @@ type PoolId = GameID;
 pub struct TunnelService {
     /// Stores the next available tunnel ID
     next_tunnel_id: AtomicU32,
-    /// Underlying tunnnel mappings
+    /// Underlying tunnel mappings
     mappings: RwLock<TunnelMappings>,
 }
 
@@ -53,11 +53,11 @@ struct TunnelMappings {
     /// associated to a [TunnelId]    
     tunnel_to_association: HashMap<TunnelId, AssociationId>,
 
-    /// Mapping assocating a [TunnelId] with a [PoolIndex] within a [PoolId]
+    /// Mapping associating a [TunnelId] with a [PoolIndex] within a [PoolId]
     /// that it is apart of
     tunnel_to_index: IntHashMap<TunnelId, PoolKey>,
     /// Inverse mapping of `tunnel_to_index` for finding the handle
-    /// assocated to a specific pool and slot
+    /// associated to a specific pool and slot
     index_to_tunnel: IntHashMap<PoolKey, TunnelId>,
 }
 
@@ -87,7 +87,7 @@ impl TunnelMappings {
         self.id_to_tunnel.insert(tunnel_id, tunnel);
     }
 
-    /// Assocates the provided `association` to the provided `tunnel`
+    /// Associates the provided `association` to the provided `tunnel`
     ///
     /// Creates a mapping for the [AssociationId] to [TunnelHandle] along
     /// with [TunnelHandle] to [AssociationId]
@@ -159,7 +159,7 @@ impl TunnelMappings {
 
     /// Removes the association between a [PoolKey] and a [TunnelId] if
     /// one is present
-    fn dissocate_pool(&mut self, pool_id: PoolId, pool_index: PoolIndex) {
+    fn dissociate_pool(&mut self, pool_id: PoolId, pool_index: PoolIndex) {
         if let Some(tunnel_id) = self
             .index_to_tunnel
             .remove(&PoolKey::new(pool_id, pool_index))
@@ -211,11 +211,11 @@ impl TunnelService {
         self.mappings.write().dissociate_tunnel(tunnel_id);
     }
 
-    /// Wrapper around [`TunnelMappings::dissocate_pool`] that holds the service
+    /// Wrapper around [`TunnelMappings::dissociate_pool`] that holds the service
     /// write lock before operating
     #[inline]
-    pub fn dissocate_pool(&self, pool_id: PoolId, pool_index: PoolIndex) {
-        self.mappings.write().dissocate_pool(pool_id, pool_index);
+    pub fn dissociate_pool(&self, pool_id: PoolId, pool_index: PoolIndex) {
+        self.mappings.write().dissociate_pool(pool_id, pool_index);
     }
 }
 
@@ -230,10 +230,10 @@ pub struct TunnelHandle {
 pub struct Tunnel {
     /// ID for this tunnel
     id: TunnelId,
-    /// The IO tunnel used to send information to the host and recieve
-    /// respones
+    /// The IO tunnel used to send information to the host and receive
+    /// response
     io: Framed<Upgraded, TunnelCodec>,
-    /// Reciever for messages that should be written to the tunnel
+    /// Receiver for messages that should be written to the tunnel
     rx: mpsc::UnboundedReceiver<TunnelMessage>,
     /// Future state for writing to the `io`
     write_state: TunnelWriteState,
@@ -259,7 +259,7 @@ enum TunnelWriteState {
     Write(Option<TunnelMessage>),
     /// Poll flushing the bytes written to [`Tunnel::io`]
     Flush,
-    /// The tunnnel has stopped and should not continue
+    /// The tunnel has stopped and should not continue
     Stop,
 }
 
@@ -267,7 +267,7 @@ enum TunnelWriteState {
 enum TunnelReadState {
     /// Continue reading
     Continue,
-    /// The tunnnel has stopped and should not continue
+    /// The tunnel has stopped and should not continue
     Stop,
 }
 
@@ -284,7 +284,7 @@ impl Tunnel {
         // Wrap the `io` with the [`TunnelCodec`] for framing
         let io = Framed::new(io, TunnelCodec::default());
 
-        // Aquire the tunnel ID
+        // Acquire the tunnel ID
         let id = service.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
 
         // Store the tunnel mapping

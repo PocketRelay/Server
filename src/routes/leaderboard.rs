@@ -43,7 +43,7 @@ pub struct LeaderboardQuery {
     count: Option<u8>,
 }
 
-/// The different types of respones that can be created
+/// The different types of response that can be created
 /// from a leaderboard request
 #[derive(Serialize)]
 pub struct LeaderboardResponse {

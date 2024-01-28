@@ -1,6 +1,6 @@
 use crate::services::game::AttrMap;
 
-/// Rulesets are fairly cheap to clone. Rule values are not usually
+/// Rule sets are fairly cheap to clone. Rule values are not usually
 /// very long.
 pub struct RuleSet {
     /// Map rule provided in the matchmaking request

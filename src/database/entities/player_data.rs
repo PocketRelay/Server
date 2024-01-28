@@ -8,7 +8,7 @@ use sea_orm::{
 use serde::Serialize;
 use std::future::Future;
 
-/// Structure for player data stro
+/// Structure for player data
 #[derive(Serialize, Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "player_data")]
 pub struct Model {
@@ -60,7 +60,7 @@ impl Model {
             value: Set(value),
         })
         .on_conflict(
-            // Update the valume column if a key already exists
+            // Update the value column if a key already exists
             OnConflict::columns([Column::PlayerId, Column::Key])
                 .update_column(Column::Value)
                 .to_owned(),
@@ -69,7 +69,7 @@ impl Model {
     }
 
     /// Bulk inserts a collection of player data for the provided player. Will not handle
-    /// conflicts so this should only be done on a freshly create player where data doesnt
+    /// conflicts so this should only be done on a freshly create player where data doesn't
     /// already exist
     ///
     /// `db`        The database connection

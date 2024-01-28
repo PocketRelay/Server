@@ -37,7 +37,7 @@ struct HandlerRoute<H, Args, Res> {
     _marker: PhantomData<fn(Args) -> Res>,
 }
 
-/// Wrapper around [Handler] that erasings the associated generic types
+/// Wrapper around [Handler] that erases the associated generic types
 /// so that it can be stored within the [Router]
 trait ErasedHandler: Send + Sync {
     fn handle(&self, req: PacketRequest) -> BoxFuture<'_, Packet>;

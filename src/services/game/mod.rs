@@ -79,7 +79,7 @@ pub type AttrMap = TdfMap<String, String>;
 pub struct GamePlayer {
     /// Session player
     pub player: Arc<Player>,
-    /// Weak reference to the assocated session
+    /// Weak reference to the associated session
     pub link: WeakSessionLink,
     pub notify_handle: SessionNotifyHandle,
     /// Networking information for the player
@@ -173,7 +173,7 @@ impl GamePlayer {
             w.tag_str(b"NAME", &self.player.display_name);
             // Player ID
             w.tag_u32(b"PID", self.player.id);
-            // Playet network data
+            // Player network data
             w.tag_ref(b"PNET", &self.net.addr);
             // Slot ID
             w.tag_owned(b"SID", slot);
@@ -196,7 +196,7 @@ impl GamePlayer {
 /// Different results for checking if a game is
 /// joinable
 pub enum GameJoinableState {
-    /// Game is currenlty joinable
+    /// Game is currently joinable
     Joinable,
     /// Game is full
     Full,
@@ -350,7 +350,7 @@ impl Game {
         };
 
         // Remove the tunnel
-        self.tunnel_service.dissocate_pool(self.id, index as u8);
+        self.tunnel_service.dissociate_pool(self.id, index as u8);
 
         // Remove the player
         let player = self.players.remove(index);
@@ -413,7 +413,7 @@ impl Game {
             return GameJoinableState::Full;
         }
 
-        // Check ruleset matches
+        // Check rule set matches
         if let Some(rule_set) = rule_set {
             if !rule_set.matches(&self.attributes) {
                 return GameJoinableState::NotMatch;
@@ -509,12 +509,12 @@ impl Game {
     }
 
     /// Notifies the provided player and all other players
-    /// in the game that they should remove eachother from
+    /// in the game that they should remove each other from
     /// their player data list
     fn rem_user_sub(&self, target: &GamePlayer) {
         debug!("Removing user subscriptions");
 
-        // Unsubscribe all the clients from eachother
+        // Unsubscribe all the clients from each other
         self.players
             .iter()
             .filter(|other| other.player.id != target.player.id)
@@ -524,7 +524,7 @@ impl Game {
             });
     }
 
-    /// Modifies the psudo admin list this list doesn't actually exist in
+    /// Modifies the pseudo admin list this list doesn't actually exist in
     /// our implementation but we still need to tell the clients these
     /// changes.
     ///

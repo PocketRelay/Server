@@ -218,7 +218,7 @@ async fn load_coalesced() -> std::io::Result<ChunkMap> {
     generate_coalesced(bytes)
 }
 
-/// Generates a compressed caolesced from the provided bytes
+/// Generates a compressed coalesced from the provided bytes
 ///
 /// `bytes` The coalesced bytes
 fn generate_coalesced(bytes: &[u8]) -> std::io::Result<ChunkMap> {
@@ -336,9 +336,9 @@ struct Message {
     end_date: Option<String>,
     /// Path to the message image dds
     /// if left blank the game will use
-    /// a default imagee
+    /// a default image
     image: Option<String>,
-    /// The title of the mesage
+    /// The title of the message
     title: Option<String>,
     /// The message text content
     message: String,
@@ -358,7 +358,7 @@ enum MessageType {
     MenuTerminal,
     /// Displayed on the main menu in the scrolling text
     MenuScrolling,
-    /// Large multiplayer fullscreen notification
+    /// Large multiplayer full-screen notification
     /// with store button
     Multiplayer,
     /// Other unknown value

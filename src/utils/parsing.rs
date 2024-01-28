@@ -1,4 +1,4 @@
-//! Utilites for parsing ME3 strings
+//! Utilities for parsing ME3 strings
 use serde::Serialize;
 use std::str::{FromStr, Split};
 

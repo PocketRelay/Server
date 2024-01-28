@@ -8,7 +8,7 @@ use indoc::formatdoc;
 use log::debug;
 use serde::Deserialize;
 
-/// Query for the Qualitu Of Service route
+/// Query for the Quality Of Service route
 #[derive(Deserialize)]
 pub struct QosQuery {
     /// The port the client is using

@@ -23,7 +23,7 @@ use crate::{
     session::models::{NetworkAddress, QosNetworkData},
     utils::{
         components::{component_key, user_sessions, DEBUG_IGNORED_PACKETS},
-        lock::{QueueLock, QueueLockGuard, TicketAquireFuture},
+        lock::{QueueLock, QueueLockGuard, TicketAcquireFuture},
         types::{GameID, PlayerID},
     },
 };
@@ -75,11 +75,11 @@ pub struct SessionNotifyHandle {
 }
 
 impl SessionNotifyHandle {
-    /// Pushes a new notification packet, this will aquire a queue position
+    /// Pushes a new notification packet, this will acquire a queue position
     /// waiting until the current response is handled before sending
     pub fn notify(&self, packet: Packet) {
         let tx = self.tx.clone();
-        let busy_lock = self.busy_lock.aquire();
+        let busy_lock = self.busy_lock.acquire();
         tokio::spawn(async move {
             let _guard = busy_lock.await;
             let _ = tx.send(packet);
@@ -151,7 +151,7 @@ impl SessionExtData {
             .map(|index| self.subscribers.swap_remove(index));
 
         if let Some((_, subscriber)) = subscriber {
-            // Notify the subscriber they've removed the user subcription
+            // Notify the subscriber they've removed the user subscription
             subscriber.notify(Packet::notify(
                 user_sessions::COMPONENT,
                 user_sessions::USER_REMOVED,
@@ -511,10 +511,10 @@ enum WriteState {
 enum ReadState<'a> {
     /// Waiting for a packet
     Recv,
-    /// Aquiring a lock guard
-    Aquire {
+    /// Acquiring a lock guard
+    Acquire {
         /// Future for the locking guard
-        ticket: TicketAquireFuture,
+        ticket: TicketAcquireFuture,
         /// The packet that was read
         packet: Option<Packet>,
     },
@@ -589,8 +589,8 @@ impl SessionFuture<'_> {
                 let result = ready!(Pin::new(&mut self.io).poll_next(cx));
 
                 if let Some(Ok(packet)) = result {
-                    let ticket = self.session.busy_lock.aquire();
-                    self.read_state = ReadState::Aquire {
+                    let ticket = self.session.busy_lock.acquire();
+                    self.read_state = ReadState::Acquire {
                         ticket,
                         packet: Some(packet),
                     }
@@ -599,11 +599,11 @@ impl SessionFuture<'_> {
                     self.stop = true;
                 }
             }
-            ReadState::Aquire { ticket, packet } => {
+            ReadState::Acquire { ticket, packet } => {
                 let guard = ready!(Pin::new(ticket).poll(cx));
                 let packet = packet
                     .take()
-                    .expect("Unexpected aquire state without packet");
+                    .expect("Unexpected acquire state without packet");
 
                 self.session.debug_log_packet("Receive", &packet);
 
@@ -613,7 +613,7 @@ impl SessionFuture<'_> {
                 self.read_state = ReadState::Handle { guard, future };
             }
             ReadState::Handle {
-                guard: _gaurd,
+                guard: _guard,
                 future,
             } => {
                 // Poll the handler until completion

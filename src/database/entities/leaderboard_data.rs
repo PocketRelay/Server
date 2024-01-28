@@ -94,7 +94,7 @@ impl Model {
             .order_by_asc(Expr::cust(Self::RANK_COL))
             // Offset to the starting position
             .offset(start as u64)
-            // Only take the requested amouont
+            // Only take the requested amount
             .limit(count as u64)
             // Inner join on the players table
             .join(sea_orm::JoinType::InnerJoin, Relation::Player.def())

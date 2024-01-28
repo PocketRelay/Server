@@ -49,7 +49,7 @@ pub struct AuthQuery {
 /// But this implementation just responds with the bare minimum response directly
 /// passing the auth key as the session token for further requests
 ///
-/// Note: Many fields here have their values ommitted compared to the
+/// Note: Many fields here have their values omitted compared to the
 /// actual response. This is because these are not needed to function
 /// so not nessicary to implement the fetching
 ///
@@ -147,7 +147,7 @@ pub async fn increase_ratings(
 /// Retrieves the galaxy at war data and promotions count for
 /// the player with the provided ID
 ///
-/// `db` The dataabse connection
+/// `db` The database connection
 /// `id` The hex ID of the player
 async fn get_player_gaw_data(
     db: &DatabaseConnection,

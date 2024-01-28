@@ -41,7 +41,7 @@ pub enum AuthenticationError {
 /// ```
 #[derive(TdfDeserialize)]
 pub struct LoginRequest {
-    /// The email addresss of the account to login with
+    /// The email address of the account to login with
     #[tdf(tag = "MAIL")]
     pub email: String,
     /// The plain text password of the account to login to

@@ -28,7 +28,7 @@ pub enum AuthError {
 
     /// Provided account credentials were invalid
     #[error("Provided credentials are not valid")]
-    InvalidCredentails,
+    InvalidCredentials,
 
     /// Provided username was not valid
     #[error("Provided username is invalid")]
@@ -80,14 +80,14 @@ pub async fn login(
     // Find a player with the matching email
     let player: Player = Player::by_email(&db, &email)
         .await?
-        .ok_or(AuthError::InvalidCredentails)?;
+        .ok_or(AuthError::InvalidCredentials)?;
 
     // Find the account password or fail if missing one
     let player_password: &str = player.password.as_ref().ok_or(AuthError::OriginAccess)?;
 
     // Verify that the password matches
     if !verify_password(&password, player_password) {
-        return Err(AuthError::InvalidCredentails);
+        return Err(AuthError::InvalidCredentials);
     }
 
     let token = sessions.create_token(player.id);
@@ -154,7 +154,7 @@ impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             Self::Database(_) | Self::PasswordHash(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::InvalidCredentails | Self::OriginAccess => StatusCode::UNAUTHORIZED,
+            Self::InvalidCredentials | Self::OriginAccess => StatusCode::UNAUTHORIZED,
             Self::EmailTaken | Self::InvalidUsername => StatusCode::BAD_REQUEST,
             Self::RegistrationDisabled => StatusCode::FORBIDDEN,
         };

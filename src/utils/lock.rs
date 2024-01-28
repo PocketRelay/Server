@@ -7,7 +7,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::PollSemaphore;
 
 /// Lock with strict ordering for permits, maintains strict
-/// FIFI ordering
+/// FIFO ordering
 #[derive(Clone)]
 pub struct QueueLock {
     inner: Arc<QueueLockInner>,
@@ -26,16 +26,16 @@ impl QueueLock {
         }
     }
 
-    /// Aquire a ticket for the queue, returns a future
+    /// Acquire a ticket for the queue, returns a future
     /// which completes when its the tickets turn to access
-    pub fn aquire(&self) -> TicketAquireFuture {
+    pub fn acquire(&self) -> TicketAcquireFuture {
         let ticket = self
             .inner
             .next_ticket
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         let poll = PollSemaphore::new(self.inner.semaphore.clone());
 
-        TicketAquireFuture {
+        TicketAcquireFuture {
             inner: self.inner.clone(),
             poll,
             ticket,
@@ -52,21 +52,21 @@ struct QueueLockInner {
     current_ticket: AtomicUsize,
 }
 
-/// Future while waiting to aquire its lock
+/// Future while waiting to acquire its lock
 ///
 /// TODO: If these futures are dropped early then
 /// the lock wont be able to unlock, figure out how
 /// to fix this..?
-pub struct TicketAquireFuture {
+pub struct TicketAcquireFuture {
     /// The queue lock being waited on
     inner: Arc<QueueLockInner>,
-    /// Pollable semaphore
+    /// Semaphore that can be polled
     poll: PollSemaphore,
     /// The ticket for this queue position
     ticket: usize,
 }
 
-impl Drop for TicketAquireFuture {
+impl Drop for TicketAcquireFuture {
     fn drop(&mut self) {
         let current = self
             .inner
@@ -75,7 +75,7 @@ impl Drop for TicketAquireFuture {
 
         // Ensure we are the ticket that is allowed
         if current != self.ticket {
-            warn!("Early dropped ticket aquire {}", self.ticket);
+            warn!("Early dropped ticket acquire {}", self.ticket);
         }
     }
 }
@@ -87,7 +87,7 @@ pub struct QueueLockGuard {
     inner: Arc<QueueLockInner>,
 }
 
-impl Future for TicketAquireFuture {
+impl Future for TicketAcquireFuture {
     type Output = QueueLockGuard;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

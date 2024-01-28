@@ -103,7 +103,7 @@ impl Default for Config {
 pub enum TunnelConfig {
     /// Only tunnel players with non "Open" NAT types if the QoS
     /// server is set to [`QosServerConfig::Disabled`] this is
-    /// equivilent to [`TunnelConfig::Always`]
+    /// equivalent to [`TunnelConfig::Always`]
     #[default]
     Stricter,
     /// Always tunnel connections through the server regardless

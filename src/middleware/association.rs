@@ -4,7 +4,7 @@ use futures_util::future::BoxFuture;
 use hyper::StatusCode;
 use std::{future::ready, sync::Arc};
 
-/// Extractor for retireving the association token from a request headers
+/// Extractor for retrieving the association token from a request headers
 pub struct Association(pub Option<AssociationId>);
 
 /// The HTTP header that contains the association token
@@ -27,13 +27,13 @@ impl<S> FromRequestParts<S> for Association {
             .get::<Arc<Sessions>>()
             .expect("Sessions extension missing");
 
-        let assocation_id = parts
+        let association_id = parts
             .headers
             .get(TOKEN_HEADER)
             .and_then(|value| value.to_str().ok())
             .and_then(|token| sessions.verify_assoc_token(token).ok());
 
-        Box::pin(ready(Ok(Self(assocation_id))))
+        Box::pin(ready(Ok(Self(association_id))))
     }
 }
 
