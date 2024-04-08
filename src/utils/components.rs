@@ -43,8 +43,10 @@ pub static DEBUG_IGNORED_PACKETS: &[ComponentKey] = &[
 /// Initializes the stored component state. Should only be
 /// called on initial startup
 pub fn initialize() {
-    init_commands();
-    init_notifications();
+    unsafe {
+        init_commands();
+        init_notifications();
+    }
 }
 
 pub fn get_component_name(component: u16) -> Option<&'static str> {
@@ -55,14 +57,13 @@ pub fn get_component_name(component: u16) -> Option<&'static str> {
 }
 
 pub fn get_command_name(key: ComponentKey, notify: bool) -> Option<&'static str> {
-    let map = unsafe {
+    unsafe {
         if notify {
-            &NOTIFICATIONS
+            NOTIFICATIONS.get(&key).copied()
         } else {
-            &COMMANDS
+            COMMANDS.get(&key).copied()
         }
-    };
-    map.get(&key).copied()
+    }
 }
 
 /// Creates an u32 value from the provided component
@@ -400,7 +401,7 @@ pub mod user_sessions {
 }
 
 #[rustfmt::skip]
-fn init_commands() {
+unsafe fn init_commands() {
     use authentication as a;
     use game_manager as g;
     use redirector as r;
@@ -411,9 +412,7 @@ fn init_commands() {
     use game_reporting as gr;
     use user_sessions as us;
 
-    let values = unsafe { &mut COMMANDS };
-
-    [
+    COMMANDS.extend([
         // Authentication
         (component_key(a::COMPONENT, a::CREATE_ACCOUNT), "CreateAccount"),
         (component_key(a::COMPONENT, a::UPDATE_ACCOUNT), "UpdateAccount"),
@@ -613,23 +612,18 @@ fn init_commands() {
         (component_key(us::COMPONENT, us::FETCH_LAST_LOCALE_USED_AND_AUTH_ERROR), "FetchLastLocaleUsedAndAuthError"),
         (component_key(us::COMPONENT, us::FETCH_USER_FIRST_LAST_AUTH_TIME), "FetchUserFirstLastAuthTime"),
         (component_key(us::COMPONENT, us::RESUME_SESSION), "ResumeSession"),
-    ]
-    .into_iter()
-    .for_each(|(k, v)| {
-        values.insert(k, v);
-    });
+    ]);
 }
 
 #[rustfmt::skip]
-fn init_notifications() {
+unsafe fn init_notifications() {
     use game_manager as g;
     use messaging as m;
     use game_reporting as gr;
     use user_sessions as us;
 
-    let values = unsafe { &mut NOTIFICATIONS };
 
-    [
+    NOTIFICATIONS.extend([
         // Game Manager
         (component_key(g::COMPONENT, g::MATCHMAKING_FAILED), "MatchmakingFailed"),
         (component_key(g::COMPONENT, g::MATCHMAKING_ASYNC_STATUS), "MatchmakingAsyncStatus"),
@@ -677,9 +671,5 @@ fn init_notifications() {
         (component_key(us::COMPONENT, us::USER_ADDED), "UserAdded"),
         (component_key(us::COMPONENT, us::USER_UPDATED), "UserUpdated"),
         (component_key(us::COMPONENT, us::USER_REMOVED), "UserRemoved"),
-    ]
-    .into_iter()
-    .for_each(|(k, v)| {
-        values.insert(k, v);
-    });
+    ]);
 }
