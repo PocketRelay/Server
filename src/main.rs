@@ -7,11 +7,11 @@ use crate::{
     },
     utils::signing::SigningKey,
 };
-use axum::{Extension, Server};
+use axum::{self, Extension};
 use config::load_config;
 use log::{debug, error, info, LevelFilter};
 use std::{net::SocketAddr, sync::Arc};
-use tokio::{join, signal};
+use tokio::{join, net::TcpListener, signal};
 use utils::logging;
 
 mod config;
@@ -88,13 +88,22 @@ async fn main() {
 
     info!("Starting server on {} (v{})", addr, VERSION);
 
-    if let Err(err) = Server::bind(&addr)
-        .serve(router)
+    // Start the TCP listener
+    let listener = match TcpListener::bind(addr).await {
+        Ok(value) => value,
+        Err(err) => {
+            error!("Failed to bind HTTP server pm {}: {:?}", addr, err);
+            return;
+        }
+    };
+
+    // Run the HTTP server
+    if let Err(err) = axum::serve(listener, router)
         .with_graceful_shutdown(async move {
             _ = signal::ctrl_c().await;
         })
         .await
     {
-        error!("Failed to bind HTTP server on {}: {:?}", addr, err);
+        error!("Error within HTTP server {:?}", err);
     }
 }

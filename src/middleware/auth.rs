@@ -6,7 +6,7 @@ use crate::{
     services::sessions::{Sessions, VerifyError},
 };
 use axum::{
-    body::boxed,
+    body::Body,
     extract::FromRequestParts,
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -125,6 +125,6 @@ impl IntoResponse for TokenError {
             Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
-        (status, boxed(self.to_string())).into_response()
+        (status, Body::from(self.to_string())).into_response()
     }
 }

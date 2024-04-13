@@ -47,7 +47,8 @@ email_address = "0.2.4"
 tokio-util = { version = "0.7", features = ["codec"] }
 
 # Hyper for connection upgrades (TODO: Update to 1.0 once reqwest supports it)
-hyper = "0.14.25"
+hyper = "1.2.0"
+hyper-util = { version = "0.1.3", features = ["tokio"] }
 tower = "0.4"
 
 bitflags = { version = "2.3.1", features = ["serde"] }
@@ -97,13 +98,13 @@ features = [
 
 # Axum web framework (TODO: Update to 0.7 once once reqwest supports hyper 1.0)
 [dependencies.axum]
-version = "0.6.1"
+version = "0.7.5"
 default-features = false
 features = ["http1", "json", "query", "tokio"]
 
 # HTTP Client
 [dependencies.reqwest]
-version = "0.11.12"
+version = "0.12.3"
 default-features = false
 features = ["json", "rustls-tls"]
 

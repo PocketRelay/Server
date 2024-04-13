@@ -6,6 +6,7 @@ use self::codec::{TunnelCodec, TunnelMessage};
 use crate::utils::{hashing::IntHashMap, types::GameID};
 use futures_util::{Sink, Stream};
 use hyper::upgrade::Upgraded;
+use hyper_util::rt::TokioIo;
 use parking_lot::RwLock;
 use std::{
     collections::HashMap,
@@ -232,7 +233,7 @@ pub struct Tunnel {
     id: TunnelId,
     /// The IO tunnel used to send information to the host and receive
     /// response
-    io: Framed<Upgraded, TunnelCodec>,
+    io: Framed<TokioIo<Upgraded>, TunnelCodec>,
     /// Receiver for messages that should be written to the tunnel
     rx: mpsc::UnboundedReceiver<TunnelMessage>,
     /// Future state for writing to the `io`
@@ -282,7 +283,7 @@ impl Tunnel {
         let (tx, rx) = mpsc::unbounded_channel();
 
         // Wrap the `io` with the [`TunnelCodec`] for framing
-        let io = Framed::new(io, TunnelCodec::default());
+        let io = Framed::new(TokioIo::new(io), TunnelCodec::default());
 
         // Acquire the tunnel ID
         let id = service.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
