@@ -29,6 +29,7 @@ use crate::{
 };
 use futures_util::{future::BoxFuture, Sink, Stream};
 use hyper::upgrade::Upgraded;
+use hyper_util::rt::TokioIo;
 use log::{debug, log_enabled, warn};
 use parking_lot::Mutex;
 use serde::Serialize;
@@ -239,7 +240,7 @@ impl Session {
         });
 
         SessionFuture {
-            io: Framed::new(io, PacketCodec::default()),
+            io: Framed::new(TokioIo::new(io), PacketCodec::default()),
             router: &router,
             rx,
             session: session.clone(),
@@ -482,7 +483,7 @@ impl Debug for DebugSessionData {
 /// Future for processing a session
 struct SessionFuture<'a> {
     /// The IO for reading and writing
-    io: Framed<Upgraded, PacketCodec>,
+    io: Framed<TokioIo<Upgraded>, PacketCodec>,
     /// Receiver for packets to write
     rx: mpsc::UnboundedReceiver<Packet>,
     /// The session this link is for

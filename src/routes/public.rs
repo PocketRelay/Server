@@ -1,5 +1,5 @@
 use axum::{
-    body::Full,
+    body::Body,
     http::{HeaderValue, Request},
     response::{IntoResponse, Response},
 };
@@ -35,7 +35,7 @@ fn find_local_path(path: &str) -> Option<PathBuf> {
     Some(file_path)
 }
 
-impl<T> Service<Request<T>> for PublicContent {
+impl Service<Request<Body>> for PublicContent {
     type Response = Response;
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
@@ -44,7 +44,7 @@ impl<T> Service<Request<T>> for PublicContent {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: Request<T>) -> Self::Future {
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
         let path = req.uri().path();
 
         // Strip the leading slash in order to match paths correctly
@@ -86,7 +86,7 @@ impl<T> Service<Request<T>> for PublicContent {
                 if local_path.exists() && local_path.is_file() {
                     if let Ok(contents) = tokio::fs::read(local_path).await {
                         // Create byte reponse from the embedded file
-                        let mut response = Full::from(contents).into_response();
+                        let mut response = Body::from(contents).into_response();
                         response
                             .headers_mut()
                             .insert(CONTENT_TYPE, HeaderValue::from_static(mime_type));
@@ -98,7 +98,7 @@ impl<T> Service<Request<T>> for PublicContent {
             // File exists within binary serve that
             if let Some(contents) = Self::get(&path) {
                 // Create byte response from the embedded file
-                let mut response = Full::from(contents).into_response();
+                let mut response = Body::from(contents).into_response();
                 response
                     .headers_mut()
                     .insert(CONTENT_TYPE, HeaderValue::from_static(mime_type));

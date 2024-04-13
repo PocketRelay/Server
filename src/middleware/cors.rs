@@ -1,15 +1,17 @@
 use axum::{
-    http::{header, HeaderValue, Method, Request, StatusCode},
+    body::Body,
+    http::{header, HeaderValue, Method, StatusCode},
     middleware::Next,
     response::Response,
 };
+use hyper::Request;
 
 /// Middleware layer function for appending CORS headers to requests
 /// and responding to options requests
 ///
 /// `req`  The request to handle
 /// `next` The next layer to use
-pub async fn cors_layer<T>(req: Request<T>, next: Next<T>) -> Response {
+pub async fn cors_layer(req: Request<Body>, next: Next) -> Response {
     // Create a new response for OPTIONS requests
     let mut res: Response = if req.method() == Method::OPTIONS {
         // Default response for OPTIONS requests
@@ -42,12 +44,12 @@ pub async fn cors_layer<T>(req: Request<T>, next: Next<T>) -> Response {
 #[cfg(test)]
 mod test {
     use super::cors_layer;
-    use axum::{middleware::from_fn, routing::get, Router};
+    use axum::{body::Body, middleware::from_fn, routing::get, Router};
     use hyper::{
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
         },
-        Body, Method, Request, StatusCode,
+        Method, Request, StatusCode,
     };
     use tower::ServiceExt;
 
