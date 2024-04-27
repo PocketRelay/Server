@@ -100,6 +100,8 @@ pub struct PlayersResponse {
     more: bool,
     /// Total number of pages available
     total_pages: u64,
+    /// Total number of items available
+    total_items: u64,
 }
 
 /// GET /api/players
@@ -122,14 +124,15 @@ pub async fn get_players(
         .order_by_asc(players::Column::Id)
         .paginate(&db, count as u64);
     let page = query.offset as u64;
-    let total_pages = paginator.num_pages().await?;
-    let more = page < total_pages;
+    let totals = paginator.num_items_and_pages().await?;
+    let more = page < totals.number_of_pages;
     let players = paginator.fetch_page(page).await?;
 
     Ok(Json(PlayersResponse {
         players,
         more,
-        total_pages,
+        total_pages: totals.number_of_pages,
+        total_items: totals.number_of_items,
     }))
 }
 

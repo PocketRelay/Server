@@ -72,6 +72,12 @@ impl GameManager {
         }
     }
 
+    /// Obtains the total count of games in the list
+    pub async fn get_total_games(&self) -> usize {
+        let games = &*self.games.read().await;
+        games.len()
+    }
+
     pub async fn create_snapshot(
         &self,
         offset: usize,

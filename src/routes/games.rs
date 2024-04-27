@@ -42,6 +42,8 @@ pub struct GamesResponse {
     games: Vec<GameSnapshot>,
     /// Whether there is more players left in the database
     more: bool,
+    /// Total number of items available
+    total_items: usize,
 }
 
 /// GET /api/games
@@ -66,7 +68,14 @@ pub async fn get_games(
         .create_snapshot(offset, count, include_net)
         .await;
 
-    Ok(Json(GamesResponse { games, more }))
+    // Get the total number of games
+    let total_games = game_manager.get_total_games().await;
+
+    Ok(Json(GamesResponse {
+        games,
+        more,
+        total_items: total_games,
+    }))
 }
 
 /// GET /api/games/:id
