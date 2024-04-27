@@ -435,10 +435,16 @@ impl Serialize for PlayerDataMap {
 ///
 /// `player_id` The ID of the player
 pub async fn all_data(
-    _: AdminAuth,
+    Auth(auth): Auth,
     Path(player_id): Path<PlayerID>,
     Extension(db): Extension<DatabaseConnection>,
 ) -> PlayersRes<PlayerDataMap> {
+    let player: Player = find_player(&db, player_id).await?;
+
+    if !auth.has_permission_over(&player) {
+        return Err(PlayersError::InvalidPermission);
+    }
+
     let data = PlayerData::all(&db, player_id).await?;
     Ok(Json(PlayerDataMap(data)))
 }
