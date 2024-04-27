@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::{error, info, warn};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::Database as SeaDatabase;
 use std::{
@@ -64,9 +64,24 @@ async fn connect_database() -> DatabaseConnection {
         .expect("Unable to create database connection");
 
     // Run migrations
-    Migrator::up(&connection, None)
-        .await
-        .expect("Unable to run database migrations");
+    if let Err(err) = Migrator::up(&connection, None).await {
+        if let DbErr::Custom(custom_err) = err {
+            if custom_err
+                .contains("is missing, this migration has been applied but its file is missing")
+            {
+                // Forward migrations are not always a failure, so its just a warning
+                warn!(
+                    "It looks like your app.db has been used with a newer version \
+                of Pocket Relay, you may encounter unexpected issues or bugs its \
+                recommended that you backup your database before trying a new version: {}",
+                    custom_err
+                )
+            }
+        } else {
+            // Other errors should be considered fatal
+            panic!("Failed to run database migrations: {}", err);
+        }
+    }
 
     connection
 }
