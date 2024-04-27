@@ -98,6 +98,8 @@ pub struct PlayersResponse {
     players: Vec<Player>,
     /// Whether there is more players left in the database
     more: bool,
+    /// Total number of pages available
+    total_pages: u64,
 }
 
 /// GET /api/players
@@ -124,7 +126,11 @@ pub async fn get_players(
     let more = page < total_pages;
     let players = paginator.fetch_page(page).await?;
 
-    Ok(Json(PlayersResponse { players, more }))
+    Ok(Json(PlayersResponse {
+        players,
+        more,
+        total_pages,
+    }))
 }
 
 /// GET /api/players/self
