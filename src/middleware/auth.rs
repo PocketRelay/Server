@@ -13,8 +13,35 @@ use axum::{
 };
 use futures_util::future::BoxFuture;
 use sea_orm::DatabaseConnection;
+use std::future::Future;
 use std::sync::Arc;
 use thiserror::Error;
+
+pub struct MaybeAuth(pub Option<Player>);
+
+impl<S> FromRequestParts<S> for MaybeAuth {
+    type Rejection = TokenError;
+
+    fn from_request_parts<'a, 'b, 'c>(
+        parts: &'a mut axum::http::request::Parts,
+        state: &'b S,
+    ) -> BoxFuture<'c, Result<Self, Self::Rejection>>
+    where
+        'a: 'c,
+        'b: 'c,
+        Self: 'c,
+    {
+        let auth: std::pin::Pin<Box<dyn Future<Output = Result<Auth, TokenError>> + Send>> =
+            Auth::from_request_parts(parts, state);
+        Box::pin(async move {
+            match auth.await {
+                Ok(Auth(value)) => Ok(MaybeAuth(Some(value))),
+                Err(TokenError::MissingToken) => Ok(MaybeAuth(None)),
+                Err(err) => Err(err),
+            }
+        })
+    }
+}
 
 pub struct Auth(pub Player);
 pub struct AdminAuth(pub Player);
@@ -47,7 +74,6 @@ const TOKEN_HEADER: &str = "X-Token";
 
 impl<S> FromRequestParts<S> for Auth {
     type Rejection = TokenError;
-
     fn from_request_parts<'a, 'b, 'c>(
         parts: &'a mut axum::http::request::Parts,
         _state: &'b S,
