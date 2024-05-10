@@ -68,7 +68,7 @@ pub struct GameSnapshot {
     /// The game attributes
     pub attributes: AttrMap,
     /// Snapshots of the game players
-    pub players: Box<[GamePlayerSnapshot]>,
+    pub players: Option<Box<[GamePlayerSnapshot]>>,
 }
 
 /// Attributes map type
@@ -423,13 +423,17 @@ impl Game {
         GameJoinableState::Joinable
     }
 
-    pub fn snapshot(&self, include_net: bool) -> GameSnapshot {
-        let players = self
-            .players
-            .iter()
-            .map(|value| value.snapshot(include_net))
-            .collect();
-
+    pub fn snapshot(&self, include_net: bool, include_players: bool) -> GameSnapshot {
+        let players = if include_players {
+            let players = self
+                .players
+                .iter()
+                .map(|value| value.snapshot(include_net))
+                .collect();
+            Some(players)
+        } else {
+            None
+        };
         GameSnapshot {
             id: self.id,
             state: self.state,

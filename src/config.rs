@@ -22,6 +22,7 @@ pub struct RuntimeConfig {
     pub menu_message: String,
     pub dashboard: DashboardConfig,
     pub tunnel: TunnelConfig,
+    pub api: APIConfig,
 }
 
 /// Environment variable key to load the config from
@@ -78,6 +79,7 @@ pub struct Config {
     pub logging: LevelFilter,
     pub retriever: RetrieverConfig,
     pub tunnel: TunnelConfig,
+    pub api: APIConfig,
 }
 
 impl Default for Config {
@@ -92,7 +94,8 @@ impl Default for Config {
             galaxy_at_war: Default::default(),
             logging: LevelFilter::Info,
             retriever: Default::default(),
-            tunnel: Default::default()
+            tunnel: Default::default(),
+            api: Default::default()
         }
     }
 }
@@ -131,6 +134,24 @@ pub enum QosServerConfig {
         /// The address of the host computer (Required for 127.0.0.1 resolution)
         host: Ipv4Addr,
     },
+}
+
+#[derive(Deserialize)]
+#[serde(default)]
+pub struct APIConfig {
+    /// Allow games data to be requested from the API without auth
+    pub public_games: bool,
+    /// Hide players from API response when no auth is provided
+    pub public_games_hide_players: bool,
+}
+
+impl Default for APIConfig {
+    fn default() -> Self {
+        Self {
+            public_games: false,
+            public_games_hide_players: true,
+        }
+    }
 }
 
 #[derive(Deserialize)]

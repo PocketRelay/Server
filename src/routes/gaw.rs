@@ -1,5 +1,5 @@
 //! Routes for the Galaxy At War API used by the Mass Effect 3 client in order
-//! to retrieve and increase the Galxay At War values for a player.
+//! to retrieve and increase the Galaxy At War values for a player.
 //!
 //! This API is not documented as it is not intended to be used by anyone
 //! other than the Mass Effect 3 client itself.
@@ -90,7 +90,7 @@ pub async fn shared_token_login(Query(AuthQuery { auth }): Query<AuthQuery>) -> 
 /// GET /galaxyatwar/getRatings/:id
 ///
 /// Route for retrieving the galaxy at war ratings for the player
-/// with the provied ID
+/// with the provided ID
 ///
 /// `id` The hex encoded ID of the player
 pub async fn get_ratings(

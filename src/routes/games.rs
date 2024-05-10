@@ -1,6 +1,7 @@
 use crate::{
+    config::RuntimeConfig,
     database::entities::players::PlayerRole,
-    middleware::auth::Auth,
+    middleware::auth::MaybeAuth,
     services::game::{manager::GameManager, GameSnapshot},
     utils::types::GameID,
 };
@@ -20,6 +21,8 @@ pub enum GamesError {
     /// The requested game could not be found (For specific game lookup)
     #[error("Game not found")]
     NotFound,
+    #[error("Missing required access")]
+    NoPermission,
 }
 
 /// The query structure for a players query
@@ -55,17 +58,25 @@ pub struct GamesResponse {
 /// Player networking information is included for requesting
 /// players with admin level or greater access.
 pub async fn get_games(
-    Auth(auth): Auth,
+    MaybeAuth(auth): MaybeAuth,
     Query(GamesRequest { offset, count }): Query<GamesRequest>,
     Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
 ) -> Result<Json<GamesResponse>, GamesError> {
+    if let (None, false) = (&auth, config.api.public_games) {
+        return Err(GamesError::NoPermission);
+    }
+
     let count: usize = count.unwrap_or(20) as usize;
     let offset: usize = offset * count;
-    let include_net = auth.role >= PlayerRole::Admin;
+    let include_net = auth
+        .as_ref()
+        .is_some_and(|player| player.role >= PlayerRole::Admin);
+    let include_players = auth.is_some() || !config.api.public_games_hide_players;
 
     // Retrieve the game snapshots
     let (games, more) = game_manager
-        .create_snapshot(offset, count, include_net)
+        .create_snapshot(offset, count, include_net, include_players)
         .await;
 
     // Get the total number of games
@@ -86,16 +97,26 @@ pub async fn get_games(
 /// Player networking information is included for requesting
 /// players with admin level or greater access.
 pub async fn get_game(
-    Auth(auth): Auth,
+    MaybeAuth(auth): MaybeAuth,
     Path(game_id): Path<GameID>,
     Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
 ) -> Result<Json<GameSnapshot>, GamesError> {
+    if let (None, false) = (&auth, config.api.public_games) {
+        return Err(GamesError::NoPermission);
+    }
+
+    let include_net = auth
+        .as_ref()
+        .is_some_and(|player| player.role >= PlayerRole::Admin);
+    let include_players = auth.is_some() || !config.api.public_games_hide_players;
+
     let game = game_manager
         .get_game(game_id)
         .await
         .ok_or(GamesError::NotFound)?;
     let game = &*game.read().await;
-    let snapshot = game.snapshot(auth.role >= PlayerRole::Admin);
+    let snapshot = game.snapshot(include_net, include_players);
 
     Ok(Json(snapshot))
 }
@@ -105,6 +126,7 @@ impl IntoResponse for GamesError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             Self::NotFound => StatusCode::NOT_FOUND,
+            Self::NoPermission => StatusCode::FORBIDDEN,
         };
 
         (status_code, self.to_string()).into_response()

@@ -45,6 +45,7 @@ async fn main() {
         dashboard: config.dashboard,
         qos: config.qos,
         tunnel: config.tunnel,
+        api: config.api,
     };
 
     debug!("QoS server: {:?}", &runtime_config.qos);

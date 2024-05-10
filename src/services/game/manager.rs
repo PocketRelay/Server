@@ -83,6 +83,7 @@ impl GameManager {
         offset: usize,
         count: usize,
         include_net: bool,
+        include_players: bool,
     ) -> (Vec<GameSnapshot>, bool) {
         // Create the futures using the handle action before passing
         // them to a future to be awaited
@@ -111,7 +112,7 @@ impl GameManager {
                 .for_each(|game| {
                     join_set.spawn(async move {
                         let game = &*game.read().await;
-                        game.snapshot(include_net)
+                        game.snapshot(include_net, include_players)
                     });
                 });
 
