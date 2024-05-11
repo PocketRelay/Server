@@ -69,6 +69,8 @@ pub struct GameSnapshot {
     pub attributes: AttrMap,
     /// Snapshots of the game players
     pub players: Option<Box<[GamePlayerSnapshot]>>,
+    /// The total number of players in the game
+    pub total_players: usize,
 }
 
 /// Attributes map type
@@ -424,6 +426,7 @@ impl Game {
     }
 
     pub fn snapshot(&self, include_net: bool, include_players: bool) -> GameSnapshot {
+        let total_players: usize = self.players.len();
         let players = if include_players {
             let players = self
                 .players
@@ -434,12 +437,14 @@ impl Game {
         } else {
             None
         };
+
         GameSnapshot {
             id: self.id,
             state: self.state,
             setting: self.settings.bits(),
             attributes: self.attributes.clone(),
             players,
+            total_players,
         }
     }
 
