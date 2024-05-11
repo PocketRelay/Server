@@ -22,6 +22,7 @@ use crate::{
         types::{GameID, PlayerID},
     },
 };
+use chrono::{DateTime, Utc};
 use log::{debug, warn};
 use serde::Serialize;
 use std::sync::{Arc, Weak};
@@ -40,19 +41,19 @@ pub type WeakGameRef = Weak<RwLock<Game>>;
 pub struct Game {
     /// Unique ID for this game
     pub id: GameID,
-
     /// The current game state
     pub state: GameState,
     /// The current game setting
     pub settings: GameSettings,
     /// The game attributes
     pub attributes: AttrMap,
-
+    /// When the game was started
+    pub created_at: DateTime<Utc>,
+    /// Players currently in the game
     pub players: Vec<GamePlayer>,
-
     /// Services access
     pub game_manager: Arc<GameManager>,
-
+    /// Access to the tunneling service
     pub tunnel_service: Arc<TunnelService>,
 }
 
@@ -71,6 +72,8 @@ pub struct GameSnapshot {
     pub players: Option<Box<[GamePlayerSnapshot]>>,
     /// The total number of players in the game
     pub total_players: usize,
+    /// When the game was created
+    pub created_at: DateTime<Utc>,
 }
 
 /// Attributes map type
@@ -217,6 +220,7 @@ impl Game {
         id: GameID,
         attributes: AttrMap,
         settings: GameSettings,
+        created_at: DateTime<Utc>,
         game_manager: Arc<GameManager>,
         tunnel_service: Arc<TunnelService>,
     ) -> Game {
@@ -226,6 +230,7 @@ impl Game {
             settings,
             state: Default::default(),
             players: Default::default(),
+            created_at,
             game_manager,
             tunnel_service,
         }
@@ -445,6 +450,7 @@ impl Game {
             attributes: self.attributes.clone(),
             players,
             total_players,
+            created_at: self.created_at,
         }
     }
 

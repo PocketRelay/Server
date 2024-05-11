@@ -15,6 +15,7 @@ use crate::{
         types::{GameID, PlayerID},
     },
 };
+use chrono::Utc;
 use log::{debug, warn};
 use std::{
     collections::VecDeque,
@@ -209,10 +210,12 @@ impl GameManager {
         setting: GameSettings,
     ) -> (GameRef, GameID) {
         let id = self.next_id.fetch_add(1, Ordering::AcqRel);
+        let created_at = Utc::now();
         let game = Game::new(
             id,
             attributes,
             setting,
+            created_at,
             self.clone(),
             self.tunnel_service.clone(),
         );
