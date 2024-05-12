@@ -126,6 +126,19 @@ impl Model {
         Entity::find().filter(Column::Email.eq(email)).one(db)
     }
 
+    /// Attempts to find a player with the provided username
+    ///
+    /// `db`    The database connection
+    /// `username` The username to search for
+    pub fn by_username<'a>(
+        db: &'a DatabaseConnection,
+        username: &str,
+    ) -> impl Future<Output = DbResult<Option<Self>>> + Send + 'a {
+        Entity::find()
+            .filter(Column::DisplayName.eq(username))
+            .one(db)
+    }
+
     /// Determines whether the current player has permission to
     /// make actions on behalf of the other player. This can
     /// occur when they are both the same player or the role of

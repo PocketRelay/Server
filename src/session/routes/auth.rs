@@ -16,10 +16,14 @@ use crate::{
         router::{Blaze, Extension, SessionAuth},
         SessionLink,
     },
-    utils::hashing::{hash_password, verify_password},
+    utils::{
+        hashing::{hash_password, verify_password},
+        random_name::generate_random_name,
+    },
 };
 use email_address::EmailAddress;
 use log::{debug, error};
+use rand::{rngs::StdRng, SeedableRng};
 use std::{borrow::Cow, sync::Arc};
 use tokio::fs::read_to_string;
 
@@ -299,14 +303,24 @@ pub async fn handle_create_account(
         return Err(AuthenticationError::Exists.into());
     }
 
-    // Hash the proivded plain text password using Argon2
+    // Hash the provided plain text password using Argon2
     let hashed_password: String = hash_password(&password).map_err(|err| {
         error!("Failed to hash password for creating account: {}", err);
         GlobalError::System
     })?;
 
-    // Create a default display name from the first 99 chars of the email
-    let display_name: String = email.chars().take(99).collect::<String>();
+    let mut rng = StdRng::from_entropy();
+    let display_name: String;
+
+    loop {
+        let generated_name = generate_random_name(&mut rng);
+
+        // Ensure the generated name is unique
+        if Player::by_username(&db, &generated_name).await?.is_none() {
+            display_name = generated_name;
+            break;
+        }
+    }
 
     // Use the super admin role if the email is the super admins
     let role: PlayerRole = if config.dashboard.is_super_email(&email) {
