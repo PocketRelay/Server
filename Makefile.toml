@@ -1,0 +1,196 @@
+# Load from the env file
+env_files = [{ path = ".env" }]
+
+# Build Windows and Linux in parallel (Cross compiling with cargo cross) 
+[tasks.build-all]
+run_task = { name = ["build-windows", "build-linux"], parallel = true }
+
+# Build a Linux build
+[tasks.build-linux]
+run_task = [
+    # Windows host taks
+    { name = [
+        "build-linux-windows",
+        "copy-build-linux-windows",
+    ], condition = { platforms = [
+        "windows",
+    ] } },
+
+    # Linux host tasks
+    { name = [
+        "build-linux-linux",
+        "copy-build-linux-linux",
+    ], condition = { platforms = [
+        "linux",
+    ] } },
+]
+
+# Build a Windows Build
+[tasks.build-windows]
+run_task = [
+    # Windows host taks
+    { name = [
+        "build-windows-windows",
+        "copy-build-windows-windows",
+        "sign-windows",
+    ], condition = { platforms = [
+        "windows",
+    ] } },
+
+    # Linux host tasks
+    { name = [
+        "build-windows-linux",
+        "copy-build-windows-linux",
+    ], condition = { platforms = [
+        "linux",
+    ] } },
+]
+
+# ---- Building docker tags ----
+
+
+# Build the local docker file
+[tasks.build-docker]
+condition = { env_set = ["DOCKER_IMAGE_TAG", "GITHUB_RELEASE_VERSION"] }
+command = "docker"
+args = [
+    "build",
+    ".",
+    "-t",
+    "${DOCKER_IMAGE_TAG}",
+    "--build-arg",
+    "GITHUB_RELEASE_VERSION=${GITHUB_RELEASE_VERSION}",
+]
+
+# Build the local docker file using the version from Cargo.toml
+[tasks.build-docker-version]
+env = { "DOCKER_IMAGE_TAG" = "${DOCKER_IMAGE_NAME}:${CARGO_MAKE_CRATE_VERSION}" }
+run_task = [{ name = "build-docker" }]
+
+# Build the local docker file using the "latest" version tag
+[tasks.build-docker-latest]
+env = { "DOCKER_IMAGE_TAG" = "${DOCKER_IMAGE_NAME}:latest" }
+run_task = [{ name = "build-docker" }]
+
+# Build the local docker file using the "latest" version tag
+[tasks.build-docker-all]
+run_task = [
+    { name = [
+        "build-docker-version",
+        "build-docker-latest",
+    ], parallel = true },
+]
+
+
+# ---- Pushing docker tags ----
+
+# Publishes the docker image using the DOCKER_IMAGE_TAG tag
+[tasks.publish-docker]
+condition = { env_set = [
+    "DOCKER_IMAGE_TAG",
+], fail_message = "Missing DOCKER_IMAGE_TAG" }
+command = "docker"
+args = ["push", "${DOCKER_IMAGE_TAG}"]
+dependencies = ["build-docker"]
+
+
+# Publish the docker image using a tag created from the verson in Cargo.toml
+[tasks.publish-docker-version]
+condition = { env_set = [
+    "DOCKER_IMAGE_NAME",
+], fail_message = "Missing DOCKER_IMAGE_NAME" }
+env = { "DOCKER_IMAGE_TAG" = "${DOCKER_IMAGE_NAME}:${CARGO_MAKE_CRATE_VERSION}" }
+run_task = [{ name = "publish-docker" }]
+
+# Published the docker image under the "latest" tag
+[tasks.publish-docker-latest]
+condition = { env_set = [
+    "DOCKER_IMAGE_NAME",
+], fail_message = "Missing DOCKER_IMAGE_NAME" }
+env = { "DOCKER_IMAGE_TAG" = "${DOCKER_IMAGE_NAME}:latest" }
+run_task = [{ name = "publish-docker" }]
+
+# Publishes all docker images
+[tasks.publish-docker-all]
+run_task = [
+    { name = [
+        "publish-docker-version",
+        "publish-docker-latest",
+    ], parallel = true },
+]
+
+# Signs the windows executable
+[tasks.sign-windows]
+command = "${SIGNTOOL_PATH}"
+args = [
+    "sign",
+    "/fd",
+    "SHA256",
+    "/f",
+    "${SIGN_FILE}",
+    "/p",
+    "${SIGN_PASSWORD}",
+    ".release/binaries/pocket-relay-windows.exe",
+]
+
+[tasks.sign-windows.condition]
+env_set = ["SIGN_FILE", "SIGN_PASSWORD", "SIGNTOOL_PATH"]
+platforms = ["windows"]
+files_exist = ["${SIGNTOOL_PATH}"]
+
+# ---- Building from a windows host ----
+
+# Build a Windows binary from a Windows host
+[tasks.build-windows-windows]
+command = "cargo"
+args = ["build", "--release"]
+
+# Build the linux version (Requires cross be installed)
+[tasks.build-linux-windows]
+command = "cross"
+args = ["build", "--target", "x86_64-unknown-linux-musl", "--release"]
+
+# Copy the linux build to the releases folder
+[tasks.copy-build-linux-windows]
+script_runner = "@shell"
+script = "cp target/x86_64-unknown-linux-musl/release/pocket-relay .release/binaries/pocket-relay-linux"
+dependencies = ["create-release-dir"]
+
+# Copy the Windows build to the releases folder
+[tasks.copy-build-windows-windows]
+script_runner = "@shell"
+script = "cp target/release/pocket-relay.exe .release/binaries/pocket-relay-windows.exe"
+dependencies = ["create-release-dir"]
+
+
+# ---- Building from a linux host ----
+
+# Build a Windows binary from a linux host
+[tasks.build-windows-linux]
+command = "cargo"
+args = ["build", "--target", "x86_64-pc-windows-gnu", "--release"]
+
+
+# Build the linux version (Requires cross be installed)
+[tasks.build-linux-linux]
+command = "cross"
+args = ["build", "--release"]
+
+# Copy the linux build to the releases folder
+[tasks.copy-build-linux-linux]
+script_runner = "@shell"
+script = "cp target/release/pocket-relay .release/binaries/pocket-relay-linux"
+dependencies = ["create-release-dir"]
+
+# Copy the Windows build to the releases folder
+[tasks.copy-build-windows-linux]
+script_runner = "@shell"
+script = "cp target/x86_64-pc-windows-gnu/release/pocket-relay.exe .release/binaries/pocket-relay-windows.exe"
+dependencies = ["create-release-dir"]
+
+
+# Create releases directory
+[tasks.create-release-dir]
+condition = { files_not_exist = [".release"] }
+script_runner = "@shell"
+script = "mkdir -p .release"

@@ -64,6 +64,85 @@ Build instructions can be found [here](https://pocket-relay.pages.dev/docs/serve
 > **Note**
 > Building the server can be resource-intensive.
 
+## Makefile.toml - Mainly used for maintainers 
+
+This project also includes a Makefile.toml for `cargo make` however its more intended for maintainers only in order to do cross compiling, building multiple versions in parallel, signing builds, creating docker releases etc
+
+> Requires installing https://github.com/sagiegurari/cargo-make
+
+### Building
+
+#### Build Windows & Linux in parallel
+
+```shell
+cargo make -t build-all
+```
+#### Building just Windows
+
+```shell
+cargo make -t build-windows
+```
+
+> [!NOTE]
+> When building for Windows on a Windows host you can sign the executable by providing a `SIGN_FILE` (File path to the .pfx file to use for signing) and `SIGN_PASSWORD` (The password to the .pdf file) you will also need to obtain a copy of signtool.exe and set the `SIGNTOOL_PATH` to be the path to that file
+>
+> After doing that Windows builds will be signed using the provided credentials
+
+#### Building just Linux
+
+```shell
+cargo make -t build-linux
+```
+
+### Docker images
+
+> [!IMPORTANT]
+> The intended release must first be up on GitHub once its up on GitHub make sure to set the `GITHUB_RELEASE_VERSION` environment variable so the right version will be used make sure you don't include the v prefix just the version number (e.g 0.6.1)
+>
+> The `DOCKER_IMAGE_NAME` env variable must be set to the intended docker image name (e.g jacobtread/pocket-relay)
+
+#### Building the docker image
+
+To build for the specific tag (Uses the version listed in the Cargo.toml):
+
+```shell
+cargo make -t build-docker-version
+```
+
+To build for the "latest" tag:
+
+```shell
+cargo make -t build-docker-latest
+```
+
+To build for both tags:
+
+```shell
+cargo make -t build-docker-all
+```
+
+### Publishing docker images
+
+To publish for the specific tag (Uses the version listed in the Cargo.toml):
+
+```shell
+cargo make -t publish-docker-version
+```
+
+To publish for the "latest" tag:
+
+```shell
+cargo make -t publish-docker-latest
+```
+
+To publish for both tags:
+
+```shell
+cargo make -t publish-docker-all
+```
+
+
+
 
 ## 🧾 License
 
