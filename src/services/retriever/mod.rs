@@ -30,7 +30,7 @@ use tokio_util::codec::Framed;
 mod models;
 pub mod origin;
 
-/// Structure for the retrievier system which contains the host address
+/// Structure for the retriever system which contains the host address
 /// for the official game server in order to make further connections
 pub struct Retriever {
     // Optional official instance if fetching is possible
@@ -159,7 +159,7 @@ impl OfficialInstance {
 
             if let Some(tokio) = tokio {
                 let ip = tokio.ip();
-                // Loopback value means it was probbably redirected in the hosts file
+                // Loopback value means it was probably redirected in the hosts file
                 // so those are ignored
                 if !ip.is_loopback() {
                     return Ok(format!("{}", ip));
@@ -167,7 +167,7 @@ impl OfficialInstance {
             }
         }
 
-        // Attempt to lookup using cloudflares DNS over HTTP
+        // Attempt to lookup using cloudflare DNS over HTTP
 
         let client = reqwest::Client::new();
         let url = format!("https://cloudflare-dns.com/dns-query?name={host}&type=A");
@@ -195,7 +195,7 @@ impl OfficialInstance {
 }
 
 impl Retriever {
-    /// Attempts to create a new retriever by first retrieving the coorect
+    /// Attempts to create a new retriever by first retrieving the correct
     /// ip address of the gosredirector.ea.com host and then creates a
     /// connection to the redirector server and obtains the IP and Port
     /// of the Official server.
@@ -280,7 +280,7 @@ pub struct OfficialSession {
 /// Error type for retriever errors
 #[derive(Debug, Error)]
 pub enum RetrieverError {
-    /// Packet decode errror
+    /// Packet decode error
     #[error(transparent)]
     Decode(#[from] DecodeError),
     /// IO Error
@@ -325,7 +325,7 @@ impl OfficialSession {
     }
 
     /// Writes a request packet and waits until the response packet is
-    /// recieved returning the contents of that response packet.
+    /// received returning the contents of that response packet.
     pub async fn request_raw<Req: TdfSerialize>(
         &mut self,
         component: u16,

@@ -56,7 +56,7 @@ pub struct FireFrame {
     pub error: u16,
     /// The type of frame
     pub ty: FrameType,
-    /// Additional options assocaited with this frame
+    /// Additional options associated with this frame
     pub options: PacketOptions,
     /// Sequence number for tracking request and response mappings
     pub seq: u16,

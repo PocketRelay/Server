@@ -93,7 +93,7 @@ impl TdfDeserializeOwned for InstanceHost {
 }
 
 /// Details about an instance. This is used for the redirector system
-/// to both encode for redirections and decode for the retriever system
+/// to both encode for redirection and decode for the retriever system
 #[derive(TdfDeserialize)]
 pub struct InstanceDetails {
     /// The networking information for the instance
@@ -144,7 +144,7 @@ pub enum NatType {
     Moderate = 0x1,
     /// Players behind a strict (but sequential) NAT can usually only connect to open players and are poor game hosts.
     StrictSequential = 0x2,
-    /// Players behind a strict (unsequential) NAT can usually only connect to open players and are the worst game hosts.
+    /// Players behind a strict (non-sequential) NAT can usually only connect to open players and are the worst game hosts.
     Strict = 0x3,
     /// unknown NAT type; possibly timed out trying to detect NAT.
     #[default]

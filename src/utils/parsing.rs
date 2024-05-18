@@ -106,7 +106,7 @@ impl PlayerClass<'_> {
 //     /// (3 if third split A is unlocked or 0 if not)
 //     /// (3 if third split B is unlocked or 0 if not)
 //     /// Unknown 0 - 6
-//     /// Charcter specific flag? True/False
+//     /// Character specific flag? True/False
 //     ///
 //     /// # Examples
 //     /// ```

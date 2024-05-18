@@ -84,7 +84,7 @@ impl Model {
         self.transform(db, |a, b| a.saturating_add(b).min(Model::MAX_VALUE), values)
     }
 
-    /// Decrease the stored group values decreasuing them by the `values`
+    /// Decrease the stored group values decreasing them by the `values`
     /// provided for each respective group
     pub fn sub(
         self,

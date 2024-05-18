@@ -134,7 +134,7 @@ impl TdfSerialize for LeaderboardResponse {
     }
 }
 
-/// Structure for the request to retrieve a leaderboards
+/// Structure for the request to retrieve a leaderboard
 /// contents at the provided start offset
 ///
 /// Component: Stats(GetLeaderboard)

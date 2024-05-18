@@ -123,7 +123,7 @@ impl GameManager {
         // Allocate a list for the snapshots
         let mut snapshots = Vec::with_capacity(join_set.len());
 
-        // Recieve all the snapshots from their tasks
+        // Receive all the snapshots from their tasks
         while let Some(result) = join_set.join_next().await {
             if let Ok(snapshot) = result {
                 snapshots.push(snapshot);
@@ -181,7 +181,7 @@ impl GameManager {
 
         let msid = player.player.id;
 
-        // MUST be sent to players atleast once when matchmaking otherwise it may fail
+        // MUST be sent to players at least once when matchmaking otherwise it may fail
         player.notify_handle.notify(Packet::notify(
             game_manager::COMPONENT,
             game_manager::MATCHMAKING_ASYNC_STATUS,

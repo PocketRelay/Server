@@ -77,7 +77,7 @@ pub async fn dashboard_details(
 /// GET /api/server/upgrade
 ///
 /// Handles upgrading connections from the Pocket Relay Client tool
-/// from HTTP over to the Blaze protocol for proxing the game traffic
+/// from HTTP over to the Blaze protocol to proxy the game traffic
 /// as blaze sessions using HTTP Upgrade
 pub async fn upgrade(
     IpAddress(addr): IpAddress,
@@ -128,7 +128,7 @@ pub async fn handle_upgrade(
 /// GET /api/server/tunnel
 ///
 /// Handles upgrading connections from the Pocket Relay Client tool
-/// from HTTP over to the Blaze protocol for proxing the game traffic
+/// from HTTP over to the Blaze protocol to proxy the game traffic
 /// as blaze sessions using HTTP Upgrade
 pub async fn tunnel(
     Association(association_id): Association,

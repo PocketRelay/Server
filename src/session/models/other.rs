@@ -15,7 +15,7 @@ impl TdfSerialize for GameReportResponse {
     }
 }
 
-/// Structure for the default response to assocated lists
+/// Structure for the default response to associated lists
 pub struct AssocListResponse;
 
 impl TdfSerialize for AssocListResponse {

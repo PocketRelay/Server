@@ -230,7 +230,7 @@ pub mod game_manager {
     pub const GAME_PLAYER_TEAM_CHANGE: u16 = 0x75;
     pub const GAME_TEAM_ID_CHANGE: u16 = 0x76;
     pub const PROCESS_QUEUE: u16 = 0x77;
-    pub const PRECENSE_MODE_CHANGED: u16 = 0x78;
+    pub const PRESENCE_MODE_CHANGED: u16 = 0x78;
     pub const GAME_PLAYER_QUEUE_POSITION_CHANGE: u16 = 0x79;
     // 0x7A-0xC8 --
     pub const GAME_LIST_UPDATE: u16 = 0xC9;
@@ -653,7 +653,7 @@ unsafe fn init_notifications() {
         (component_key(g::COMPONENT, g::GAME_PLAYER_TEAM_CHANGE), "GamePlayerTeamChange"),
         (component_key(g::COMPONENT, g::GAME_TEAM_ID_CHANGE), "GameTeamIDChange"),
         (component_key(g::COMPONENT, g::PROCESS_QUEUE), "PROCESS_QUEUE"),
-        (component_key(g::COMPONENT, g::PRECENSE_MODE_CHANGED), "PrecenseModeChanged"),
+        (component_key(g::COMPONENT, g::PRESENCE_MODE_CHANGED), "PresenceModeChanged"),
         (component_key(g::COMPONENT, g::GAME_PLAYER_QUEUE_POSITION_CHANGE), "GamePlayerQueuePositionChange"),
         (component_key(g::COMPONENT, g::GAME_LIST_UPDATE), "GameListUpdate"),
         (component_key(g::COMPONENT, g::ADMIN_LIST_CHANGE), "AdminListChange"),

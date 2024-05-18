@@ -85,7 +85,7 @@ impl Service<Request<Body>> for PublicContent {
             if let Some(local_path) = find_local_path(&path) {
                 if local_path.exists() && local_path.is_file() {
                     if let Ok(contents) = tokio::fs::read(local_path).await {
-                        // Create byte reponse from the embedded file
+                        // Create byte response from the embedded file
                         let mut response = Body::from(contents).into_response();
                         response
                             .headers_mut()

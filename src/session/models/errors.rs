@@ -41,7 +41,7 @@ pub enum GlobalError {
 pub enum DatabaseError {
     Timeout = 0x406c,
     InitFailure = 0x406d,
-    TranscationNotComplete = 0x406e,
+    TransactionNotComplete = 0x406e,
     Disconnected = 0x406b,
     NoConnectionAvailable = 0x4068,
     DuplicateEntry = 0x4069,

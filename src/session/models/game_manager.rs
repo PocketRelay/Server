@@ -222,7 +222,7 @@ pub struct PlayerRemoved {
 pub enum RemoveReason {
     /// Hit timeout while joining
     JoinTimeout = 0x0,
-    /// Player lost PTP conneciton
+    /// Player lost PTP connection
     PlayerConnectionLost = 0x1,
     /// Player lost connection with the Pocket Relay server
     ServerConnectionLost = 0x2,
@@ -599,8 +599,8 @@ pub enum GameState {
     Migrating = 0x5,
     /// Game destruction state, closed to joins/matchmaking
     Destructing = 0x6,
-    /// Game resetable state, closed to joins/matchmaking, but available to be reset
-    Resetable = 0x7,
+    /// Game resettable state, closed to joins/matchmaking, but available to be reset
+    Resettable = 0x7,
     /// Unresponsive, closed to joins/matchmaking
     Unresponsive = 0x9,
     /// Initialized state, intended for the use of game group
@@ -625,7 +625,7 @@ bitflags! {
         const ENABLE_PERSISTED_GAME_ID = 0x800;
         const ALLOW_SAME_TEAM_ID = 0x1000;
         const VIRTUALIZED = 0x2000;
-        const SEND_ORPHANDED_GAME_REPORT_EVENT = 0x4000;
+        const SEND_ORPHANED_GAME_REPORT_EVENT = 0x4000;
         const ALLOW_ANY_REPUTATION = 0x8000;
     }
 }
@@ -843,7 +843,7 @@ impl TdfSerialize for GameSetupResponse<'_> {
             // Host network qos data
             w.tag_ref(b"NQOS", &host.net.qos);
 
-            // Flag to indicate that this game is not resetable. This applies only to the CLIENT_SERVER_DEDICATED topology.  The game will be prevented from ever going into the RESETABlE state.
+            // Flag to indicate that this game is not resettable. This applies only to the CLIENT_SERVER_DEDICATED topology.  The game will be prevented from ever going into the RESETABlE state.
             w.tag_bool(b"NRES", false);
 
             // Game network topology

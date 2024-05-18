@@ -416,7 +416,7 @@ impl Message {
 /// this configuration includes the addresses for the the Galaxy At War
 /// server (GAW_SERVER_BASE_URL) and shop image contents (IMG_MNGR_BASE_URL)
 /// these urls are set to (gosredirector.ea.com) because the client will
-/// redirect this host and handling proxying itself
+/// redirect this host and handle the request proxy itself
 ///
 ///
 /// Last known original server values:
@@ -443,7 +443,7 @@ fn data_config() -> TdfMap<String, String> {
     config.insert("JOB_THROTTLE_2".to_string(), "1000".to_string());
     config.insert("MATCH_MAKING_RULES_VERSION".to_string(), "5".to_string());
     config.insert("MULTIPLAYER_PROTOCOL_VERSION".to_string(), "3".to_string());
-    config.insert("TEL_DISABLE".to_string(), TELEMTRY_DISA.to_string());
+    config.insert("TEL_DISABLE".to_string(), TELEMETRY_DISA.to_string());
     config.insert(
         "TEL_DOMAIN".to_string(),
         "pc/masseffect-3-pc-anon".to_string(),

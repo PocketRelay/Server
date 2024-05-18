@@ -104,7 +104,7 @@ pub struct AuthResponse {
     pub player: Arc<Player>,
     /// The session token for the completed authentication
     pub session_token: String,
-    /// Whether the authentication proccess was silent
+    /// Whether the authentication process was silent
     pub silent: bool,
 }
 

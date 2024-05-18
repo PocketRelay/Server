@@ -119,7 +119,7 @@ impl<S> FromRequestParts<S> for Auth {
 }
 
 /// Error type used by the token checking middleware to handle
-/// different errors and create error respones based on them
+/// different errors and create error response based on them
 #[derive(Debug, Error)]
 pub enum TokenError {
     /// The token was expired
