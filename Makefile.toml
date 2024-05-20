@@ -191,6 +191,6 @@ dependencies = ["create-release-dir"]
 
 # Create releases directory
 [tasks.create-release-dir]
-condition = { files_not_exist = [".release"] }
+condition = { files_not_exist = [".release/binaries"] }
 script_runner = "@shell"
-script = "mkdir -p .release"
+script = "mkdir -p .release/binaries"
