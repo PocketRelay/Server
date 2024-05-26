@@ -90,9 +90,11 @@ impl OriginFlow {
 
             // Update the password with the specified one
             if let Some(super_password) = config.dashboard.super_password.as_ref() {
-                let password_hash =
-                    hash_password(super_password).expect("Failed to hash super user password");
-                password = Some(password_hash);
+                if !super_password.is_empty() {
+                    let password_hash =
+                        hash_password(super_password).expect("Failed to hash super user password");
+                    password = Some(password_hash);
+                }
             }
         }
 

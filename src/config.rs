@@ -182,7 +182,7 @@ impl DashboardConfig {
     pub fn is_super_email(&self, email: &str) -> bool {
         self.super_email
             .as_ref()
-            .is_some_and(|value| value.eq(email))
+            .is_some_and(|value| !value.is_empty() && value.eq(email))
     }
 }
 

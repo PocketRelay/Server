@@ -94,6 +94,8 @@ async fn connect_database() -> DatabaseConnection {
 /// `config` The config to use for the admin details
 async fn init_database_admin(db: &DatabaseConnection, config: &RuntimeConfig) {
     let admin_email = match &config.dashboard.super_email {
+        // Ignore if email is empty
+        Some(value) if value.is_empty() => return,
         Some(value) => value,
         None => return,
     };
@@ -119,6 +121,11 @@ async fn init_database_admin(db: &DatabaseConnection, config: &RuntimeConfig) {
     };
 
     if let Some(password) = &config.dashboard.super_password {
+        // Ignore the password if empty
+        if !password.is_empty() {
+            return;
+        }
+
         let password_hash = hash_password(password).expect("Failed to hash super user password");
 
         let matches = match &player.password {
