@@ -1152,6 +1152,8 @@ dependencies = [
 [[package]]
 name = "me3-coalesced-parser"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e90a2e0071fb00bee14818c88c51a5f4e116d1aecaf60218af06bf1fe7be109"
 dependencies = [
  "bitvec",
  "serde",
