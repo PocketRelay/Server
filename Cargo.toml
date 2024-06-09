@@ -17,6 +17,9 @@ include = ["src/**/*"]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# Coalesced parser
+me3-coalesced-parser = "0.1.0"
+
 # Logging facade
 log = { version = "0.4", features = ["serde"] }
 log-panics = { version = "2", features = ["with-backtrace"] }

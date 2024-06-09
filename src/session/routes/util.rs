@@ -15,6 +15,7 @@ use base64ct::{Base64, Encoding};
 use embeddy::Embedded;
 use flate2::{write::ZlibEncoder, Compression};
 use log::{debug, error};
+use me3_coalesced_parser::{serialize_coalesced, Coalesced};
 use sea_orm::DatabaseConnection;
 use std::{
     cmp::Ordering,
@@ -166,7 +167,7 @@ pub async fn handle_fetch_client_config(
             map.insert("VERSION".to_string(), "40128".to_string());
             map
         }
-        "ME3_BINI_PC_COMPRESSED" => match load_coalesced().await {
+        "ME3_BINI_PC_COMPRESSED" => match create_coalesced_map().await {
             Ok(map) => map,
             Err(err) => {
                 error!("Failed to load server coalesced: {}", err);
@@ -195,27 +196,47 @@ fn load_entitlements() -> TdfMap<String, String> {
         .collect()
 }
 
-/// Loads the local coalesced if one is present falling back
-/// to the default one on error or if its missing
-async fn load_coalesced() -> std::io::Result<ChunkMap> {
-    let local_path = Path::new("data/coalesced.bin");
+async fn load_coalesced() -> std::io::Result<Coalesced> {
+    let local_path = Path::new("data/coalesced.json");
 
     if local_path.is_file() {
-        if let Ok(map) = read(local_path)
-            .await
-            .and_then(|bytes| generate_coalesced(&bytes))
-        {
-            return Ok(map);
+        if let Ok(value) = read(local_path).await.and_then(|bytes| {
+            serde_json::from_slice(&bytes).map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Failed to parse server coalesced",
+                )
+            })
+        }) {
+            return Ok(value);
         }
 
         error!(
-            "Unable to compress local coalesced from data/coalesced.bin falling back to default."
+            "Unable to compress local coalesced from data/coalesced.json falling back to default."
         );
     }
 
     // Fallback to embedded default coalesced.bin
-    let bytes: &[u8] = include_bytes!("../../resources/data/coalesced.bin");
-    generate_coalesced(bytes)
+    let bytes: &[u8] = include_bytes!("../../resources/data/coalesced.json");
+    serde_json::from_slice(bytes).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to parse server coalesced",
+        )
+    })
+}
+
+/// Loads the local coalesced if one is present falling back
+/// to the default one on error or if its missing
+async fn create_coalesced_map() -> std::io::Result<ChunkMap> {
+    // Load the coalesced from JSON
+    let coalesced = load_coalesced().await?;
+
+    // Serialize the coalesced to bytes
+    let serialized = serialize_coalesced(&coalesced);
+
+    // Encode and compress the coalesced
+    generate_coalesced(&serialized)
 }
 
 /// Generates a compressed coalesced from the provided bytes
