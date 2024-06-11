@@ -12,7 +12,7 @@
 [Discord Server (discord.gg/yvycWW8RgR)](https://discord.gg/yvycWW8RgR) | [Website (pocket-relay.pages.dev)](https://pocket-relay.pages.dev/)
 
 
-The master branch contains the latest changes and may not be stable for general use, if you would like to compile a stable version from source its recommened you use a specific tag rather than master
+The master branch contains the latest changes and may not be stable for general use, if you would like to compile a stable version from source its recommended you use a specific tag rather than master
 
 **Pocket Relay** Is a custom implementation of the Mass Effect 3 multiplayer servers all bundled into a easy to use server with a Dashboard for managing accounts and inventories.
 
