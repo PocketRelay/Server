@@ -56,7 +56,9 @@ where
     }
 }
 
-///
+/// Packet request to be handled, includes the packet itself
+/// along with the session link the packet is being handled
+/// by and the extensions map of provided extensions
 pub struct PacketRequest {
     pub state: SessionLink,
     pub packet: Packet,
