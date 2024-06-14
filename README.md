@@ -63,6 +63,10 @@ Build instructions can be found [here](https://pocket-relay.pages.dev/docs/serve
 
 > **Note**
 > Building the server can be resource-intensive.
+>
+> If you are building for a version older than Windows 10 you will need to use Rust v1.75.0 or lower as 
+> Rust has dropped support for <10 after that. The server should compile on this version but future breaking
+> changes to the project may cause that to no longer be the case.
 
 ## Makefile.toml - Mainly used for maintainers 
 
