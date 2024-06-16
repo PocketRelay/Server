@@ -6,11 +6,14 @@ use crate::utils::hashing::IntHashMap;
 use crate::utils::signing::SigningKey;
 use crate::utils::types::PlayerID;
 use base64ct::{Base64UrlUnpadded, Encoding};
+use hashbrown::HashMap;
 use parking_lot::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 type SessionMap = IntHashMap<PlayerID, WeakSessionLink>;
+
+pub type LoginCode = String;
 
 /// Service for storing links to authenticated sessions and
 /// functionality for authenticating sessions
@@ -22,8 +25,19 @@ pub struct Sessions {
     /// warrant the need for the async variant
     sessions: Mutex<SessionMap>,
 
+    /// Mapping between generated login codes and the user the code
+    /// will login
+    login_codes: Mutex<HashMap<LoginCode, LoginCodeData>>,
+
     /// HMAC key used for computing signatures
     key: SigningKey,
+}
+
+pub struct LoginCodeData {
+    /// ID of the player the code is for
+    player_id: PlayerID,
+    /// Timestamp when the code expires
+    exp: SystemTime,
 }
 
 /// Unique ID given to clients before connecting so that session
@@ -35,12 +49,48 @@ impl Sessions {
     /// Expiry time for tokens
     const EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24 * 30 /* 30 Days */);
 
+    /// Expiry time for tokens
+    const LOGIN_CODE_EXPIRY_TIME: Duration = Duration::from_secs(60 * 30 /* 30 minutes */);
+
     /// Starts a new service returning its link
     pub fn new(key: SigningKey) -> Self {
         Self {
             sessions: Default::default(),
+            login_codes: Default::default(),
             key,
         }
+    }
+
+    /// Creates a new login code for the provider player, returns the
+    /// login code storing the data so it can be exchanged
+    pub fn create_login_code(&self, player_id: PlayerID) -> Result<LoginCode, ()> {
+        let code: LoginCode = "ACC123".to_string();
+
+        // Compute expiry timestamp
+        let exp = SystemTime::now()
+            .checked_add(Self::LOGIN_CODE_EXPIRY_TIME)
+            .expect("Expiry timestamp too far into the future");
+
+        // Store the code so they can login
+        self.login_codes
+            .lock()
+            .insert(code.clone(), LoginCodeData { player_id, exp });
+
+        Ok(code)
+    }
+
+    /// Exchanges a login code for a token to the player the code was for
+    /// if the token is not expired
+    pub fn exchange_login_code(&self, login_code: &LoginCode) -> Option<String> {
+        let data = self.login_codes.lock().remove(login_code)?;
+
+        // Login code is expired
+        if data.exp.lt(&SystemTime::now()) {
+            return None;
+        }
+
+        let token = self.create_token(data.player_id);
+        Some(token)
     }
 
     /// Creates a new association token
