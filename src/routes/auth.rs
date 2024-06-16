@@ -192,8 +192,8 @@ pub async fn handle_request_login_code(
 
     // Create and serialize the message
     let origin_message = serde_json::to_string(&SystemMessage {
-        title : "Origin Confirmation Code".to_string(),
-        message: format!("You Origin confirmation code is <font color='#FFFF66'>{login_code}</font>, enter this on the dashboard to login"),
+        title : "Login Confirmation Code".to_string(),
+        message: format!("Your login confirmation code is <font color='#FFFF66'>{login_code}</font>, enter this on the dashboard to login"),
         image: "".to_string(),
         ty:0, 
         tracking_id: -1,
