@@ -8,6 +8,9 @@ use crate::utils::types::PlayerID;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use hashbrown::HashMap;
 use parking_lot::Mutex;
+use rand::distributions::Distribution;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
@@ -45,6 +48,16 @@ pub struct LoginCodeData {
 /// relying on IP addresses: https://github.com/PocketRelay/Server/issues/64#issuecomment-1867015578
 pub type AssociationId = Uuid;
 
+/// Rand distribution for a logic code part
+struct LoginCodePart;
+
+impl Distribution<char> for LoginCodePart {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> char {
+        let chars = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let idx = rng.gen_range(0..chars.len());
+        chars[idx] as char
+    }
+}
 impl Sessions {
     /// Expiry time for tokens
     const EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24 * 30 /* 30 Days */);
@@ -64,7 +77,13 @@ impl Sessions {
     /// Creates a new login code for the provider player, returns the
     /// login code storing the data so it can be exchanged
     pub fn create_login_code(&self, player_id: PlayerID) -> Result<LoginCode, ()> {
-        let code: LoginCode = "ACC123".to_string();
+        let rng = StdRng::from_entropy();
+
+        let code: LoginCode = rng
+            .sample_iter(&LoginCodePart)
+            .take(5)
+            .map(char::from)
+            .collect();
 
         // Compute expiry timestamp
         let exp = SystemTime::now()
