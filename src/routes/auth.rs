@@ -170,6 +170,8 @@ pub struct RequestLoginCodeRequest {
     email: String,
 }
 
+/// POST /api/auth/request-code
+/// 
 /// Requests a login code be sent to a active session to be used
 /// for logging in without a password
 pub async fn handle_request_login_code(
@@ -233,6 +235,8 @@ pub struct RequestExchangeLoginCode {
     login_code: String,
 }
 
+/// POST /api/auth/exchange-code
+/// 
 /// Requests a login code be sent to a active session to be used
 /// for logging in without a password
 pub async fn handle_exchange_login_code(
