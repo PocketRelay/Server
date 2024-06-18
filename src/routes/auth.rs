@@ -200,7 +200,7 @@ pub async fn handle_request_login_code(
         ty:0, 
         tracking_id: -1,
         priority: 1
-    }).unwrap();
+    }).map_err(|_|AuthError::FailedGenerateCode)?;
     
     let notify_origin = Packet::notify(
         messaging::COMPONENT,
