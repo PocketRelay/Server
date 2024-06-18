@@ -80,7 +80,9 @@ pub fn router() -> Router {
                     "/auth",
                     Router::new()
                         .route("/login", post(auth::login))
-                        .route("/create", post(auth::create)),
+                        .route("/create", post(auth::create))
+                        .route("/request-code", post(auth::handle_request_login_code))
+                        .route("/exchange-code", post(auth::handle_exchange_login_code)),
                 )
                 // Leaderboard routing
                 .nest(

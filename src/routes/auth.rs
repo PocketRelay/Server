@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    config::RuntimeConfig,
-    database::entities::{Player, PlayerRole},
-    services::sessions::Sessions,
-    utils::hashing::{hash_password, verify_password},
+    config::RuntimeConfig, database::entities::{Player, PlayerRole}, services::sessions::Sessions, session::{models::messaging::MessageNotify, packet::Packet}, utils::{components::messaging, hashing::{hash_password, verify_password}}
 };
 use axum::{
     http::StatusCode,
@@ -30,6 +27,10 @@ pub enum AuthError {
     #[error("Provided credentials are not valid")]
     InvalidCredentials,
 
+    /// Provided account didn't exist
+    #[error("No matching account")]
+    NoMatchingAccount,
+
     /// Provided username was not valid
     #[error("Provided username is invalid")]
     InvalidUsername,
@@ -45,6 +46,18 @@ pub enum AuthError {
     /// Server has disabled account creation on dashboard
     #[error("This server has disabled dashboard account registration")]
     RegistrationDisabled,
+
+    /// Session is not active
+    #[error("This player is not currently connected, please connect to the server and visit the main menu in-game before attempting this action.")]
+    SessionNotActive,
+    
+    /// Failed to create login code
+    #[error("Failed to generate login code")]
+    FailedGenerateCode,
+    
+    /// Failed to create login code
+    #[error("The provided login code was incorrect")]
+    InvalidCode,
 }
 
 /// Response type alias for JSON responses with AuthError
@@ -149,13 +162,104 @@ pub async fn create(
     Ok(Json(TokenResponse { token }))
 }
 
+
+/// Request structure for requesting a login code
+#[derive(Deserialize)]
+pub struct RequestLoginCodeRequest {
+    /// The email address of the account to login with
+    email: String,
+}
+
+/// POST /api/auth/request-code
+/// 
+/// Requests a login code be sent to a active session to be used
+/// for logging in without a password
+pub async fn handle_request_login_code(
+    Extension(db): Extension<DatabaseConnection>,
+    Extension(sessions): Extension<Arc<Sessions>>,
+    Json(RequestLoginCodeRequest { email }): Json<RequestLoginCodeRequest>,
+) -> Result<StatusCode, AuthError> {
+    // Player must exist
+    let player = Player::by_email(&db, &email)
+        .await?
+        .ok_or(AuthError::NoMatchingAccount)?;
+
+    // Session must be active
+    let session = sessions
+        .lookup_session(player.id)
+        .ok_or(AuthError::SessionNotActive)?;
+
+    // Generate the login code
+    let login_code = sessions.create_login_code(player.id).map_err(|_|AuthError::FailedGenerateCode)?;
+
+    // Create and serialize the message
+    let origin_message = serde_json::to_string(&SystemMessage {
+        title : "Login Confirmation Code".to_string(),
+        message: format!("Your login confirmation code is <font color='#FFFF66'>{login_code}</font>, enter this on the dashboard to login"),
+        image: "".to_string(),
+        ty:0, 
+        tracking_id: -1,
+        priority: 1
+    }).map_err(|_|AuthError::FailedGenerateCode)?;
+    
+    let notify_origin = Packet::notify(
+        messaging::COMPONENT,
+        messaging::SEND_MESSAGE,
+        MessageNotify {
+            message: format!("[SYSTEM_TERMINAL]{origin_message}"),
+            player_id: player.id,
+        },
+    );
+
+    // Send the message
+    session.notify_handle().notify(notify_origin);
+
+
+    Ok(StatusCode::OK)
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct SystemMessage {
+    title: String,
+    message: String,
+    image: String,
+    ty: u8,
+    tracking_id: i32,
+    priority: i32,
+}
+
+/// Request structure for requesting a login code
+#[derive(Deserialize)]
+pub struct RequestExchangeLoginCode {
+    /// The email address of the account to login with
+    login_code: String,
+}
+
+/// POST /api/auth/exchange-code
+/// 
+/// Requests a login code be sent to a active session to be used
+/// for logging in without a password
+pub async fn handle_exchange_login_code(
+    Extension(sessions): Extension<Arc<Sessions>>,
+    Json(RequestExchangeLoginCode { login_code }): Json<RequestExchangeLoginCode>,
+) -> AuthRes<TokenResponse>  {
+
+    // Exchange the code for a token
+    let token = sessions.exchange_login_code(&login_code).ok_or(AuthError::InvalidCode)?;
+
+    Ok(Json(TokenResponse { token }))
+}
+
+
 /// Response implementation for auth errors
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            Self::Database(_) | Self::PasswordHash(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Database(_) | Self::PasswordHash(_) | Self::FailedGenerateCode => StatusCode::INTERNAL_SERVER_ERROR,
             Self::InvalidCredentials | Self::OriginAccess => StatusCode::UNAUTHORIZED,
-            Self::EmailTaken | Self::InvalidUsername => StatusCode::BAD_REQUEST,
+            Self::EmailTaken | Self::InvalidUsername | Self::SessionNotActive | Self::NoMatchingAccount | Self::InvalidCode => {
+                StatusCode::BAD_REQUEST
+            }
             Self::RegistrationDisabled => StatusCode::FORBIDDEN,
         };
 
