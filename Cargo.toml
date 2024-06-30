@@ -18,7 +18,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Coalesced parser
-me3-coalesced-parser = "0.1.0"
+me3-coalesced-parser = { version = "0.2.0", path = "../coalesced-parser" }
 
 # Logging facade
 log = { version = "0.4", features = ["serde"] }

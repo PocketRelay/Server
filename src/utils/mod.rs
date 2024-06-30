@@ -1,4 +1,5 @@
 pub mod components;
+pub mod encoding;
 pub mod hashing;
 pub mod lock;
 pub mod logging;

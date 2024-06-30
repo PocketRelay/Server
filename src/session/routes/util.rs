@@ -1,6 +1,9 @@
 use crate::{
     config::{RuntimeConfig, VERSION},
     database::entities::PlayerData,
+    services::config::{
+        fallback_coalesced_file, fallback_talk_file, local_coalesced_file, local_talk_file,
+    },
     session::{
         models::{
             errors::{BlazeError, GlobalError, ServerResult},
@@ -10,22 +13,18 @@ use crate::{
         router::{Blaze, Extension, SessionAuth},
         SessionLink,
     },
+    utils::encoding::{create_base64_map, generate_coalesced, ChunkMap},
 };
-use base64ct::{Base64, Encoding};
-use embeddy::Embedded;
-use flate2::{write::ZlibEncoder, Compression};
 use log::{debug, error};
 use me3_coalesced_parser::{serialize_coalesced, Coalesced};
 use sea_orm::DatabaseConnection;
 use std::{
+    borrow::Cow,
     cmp::Ordering,
-    io::Write,
-    path::Path,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tdf::TdfMap;
-use tokio::fs::read;
 
 /// Handles retrieving the details about the telemetry server
 ///
@@ -196,41 +195,29 @@ fn load_entitlements() -> TdfMap<String, String> {
         .collect()
 }
 
-async fn load_coalesced() -> std::io::Result<Coalesced> {
-    let local_path = Path::new("data/coalesced.json");
+async fn load_coalesced() -> Coalesced {
+    match local_coalesced_file().await {
+        Ok(result) => result,
+        Err(err) => {
+            // Log errors if the file existed
+            if !matches!(err.kind(), std::io::ErrorKind::NotFound) {
+                error!(
+                    "Unable to load local coalesced file falling back to default: {}",
+                    err
+                );
+            }
 
-    if local_path.is_file() {
-        if let Ok(value) = read(local_path).await.and_then(|bytes| {
-            serde_json::from_slice(&bytes).map_err(|_| {
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Failed to parse server coalesced",
-                )
-            })
-        }) {
-            return Ok(value);
+            // Fallback to default
+            fallback_coalesced_file()
         }
-
-        error!(
-            "Unable to compress local coalesced from data/coalesced.json falling back to default."
-        );
     }
-
-    // Fallback to embedded default coalesced.bin
-    let bytes: &[u8] = include_bytes!("../../resources/data/coalesced.json");
-    serde_json::from_slice(bytes).map_err(|_| {
-        std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Failed to parse server coalesced",
-        )
-    })
 }
 
 /// Loads the local coalesced if one is present falling back
 /// to the default one on error or if its missing
 async fn create_coalesced_map() -> std::io::Result<ChunkMap> {
     // Load the coalesced from JSON
-    let coalesced = load_coalesced().await?;
+    let coalesced = load_coalesced().await;
 
     // Serialize the coalesced to bytes
     let serialized = serialize_coalesced(&coalesced);
@@ -239,93 +226,28 @@ async fn create_coalesced_map() -> std::io::Result<ChunkMap> {
     generate_coalesced(&serialized)
 }
 
-/// Generates a compressed coalesced from the provided bytes
-///
-/// `bytes` The coalesced bytes
-fn generate_coalesced(bytes: &[u8]) -> std::io::Result<ChunkMap> {
-    let compressed: Vec<u8> = {
-        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::new(6));
-        encoder.write_all(bytes)?;
-        encoder.finish()?
-    };
-
-    let mut encoded = Vec::with_capacity(16 + compressed.len());
-    encoded.extend_from_slice(b"NIBC");
-    encoded.extend_from_slice(&1u32.to_le_bytes());
-    encoded.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
-    encoded.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
-    encoded.extend_from_slice(&compressed);
-    Ok(create_base64_map(&encoded))
-}
-
-/// Type of a base64 chunks map
-type ChunkMap = TdfMap<String, String>;
-
-/// Converts to provided slice of bytes into an ordered TdfMap where
-/// the keys are the chunk index and the values are the bytes encoded
-/// as base64 chunks. The map contains a CHUNK_SIZE key which states
-/// how large each chunk is and a DATA_SIZE key indicating the total
-/// length of the chunked value
-///
-/// `bytes` The bytes to convert
-fn create_base64_map(bytes: &[u8]) -> ChunkMap {
-    // The size of the chunks
-    const CHUNK_LENGTH: usize = 255;
-
-    let encoded: String = Base64::encode_string(bytes);
-    let length = encoded.len();
-    let mut output: ChunkMap = TdfMap::with_capacity((length / CHUNK_LENGTH) + 2);
-
-    let mut index = 0;
-    let mut offset = 0;
-
-    while offset < length {
-        let o1 = offset;
-        offset += CHUNK_LENGTH;
-
-        let slice = if offset < length {
-            &encoded[o1..offset]
-        } else {
-            &encoded[o1..]
-        };
-
-        output.insert(format!("CHUNK_{}", index), slice.to_string());
-        index += 1;
-    }
-
-    output.insert("CHUNK_SIZE".to_string(), CHUNK_LENGTH.to_string());
-    output.insert("DATA_SIZE".to_string(), length.to_string());
-    output
-}
-
-/// Default talk file values
-#[derive(Embedded)]
-#[folder = "src/resources/data/tlk"]
-struct DefaultTlkFiles;
-
 /// Retrieves a talk file for the specified language code falling back
 /// to the `ME3_TLK_DEFAULT` default talk file if it could not be found
 ///
 /// `lang` The talk file language
 async fn talk_file(lang: &str) -> ChunkMap {
-    let file_name = format!("{}.tlk", lang);
+    let bytes: Cow<'static, [u8]> = match local_talk_file(lang).await {
+        Ok(result) => Cow::Owned(result),
+        Err(err) => {
+            // Log errors if the file existed
+            if !matches!(err.kind(), std::io::ErrorKind::NotFound) {
+                error!(
+                    "Unable to load local talk file falling back to default: {}",
+                    err
+                );
+            }
 
-    let local_path = format!("data/{}", file_name);
-    let local_path = Path::new(&local_path);
-    if local_path.is_file() {
-        if let Ok(map) = read(local_path)
-            .await
-            .map(|bytes| create_base64_map(&bytes))
-        {
-            return map;
+            // Fallback to default
+            Cow::Borrowed(fallback_talk_file(lang))
         }
-        error!("Unable to load local talk file falling back to default.");
-    }
+    };
 
-    let bytes = DefaultTlkFiles::get(&file_name)
-        .unwrap_or(include_bytes!("../../resources/data/tlk/default.tlk"));
-
-    create_base64_map(bytes)
+    create_base64_map(&bytes)
 }
 
 /// Loads the messages that should be displayed to the client and
