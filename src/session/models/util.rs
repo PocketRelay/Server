@@ -88,7 +88,7 @@ impl TdfSerialize for TickerServer {
 
 /// Origin auth source?
 pub const AUTH_SOURCE: &str = "303107";
-pub const BLAZE_VERSION: &str = "Blaze 3.15.08.0 (CL# 1629389)";
+pub const BLAZE_VERSION: &str = "Blaze 3.15.08.0 (CL# 1905397)\n";
 pub const PING_PERIOD: &str = "15s";
 
 /// Alias used for ping sites
