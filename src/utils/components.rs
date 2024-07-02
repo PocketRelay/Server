@@ -21,6 +21,7 @@ static mut NOTIFICATIONS: IntHashMap<ComponentKey, &'static str> = int_hash_map(
 
 // Packets that will have their content omitted for debug logging
 #[rustfmt::skip]
+#[cfg(not(feature = "large-packet-logging"))]
 pub static OMIT_PACKET_CONTENTS: &[ComponentKey] = &[
     // Hide authentication packets for user privacy
     component_key(authentication::COMPONENT, authentication::ORIGIN_LOGIN),
@@ -32,13 +33,20 @@ pub static OMIT_PACKET_CONTENTS: &[ComponentKey] = &[
     component_key(util::COMPONENT, util::USER_SETTINGS_LOAD_ALL),
 ];
 
+#[cfg(feature = "large-packet-logging")]
+pub static OMIT_PACKET_CONTENTS: &[ComponentKey] = &[];
+
 // Packets that wont show up in debug logging
 #[rustfmt::skip]
+#[cfg(not(feature = "large-packet-logging"))]
 pub static DEBUG_IGNORED_PACKETS: &[ComponentKey] = &[
     // Ping messages occur very frequently and contain nothing important
     component_key(util::COMPONENT, util::PING),
     component_key(util::COMPONENT, util::SUSPEND_USER_PING),
 ];
+
+#[cfg(feature = "large-packet-logging")]
+pub static DEBUG_IGNORED_PACKETS: &[ComponentKey] = &[];
 
 /// Initializes the stored component state. Should only be
 /// called on initial startup

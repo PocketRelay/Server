@@ -12,6 +12,11 @@ repository = "https://github.com/PocketRelay/Server"
 # Glob to ensure resources is included 
 include = ["src/**/*"]
 
+[features]
+default = []
+# Feature to enable logging of common large packet contents that are ignored for log size sake
+large-packet-logging = []
+
 [dependencies]
 # Serde and Serde JSON for serialization
 serde = { version = "1", features = ["derive"] }
