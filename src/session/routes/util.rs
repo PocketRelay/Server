@@ -188,11 +188,12 @@ pub async fn handle_fetch_client_config(
 /// Loads the entitlements from the entitlements file and parses
 /// it as a
 fn load_entitlements() -> TdfMap<String, String> {
-    ME3_ENT
+    let vec = ME3_ENT
         .lines()
         .filter_map(|line| line.split_once('='))
         .map(|(key, value)| (key.to_string(), value.to_string()))
-        .collect()
+        .collect();
+    TdfMap::from_presorted_elements(vec)
 }
 
 async fn load_coalesced() -> Coalesced {
