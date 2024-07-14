@@ -21,6 +21,7 @@ use crate::{
         random_name::generate_random_name,
     },
 };
+use chrono::Utc;
 use email_address::EmailAddress;
 use log::{debug, error};
 use rand::{rngs::StdRng, SeedableRng};
@@ -54,8 +55,12 @@ pub async fn handle_login(
         return Err(AuthenticationError::InvalidPassword.into());
     }
 
-    // Update the session stored player
+    // Update last login timestamp
+    if let Err(err) = Player::set_last_login(&db, player.id, Utc::now()).await {
+        error!("failed to store last login time: {err}");
+    }
 
+    // Update the session stored player
     let player = session.set_player(player);
     sessions.add_session(player.id, Arc::downgrade(&session));
 
@@ -83,6 +88,11 @@ pub async fn handle_silent_login(
     let player = Player::by_id(&db, player_id)
         .await?
         .ok_or(AuthenticationError::InvalidToken)?;
+
+    // Update last login timestamp
+    if let Err(err) = Player::set_last_login(&db, player_id, Utc::now()).await {
+        error!("failed to store last login time: {err}");
+    }
 
     // Update the session stored player
     let player = session.set_player(player);
@@ -113,6 +123,11 @@ pub async fn handle_origin_login(
         error!("Failed to login with origin: {}", err);
         GlobalError::System
     })?;
+
+    // Update last login timestamp
+    if let Err(err) = Player::set_last_login(&db, player.id, Utc::now()).await {
+        error!("failed to store last login time: {err}");
+    }
 
     // Update the session stored player
     let player = session.set_player(player);
@@ -338,6 +353,11 @@ pub async fn handle_create_account(
     // Create a new player
     let player: Player =
         Player::create(&db, email, display_name, Some(hashed_password), role).await?;
+
+    // Update last login timestamp
+    if let Err(err) = Player::set_last_login(&db, player.id, Utc::now()).await {
+        error!("failed to store last login time: {err}");
+    }
 
     let player = session.set_player(player);
     sessions.add_session(player.id, Arc::downgrade(&session));

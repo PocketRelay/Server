@@ -148,6 +148,7 @@ pub async fn seed() {
             display_name: Set(display_name),
             password: Set(Some(password)),
             role: Set(role),
+            last_login_at: Set(None),
         }
         .insert(&db)
         .await

@@ -13,6 +13,8 @@ use crate::{
         LookupResponse, SessionLink,
     },
 };
+use chrono::Utc;
+use log::error;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
@@ -76,6 +78,11 @@ pub async fn handle_resume_session(
     let player = Player::by_id(&db, player_id)
         .await?
         .ok_or(AuthenticationError::InvalidToken)?;
+
+    // Update last login timestamp
+    if let Err(err) = Player::set_last_login(&db, player_id, Utc::now()).await {
+        error!("failed to store last login time: {err}");
+    }
 
     let player = session.set_player(player);
     sessions.add_session(player.id, Arc::downgrade(&session));

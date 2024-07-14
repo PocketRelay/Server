@@ -15,6 +15,8 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json,
 };
+use chrono::Utc;
+use log::error;
 use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -110,6 +112,11 @@ pub async fn login(
         return Err(AuthError::InvalidCredentials);
     }
 
+    // Update last login timestamp
+    if let Err(err) = Player::set_last_login(&db, player.id, Utc::now()).await {
+        error!("failed to store last login time: {err}");
+    }
+
     let token = sessions.create_token(player.id);
     Ok(Json(TokenResponse { token }))
 }
@@ -164,6 +171,11 @@ pub async fn create(
 
     let password: String = hash_password(&password)?;
     let player: Player = Player::create(&db, email, username, Some(password), role).await?;
+
+    // Update last login timestamp
+    if let Err(err) = Player::set_last_login(&db, player.id, Utc::now()).await {
+        error!("failed to store last login time: {err}");
+    }
 
     let token = sessions.create_token(player.id);
     Ok(Json(TokenResponse { token }))
@@ -255,13 +267,19 @@ pub struct RequestExchangeLoginCode {
 /// Requests a login code be sent to a active session to be used
 /// for logging in without a password
 pub async fn handle_exchange_login_code(
+    Extension(db): Extension<DatabaseConnection>,
     Extension(sessions): Extension<Arc<Sessions>>,
     Json(RequestExchangeLoginCode { login_code }): Json<RequestExchangeLoginCode>,
 ) -> AuthRes<TokenResponse> {
     // Exchange the code for a token
-    let token = sessions
+    let (player_id, token) = sessions
         .exchange_login_code(&login_code)
         .ok_or(AuthError::InvalidCode)?;
+
+    // Update last login timestamp
+    if let Err(err) = Player::set_last_login(&db, player_id, Utc::now()).await {
+        error!("failed to store last login time: {err}");
+    }
 
     Ok(Json(TokenResponse { token }))
 }

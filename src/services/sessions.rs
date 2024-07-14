@@ -100,7 +100,7 @@ impl Sessions {
 
     /// Exchanges a login code for a token to the player the code was for
     /// if the token is not expired
-    pub fn exchange_login_code(&self, login_code: &LoginCode) -> Option<String> {
+    pub fn exchange_login_code(&self, login_code: &LoginCode) -> Option<(PlayerID, String)> {
         let data = self.login_codes.lock().remove(login_code)?;
 
         // Login code is expired
@@ -108,8 +108,10 @@ impl Sessions {
             return None;
         }
 
-        let token = self.create_token(data.player_id);
-        Some(token)
+        let player_id = data.player_id;
+
+        let token = self.create_token(player_id);
+        Some((player_id, token))
     }
 
     /// Creates a new association token
