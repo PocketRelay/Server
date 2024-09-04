@@ -29,7 +29,7 @@ use std::sync::{Arc, Weak};
 use tdf::{ObjectId, TdfMap, TdfSerializer};
 use tokio::sync::RwLock;
 
-use super::tunnel::TunnelService;
+use super::{tunnel::TunnelService, udp_tunnel::TunnelServiceV2};
 
 pub mod manager;
 pub mod rules;
@@ -55,6 +55,8 @@ pub struct Game {
     pub game_manager: Arc<GameManager>,
     /// Access to the tunneling service
     pub tunnel_service: Arc<TunnelService>,
+    /// Access to version 2 of the tunneling service
+    pub tunnel_service_v2: Arc<TunnelServiceV2>,
 }
 
 /// Snapshot of the current game state and players
@@ -223,6 +225,7 @@ impl Game {
         created_at: DateTime<Utc>,
         game_manager: Arc<GameManager>,
         tunnel_service: Arc<TunnelService>,
+        tunnel_service_v2: Arc<TunnelServiceV2>,
     ) -> Game {
         Game {
             id,
@@ -233,6 +236,7 @@ impl Game {
             created_at,
             game_manager,
             tunnel_service,
+            tunnel_service_v2,
         }
     }
 
@@ -358,6 +362,7 @@ impl Game {
 
         // Remove the tunnel
         self.tunnel_service.dissociate_pool(self.id, index as u8);
+        self.tunnel_service_v2.dissociate_pool(self.id, index as u8);
 
         // Remove the player
         let player = self.players.remove(index);

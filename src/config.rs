@@ -71,6 +71,7 @@ pub fn load_config() -> Option<Config> {
 pub struct Config {
     pub host: IpAddr,
     pub port: Port,
+    pub tunnel_port: Port,
     pub qos: QosServerConfig,
     pub reverse_proxy: bool,
     pub dashboard: DashboardConfig,
@@ -87,6 +88,7 @@ impl Default for Config {
         Self {
             host: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: 80,
+            tunnel_port: 9032,
             qos: QosServerConfig::default(),
             reverse_proxy: false,
             dashboard: Default::default(),

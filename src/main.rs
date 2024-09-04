@@ -10,6 +10,7 @@ use crate::{
 use axum::{self, Extension};
 use config::load_config;
 use log::{debug, error, info, LevelFilter};
+use services::udp_tunnel::create_tunnel_service;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{join, net::TcpListener, signal};
 use utils::logging;
@@ -37,6 +38,9 @@ async fn main() {
     // Create the server socket address while the port is still available
     let addr: SocketAddr = SocketAddr::new(config.host, config.port);
 
+    // Create tunnel server socket address
+    let tunnel_addr: SocketAddr = SocketAddr::new(config.host, config.tunnel_port);
+
     // Config data persisted to runtime
     let runtime_config = RuntimeConfig {
         reverse_proxy: config.reverse_proxy,
@@ -53,15 +57,20 @@ async fn main() {
     // This step may take longer than expected so its spawned instead of joined
     tokio::spawn(logging::log_connection_urls(config.port));
 
-    let (db, retriever, signing_key) = join!(
+    let (db, retriever, signing_key, tunnel_service_v2) = join!(
         database::init(&runtime_config),
         Retriever::start(config.retriever),
-        SigningKey::global()
+        SigningKey::global(),
+        create_tunnel_service(tunnel_addr),
     );
 
     let config = Arc::new(runtime_config);
     let tunnel_service = Arc::new(TunnelService::default());
-    let game_manager = Arc::new(GameManager::new(tunnel_service.clone(), config.clone()));
+    let game_manager = Arc::new(GameManager::new(
+        tunnel_service.clone(),
+        tunnel_service_v2.clone(),
+        config.clone(),
+    ));
     let sessions = Arc::new(Sessions::new(signing_key));
     let retriever = Arc::new(retriever);
 
@@ -73,6 +82,7 @@ async fn main() {
     router.add_extension(retriever);
     router.add_extension(game_manager.clone());
     router.add_extension(sessions.clone());
+    router.add_extension(tunnel_service_v2.clone());
 
     let router = router.build();
 
@@ -85,6 +95,7 @@ async fn main() {
         .layer(Extension(game_manager))
         .layer(Extension(sessions))
         .layer(Extension(tunnel_service))
+        .layer(Extension(tunnel_service_v2))
         .into_make_service_with_connect_info::<SocketAddr>();
 
     info!("Starting server on {} (v{})", addr, VERSION);

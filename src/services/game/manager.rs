@@ -1,7 +1,7 @@
 use super::{rules::RuleSet, AttrMap, Game, GameJoinableState, GamePlayer, GameRef, GameSnapshot};
 use crate::{
     config::RuntimeConfig,
-    services::tunnel::TunnelService,
+    services::{tunnel::TunnelService, udp_tunnel::TunnelServiceV2},
     session::{
         models::game_manager::{
             AsyncMatchmakingStatus, GameSettings, GameSetupContext, MatchmakingResult,
@@ -42,6 +42,8 @@ pub struct GameManager {
     queue: Mutex<VecDeque<MatchmakingEntry>>,
     /// Tunneling service
     tunnel_service: Arc<TunnelService>,
+    /// Tunneling service v2
+    tunnel_service_v2: Arc<TunnelServiceV2>,
     /// Runtime configuration
     config: Arc<RuntimeConfig>,
 }
@@ -63,12 +65,17 @@ impl GameManager {
     const MAX_RELEASE_ATTEMPTS: u8 = 20;
 
     /// Starts a new game manager service returning its link
-    pub fn new(tunnel_service: Arc<TunnelService>, config: Arc<RuntimeConfig>) -> Self {
+    pub fn new(
+        tunnel_service: Arc<TunnelService>,
+        tunnel_service_v2: Arc<TunnelServiceV2>,
+        config: Arc<RuntimeConfig>,
+    ) -> Self {
         Self {
             games: Default::default(),
             next_id: AtomicU32::new(1),
             queue: Default::default(),
             tunnel_service,
+            tunnel_service_v2,
             config,
         }
     }
@@ -166,6 +173,8 @@ impl GameManager {
         if let Some(association) = session.association {
             self.tunnel_service
                 .associate_pool(association, game_id, index as u8);
+            self.tunnel_service_v2
+                .associate_pool(association, game_id, index as u8);
         }
 
         // Update the player current game
@@ -218,6 +227,7 @@ impl GameManager {
             created_at,
             self.clone(),
             self.tunnel_service.clone(),
+            self.tunnel_service_v2.clone(),
         );
         let link = Arc::new(RwLock::new(game));
         {
