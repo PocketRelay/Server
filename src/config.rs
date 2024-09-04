@@ -23,6 +23,7 @@ pub struct RuntimeConfig {
     pub dashboard: DashboardConfig,
     pub tunnel: TunnelConfig,
     pub api: APIConfig,
+    pub tunnel_port: u16,
 }
 
 /// Environment variable key to load the config from

@@ -9,7 +9,7 @@ use std::{
 };
 
 use codec::{MessageHeader, MessageReader, MessageWriter, TunnelMessage};
-use log::error;
+use log::{debug, error};
 use parking_lot::RwLock;
 use tokio::{
     net::UdpSocket,
@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 use crate::utils::{hashing::IntHashMap, types::GameID};
 
-use super::sessions::AssociationId;
+use super::sessions::{AssociationId, Sessions};
 
 /// The port bound on clients representing the host player within the socket pool
 pub const _TUNNEL_HOST_LOCAL_PORT: u16 = 42132;
@@ -31,9 +31,14 @@ type PoolIndex = u8;
 /// ID of a pool
 type PoolId = GameID;
 
-pub async fn create_tunnel_service(tunnel_addr: SocketAddr) -> Arc<TunnelServiceV2> {
+pub async fn create_tunnel_service(
+    sessions: Arc<Sessions>,
+    tunnel_addr: SocketAddr,
+) -> Arc<TunnelServiceV2> {
     let socket = UdpSocket::bind(tunnel_addr).await.unwrap();
-    let service = Arc::new(TunnelService::new(socket));
+    let service = Arc::new(TunnelService::new(socket, sessions));
+
+    debug!("started tunneling server {tunnel_addr}");
 
     // Spawn the task to handle accepting messages
     tokio::spawn(accept_messages(service.clone()));
@@ -64,14 +69,20 @@ pub async fn accept_messages(service: Arc<TunnelService>) {
         let header = match MessageHeader::read(&mut reader) {
             Ok(value) => value,
             Err(_err) => {
+                error!("invalid message header");
                 continue;
             }
         };
 
         let message = match TunnelMessage::read(&mut reader) {
             Ok(value) => value,
-            Err(_err) => continue,
+            Err(_err) => {
+                error!("invalid message");
+                continue;
+            }
         };
+
+        debug!("got message: {:?}", message);
 
         let tunnel_id = header.tunnel_id;
 
@@ -83,7 +94,7 @@ pub async fn accept_messages(service: Arc<TunnelService>) {
     }
 }
 
-const KEEP_ALIVE_DELAY: Duration = Duration::from_secs(10);
+const KEEP_ALIVE_DELAY: Duration = Duration::from_secs(5);
 const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub async fn keep_alive(service: Arc<TunnelService>) {
@@ -153,6 +164,7 @@ pub struct TunnelService {
     socket: UdpSocket,
     next_tunnel_id: AtomicU32,
     mappings: RwLock<TunnelMappings>,
+    sessions: Arc<Sessions>,
 }
 
 pub struct TunnelData {
@@ -288,11 +300,12 @@ impl TunnelMappings {
 }
 
 impl TunnelService {
-    pub fn new(socket: UdpSocket) -> Self {
+    pub fn new(socket: UdpSocket, sessions: Arc<Sessions>) -> Self {
         Self {
             socket,
             next_tunnel_id: AtomicU32::new(0),
             mappings: RwLock::new(TunnelMappings::default()),
+            sessions,
         }
     }
 
@@ -332,7 +345,7 @@ impl TunnelService {
     async fn handle_message(&self, tunnel_id: u32, msg: TunnelMessage, addr: SocketAddr) {
         match msg {
             TunnelMessage::Initiate { association_token } => {
-                let association = match Uuid::parse_str(&association_token) {
+                let association = match self.sessions.verify_assoc_token(&association_token) {
                     Ok(value) => value,
                     Err(_err) => {
                         return;
@@ -355,6 +368,20 @@ impl TunnelService {
                         last_alive: Instant::now(),
                     },
                 );
+
+                let mut buffer = MessageWriter::default();
+
+                let header = MessageHeader {
+                    tunnel_id,
+                    version: 0,
+                };
+                let message = TunnelMessage::Initiated { tunnel_id: id };
+
+                // Write header and message
+                header.write(&mut buffer);
+                message.write(&mut buffer);
+
+                self.socket.send_to(&buffer.buffer, addr).await.unwrap();
             }
             TunnelMessage::Initiated { .. } => {
                 // Server shouldn't be receiving this message... ignore it
@@ -534,6 +561,7 @@ mod codec {
         }
     }
 
+    #[derive(Debug)]
     pub enum TunnelMessage {
         /// Client is requesting to initiate a connection
         Initiate {
@@ -605,7 +633,7 @@ mod codec {
                     debug_assert!(association_token.len() < u16::MAX as usize);
                     buf.write_u8(MessageType::Initiate as u8);
 
-                    buf.write_u32(association_token.len() as u32);
+                    buf.write_u16(association_token.len() as u16);
                     buf.write_bytes(association_token.as_bytes());
                 }
                 TunnelMessage::Initiated { tunnel_id } => {
@@ -618,6 +646,7 @@ mod codec {
 
                     buf.write_u8(*index);
                     buf.write_u16(message.len() as u16);
+                    buf.write_bytes(message);
                 }
                 TunnelMessage::KeepAlive => {
                     buf.write_u8(MessageType::KeepAlive as u8);

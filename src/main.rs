@@ -50,6 +50,7 @@ async fn main() {
         qos: config.qos,
         tunnel: config.tunnel,
         api: config.api,
+        tunnel_port: config.tunnel_port,
     };
 
     debug!("QoS server: {:?}", &runtime_config.qos);
@@ -57,21 +58,21 @@ async fn main() {
     // This step may take longer than expected so its spawned instead of joined
     tokio::spawn(logging::log_connection_urls(config.port));
 
-    let (db, retriever, signing_key, tunnel_service_v2) = join!(
+    let (db, retriever, signing_key) = join!(
         database::init(&runtime_config),
         Retriever::start(config.retriever),
         SigningKey::global(),
-        create_tunnel_service(tunnel_addr),
     );
-
+    let sessions = Arc::new(Sessions::new(signing_key));
     let config = Arc::new(runtime_config);
     let tunnel_service = Arc::new(TunnelService::default());
+    let tunnel_service_v2 = create_tunnel_service(sessions.clone(), tunnel_addr).await;
+
     let game_manager = Arc::new(GameManager::new(
         tunnel_service.clone(),
         tunnel_service_v2.clone(),
         config.clone(),
     ));
-    let sessions = Arc::new(Sessions::new(signing_key));
     let retriever = Arc::new(retriever);
 
     // Initialize session router

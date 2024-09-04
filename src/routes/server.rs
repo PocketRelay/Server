@@ -38,6 +38,8 @@ pub struct ServerDetails {
     version: &'static str,
     /// Random association token for the client to use
     association: String,
+    /// Port the tunnel server is running on
+    tunnel_port: u16,
 }
 
 /// GET /api/server
@@ -45,12 +47,16 @@ pub struct ServerDetails {
 /// Handles providing the server details. The Pocket Relay client tool
 /// uses this endpoint to validate that the provided host is a valid
 /// Pocket Relay server.
-pub async fn server_details(Extension(sessions): Extension<Arc<Sessions>>) -> Json<ServerDetails> {
+pub async fn server_details(
+    Extension(sessions): Extension<Arc<Sessions>>,
+    Extension(config): Extension<Arc<RuntimeConfig>>,
+) -> Json<ServerDetails> {
     let association = sessions.create_assoc_token();
     Json(ServerDetails {
         ident: "POCKET_RELAY_SERVER",
         version: VERSION,
         association,
+        tunnel_port: config.tunnel_port,
     })
 }
 
