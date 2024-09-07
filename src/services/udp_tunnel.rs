@@ -56,6 +56,15 @@ pub async fn accept_messages(service: Arc<TunnelService>) {
         let (size, addr) = match service.socket.recv_from(&mut buffer).await {
             Ok(value) => value,
             Err(err) => {
+                if let Some(error_code) = err.raw_os_error() {
+                    // Ignore "An existing connection was forcibly closed by the remote host."
+                    // this happens when we tried to send a packet to a closed connection.
+                    // error happens here instead of the sending portion for some reason
+                    if error_code == 10054 {
+                        continue;
+                    }
+                }
+
                 error!("failed to recv message: {err}");
                 continue;
             }
@@ -87,11 +96,11 @@ pub async fn accept_messages(service: Arc<TunnelService>) {
 }
 
 /// Delay between each keep-alive packet
-const KEEP_ALIVE_DELAY: Duration = Duration::from_secs(5);
+const KEEP_ALIVE_DELAY: Duration = Duration::from_secs(10);
 
 /// When this duration elapses between keep-alive checks for a connection
-/// the connection is considered to be dead
-const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(60);
+/// the connection is considered to be dead (4 missed keep-alive check intervals)
+const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(KEEP_ALIVE_DELAY.as_secs() * 4);
 
 /// Background task that sends out keep alive messages to all the sockets connected
 /// to the tunnel system. Removes inactive and dead connections
@@ -113,9 +122,9 @@ pub async fn keep_alive(service: Arc<TunnelService>) {
 
         // Read the tunnels of all current tunnels
         let tunnels: Vec<(TunnelId, SocketAddr, Instant)> = {
-            let mappings = &*service.mappings.read();
-
-            mappings
+            service
+                .mappings
+                .read()
                 .id_to_tunnel
                 .iter()
                 .map(|(tunnel_id, value)| (*tunnel_id, value.addr, value.last_alive))
