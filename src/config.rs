@@ -24,6 +24,7 @@ pub struct RuntimeConfig {
     pub tunnel: TunnelConfig,
     pub api: APIConfig,
     pub tunnel_port: u16,
+    pub external_tunnel_port: Option<u16>,
 }
 
 /// Environment variable key to load the config from
@@ -73,6 +74,7 @@ pub struct Config {
     pub host: IpAddr,
     pub port: Port,
     pub tunnel_port: Port,
+    pub external_tunnel_port: Option<Port>,
     pub qos: QosServerConfig,
     pub reverse_proxy: bool,
     pub dashboard: DashboardConfig,
@@ -90,6 +92,7 @@ impl Default for Config {
             host: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: 80,
             tunnel_port: 9032,
+            external_tunnel_port: None,
             qos: QosServerConfig::default(),
             reverse_proxy: false,
             dashboard: Default::default(),

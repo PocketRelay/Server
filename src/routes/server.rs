@@ -56,7 +56,7 @@ pub async fn server_details(
         ident: "POCKET_RELAY_SERVER",
         version: VERSION,
         association,
-        tunnel_port: config.tunnel_port,
+        tunnel_port: config.external_tunnel_port.unwrap_or(config.tunnel_port),
     })
 }
 

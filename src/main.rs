@@ -51,6 +51,7 @@ async fn main() {
         tunnel: config.tunnel,
         api: config.api,
         tunnel_port: config.tunnel_port,
+        external_tunnel_port: config.external_tunnel_port,
     };
 
     debug!("QoS server: {:?}", &runtime_config.qos);
