@@ -353,7 +353,7 @@ impl TunnelService {
                 };
 
                 // Acquire the tunnel ID
-                let id = self.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
+                let tunnel_id = self.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
 
                 self.mappings
                     .write()
@@ -361,7 +361,7 @@ impl TunnelService {
 
                 // Store the tunnel mapping
                 self.mappings.write().insert_tunnel(
-                    id,
+                    tunnel_id,
                     TunnelData {
                         addr,
                         association,
@@ -375,7 +375,7 @@ impl TunnelService {
                     tunnel_id,
                     version: 0,
                 };
-                let message = TunnelMessage::Initiated { tunnel_id: id };
+                let message = TunnelMessage::Initiated { tunnel_id };
 
                 // Write header and message
                 header.write(&mut buffer);
@@ -391,7 +391,9 @@ impl TunnelService {
                 let (target_addr, index) = match self.get_tunnel_route(tunnel_id, index) {
                     Some(value) => value,
                     // Don't have a tunnel to send the message through
-                    None => return,
+                    None => {
+                        return;
+                    }
                 };
 
                 let mut buffer = MessageWriter::default();
