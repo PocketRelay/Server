@@ -1,3 +1,8 @@
+use super::sessions::{AssociationId, Sessions};
+use crate::utils::{hashing::IntHashMap, types::GameID};
+use log::{debug, error};
+use parking_lot::RwLock;
+use pocket_relay_udp_tunnel::{deserialize_message, serialize_message, TunnelMessage};
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -7,19 +12,11 @@ use std::{
     },
     time::Duration,
 };
-
-use codec::{MessageHeader, MessageReader, MessageWriter, TunnelMessage};
-use log::{debug, error};
-use parking_lot::RwLock;
 use tokio::{
     net::UdpSocket,
+    task::JoinSet,
     time::{interval_at, Instant, MissedTickBehavior},
 };
-use uuid::Uuid;
-
-use crate::utils::{hashing::IntHashMap, types::GameID};
-
-use super::sessions::{AssociationId, Sessions};
 
 /// The port bound on clients representing the host player within the socket pool
 pub const _TUNNEL_HOST_LOCAL_PORT: u16 = 42132;
@@ -55,6 +52,7 @@ pub async fn accept_messages(service: Arc<TunnelService>) {
     let mut buffer = [0; u16::MAX as usize];
 
     loop {
+        // Receive the message bytes
         let (size, addr) = match service.socket.recv_from(&mut buffer).await {
             Ok(value) => value,
             Err(err) => {
@@ -64,40 +62,43 @@ pub async fn accept_messages(service: Arc<TunnelService>) {
         };
 
         let buffer = &buffer[0..size];
-        let mut reader = MessageReader::new(buffer);
 
-        let header = match MessageHeader::read(&mut reader) {
+        // Deserialize the message
+        let packet = match deserialize_message(buffer) {
             Ok(value) => value,
-            Err(_err) => {
-                error!("invalid message header");
+            Err(err) => {
+                error!("failed to deserialize packet: {}", err);
                 continue;
             }
         };
 
-        let message = match TunnelMessage::read(&mut reader) {
-            Ok(value) => value,
-            Err(_err) => {
-                error!("invalid message");
-                continue;
-            }
-        };
-
-        debug!("got message: {:?}", message);
-
-        let tunnel_id = header.tunnel_id;
+        let tunnel_id = packet.header.tunnel_id;
 
         // Handle the message through a background task
         let service = service.clone();
+
+        // Handle the message in its own task
         tokio::spawn(async move {
-            service.handle_message(tunnel_id, message, addr).await;
+            service
+                .handle_message(tunnel_id, packet.message, addr)
+                .await;
         });
     }
 }
 
+/// Delay between each keep-alive packet
 const KEEP_ALIVE_DELAY: Duration = Duration::from_secs(5);
+
+/// When this duration elapses between keep-alive checks for a connection
+/// the connection is considered to be dead
 const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Background task that sends out keep alive messages to all the sockets connected
+/// to the tunnel system. Removes inactive and dead connections
 pub async fn keep_alive(service: Arc<TunnelService>) {
+    // Task set for keep alive tasks
+    let mut send_task_set = JoinSet::new();
+
     // Create the interval to track keep alive pings
     let keep_alive_start = Instant::now() + KEEP_ALIVE_DELAY;
     let mut keep_alive_interval = interval_at(keep_alive_start, KEEP_ALIVE_DELAY);
@@ -105,6 +106,7 @@ pub async fn keep_alive(service: Arc<TunnelService>) {
     keep_alive_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
     loop {
+        // Wait for the next keep-alive tick
         keep_alive_interval.tick().await;
 
         let now = Instant::now();
@@ -120,10 +122,14 @@ pub async fn keep_alive(service: Arc<TunnelService>) {
                 .collect()
         };
 
+        // Don't need to tick if theres no tunnels available
+        if tunnels.is_empty() {
+            continue;
+        }
+
         let mut expired_tunnels: Vec<TunnelId> = Vec::new();
 
         // Send out keep-alive messages for any tunnels that aren't expired
-
         for (tunnel_id, addr, last_alive) in tunnels {
             let last_alive = last_alive.duration_since(now);
             if last_alive > KEEP_ALIVE_TIMEOUT {
@@ -131,21 +137,18 @@ pub async fn keep_alive(service: Arc<TunnelService>) {
                 continue;
             }
 
-            let mut buffer = MessageWriter::default();
+            let buffer = serialize_message(tunnel_id, &TunnelMessage::KeepAlive);
 
-            let header = MessageHeader {
-                tunnel_id,
-                version: 0,
-            };
-            let message = TunnelMessage::KeepAlive;
+            // Spawn the task to send the keep-alive message
+            send_task_set.spawn({
+                let service = service.clone();
 
-            // Write header and message
-            header.write(&mut buffer);
-            message.write(&mut buffer);
-
-            // TODO: Parallel send
-            service.socket.send_to(&buffer.buffer, addr).await.unwrap();
+                async move { service.socket.send_to(&buffer, addr).await }
+            });
         }
+
+        // Join all keep alive tasks
+        while send_task_set.join_next().await.is_some() {}
 
         // Drop any tunnel connections that have passed acceptable keep-alive bounds
         if !expired_tunnels.is_empty() {
@@ -369,19 +372,9 @@ impl TunnelService {
                     },
                 );
 
-                let mut buffer = MessageWriter::default();
+                let buffer = serialize_message(tunnel_id, &TunnelMessage::Initiated { tunnel_id });
 
-                let header = MessageHeader {
-                    tunnel_id,
-                    version: 0,
-                };
-                let message = TunnelMessage::Initiated { tunnel_id };
-
-                // Write header and message
-                header.write(&mut buffer);
-                message.write(&mut buffer);
-
-                self.socket.send_to(&buffer.buffer, addr).await.unwrap();
+                self.socket.send_to(&buffer, addr).await.unwrap();
             }
             TunnelMessage::Initiated { .. } => {
                 // Server shouldn't be receiving this message... ignore it
@@ -396,263 +389,13 @@ impl TunnelService {
                     }
                 };
 
-                let mut buffer = MessageWriter::default();
+                let buffer =
+                    serialize_message(tunnel_id, &TunnelMessage::Forward { index, message });
 
-                let header = MessageHeader {
-                    tunnel_id,
-                    version: 0,
-                };
-                let message = TunnelMessage::Forward { index, message };
-
-                // Write header and message
-                header.write(&mut buffer);
-                message.write(&mut buffer);
-
-                self.socket
-                    .send_to(&buffer.buffer, target_addr)
-                    .await
-                    .unwrap();
+                self.socket.send_to(&buffer, target_addr).await.unwrap();
             }
             TunnelMessage::KeepAlive => {
                 // Ack keep alive
-            }
-        }
-    }
-}
-
-mod codec {
-    use thiserror::Error;
-
-    #[derive(Default)]
-    pub struct MessageWriter {
-        pub buffer: Vec<u8>,
-    }
-
-    impl MessageWriter {
-        #[inline]
-        pub fn write_u8(&mut self, value: u8) {
-            self.buffer.push(value)
-        }
-
-        #[inline]
-        pub fn write_bytes(&mut self, value: &[u8]) {
-            self.buffer.extend_from_slice(value)
-        }
-
-        pub fn write_u32(&mut self, value: u32) {
-            self.write_bytes(&value.to_be_bytes())
-        }
-
-        pub fn write_u16(&mut self, value: u16) {
-            self.write_bytes(&value.to_be_bytes())
-        }
-    }
-
-    pub struct MessageReader<'a> {
-        buffer: &'a [u8],
-        cursor: usize,
-    }
-
-    impl<'a> MessageReader<'a> {
-        pub fn new(buffer: &'a [u8]) -> MessageReader<'a> {
-            MessageReader { buffer, cursor: 0 }
-        }
-
-        #[inline]
-        pub fn capacity(&self) -> usize {
-            self.buffer.len()
-        }
-
-        pub fn len(&self) -> usize {
-            self.capacity() - self.cursor
-        }
-
-        pub fn read_u8(&mut self) -> Result<u8, MessageError> {
-            if self.len() < 1 {
-                return Err(MessageError::Incomplete);
-            }
-
-            let value = self.buffer[self.cursor];
-            self.cursor += 1;
-
-            Ok(value)
-        }
-
-        pub fn read_u32(&mut self) -> Result<u32, MessageError> {
-            let value = self.read_bytes(4)?;
-            let value = u32::from_be_bytes([value[0], value[1], value[2], value[3]]);
-            Ok(value)
-        }
-
-        pub fn read_u16(&mut self) -> Result<u16, MessageError> {
-            let value = self.read_bytes(2)?;
-            let value = u16::from_be_bytes([value[0], value[1]]);
-            Ok(value)
-        }
-
-        pub fn read_bytes(&mut self, length: usize) -> Result<&'a [u8], MessageError> {
-            if self.len() < length {
-                return Err(MessageError::Incomplete);
-            }
-            let value = &self.buffer[self.cursor..self.cursor + length];
-            self.cursor += length;
-            Ok(value)
-        }
-    }
-
-    #[derive(Debug)]
-    pub struct MessageHeader {
-        /// Protocol version (For future sake)
-        pub version: u8,
-        /// ID of the tunnel this message is from, [u32::MAX] when the
-        /// tunnel is not yet initiated
-        pub tunnel_id: u32,
-    }
-
-    #[derive(Debug, Error)]
-    pub enum MessageError {
-        #[error("unknown message type")]
-        UnknownMessageType,
-
-        #[error("message was incomplete")]
-        Incomplete,
-    }
-
-    impl MessageHeader {
-        pub fn read(buf: &mut MessageReader<'_>) -> Result<MessageHeader, MessageError> {
-            let version = buf.read_u8()?;
-            let tunnel_id = buf.read_u32()?;
-
-            Ok(Self { version, tunnel_id })
-        }
-
-        pub fn write(&self, buf: &mut MessageWriter) {
-            buf.write_u8(self.version);
-            buf.write_u32(self.tunnel_id);
-        }
-    }
-
-    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-    #[repr(u8)]
-    pub enum MessageType {
-        /// Client is requesting to initiate a connection
-        Initiate = 0x0,
-
-        /// Server has accepted a connection
-        Initiated = 0x1,
-
-        /// Forward a message on behalf of the player to
-        /// another player
-        Forward = 0x2,
-
-        /// Message to keep the stream alive
-        /// (When the connect is inactive)
-        KeepAlive = 0x3,
-    }
-
-    impl TryFrom<u8> for MessageType {
-        type Error = MessageError;
-        fn try_from(value: u8) -> Result<Self, MessageError> {
-            Ok(match value {
-                0x0 => Self::Initiate,
-                0x1 => Self::Initiated,
-                0x2 => Self::Forward,
-                0x3 => Self::KeepAlive,
-                _ => return Err(MessageError::UnknownMessageType),
-            })
-        }
-    }
-
-    #[derive(Debug)]
-    pub enum TunnelMessage {
-        /// Client is requesting to initiate a connection
-        Initiate {
-            /// Association token to authenticate with
-            association_token: String,
-        },
-
-        /// Server created and associated the tunnel
-        Initiated {
-            /// Unique ID for the tunnel to include in future messages
-            /// to identify itself
-            tunnel_id: u32,
-        },
-
-        /// Client wants to forward a message
-        Forward {
-            /// Local socket pool index the message was sent to.
-            /// Used to map to the target within the game
-            index: u8,
-
-            /// Message contents to forward
-            message: Vec<u8>,
-        },
-
-        /// Keep alive
-        KeepAlive,
-    }
-
-    impl TunnelMessage {
-        pub fn read(buf: &mut MessageReader<'_>) -> Result<TunnelMessage, MessageError> {
-            let ty = buf.read_u8()?;
-            let ty = MessageType::try_from(ty)?;
-
-            match ty {
-                MessageType::Initiate => {
-                    // Get length of the association token
-                    let length = buf.read_u16()? as usize;
-                    let token_bytes = buf.read_bytes(length)?;
-                    let token = String::from_utf8_lossy(token_bytes);
-                    Ok(TunnelMessage::Initiate {
-                        association_token: token.to_string(),
-                    })
-                }
-                MessageType::Initiated => {
-                    let tunnel_id = buf.read_u32()?;
-
-                    Ok(TunnelMessage::Initiated { tunnel_id })
-                }
-                MessageType::Forward => {
-                    let index = buf.read_u8()?;
-
-                    // Get length of the association token
-                    let length = buf.read_u16()? as usize;
-
-                    let message = buf.read_bytes(length)?;
-
-                    Ok(TunnelMessage::Forward {
-                        index,
-                        message: message.to_vec(),
-                    })
-                }
-                MessageType::KeepAlive => Ok(TunnelMessage::KeepAlive),
-            }
-        }
-
-        pub fn write(&self, buf: &mut MessageWriter) {
-            match self {
-                TunnelMessage::Initiate { association_token } => {
-                    debug_assert!(association_token.len() < u16::MAX as usize);
-                    buf.write_u8(MessageType::Initiate as u8);
-
-                    buf.write_u16(association_token.len() as u16);
-                    buf.write_bytes(association_token.as_bytes());
-                }
-                TunnelMessage::Initiated { tunnel_id } => {
-                    buf.write_u8(MessageType::Initiated as u8);
-                    buf.write_u32(*tunnel_id);
-                }
-                TunnelMessage::Forward { index, message } => {
-                    buf.write_u8(MessageType::Forward as u8);
-                    debug_assert!(message.len() < u16::MAX as usize);
-
-                    buf.write_u8(*index);
-                    buf.write_u16(message.len() as u16);
-                    buf.write_bytes(message);
-                }
-                TunnelMessage::KeepAlive => {
-                    buf.write_u8(MessageType::KeepAlive as u8);
-                }
             }
         }
     }

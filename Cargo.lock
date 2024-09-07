@@ -1498,6 +1498,7 @@ dependencies = [
  "log4rs",
  "me3-coalesced-parser",
  "parking_lot",
+ "pocket-relay-udp-tunnel",
  "rand",
  "reqwest",
  "ring",
@@ -1511,6 +1512,15 @@ dependencies = [
  "tokio-util",
  "tower",
  "uuid",
+]
+
+[[package]]
+name = "pocket-relay-udp-tunnel"
+version = "0.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19cd08a4437ac5638666cfcb2cf16f433c0d2b4c5a44ccee822950dde6d55fb8"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
