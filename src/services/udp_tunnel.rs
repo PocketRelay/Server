@@ -231,6 +231,18 @@ impl TunnelMappings {
         self.id_to_tunnel.insert(tunnel_id, tunnel);
     }
 
+    /// Updates the [SocketAddr] for an existing tunnel when the address has changed
+    fn update_tunnel_addr(&mut self, tunnel_id: TunnelId, tunnel_addr: SocketAddr) {
+        if let Some(tunnel_data) = self.id_to_tunnel.get_mut(&tunnel_id) {
+            tunnel_data.addr = tunnel_addr;
+        }
+    }
+
+    /// Checks if the provided `tunnel_id` is already in use
+    fn tunnel_exists(&self, tunnel_id: TunnelId) -> bool {
+        self.id_to_tunnel.contains_key(&tunnel_id)
+    }
+
     /// Associates the provided `association` to the provided `tunnel`
     ///
     /// Creates a mapping for the [AssociationId] to [TunnelHandle] along
@@ -355,17 +367,50 @@ impl TunnelService {
 
     /// Handles processing a message received through the tunnel
     async fn handle_message(&self, tunnel_id: u32, msg: TunnelMessage, addr: SocketAddr) {
+        // Only process tunnels with known IDs
+        if tunnel_id != u32::MAX {
+            // Store the updated tunnel address
+            self.mappings.write().update_tunnel_addr(tunnel_id, addr);
+        }
+
         match msg {
             TunnelMessage::Initiate { association_token } => {
                 let association = match self.sessions.verify_assoc_token(&association_token) {
                     Ok(value) => value,
-                    Err(_err) => {
+                    Err(err) => {
+                        error!("client send invalid association token: {}", err);
                         return;
                     }
                 };
 
-                // Acquire the tunnel ID
-                let tunnel_id = self.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
+                let mut addr_exhausted = 0;
+
+                // Attempt to acquire an available tunnel ID
+                let tunnel_id = {
+                    // Hold read lock while searching
+                    let mappings = &*self.mappings.read();
+
+                    loop {
+                        // Acquire the tunnel ID
+                        let tunnel_id = self.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
+
+                        // If the one we were issued was the last address then the next
+                        // address will loop around to zero
+                        if tunnel_id == u32::MAX {
+                            addr_exhausted += 1;
+                        }
+
+                        // Ensure the tunnel isn't already mapped
+                        if !mappings.tunnel_exists(tunnel_id) {
+                            break tunnel_id;
+                        }
+
+                        // If we iterated the full range of u32 twice we've definitely exhausted all possible IDs
+                        if addr_exhausted > 2 {
+                            return;
+                        }
+                    }
+                };
 
                 self.mappings
                     .write()

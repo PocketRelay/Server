@@ -12,6 +12,7 @@ use rand::distributions::Distribution;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use thiserror::Error;
 use uuid::Uuid;
 
 type SessionMap = IntHashMap<PlayerID, WeakSessionLink>;
@@ -248,11 +249,13 @@ impl Sessions {
 }
 
 /// Errors that can occur while verifying a token
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum VerifyError {
     /// The token is expired
+    #[error("token is expired")]
     Expired,
     /// The token is invalid
+    #[error("token is invalid")]
     Invalid,
 }
 
