@@ -1,6 +1,6 @@
 [package]
 name = "pocket-relay"
-version = "0.6.2-beta"
+version = "0.7.0-beta"
 description = "Pocket Relay Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
