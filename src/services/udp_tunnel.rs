@@ -31,9 +31,9 @@ type PoolId = GameID;
 pub async fn create_tunnel_service(
     sessions: Arc<Sessions>,
     tunnel_addr: SocketAddr,
-) -> Arc<TunnelServiceV2> {
+) -> Arc<UdpTunnelService> {
     let socket = UdpSocket::bind(tunnel_addr).await.unwrap();
-    let service = Arc::new(TunnelService::new(socket, sessions));
+    let service = Arc::new(UdpTunnelService::new(socket, sessions));
 
     debug!("started tunneling server {tunnel_addr}");
 
@@ -47,7 +47,7 @@ pub async fn create_tunnel_service(
 }
 
 /// Reads inbound messages from the tunnel service
-pub async fn accept_messages(service: Arc<TunnelService>) {
+pub async fn accept_messages(service: Arc<UdpTunnelService>) {
     // Buffer to recv messages
     let mut buffer = [0; u16::MAX as usize];
 
@@ -104,7 +104,7 @@ const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(KEEP_ALIVE_DELAY.as_sec
 
 /// Background task that sends out keep alive messages to all the sockets connected
 /// to the tunnel system. Removes inactive and dead connections
-pub async fn keep_alive(service: Arc<TunnelService>) {
+pub async fn keep_alive(service: Arc<UdpTunnelService>) {
     // Task set for keep alive tasks
     let mut send_task_set = JoinSet::new();
 
@@ -170,9 +170,7 @@ pub async fn keep_alive(service: Arc<TunnelService>) {
     }
 }
 
-pub type TunnelServiceV2 = TunnelService;
-
-pub struct TunnelService {
+pub struct UdpTunnelService {
     socket: UdpSocket,
     next_tunnel_id: AtomicU32,
     mappings: RwLock<TunnelMappings>,
@@ -323,7 +321,7 @@ impl TunnelMappings {
     }
 }
 
-impl TunnelService {
+impl UdpTunnelService {
     pub fn new(socket: UdpSocket, sessions: Arc<Sessions>) -> Self {
         Self {
             socket,
