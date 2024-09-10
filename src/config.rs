@@ -22,9 +22,8 @@ pub struct RuntimeConfig {
     pub menu_message: String,
     pub dashboard: DashboardConfig,
     pub tunnel: TunnelConfig,
+    pub udp_tunnel: UdpTunnelConfig,
     pub api: APIConfig,
-    pub tunnel_port: u16,
-    pub external_tunnel_port: Option<u16>,
 }
 
 /// Environment variable key to load the config from
@@ -73,8 +72,6 @@ pub fn load_config() -> Option<Config> {
 pub struct Config {
     pub host: IpAddr,
     pub port: Port,
-    pub tunnel_port: Port,
-    pub external_tunnel_port: Option<Port>,
     pub qos: QosServerConfig,
     pub reverse_proxy: bool,
     pub dashboard: DashboardConfig,
@@ -83,6 +80,7 @@ pub struct Config {
     pub logging: LevelFilter,
     pub retriever: RetrieverConfig,
     pub tunnel: TunnelConfig,
+    pub udp_tunnel: UdpTunnelConfig,
     pub api: APIConfig,
 }
 
@@ -91,8 +89,6 @@ impl Default for Config {
         Self {
             host: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: 80,
-            tunnel_port: 9032,
-            external_tunnel_port: None,
             qos: QosServerConfig::default(),
             reverse_proxy: false,
             dashboard: Default::default(),
@@ -101,12 +97,15 @@ impl Default for Config {
             logging: LevelFilter::Info,
             retriever: Default::default(),
             tunnel: Default::default(),
+            udp_tunnel: Default::default(),
             api: Default::default()
         }
     }
 }
 
 /// Configuration for how the server should use tunneling
+///
+/// This option applies to both the HTTP and UDP tunnels
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TunnelConfig {
@@ -120,6 +119,29 @@ pub enum TunnelConfig {
     Always,
     /// Never tunnel connections through the server
     Disabled,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UdpTunnelConfig {
+    /// Port to bind the UDP tunnel socket to, the socket is bound
+    /// using the same host as the server
+    pub port: Port,
+
+    /// External facing port, only needed when the port visible to users
+    /// is different to [UdpTunnelConfig::port]
+    ///
+    /// For cases such as different exposed port in docker or usage behind
+    /// a reverse proxy such as NGINX
+    pub external_port: Option<Port>,
+}
+
+impl Default for UdpTunnelConfig {
+    fn default() -> Self {
+        Self {
+            port: 9032,
+            external_port: None,
+        }
+    }
 }
 
 /// Configuration for the server QoS setup

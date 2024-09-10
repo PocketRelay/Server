@@ -28,32 +28,32 @@ type PoolIndex = u8;
 /// ID of a pool
 type PoolId = GameID;
 
-pub async fn create_tunnel_service(
-    sessions: Arc<Sessions>,
+pub async fn start_udp_tunnel(
     tunnel_addr: SocketAddr,
-) -> Arc<UdpTunnelService> {
-    let socket = UdpSocket::bind(tunnel_addr).await.unwrap();
-    let service = Arc::new(UdpTunnelService::new(socket, sessions));
+    service: Arc<UdpTunnelService>,
+) -> std::io::Result<()> {
+    let socket = UdpSocket::bind(tunnel_addr).await?;
+    let socket = Arc::new(socket);
 
     debug!("started tunneling server {tunnel_addr}");
 
     // Spawn the task to handle accepting messages
-    tokio::spawn(accept_messages(service.clone()));
+    tokio::spawn(accept_messages(service.clone(), socket.clone()));
 
     // Spawn task to keep connections alive
-    tokio::spawn(keep_alive(service.clone()));
+    tokio::spawn(keep_alive(service, socket));
 
-    service
+    Ok(())
 }
 
 /// Reads inbound messages from the tunnel service
-pub async fn accept_messages(service: Arc<UdpTunnelService>) {
+pub async fn accept_messages(service: Arc<UdpTunnelService>, socket: Arc<UdpSocket>) {
     // Buffer to recv messages
     let mut buffer = [0; u16::MAX as usize];
 
     loop {
         // Receive the message bytes
-        let (size, addr) = match service.socket.recv_from(&mut buffer).await {
+        let (size, addr) = match socket.recv_from(&mut buffer).await {
             Ok(value) => value,
             Err(err) => {
                 if let Some(error_code) = err.raw_os_error() {
@@ -83,13 +83,13 @@ pub async fn accept_messages(service: Arc<UdpTunnelService>) {
 
         let tunnel_id = packet.header.tunnel_id;
 
-        // Handle the message through a background task
         let service = service.clone();
+        let socket = socket.clone();
 
         // Handle the message in its own task
         tokio::spawn(async move {
             service
-                .handle_message(tunnel_id, packet.message, addr)
+                .handle_message(socket, tunnel_id, packet.message, addr)
                 .await;
         });
     }
@@ -104,7 +104,7 @@ const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(KEEP_ALIVE_DELAY.as_sec
 
 /// Background task that sends out keep alive messages to all the sockets connected
 /// to the tunnel system. Removes inactive and dead connections
-pub async fn keep_alive(service: Arc<UdpTunnelService>) {
+pub async fn keep_alive(service: Arc<UdpTunnelService>, socket: Arc<UdpSocket>) {
     // Task set for keep alive tasks
     let mut send_task_set = JoinSet::new();
 
@@ -150,9 +150,9 @@ pub async fn keep_alive(service: Arc<UdpTunnelService>) {
 
             // Spawn the task to send the keep-alive message
             send_task_set.spawn({
-                let service = service.clone();
+                let socket = socket.clone();
 
-                async move { service.socket.send_to(&buffer, addr).await }
+                async move { socket.send_to(&buffer, addr).await }
             });
         }
 
@@ -170,10 +170,14 @@ pub async fn keep_alive(service: Arc<UdpTunnelService>) {
     }
 }
 
+/// UDP tunneling service
 pub struct UdpTunnelService {
-    socket: UdpSocket,
+    /// Next available tunnel ID
     next_tunnel_id: AtomicU32,
+    /// Tunneling mapping data
     mappings: RwLock<TunnelMappings>,
+    /// Access to the session service for exchanging
+    /// association tokens
     sessions: Arc<Sessions>,
 }
 
@@ -322,9 +326,8 @@ impl TunnelMappings {
 }
 
 impl UdpTunnelService {
-    pub fn new(socket: UdpSocket, sessions: Arc<Sessions>) -> Self {
+    pub fn new(sessions: Arc<Sessions>) -> Self {
         Self {
-            socket,
             next_tunnel_id: AtomicU32::new(0),
             mappings: RwLock::new(TunnelMappings::default()),
             sessions,
@@ -364,7 +367,13 @@ impl UdpTunnelService {
     }
 
     /// Handles processing a message received through the tunnel
-    async fn handle_message(&self, tunnel_id: u32, msg: TunnelMessage, addr: SocketAddr) {
+    async fn handle_message(
+        &self,
+        socket: Arc<UdpSocket>,
+        tunnel_id: u32,
+        msg: TunnelMessage,
+        addr: SocketAddr,
+    ) {
         // Only process tunnels with known IDs
         if tunnel_id != u32::MAX {
             // Store the updated tunnel address
@@ -426,7 +435,7 @@ impl UdpTunnelService {
 
                 let buffer = serialize_message(tunnel_id, &TunnelMessage::Initiated { tunnel_id });
 
-                self.socket.send_to(&buffer, addr).await.unwrap();
+                _ = socket.send_to(&buffer, addr).await;
             }
             TunnelMessage::Initiated { .. } => {
                 // Server shouldn't be receiving this message... ignore it
@@ -444,7 +453,7 @@ impl UdpTunnelService {
                 let buffer =
                     serialize_message(tunnel_id, &TunnelMessage::Forward { index, message });
 
-                self.socket.send_to(&buffer, target_addr).await.unwrap();
+                _ = socket.send_to(&buffer, target_addr).await;
             }
             TunnelMessage::KeepAlive => {
                 // Ack keep alive

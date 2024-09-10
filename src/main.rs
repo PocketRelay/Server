@@ -8,9 +8,9 @@ use crate::{
     utils::signing::SigningKey,
 };
 use axum::{self, Extension};
-use config::load_config;
+use config::{load_config, TunnelConfig};
 use log::{debug, error, info, LevelFilter};
-use services::udp_tunnel::create_tunnel_service;
+use services::udp_tunnel::{start_udp_tunnel, UdpTunnelService};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{join, net::TcpListener, signal};
 use utils::logging;
@@ -39,7 +39,10 @@ async fn main() {
     let addr: SocketAddr = SocketAddr::new(config.host, config.port);
 
     // Create tunnel server socket address
-    let tunnel_addr: SocketAddr = SocketAddr::new(config.host, config.tunnel_port);
+    let tunnel_addr: SocketAddr = SocketAddr::new(config.host, config.udp_tunnel.port);
+
+    // Check if the tunnel is enabled
+    let tunnel_enabled: bool = !matches!(config.tunnel, TunnelConfig::Disabled);
 
     // Config data persisted to runtime
     let runtime_config = RuntimeConfig {
@@ -50,8 +53,7 @@ async fn main() {
         qos: config.qos,
         tunnel: config.tunnel,
         api: config.api,
-        tunnel_port: config.tunnel_port,
-        external_tunnel_port: config.external_tunnel_port,
+        udp_tunnel: config.udp_tunnel,
     };
 
     debug!("QoS server: {:?}", &runtime_config.qos);
@@ -67,14 +69,22 @@ async fn main() {
     let sessions = Arc::new(Sessions::new(signing_key));
     let config = Arc::new(runtime_config);
     let tunnel_service = Arc::new(TunnelService::default());
-    let tunnel_service_v2 = create_tunnel_service(sessions.clone(), tunnel_addr).await;
+    let udp_tunnel_service = Arc::new(UdpTunnelService::new(sessions.clone()));
 
     let game_manager = Arc::new(GameManager::new(
         tunnel_service.clone(),
-        tunnel_service_v2.clone(),
+        udp_tunnel_service.clone(),
         config.clone(),
     ));
     let retriever = Arc::new(retriever);
+
+    // Start the tunnel server
+    if tunnel_enabled {
+        // Start the tunnel service server
+        if let Err(err) = start_udp_tunnel(tunnel_addr, udp_tunnel_service.clone()).await {
+            error!("failed to start udp tunnel server: {}", err);
+        }
+    }
 
     // Initialize session router
     let mut router = session::routes::router();
@@ -84,7 +94,7 @@ async fn main() {
     router.add_extension(retriever);
     router.add_extension(game_manager.clone());
     router.add_extension(sessions.clone());
-    router.add_extension(tunnel_service_v2.clone());
+    router.add_extension(udp_tunnel_service.clone());
 
     let router = router.build();
 
@@ -97,7 +107,7 @@ async fn main() {
         .layer(Extension(game_manager))
         .layer(Extension(sessions))
         .layer(Extension(tunnel_service))
-        .layer(Extension(tunnel_service_v2))
+        .layer(Extension(udp_tunnel_service))
         .into_make_service_with_connect_info::<SocketAddr>();
 
     info!("Starting server on {} (v{})", addr, VERSION);
