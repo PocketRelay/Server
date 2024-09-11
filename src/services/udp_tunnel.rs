@@ -240,6 +240,13 @@ impl TunnelMappings {
         }
     }
 
+    /// Updates the last-alive instant for the tunnel
+    fn update_tunnel_last_alive(&mut self, tunnel_id: TunnelId, last_alive: Instant) {
+        if let Some(tunnel_data) = self.id_to_tunnel.get_mut(&tunnel_id) {
+            tunnel_data.last_alive = last_alive;
+        }
+    }
+
     /// Checks if the provided `tunnel_id` is already in use
     fn tunnel_exists(&self, tunnel_id: TunnelId) -> bool {
         self.id_to_tunnel.contains_key(&tunnel_id)
@@ -469,7 +476,10 @@ impl UdpTunnelService {
                 _ = socket.send_to(&buffer, target_addr).await;
             }
             TunnelMessage::KeepAlive => {
-                // Ack keep alive
+                // Update tunnel last alive time
+                self.mappings
+                    .write()
+                    .update_tunnel_last_alive(tunnel_id, Instant::now());
             }
         }
     }
