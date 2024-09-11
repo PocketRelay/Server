@@ -366,6 +366,38 @@ impl UdpTunnelService {
         self.mappings.write().dissociate_pool(pool_id, pool_index);
     }
 
+    /// Attempts to obtain the next available tunnel ID to allocate to
+    /// a new tunnel, will return [None] if all IDs are determined to
+    /// have been exhausted
+    fn acquire_tunnel_id(&self) -> Option<TunnelId> {
+        let mut addr_exhausted = 0;
+
+        // Attempt to acquire an available tunnel ID
+        // Hold read lock while searching
+        let mappings = &*self.mappings.read();
+
+        loop {
+            // Acquire the tunnel ID
+            let tunnel_id = self.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
+
+            // If the one we were issued was the last address then the next
+            // address will loop around to zero
+            if tunnel_id == u32::MAX {
+                addr_exhausted += 1;
+            }
+
+            // Ensure the tunnel isn't already mapped
+            if !mappings.tunnel_exists(tunnel_id) {
+                return Some(tunnel_id);
+            }
+
+            // If we iterated the full range of u32 twice we've definitely exhausted all possible IDs
+            if addr_exhausted > 2 {
+                return None;
+            }
+        }
+    }
+
     /// Handles processing a message received through the tunnel
     async fn handle_message(
         &self,
@@ -390,32 +422,13 @@ impl UdpTunnelService {
                     }
                 };
 
-                let mut addr_exhausted = 0;
-
                 // Attempt to acquire an available tunnel ID
-                let tunnel_id = {
-                    // Hold read lock while searching
-                    let mappings = &*self.mappings.read();
-
-                    loop {
-                        // Acquire the tunnel ID
-                        let tunnel_id = self.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
-
-                        // If the one we were issued was the last address then the next
-                        // address will loop around to zero
-                        if tunnel_id == u32::MAX {
-                            addr_exhausted += 1;
-                        }
-
-                        // Ensure the tunnel isn't already mapped
-                        if !mappings.tunnel_exists(tunnel_id) {
-                            break tunnel_id;
-                        }
-
-                        // If we iterated the full range of u32 twice we've definitely exhausted all possible IDs
-                        if addr_exhausted > 2 {
-                            return;
-                        }
+                let tunnel_id = match self.acquire_tunnel_id() {
+                    Some(value) => value,
+                    // Cannot allocate the tunnel an ID
+                    None => {
+                        error!("failed to allocate a tunnel ID: exhausted");
+                        return;
                     }
                 };
 
