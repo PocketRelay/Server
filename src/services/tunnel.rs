@@ -46,18 +46,22 @@ pub struct TunnelService {
     mappings: RwLock<TunnelMappings>,
 }
 
+pub struct TunnelData {
+    /// Association ID for the tunnel
+    association: AssociationId,
+    /// Handle for the tunnel
+    handle: TunnelHandle,
+}
+
 /// Stores mappings between various tunnel objects
 #[derive(Default)]
 struct TunnelMappings {
     /// Mapping from [TunnelId]s to the actual [TunnelHandle] for communicating
     /// with the tunnel
-    id_to_tunnel: IntHashMap<TunnelId, TunnelHandle>,
+    id_to_tunnel: IntHashMap<TunnelId, TunnelData>,
 
     /// Mapping from [AssociationId] (Client association) to [TunnelHandle]
     association_to_tunnel: HashMap<AssociationId, TunnelId>,
-    /// Inverse mapping of `association_to_tunnel` for finding a [AssociationId]
-    /// associated to a [TunnelId]    
-    tunnel_to_association: HashMap<TunnelId, AssociationId>,
 
     /// Mapping associating a [TunnelId] with a [PoolIndex] within a [PoolId]
     /// that it is apart of
@@ -88,7 +92,7 @@ impl PoolKey {
 
 impl TunnelMappings {
     // Inserts a new tunnel into the mappings
-    fn insert_tunnel(&mut self, tunnel_id: TunnelId, tunnel: TunnelHandle) {
+    fn insert_tunnel(&mut self, tunnel_id: TunnelId, tunnel: TunnelData) {
         // Insert the tunnel into the mappings
         self.id_to_tunnel.insert(tunnel_id, tunnel);
     }
@@ -100,7 +104,6 @@ impl TunnelMappings {
     fn associate_tunnel(&mut self, association: AssociationId, tunnel_id: TunnelId) {
         // Create the IP relationship
         self.association_to_tunnel.insert(association, tunnel_id);
-        self.tunnel_to_association.insert(tunnel_id, association);
     }
 
     /// Attempts to associate the tunnel from `address` to the provided
@@ -139,7 +142,7 @@ impl TunnelMappings {
             .get(&PoolKey::new(game_id, pool_index))?;
         let tunnel = self.id_to_tunnel.get(other_tunnel)?;
 
-        Some((tunnel.clone(), self_index))
+        Some((tunnel.handle.clone(), self_index))
     }
 
     /// Removes the association between the `tunnel_id` and any games and
@@ -149,11 +152,10 @@ impl TunnelMappings {
     /// related to the tunnel
     fn dissociate_tunnel(&mut self, tunnel_id: TunnelId) {
         // Remove tunnel itself
-        _ = self.id_to_tunnel.remove(&tunnel_id);
+        let tunnel_data = self.id_to_tunnel.remove(&tunnel_id);
 
-        // Remove the IP association
-        if let Some(association) = self.tunnel_to_association.remove(&tunnel_id) {
-            self.association_to_tunnel.remove(&association);
+        if let Some(tunnel_data) = tunnel_data {
+            self.association_to_tunnel.remove(&tunnel_data.association);
         }
 
         // Remove the slot association
@@ -287,9 +289,13 @@ impl Tunnel {
     ///
     /// ## Arguments
     /// * `service`     - The service to add the tunnel to
-    /// * `io`          - The underlying tunnel IO
     /// * `association` - The client association ID for this tunnel
-    pub fn start(service: Arc<TunnelService>, io: Upgraded) -> TunnelId {
+    /// * `io`          - The underlying tunnel IO
+    pub fn start(
+        service: Arc<TunnelService>,
+        association: AssociationId,
+        io: Upgraded,
+    ) -> TunnelId {
         let (tx, rx) = mpsc::unbounded_channel();
 
         // Wrap the `io` with the [`TunnelCodec`] for framing
@@ -299,10 +305,13 @@ impl Tunnel {
         let id = service.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
 
         // Store the tunnel mapping
-        service
-            .mappings
-            .write()
-            .insert_tunnel(id, TunnelHandle { tx });
+        service.mappings.write().insert_tunnel(
+            id,
+            TunnelData {
+                association,
+                handle: TunnelHandle { tx },
+            },
+        );
 
         // Create the interval to track keep alive pings
         let keep_alive_start = Instant::now() + Self::KEEP_ALIVE_DELAY;

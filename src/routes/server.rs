@@ -181,7 +181,7 @@ pub async fn handle_upgrade_tunnel(
         }
     };
 
-    let tunnel_id = Tunnel::start(tunnel_service.clone(), upgraded);
+    let tunnel_id = Tunnel::start(tunnel_service.clone(), association, upgraded);
     tunnel_service.associate_tunnel(association, tunnel_id);
 }
 
