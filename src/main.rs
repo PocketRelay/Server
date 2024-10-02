@@ -78,8 +78,8 @@ async fn main() {
     ));
     let retriever = Arc::new(retriever);
 
-    // Start the tunnel server
-    if tunnel_enabled {
+    // Start the tunnel server (If enabled)
+    if tunnel_enabled && config.udp_tunnel.enabled {
         // Start the tunnel service server
         if let Err(err) = start_udp_tunnel(tunnel_addr, udp_tunnel_service.clone()).await {
             error!("failed to start udp tunnel server: {}", err);

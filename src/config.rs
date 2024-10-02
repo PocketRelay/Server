@@ -133,6 +133,10 @@ pub struct UdpTunnelConfig {
     /// For cases such as different exposed port in docker or usage behind
     /// a reverse proxy such as NGINX
     pub external_port: Option<Port>,
+
+    /// Optionally choose to disable the tunnel if you don't intend to use it
+    /// default value is true
+    pub enabled: bool,
 }
 
 impl Default for UdpTunnelConfig {
@@ -140,7 +144,22 @@ impl Default for UdpTunnelConfig {
         Self {
             port: 9032,
             external_port: None,
+            enabled: true,
         }
+    }
+}
+
+impl UdpTunnelConfig {
+    /// Get the port the exposed to the clients for the UDP
+    /// tunnel. This is [None] if the tunnel is disabled. Otherwise
+    /// its [UdpTunnelConfig::external_port] if set otherwise its
+    /// [UdpTunnelConfig::port]
+    pub fn get_exposed_port(&self) -> Option<Port> {
+        if !self.enabled {
+            return None;
+        }
+
+        Some(self.external_port.unwrap_or(self.port))
     }
 }
 

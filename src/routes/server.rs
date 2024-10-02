@@ -39,7 +39,7 @@ pub struct ServerDetails {
     /// Random association token for the client to use
     association: String,
     /// Port the tunnel server is running on
-    tunnel_port: u16,
+    tunnel_port: Option<u16>,
 }
 
 /// GET /api/server
@@ -56,10 +56,7 @@ pub async fn server_details(
         ident: "POCKET_RELAY_SERVER",
         version: VERSION,
         association,
-        tunnel_port: config
-            .udp_tunnel
-            .external_port
-            .unwrap_or(config.udp_tunnel.port),
+        tunnel_port: config.udp_tunnel.get_exposed_port(),
     })
 }
 
