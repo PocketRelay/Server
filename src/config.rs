@@ -122,6 +122,7 @@ pub enum TunnelConfig {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(default)]
 pub struct UdpTunnelConfig {
     /// Port to bind the UDP tunnel socket to, the socket is bound
     /// using the same host as the server
