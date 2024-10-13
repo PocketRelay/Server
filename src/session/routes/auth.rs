@@ -44,7 +44,7 @@ pub async fn handle_login(
         .await?
         .ok_or(AuthenticationError::InvalidUser)?;
 
-    // Get the attached password (Passwordless accounts fail as invalid)
+    // Get the attached password (Accounts without a password will fail as invalid)
     let player_password: &str = player
         .password
         .as_ref()

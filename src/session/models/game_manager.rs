@@ -843,7 +843,8 @@ impl TdfSerialize for GameSetupResponse<'_> {
             // Host network qos data
             w.tag_ref(b"NQOS", &host.net.qos);
 
-            // Flag to indicate that this game is not resettable. This applies only to the CLIENT_SERVER_DEDICATED topology.  The game will be prevented from ever going into the RESETABlE state.
+            // Flag to indicate that this game is not resettable. This applies only to the CLIENT_SERVER_DEDICATED topology.
+            // The game will be prevented from ever going into the RESETTABlE state.
             w.tag_bool(b"NRES", false);
 
             // Game network topology

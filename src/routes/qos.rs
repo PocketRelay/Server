@@ -38,7 +38,7 @@ pub struct QosQuery {
 ///
 /// `query` The query string from the client
 pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
-    debug!("Recieved QOS query: (Port: {})", query.port);
+    debug!("Received QOS query: (Port: {})", query.port);
 
     /// Port for the local Quality of Service server
     const QOS_PORT: u16 = 42130;
