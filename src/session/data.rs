@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{net::Ipv4Addr, sync::Arc};
 
 use parking_lot::{Mutex, MutexGuard};
 use serde::Serialize;
@@ -7,7 +7,7 @@ use crate::{
     database::entities::Player,
     services::{
         game::{GameRef, WeakGameRef},
-        sessions::SessionPlayerAssociation,
+        sessions::{AssociationId, SessionPlayerAssociation},
     },
     utils::{
         components::user_sessions,
@@ -29,23 +29,46 @@ use super::{
     SessionNotifyHandle,
 };
 
-#[derive(Default)]
 pub struct SessionData {
-    inner: Mutex<Option<SessionDataInner>>,
+    /// Extended session data for authenticated sessions
+    ext: Mutex<Option<SessionDataExt>>,
+
+    /// IP address associated with the session
+    addr: Ipv4Addr,
+
+    /// User will not have an association if they are using an outdated
+    /// client version.
+    association: Option<AssociationId>,
 }
 
 impl SessionData {
+    pub fn new(addr: Ipv4Addr, association: Option<AssociationId>) -> Self {
+        Self {
+            ext: Default::default(),
+            addr,
+            association,
+        }
+    }
+
+    pub fn get_addr(&self) -> Ipv4Addr {
+        self.addr
+    }
+
+    pub fn get_association(&self) -> Option<AssociationId> {
+        self.association
+    }
+
     // Read from the underlying session data
-    fn read(&self) -> MutexGuard<'_, Option<SessionDataInner>> {
-        self.inner.lock()
+    fn read(&self) -> MutexGuard<'_, Option<SessionDataExt>> {
+        self.ext.lock()
     }
 
     /// Writes to the underlying session data without publishing the changes
     fn write_silent<F, O>(&self, update: F) -> Option<O>
     where
-        F: FnOnce(&mut SessionDataInner) -> O,
+        F: FnOnce(&mut SessionDataExt) -> O,
     {
-        self.inner.lock().as_mut().map(update)
+        self.ext.lock().as_mut().map(update)
     }
 
     /// Writes to the underlying session data, publishes changes to
@@ -53,9 +76,9 @@ impl SessionData {
     #[inline]
     fn write_publish<F, O>(&self, update: F) -> Option<O>
     where
-        F: FnOnce(&mut SessionDataInner) -> O,
+        F: FnOnce(&mut SessionDataExt) -> O,
     {
-        self.inner.lock().as_mut().map(|data| {
+        self.ext.lock().as_mut().map(|data| {
             let value = update(data);
             data.publish_update();
             value
@@ -64,14 +87,14 @@ impl SessionData {
 
     /// Clears the underlying session data
     pub fn clear(&self) {
-        self.inner.lock().take();
+        self.ext.lock().take();
     }
 
     /// Starts a session from the provided player association
     pub fn start_session(&self, player: SessionPlayerAssociation) -> Arc<Player> {
-        self.inner
+        self.ext
             .lock()
-            .insert(SessionDataInner::new(player))
+            .insert(SessionDataExt::new(player))
             // Obtain the player to return
             .player_assoc
             .player
@@ -172,7 +195,8 @@ impl SessionData {
     }
 }
 
-pub struct SessionDataInner {
+/// Extended session data, present when the user is authenticated
+struct SessionDataExt {
     /// Session -> Player association, currently authenticated player
     player_assoc: Arc<SessionPlayerAssociation>,
     /// Networking information for current session
@@ -183,7 +207,7 @@ pub struct SessionDataInner {
     subscribers: Vec<SessionSubscription>,
 }
 
-impl SessionDataInner {
+impl SessionDataExt {
     fn new(player: SessionPlayerAssociation) -> Self {
         Self {
             player_assoc: Arc::new(player),

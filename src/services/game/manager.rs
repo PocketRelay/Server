@@ -170,7 +170,7 @@ impl GameManager {
         };
 
         // Allocate tunnel if supported by client
-        if let Some(association) = session.association {
+        if let Some(association) = session.data.get_association() {
             self.tunnel_service
                 .associate_pool(association, game_id, index as u8);
             self.udp_tunnel_service

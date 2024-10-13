@@ -132,6 +132,8 @@ pub async fn handle_update_network(
         ping_site_latency,
     }): Blaze<UpdateNetworkRequest>,
 ) {
+    let session_addr = session.data.get_addr();
+
     match &config.qos {
         QosServerConfig::Disabled => {}
         // Hamachi should override local addresses
@@ -140,10 +142,10 @@ pub async fn handle_update_network(
             if let NetworkAddress::AddressPair(pair) = &mut address {
                 let int = &mut pair.internal;
 
-                if session.addr.is_loopback() {
+                if session_addr.is_loopback() {
                     int.addr = *host;
                 } else {
-                    int.addr = session.addr;
+                    int.addr = session_addr;
                 }
             }
         }
@@ -156,7 +158,7 @@ pub async fn handle_update_network(
                 // If address is missing
                 if ext.addr.is_unspecified() {
                     // Replace address with new address and port with same as local port
-                    ext.addr = session.addr;
+                    ext.addr = session_addr;
                     ext.port = pair.internal.port;
                 }
             }
