@@ -64,7 +64,7 @@ pub async fn handle_login(
     let player = sessions.add_session(player, Arc::downgrade(&session));
 
     // Update the session stored player
-    let player = session.data.start_session(player);
+    let player = session.data.set_auth(player);
 
     let session_token: String = sessions.create_token(player.id);
 
@@ -100,7 +100,7 @@ pub async fn handle_silent_login(
     let player = sessions.add_session(player, Arc::downgrade(&session));
 
     // Update the session stored player
-    let player = session.data.start_session(player);
+    let player = session.data.set_auth(player);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -137,7 +137,7 @@ pub async fn handle_origin_login(
     let player = sessions.add_session(player, Arc::downgrade(&session));
 
     // Update the session stored player
-    let player = session.data.start_session(player);
+    let player = session.data.set_auth(player);
 
     let session_token: String = sessions.create_token(player.id);
 
@@ -157,7 +157,7 @@ pub async fn handle_origin_login(
 /// Content: {}
 /// ```
 pub async fn handle_logout(session: SessionLink) {
-    session.data.clear();
+    session.data.clear_auth();
 }
 
 // Skip formatting these entitlement creations
@@ -363,7 +363,7 @@ pub async fn handle_create_account(
     // Create the session association
     let player = sessions.add_session(player, Arc::downgrade(&session));
 
-    let player = session.data.start_session(player);
+    let player = session.data.set_auth(player);
 
     let session_token = sessions.create_token(player.id);
 

@@ -258,6 +258,12 @@ impl SessionFuture<'_> {
     /// Polls the read state, the poll ready state returns whether
     /// the future should continue
     fn poll_read_state(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        // Poll checking if the connection has timed-out
+        if self.session.data.poll_keep_alive_dead(cx) {
+            self.stop = true;
+            return Poll::Ready(());
+        }
+
         match &mut self.read_state {
             ReadState::Recv => {
                 // Try receive a packet from the write channel
@@ -330,7 +336,7 @@ impl Drop for SessionFuture<'_> {
     fn drop(&mut self) {
         // Clear session data, speeds up process of ending the session
         // prevents session data being accessed while shutting down
-        self.session.data.clear();
+        self.session.data.clear_auth();
     }
 }
 

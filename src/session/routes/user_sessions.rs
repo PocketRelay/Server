@@ -85,7 +85,7 @@ pub async fn handle_resume_session(
     }
 
     let player = sessions.add_session(player, Arc::downgrade(&session));
-    let player = session.data.start_session(player);
+    let player = session.data.set_auth(player);
 
     Ok(Blaze(AuthResponse {
         player,

@@ -1,6 +1,7 @@
 use super::Port;
 use crate::{
     config::{QosServerConfig, RuntimeConfig},
+    session::data::KEEP_ALIVE_DELAY,
     utils::types::PlayerID,
 };
 use bitflags::bitflags;
@@ -89,7 +90,6 @@ impl TdfSerialize for TickerServer {
 /// Origin auth source?
 pub const AUTH_SOURCE: &str = "303107";
 pub const BLAZE_VERSION: &str = "Blaze 3.15.08.0 (CL# 1905397)\n";
-pub const PING_PERIOD: &str = "15s";
 
 /// Alias used for ping sites
 pub const PING_SITE_ALIAS: &str = "ea-sjc";
@@ -114,13 +114,15 @@ impl TdfSerialize for PreAuthResponse {
         );
         w.tag_str_empty(b"CNGN");
 
+        let ping_period = format!("{}s", KEEP_ALIVE_DELAY.as_secs());
+
         // Client configuration provided by the server
         w.group(b"CONF", |w| {
             w.tag_map_tuples(
                 b"CONF",
                 &[
                     // Client to server ping period
-                    ("pingPeriod", PING_PERIOD),
+                    ("pingPeriod", ping_period.as_str()),
                     // VOIP headset update rate
                     ("voipHeadsetUpdateRate", "1000"),
                     // XLSP (Xbox Live Server Platform)

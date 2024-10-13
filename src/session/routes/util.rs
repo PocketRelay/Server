@@ -121,7 +121,9 @@ pub async fn handle_post_auth(
 /// Content: {}
 /// ```
 ///
-pub async fn handle_ping() -> Blaze<PingResponse> {
+pub async fn handle_ping(session: SessionLink) -> Blaze<PingResponse> {
+    session.data.set_alive();
+
     let server_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
@@ -420,12 +422,19 @@ fn data_config() -> TdfMap<String, String> {
 /// }
 /// ```
 pub async fn handle_suspend_user_ping(
+    session: SessionLink,
     Blaze(SuspendPingRequest { time_value }): Blaze<SuspendPingRequest>,
 ) -> BlazeError {
     let res = match time_value.cmp(&90000000) {
         Ordering::Less => UtilError::SuspendPingTimeTooSmall,
         Ordering::Greater => UtilError::SuspendPingTimeTooLarge,
-        Ordering::Equal => UtilError::PingSuspended,
+        Ordering::Equal => {
+            session
+                .data
+                .set_keep_alive_grace(Duration::from_micros(time_value as u64));
+
+            UtilError::PingSuspended
+        }
     };
     res.into()
 }
