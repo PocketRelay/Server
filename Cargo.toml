@@ -60,7 +60,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 # Hyper for connection upgrades (TODO: Update to 1.0 once reqwest supports it)
 hyper = "1.4"
 hyper-util = { version = "0.1.7", features = ["tokio"] }
-tower = "0.4"
+tower = { version = "0.4", features = ["util"] }
 
 bitflags = { version = "2.3.1", features = ["serde"] }
 tdf = { version = "0.4" }
