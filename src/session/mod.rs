@@ -23,7 +23,6 @@ use crate::{
     session::models::{NetworkAddress, QosNetworkData},
     utils::{
         components::{component_key, user_sessions, DEBUG_IGNORED_PACKETS},
-        lock::{QueueLock, QueueLockGuard, TicketAcquireFuture},
         types::{GameID, PlayerID},
     },
 };
@@ -44,7 +43,7 @@ use std::{
     task::{ready, Context, Poll},
 };
 use std::{future::Future, sync::Weak};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, OwnedMutexGuard};
 use tokio_util::codec::Framed;
 
 pub mod models;
@@ -67,8 +66,8 @@ pub struct Session {
     pub association: Option<AssociationId>,
 
     /// Lock for handling packets with a session, ensures only one packet is
-    /// processed at a time and in the same order that it was received
-    busy_lock: QueueLock,
+    /// processed at a time and in the same order that it was received / sent
+    busy_lock: Arc<tokio::sync::Mutex<()>>,
 
     /// Sender for sending packets to the session
     tx: mpsc::UnboundedSender<Packet>,
@@ -82,16 +81,18 @@ pub struct Session {
 
 #[derive(Clone)]
 pub struct SessionNotifyHandle {
-    busy_lock: QueueLock,
+    busy_lock: Arc<tokio::sync::Mutex<()>>,
     tx: mpsc::UnboundedSender<Packet>,
 }
 
 impl SessionNotifyHandle {
-    /// Pushes a new notification packet, this will acquire a queue position
-    /// waiting until the current response is handled before sending
+    /// Pushes a new notification packet
     pub fn notify(&self, packet: Packet) {
         let tx = self.tx.clone();
-        let busy_lock = self.busy_lock.acquire();
+
+        // Acquire the lock position before scheduling the task to ensure correct ordering
+        let busy_lock = self.busy_lock.clone().lock_owned();
+
         tokio::spawn(async move {
             let _guard = busy_lock.await;
             let _ = tx.send(packet);
@@ -243,7 +244,7 @@ impl Session {
         let session = Arc::new(Self {
             id,
             association,
-            busy_lock: QueueLock::new(),
+            busy_lock: Default::default(),
             tx,
             data: Default::default(),
             addr,
@@ -526,14 +527,14 @@ enum ReadState<'a> {
     /// Acquiring a lock guard
     Acquire {
         /// Future for the locking guard
-        ticket: TicketAcquireFuture,
+        lock_future: BoxFuture<'static, OwnedMutexGuard<()>>,
         /// The packet that was read
         packet: Option<Packet>,
     },
     /// Future for a handler is being polled
     Handle {
         /// Locking guard
-        guard: QueueLockGuard,
+        guard: OwnedMutexGuard<()>,
         /// Handle future
         future: BoxFuture<'a, Packet>,
     },
@@ -601,9 +602,12 @@ impl SessionFuture<'_> {
                 let result = ready!(Pin::new(&mut self.io).poll_next(cx));
 
                 if let Some(Ok(packet)) = result {
-                    let ticket = self.session.busy_lock.acquire();
+                    let lock_future = self.session.busy_lock.clone().lock_owned();
+                    let lock_future: BoxFuture<'static, OwnedMutexGuard<()>> =
+                        Box::pin(lock_future);
+
                     self.read_state = ReadState::Acquire {
-                        ticket,
+                        lock_future,
                         packet: Some(packet),
                     }
                 } else {
@@ -611,8 +615,11 @@ impl SessionFuture<'_> {
                     self.stop = true;
                 }
             }
-            ReadState::Acquire { ticket, packet } => {
-                let guard = ready!(Pin::new(ticket).poll(cx));
+            ReadState::Acquire {
+                lock_future,
+                packet,
+            } => {
+                let guard = ready!(Pin::new(lock_future).poll(cx));
                 let packet = packet
                     .take()
                     .expect("Unexpected acquire state without packet");
