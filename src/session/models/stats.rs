@@ -15,6 +15,7 @@ pub struct SubmitGameReportRequest {
 pub struct GameReport {
     // Must be read since it uses the same duplicate tag
     #[tdf(tag = "GAME")]
+    #[allow(unused)]
     pub game_ids: VarIntList,
 
     #[tdf(tag = "GAME")]
@@ -34,6 +35,7 @@ pub struct GameReportGame {
 pub struct GameReportPlayerData {
     /// Locale string encoded as int
     #[tdf(tag = "CTRY")]
+    #[allow(unused)]
     pub country: u32,
     /// Number of challenge points the player has
     #[tdf(tag = "NCHP")]

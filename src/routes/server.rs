@@ -227,6 +227,7 @@ pub async fn clear_log(AdminAuth(auth): AdminAuth) -> Result<(), StatusCode> {
 
 /// Structure of a telemetry message coming from a client
 #[derive(Debug, Deserialize)]
+#[allow(unused)]
 pub struct TelemetryMessage {
     /// The telemetry message values
     pub values: Vec<(String, String)>,

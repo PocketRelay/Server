@@ -95,6 +95,7 @@ impl TdfDeserializeOwned for InstanceHost {
 /// Details about an instance. This is used for the redirector system
 /// to both encode for redirection and decode for the retriever system
 #[derive(TdfDeserialize)]
+#[allow(unused)]
 pub struct InstanceDetails {
     /// The networking information for the instance
     #[tdf(tag = "ADDR")]

@@ -344,6 +344,7 @@ pub struct SetClientMetricsRequest {
 
     /// Upnp last result code.
     #[tdf(tag = "ULRC")]
+    #[allow(unused)]
     pub last_result_code: i32,
 
     /// Upnp metrics report NAT type.
