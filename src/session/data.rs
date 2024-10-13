@@ -35,18 +35,13 @@ pub struct SessionData {
 }
 
 impl SessionData {
-    /// Clears the underlying session data
-    pub fn clear(&self) {
-        self.inner.lock().take();
-    }
-
     // Read from the underlying session data
-    pub fn read(&self) -> MutexGuard<'_, Option<SessionDataInner>> {
+    fn read(&self) -> MutexGuard<'_, Option<SessionDataInner>> {
         self.inner.lock()
     }
 
     /// Writes to the underlying session data without publishing the changes
-    pub fn write_silent<F, O>(&self, update: F) -> Option<O>
+    fn write_silent<F, O>(&self, update: F) -> Option<O>
     where
         F: FnOnce(&mut SessionDataInner) -> O,
     {
@@ -56,7 +51,7 @@ impl SessionData {
     /// Writes to the underlying session data, publishes changes to
     /// subscribers
     #[inline]
-    pub fn write_publish<F, O>(&self, update: F) -> Option<O>
+    fn write_publish<F, O>(&self, update: F) -> Option<O>
     where
         F: FnOnce(&mut SessionDataInner) -> O,
     {
@@ -65,6 +60,11 @@ impl SessionData {
             data.publish_update();
             value
         })
+    }
+
+    /// Clears the underlying session data
+    pub fn clear(&self) {
+        self.inner.lock().take();
     }
 
     /// Starts a session from the provided player association
@@ -83,6 +83,13 @@ impl SessionData {
         self.read()
             .as_ref()
             .map(|value| value.player_assoc.player.clone())
+    }
+
+    /// Obtains the parts required to create a game player
+    pub fn get_game_player_data(&self) -> Option<(Arc<Player>, Arc<NetData>)> {
+        self.read()
+            .as_ref()
+            .map(|value| (value.player_assoc.player.clone(), value.net.clone()))
     }
 
     /// Updates the session hardware flags
@@ -167,9 +174,9 @@ impl SessionData {
 
 pub struct SessionDataInner {
     /// Session -> Player association, currently authenticated player
-    pub player_assoc: Arc<SessionPlayerAssociation>,
+    player_assoc: Arc<SessionPlayerAssociation>,
     /// Networking information for current session
-    pub net: Arc<NetData>,
+    net: Arc<NetData>,
     /// Currently connected game for the session
     game: Option<SessionGameData>,
     /// Subscribers listening for changes to this session
@@ -186,7 +193,7 @@ impl SessionDataInner {
         }
     }
 
-    pub fn ext_data(&self) -> UserSessionExtendedData {
+    fn ext_data(&self) -> UserSessionExtendedData {
         UserSessionExtendedData {
             net: self.net.clone(),
             game: self.game.as_ref().map(|game| game.game_id),
@@ -195,7 +202,7 @@ impl SessionDataInner {
 
     /// Adds a new subscriber to this session `player_id` is the ID of the player who is
     /// subscribing and `notify_handle` is the handle for sending messages to them
-    pub fn add_subscriber(&mut self, player_id: PlayerID, notify_handle: SessionNotifyHandle) {
+    fn add_subscriber(&mut self, player_id: PlayerID, notify_handle: SessionNotifyHandle) {
         let target_id = self.player_assoc.player.id;
 
         // Notify the addition of this user data to the subscriber
@@ -226,7 +233,7 @@ impl SessionDataInner {
         });
     }
 
-    pub fn remove_subscriber(&mut self, player_id: PlayerID) {
+    fn remove_subscriber(&mut self, player_id: PlayerID) {
         self.subscribers
             .retain(|value| value.source_id != player_id);
     }
