@@ -16,14 +16,14 @@ use crate::{
     },
 };
 use chrono::Utc;
-use log::{debug, warn};
+use log::debug;
 use std::{
     collections::VecDeque,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
     },
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 use tokio::{
     sync::{Mutex, RwLock},
@@ -61,9 +61,6 @@ struct MatchmakingEntry {
 const DEFAULT_FIT: u16 = 21600;
 
 impl GameManager {
-    /// Max number of times to poll a game for shutdown before erroring
-    const MAX_RELEASE_ATTEMPTS: u8 = 20;
-
     /// Starts a new game manager service returning its link
     pub fn new(
         tunnel_service: Arc<TunnelService>,
@@ -269,40 +266,7 @@ impl GameManager {
 
     pub async fn remove_game(&self, game_id: GameID) {
         let games = &mut *self.games.write().await;
-        if let Some(mut game) = games.remove(&game_id) {
-            let mut attempt: u8 = 1;
-
-            // Attempt to obtain the owned game
-            let game = loop {
-                if attempt > Self::MAX_RELEASE_ATTEMPTS {
-                    let references = Arc::strong_count(&game);
-                    warn!(
-                        "Failed to stop game {} there are still {} references to it",
-                        game_id, references
-                    );
-                    return;
-                }
-
-                match Arc::try_unwrap(game) {
-                    Ok(value) => break value,
-                    Err(arc) => {
-                        let wait = 5 * attempt as u64;
-                        let references = Arc::strong_count(&arc);
-                        debug!(
-                            "Game {} still has {} references to it, waiting {}s",
-                            game_id, references, wait
-                        );
-                        tokio::time::sleep(Duration::from_secs(wait)).await;
-                        game = arc;
-                        attempt += 1;
-                        continue;
-                    }
-                }
-            };
-
-            let game = game.into_inner();
-            game.stopped();
-        }
+        _ = games.remove(&game_id);
     }
 
     pub async fn process_queue(&self, link: GameRef, game_id: GameID) {

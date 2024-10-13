@@ -395,12 +395,6 @@ impl Game {
         }
     }
 
-    /// Called by the game manager service once this game has been stopped and
-    /// removed from the game list
-    fn stopped(self) {
-        debug!("Game is stopped (GID: {})", self.id);
-    }
-
     fn stop(&mut self) {
         // Mark the game as stopping
         self.state = GameState::Destructing;
@@ -625,5 +619,11 @@ impl Game {
         ));
 
         debug!("Finished host migration (GID: {})", self.id);
+    }
+}
+
+impl Drop for Game {
+    fn drop(&mut self) {
+        debug!("Game is stopped (GID: {})", self.id);
     }
 }
