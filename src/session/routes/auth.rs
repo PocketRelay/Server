@@ -60,9 +60,11 @@ pub async fn handle_login(
         error!("failed to store last login time: {err}");
     }
 
+    // Create the player session mapping
+    let player = sessions.add_session(player, Arc::downgrade(&session));
+
     // Update the session stored player
     let player = session.set_player(player);
-    sessions.add_session(player.id, Arc::downgrade(&session));
 
     let session_token: String = sessions.create_token(player.id);
 
@@ -94,9 +96,11 @@ pub async fn handle_silent_login(
         error!("failed to store last login time: {err}");
     }
 
+    // Create the session association
+    let player = sessions.add_session(player, Arc::downgrade(&session));
+
     // Update the session stored player
     let player = session.set_player(player);
-    sessions.add_session(player.id, Arc::downgrade(&session));
 
     Ok(Blaze(AuthResponse {
         player,
@@ -129,9 +133,11 @@ pub async fn handle_origin_login(
         error!("failed to store last login time: {err}");
     }
 
+    // Create the session association
+    let player = sessions.add_session(player, Arc::downgrade(&session));
+
     // Update the session stored player
     let player = session.set_player(player);
-    sessions.add_session(player.id, Arc::downgrade(&session));
 
     let session_token: String = sessions.create_token(player.id);
 
@@ -150,13 +156,8 @@ pub async fn handle_origin_login(
 /// ID: 8
 /// Content: {}
 /// ```
-pub async fn handle_logout(
-    session: SessionLink,
-    SessionAuth(player): SessionAuth,
-    Extension(sessions): Extension<Arc<Sessions>>,
-) {
-    session.clear_player();
-    sessions.remove_session(player.id);
+pub async fn handle_logout(session: SessionLink) {
+    session.clear_data();
 }
 
 // Skip formatting these entitlement creations
@@ -359,8 +360,10 @@ pub async fn handle_create_account(
         error!("failed to store last login time: {err}");
     }
 
+    // Create the session association
+    let player = sessions.add_session(player, Arc::downgrade(&session));
+
     let player = session.set_player(player);
-    sessions.add_session(player.id, Arc::downgrade(&session));
 
     let session_token = sessions.create_token(player.id);
 

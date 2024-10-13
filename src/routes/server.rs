@@ -89,17 +89,10 @@ pub async fn upgrade(
     IpAddress(addr): IpAddress,
     Association(association_id): Association,
     Extension(router): Extension<Arc<BlazeRouter>>,
-    Extension(sessions): Extension<Arc<Sessions>>,
     Upgrade(upgrade): Upgrade,
 ) -> Response {
     // Spawn the upgrading process to its own task
-    tokio::spawn(handle_upgrade(
-        upgrade,
-        addr,
-        association_id,
-        router,
-        sessions,
-    ));
+    tokio::spawn(handle_upgrade(upgrade, addr, association_id, router));
 
     // Let the client know to upgrade its connection
     (
@@ -118,7 +111,6 @@ pub async fn handle_upgrade(
     addr: Ipv4Addr,
     association_id: Option<AssociationId>,
     router: Arc<BlazeRouter>,
-    sessions: Arc<Sessions>,
 ) {
     let upgraded = match upgrade.await {
         Ok(upgraded) => upgraded,
@@ -128,7 +120,7 @@ pub async fn handle_upgrade(
         }
     };
 
-    Session::start(upgraded, addr, association_id, router, sessions).await;
+    Session::start(upgraded, addr, association_id, router).await;
 }
 
 /// GET /api/server/tunnel

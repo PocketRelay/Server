@@ -1,6 +1,7 @@
-//! Service for storing links to all the currenly active
+//! Service for storing links to all the currently active
 //! authenticated sessions on the server
 
+use crate::database::entities::Player;
 use crate::session::{SessionLink, WeakSessionLink};
 use crate::utils::hashing::IntHashMap;
 use crate::utils::signing::SigningKey;
@@ -11,6 +12,7 @@ use parking_lot::Mutex;
 use rand::distributions::Distribution;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use uuid::Uuid;
@@ -222,14 +224,29 @@ impl Sessions {
         Ok(id)
     }
 
-    pub fn remove_session(&self, player_id: PlayerID) {
-        let sessions = &mut *self.sessions.lock();
-        sessions.remove(&player_id);
+    /// Creates an association between a session and a player, returning a
+    /// [SessionPlayerAssociation] which will release the
+    pub fn add_session(
+        self: &Arc<Self>,
+        player: Player,
+        link: WeakSessionLink,
+    ) -> SessionPlayerAssociation {
+        // Add the session mapping
+        {
+            let sessions = &mut *self.sessions.lock();
+            sessions.insert(player.id, link);
+        }
+
+        SessionPlayerAssociation {
+            player: Arc::new(player),
+            sessions: self.clone(),
+        }
     }
 
-    pub fn add_session(&self, player_id: PlayerID, link: WeakSessionLink) {
+    /// Removes an association between a session and player
+    fn remove_session(&self, player_id: PlayerID) {
         let sessions = &mut *self.sessions.lock();
-        sessions.insert(player_id, link);
+        sessions.remove(&player_id);
     }
 
     pub fn lookup_session(&self, player_id: PlayerID) -> Option<SessionLink> {
@@ -245,6 +262,24 @@ impl Sessions {
         };
 
         Some(session)
+    }
+}
+
+/// Association between a session and a player, as long as this is held the
+/// sessions service will maintain the link between the session and the player
+///
+/// Upon dropping this the session will remove the association
+pub struct SessionPlayerAssociation {
+    /// Player belonging to the session
+    pub player: Arc<Player>,
+
+    // Access to the session service to remove on drop
+    sessions: Arc<Sessions>,
+}
+
+impl Drop for SessionPlayerAssociation {
+    fn drop(&mut self) {
+        self.sessions.remove_session(self.player.id);
     }
 }
 

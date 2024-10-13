@@ -514,6 +514,6 @@ pub async fn handle_cancel_matchmaking(
     SessionAuth(player): SessionAuth,
     Extension(game_manager): Extension<Arc<GameManager>>,
 ) {
-    session.remove_from_game();
+    session.clear_game();
     game_manager.remove_queue(player.id).await;
 }

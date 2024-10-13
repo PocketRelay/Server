@@ -224,7 +224,7 @@ impl FromPacketRequest for GamePlayer {
             let data = &*req.state.data.lock();
             let data = data.as_ref().ok_or(GlobalError::AuthenticationRequired)?;
             Ok(GamePlayer::new(
-                data.player.clone(),
+                data.player_assoc.player.clone(),
                 data.net.clone(),
                 Arc::downgrade(&req.state),
                 req.state.notify_handle(),
@@ -245,7 +245,7 @@ impl FromPacketRequest for SessionAuth {
         Box::pin(async move {
             let data = &*req.state.data.lock();
             let data = data.as_ref().ok_or(GlobalError::AuthenticationRequired)?;
-            let player = data.player.clone();
+            let player = data.player_assoc.player.clone();
             Ok(SessionAuth(player))
         })
     }

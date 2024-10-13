@@ -84,8 +84,8 @@ pub async fn handle_resume_session(
         error!("failed to store last login time: {err}");
     }
 
+    let player = sessions.add_session(player, Arc::downgrade(&session));
     let player = session.set_player(player);
-    sessions.add_session(player.id, Arc::downgrade(&session));
 
     Ok(Blaze(AuthResponse {
         player,
