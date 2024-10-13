@@ -221,7 +221,7 @@ impl FromPacketRequest for GamePlayer {
         Self: 'a,
     {
         Box::pin(async move {
-            let data = &*req.state.data.lock();
+            let data = &*req.state.data.read();
             let data = data.as_ref().ok_or(GlobalError::AuthenticationRequired)?;
             Ok(GamePlayer::new(
                 data.player_assoc.player.clone(),
@@ -243,7 +243,7 @@ impl FromPacketRequest for SessionAuth {
         Self: 'a,
     {
         Box::pin(async move {
-            let data = &*req.state.data.lock();
+            let data = &*req.state.data.read();
             let data = data.as_ref().ok_or(GlobalError::AuthenticationRequired)?;
             let player = data.player_assoc.player.clone();
             Ok(SessionAuth(player))

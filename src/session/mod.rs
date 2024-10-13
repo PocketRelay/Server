@@ -3,35 +3,19 @@
 //! networking data.
 
 use self::{
-    models::{
-        game_manager::RemoveReason,
-        user_sessions::{
-            HardwareFlags, LookupResponse, NotifyUserAdded, NotifyUserRemoved, NotifyUserUpdated,
-            UserDataFlags, UserIdentification, UserSessionExtendedData,
-            UserSessionExtendedDataUpdate,
-        },
-    },
     packet::{Packet, PacketCodec, PacketDebug},
     router::BlazeRouter,
 };
 use crate::{
     database::entities::Player,
-    services::{
-        game::{GameRef, WeakGameRef},
-        sessions::{AssociationId, SessionPlayerAssociation},
-    },
-    session::models::{NetworkAddress, QosNetworkData},
-    utils::{
-        components::{component_key, user_sessions, DEBUG_IGNORED_PACKETS},
-        types::{GameID, PlayerID},
-    },
+    services::sessions::AssociationId,
+    utils::components::{component_key, DEBUG_IGNORED_PACKETS},
 };
+use data::SessionData;
 use futures_util::{future::BoxFuture, Sink, Stream};
 use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
 use log::{debug, log_enabled, warn};
-use parking_lot::Mutex;
-use serde::Serialize;
 use std::{
     fmt::Debug,
     net::Ipv4Addr,
@@ -46,6 +30,7 @@ use std::{future::Future, sync::Weak};
 use tokio::sync::{mpsc, OwnedMutexGuard};
 use tokio_util::codec::Framed;
 
+pub mod data;
 pub mod models;
 pub mod packet;
 pub mod router;
@@ -73,7 +58,7 @@ pub struct Session {
     tx: mpsc::UnboundedSender<Packet>,
 
     /// Mutable data associated with the session
-    data: Mutex<Option<SessionExtData>>,
+    pub data: SessionData,
 }
 
 #[derive(Clone)]
@@ -94,179 +79,6 @@ impl SessionNotifyHandle {
             let _guard = busy_lock.await;
             let _ = tx.send(packet);
         });
-    }
-}
-
-struct SessionExtData {
-    /// Session -> Player association, currently authenticated player
-    player_assoc: Arc<SessionPlayerAssociation>,
-    /// Networking information for current session
-    net: Arc<NetData>,
-    /// Currently connected game for the session
-    game: Option<SessionGameData>,
-    /// Subscribers listening for changes to this session
-    subscribers: Vec<SessionSubscription>,
-}
-
-/// Subscription to a session to be notified when the session details
-/// change.
-struct SessionSubscription {
-    /// ID of the player being subscribed to
-    target_id: PlayerID,
-    /// ID of the player who is subscribing
-    source_id: PlayerID,
-    /// Handle to send messages to the source
-    source_notify_handle: SessionNotifyHandle,
-}
-
-impl Drop for SessionSubscription {
-    fn drop(&mut self) {
-        // Notify the subscriber they've removed the user subscription
-        self.source_notify_handle.notify(Packet::notify(
-            user_sessions::COMPONENT,
-            user_sessions::USER_REMOVED,
-            NotifyUserRemoved {
-                player_id: self.target_id,
-            },
-        ))
-    }
-}
-
-impl SessionExtData {
-    fn new(player: SessionPlayerAssociation) -> Self {
-        Self {
-            player_assoc: Arc::new(player),
-            net: Default::default(),
-            game: Default::default(),
-            subscribers: Default::default(),
-        }
-    }
-
-    fn ext(&self) -> UserSessionExtendedData {
-        UserSessionExtendedData {
-            net: self.net.clone(),
-            game: self.game.as_ref().map(|game| game.game_id),
-        }
-    }
-
-    /// Adds a new subscriber to this session `player_id` is the ID of the player who is
-    /// subscribing and `notify_handle` is the handle for sending messages to them
-    fn add_subscriber(&mut self, player_id: PlayerID, notify_handle: SessionNotifyHandle) {
-        let target_id = self.player_assoc.player.id;
-
-        // Notify the addition of this user data to the subscriber
-        notify_handle.notify(Packet::notify(
-            user_sessions::COMPONENT,
-            user_sessions::USER_ADDED,
-            NotifyUserAdded {
-                session_data: self.ext(),
-                user: UserIdentification::from_player(&self.player_assoc.player),
-            },
-        ));
-
-        // Notify the user that they are now subscribed to this user
-        notify_handle.notify(Packet::notify(
-            user_sessions::COMPONENT,
-            user_sessions::USER_UPDATED,
-            NotifyUserUpdated {
-                flags: UserDataFlags::SUBSCRIBED | UserDataFlags::ONLINE,
-                player_id: target_id,
-            },
-        ));
-
-        // Add the subscriber
-        self.subscribers.push(SessionSubscription {
-            target_id,
-            source_id: player_id,
-            source_notify_handle: notify_handle,
-        });
-    }
-
-    fn remove_subscriber(&mut self, player_id: PlayerID) {
-        self.subscribers
-            .retain(|value| value.source_id != player_id);
-    }
-
-    /// Publishes changes of the session data to all the
-    /// subscribed session links
-    fn publish_update(&self) {
-        let packet = Packet::notify(
-            user_sessions::COMPONENT,
-            user_sessions::USER_SESSION_EXTENDED_DATA_UPDATE,
-            UserSessionExtendedDataUpdate {
-                user_id: self.player_assoc.player.id,
-                data: self.ext(),
-            },
-        );
-
-        self.subscribers
-            .iter()
-            .for_each(|sub| sub.source_notify_handle.notify(packet.clone()));
-    }
-}
-
-/// When dropped if the player is still connected to the game they will
-/// be disconnected from the game
-struct SessionGameData {
-    /// ID of the player session when they joined the game
-    player_id: PlayerID,
-    /// ID of the game that was joined
-    game_id: GameID,
-    /// Reference for accessing the game
-    game_ref: WeakGameRef,
-}
-
-impl Drop for SessionGameData {
-    fn drop(&mut self) {
-        // Attempt to access the game
-        let game_ref = match self.game_ref.upgrade() {
-            Some(value) => value,
-            // Game doesn't exist anymore
-            None => return,
-        };
-
-        let player_id = self.player_id;
-
-        // Spawn an async task to handle removing the player
-        tokio::spawn(async move {
-            let game = &mut *game_ref.write().await;
-            game.remove_player(player_id, RemoveReason::PlayerLeft);
-        });
-    }
-}
-
-#[derive(Debug, Default, Clone, Serialize)]
-pub struct NetData {
-    pub addr: NetworkAddress,
-    pub qos: QosNetworkData,
-    pub hardware_flags: HardwareFlags,
-    pub ping_site_latency: Vec<u32>,
-}
-
-impl NetData {
-    // Re-creates the current net data using the provided address and QOS data
-    pub fn with_basic(
-        &self,
-        addr: NetworkAddress,
-        qos: QosNetworkData,
-        ping_site_latency: Vec<u32>,
-    ) -> Self {
-        Self {
-            addr,
-            qos,
-            hardware_flags: self.hardware_flags,
-            ping_site_latency,
-        }
-    }
-
-    /// Re-creates the current net data using the provided hardware flags
-    pub fn with_hardware_flags(&self, flags: HardwareFlags) -> Self {
-        Self {
-            addr: self.addr.clone(),
-            qos: self.qos,
-            hardware_flags: flags,
-            ping_site_latency: self.ping_site_latency.clone(),
-        }
     }
 }
 
@@ -318,7 +130,7 @@ impl Session {
     /// in order to clean up any remaining references to the session before dropping
     fn stop(self: Arc<Self>) {
         // Clear session data
-        self.clear_data();
+        self.data.clear();
 
         // Session should now be the sole owner
         let session = match Arc::try_unwrap(self) {
@@ -334,112 +146,6 @@ impl Session {
         };
 
         debug!("Session stopped (SID: {})", session.id);
-    }
-
-    pub fn add_subscriber(&self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
-        let data = &mut *self.data.lock();
-        if let Some(data) = data {
-            data.add_subscriber(player_id, subscriber);
-        }
-    }
-
-    pub fn remove_subscriber(&self, player_id: PlayerID) {
-        let data = &mut *self.data.lock();
-        if let Some(data) = data {
-            data.remove_subscriber(player_id)
-        }
-    }
-
-    pub fn set_player(&self, player: SessionPlayerAssociation) -> Arc<Player> {
-        let data = &mut *self.data.lock();
-        let data = data.insert(SessionExtData::new(player));
-
-        data.player_assoc.player.clone()
-    }
-
-    /// Clears the current game returning the game data if
-    /// the player was in a game
-    ///
-    /// Called by the game itself when the player has been removed
-    pub fn clear_game(&self) {
-        self.update_data(|data| {
-            // Clear active game
-            data.game = None;
-        });
-    }
-
-    /// Clears data associated with the session (Authentication/Current game/Networking)
-    pub fn clear_data(&self) {
-        // Take the current data and drop it
-        self.data.lock().take();
-    }
-
-    pub fn get_game(&self) -> Option<(GameID, GameRef)> {
-        let data = &*self.data.lock();
-        data.as_ref()
-            .and_then(|value| value.game.as_ref())
-            // Try upgrading the reference to get an actual game
-            .and_then(|value| {
-                value
-                    .game_ref
-                    .upgrade()
-                    .map(|game_ref| (value.game_id, game_ref))
-            })
-    }
-
-    pub fn get_lookup(&self) -> Option<LookupResponse> {
-        let data = &*self.data.lock();
-        data.as_ref().map(|data| LookupResponse {
-            player: data.player_assoc.player.clone(),
-            extended_data: data.ext(),
-        })
-    }
-
-    #[inline]
-    fn update_data<F>(&self, update: F)
-    where
-        F: FnOnce(&mut SessionExtData),
-    {
-        let data = &mut *self.data.lock();
-        if let Some(data) = data {
-            update(data);
-            data.publish_update();
-        }
-    }
-
-    pub fn set_game(&self, game_id: GameID, game_ref: WeakGameRef) {
-        // Set the current game
-        self.update_data(|data| {
-            data.game = Some(SessionGameData {
-                player_id: data.player_assoc.player.id,
-                game_id,
-                game_ref,
-            });
-        });
-    }
-
-    #[inline]
-    pub fn set_hardware_flags(&self, value: HardwareFlags) {
-        self.update_data(|data| {
-            data.net = Arc::new(data.net.with_hardware_flags(value));
-        });
-    }
-
-    pub fn network_info(&self) -> Option<Arc<NetData>> {
-        let data = &mut *self.data.lock();
-        data.as_ref().map(|value| value.net.clone())
-    }
-
-    #[inline]
-    pub fn set_network_info(
-        &self,
-        address: NetworkAddress,
-        qos: QosNetworkData,
-        ping_site_latency: Vec<u32>,
-    ) {
-        self.update_data(|data| {
-            data.net = Arc::new(data.net.with_basic(address, qos, ping_site_latency));
-        });
     }
 
     /// Logs the contents of the provided packet to the debug output along with
@@ -462,11 +168,7 @@ impl Session {
         }
 
         // Get the authenticated player to include in the debug message
-        let auth = self
-            .data
-            .lock()
-            .as_ref()
-            .map(|data| data.player_assoc.player.clone());
+        let auth = self.data.get_player();
 
         let debug_data = DebugSessionData {
             action,

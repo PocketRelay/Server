@@ -3,6 +3,7 @@ use crate::{
     config::RuntimeConfig,
     database::entities::Player,
     session::{
+        data::NetData,
         models::{
             game_manager::{
                 AdminListChange, AdminListOperation, AttributesChange, GameSettings,
@@ -15,7 +16,7 @@ use crate::{
         },
         packet::Packet,
         router::RawBlaze,
-        NetData, SessionNotifyHandle, WeakSessionLink,
+        SessionNotifyHandle, WeakSessionLink,
     },
     utils::{
         components::game_manager,
@@ -131,19 +132,19 @@ impl GamePlayer {
 
     pub fn try_clear_game(&self) {
         if let Some(link) = self.link.upgrade() {
-            link.clear_game();
+            link.data.clear_game();
         }
     }
 
     pub fn try_subscribe(&self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
         if let Some(link) = self.link.upgrade() {
-            link.add_subscriber(player_id, subscriber);
+            link.data.add_subscriber(player_id, subscriber);
         }
     }
 
     pub fn try_unsubscribe(&self, player_id: PlayerID) {
         if let Some(link) = self.link.upgrade() {
-            link.remove_subscriber(player_id);
+            link.data.remove_subscriber(player_id);
         }
     }
 

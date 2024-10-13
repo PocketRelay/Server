@@ -100,7 +100,9 @@ pub async fn handle_post_auth(
     SessionAuth(player): SessionAuth,
 ) -> ServerResult<Blaze<PostAuthResponse>> {
     // Subscribe to the session with itself
-    session.add_subscriber(player.id, session.notify_handle());
+    session
+        .data
+        .add_subscriber(player.id, session.notify_handle());
 
     Ok(Blaze(PostAuthResponse {
         telemetry: TelemetryServer,
@@ -510,7 +512,7 @@ pub async fn handle_set_client_metrics(
     if !wan.is_unspecified() && !blaze_flags.contains(UpnpFlags::DOUBLE_NAT) {
         debug!("Using client Upnp WAN address override: {}", wan);
 
-        let network_info = session.network_info().unwrap_or_default();
+        let network_info = session.data.network_info().unwrap_or_default();
         let ping_site_latency = network_info.ping_site_latency.clone();
         let qos = network_info.qos;
         let mut pair_addr = match &network_info.addr {
@@ -523,7 +525,7 @@ pub async fn handle_set_client_metrics(
         pair_addr.external.addr = wan;
 
         // Update network info with new details
-        session.set_network_info(
+        session.data.set_network_info(
             NetworkAddress::AddressPair(pair_addr),
             qos,
             ping_site_latency,

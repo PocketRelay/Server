@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     database::entities::Player,
-    session::NetData,
+    session::data::NetData,
     utils::{components::game_manager::GAME_TYPE, types::PlayerID},
 };
 use bitflags::bitflags;

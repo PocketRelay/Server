@@ -10,7 +10,7 @@ use crate::{
             NetworkAddress,
         },
         router::{Blaze, Extension},
-        LookupResponse, SessionLink,
+        SessionLink,
     },
 };
 use chrono::Utc;
@@ -38,14 +38,14 @@ pub async fn handle_lookup_user(
     Extension(sessions): Extension<Arc<Sessions>>,
 ) -> ServerResult<Blaze<LookupResponse>> {
     // Lookup the session
-
     let session = sessions
         .lookup_session(req.player_id)
         .ok_or(UserSessionsError::UserNotFound)?;
 
     // Get the lookup response from the session
     let response = session
-        .get_lookup()
+        .data
+        .get_lookup_response()
         .ok_or(UserSessionsError::UserNotFound)?;
 
     Ok(Blaze(response))
@@ -85,7 +85,7 @@ pub async fn handle_resume_session(
     }
 
     let player = sessions.add_session(player, Arc::downgrade(&session));
-    let player = session.set_player(player);
+    let player = session.data.start_session(player);
 
     Ok(Blaze(AuthResponse {
         player,
@@ -169,7 +169,9 @@ pub async fn handle_update_network(
         Vec::new()
     };
 
-    session.set_network_info(address, qos, ping_site_latency);
+    session
+        .data
+        .set_network_info(address, qos, ping_site_latency);
 }
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
@@ -185,5 +187,5 @@ pub async fn handle_update_hardware_flag(
     session: SessionLink,
     Blaze(UpdateHardwareFlagsRequest { hardware_flags }): Blaze<UpdateHardwareFlagsRequest>,
 ) {
-    session.set_hardware_flags(hardware_flags);
+    session.data.set_hardware_flags(hardware_flags);
 }

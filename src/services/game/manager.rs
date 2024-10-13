@@ -178,7 +178,7 @@ impl GameManager {
         }
 
         // Update the player current game
-        session.set_game(game_id, Arc::downgrade(&game_ref));
+        session.data.set_game(game_id, Arc::downgrade(&game_ref));
     }
 
     pub async fn add_from_matchmaking(&self, game_ref: GameRef, player: GamePlayer) {
