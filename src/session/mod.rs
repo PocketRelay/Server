@@ -97,7 +97,7 @@ impl SessionNotifyHandle {
     }
 }
 
-pub struct SessionExtData {
+struct SessionExtData {
     /// Session -> Player association, currently authenticated player
     player_assoc: Arc<SessionPlayerAssociation>,
     /// Networking information for current session
@@ -105,13 +105,35 @@ pub struct SessionExtData {
     /// Currently connected game for the session
     game: Option<SessionGameData>,
     /// Subscribers listening for changes to this session
-    ///
-    /// They will be notified when information about this session changes.
-    subscribers: Vec<(PlayerID, SessionNotifyHandle)>,
+    subscribers: Vec<SessionSubscription>,
+}
+
+/// Subscription to a session to be notified when the session details
+/// change.
+struct SessionSubscription {
+    /// ID of the player being subscribed to
+    target_id: PlayerID,
+    /// ID of the player who is subscribing
+    source_id: PlayerID,
+    /// Handle to send messages to the source
+    source_notify_handle: SessionNotifyHandle,
+}
+
+impl Drop for SessionSubscription {
+    fn drop(&mut self) {
+        // Notify the subscriber they've removed the user subscription
+        self.source_notify_handle.notify(Packet::notify(
+            user_sessions::COMPONENT,
+            user_sessions::USER_REMOVED,
+            NotifyUserRemoved {
+                player_id: self.target_id,
+            },
+        ))
+    }
 }
 
 impl SessionExtData {
-    pub fn new(player: SessionPlayerAssociation) -> Self {
+    fn new(player: SessionPlayerAssociation) -> Self {
         Self {
             player_assoc: Arc::new(player),
             net: Default::default(),
@@ -127,9 +149,13 @@ impl SessionExtData {
         }
     }
 
-    fn add_subscriber(&mut self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
+    /// Adds a new subscriber to this session `player_id` is the ID of the player who is
+    /// subscribing and `notify_handle` is the handle for sending messages to them
+    fn add_subscriber(&mut self, player_id: PlayerID, notify_handle: SessionNotifyHandle) {
+        let target_id = self.player_assoc.player.id;
+
         // Notify the addition of this user data to the subscriber
-        subscriber.notify(Packet::notify(
+        notify_handle.notify(Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_ADDED,
             NotifyUserAdded {
@@ -139,36 +165,26 @@ impl SessionExtData {
         ));
 
         // Notify the user that they are now subscribed to this user
-        subscriber.notify(Packet::notify(
+        notify_handle.notify(Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_UPDATED,
             NotifyUserUpdated {
                 flags: UserDataFlags::SUBSCRIBED | UserDataFlags::ONLINE,
-                player_id: self.player_assoc.player.id,
+                player_id: target_id,
             },
         ));
 
         // Add the subscriber
-        self.subscribers.push((player_id, subscriber));
+        self.subscribers.push(SessionSubscription {
+            target_id,
+            source_id: player_id,
+            source_notify_handle: notify_handle,
+        });
     }
 
     fn remove_subscriber(&mut self, player_id: PlayerID) {
-        let subscriber = self
-            .subscribers
-            .iter()
-            // Find the subscriber to remove
-            .position(|(id, _sub)| player_id.eq(id))
-            // Remove the subscriber
-            .map(|index| self.subscribers.swap_remove(index));
-
-        if let Some((_, subscriber)) = subscriber {
-            // Notify the subscriber they've removed the user subscription
-            subscriber.notify(Packet::notify(
-                user_sessions::COMPONENT,
-                user_sessions::USER_REMOVED,
-                NotifyUserRemoved { player_id },
-            ))
-        }
+        self.subscribers
+            .retain(|value| value.source_id != player_id);
     }
 
     /// Publishes changes of the session data to all the
@@ -185,12 +201,8 @@ impl SessionExtData {
 
         self.subscribers
             .iter()
-            .for_each(|(_, sub)| sub.notify(packet.clone()));
+            .for_each(|sub| sub.source_notify_handle.notify(packet.clone()));
     }
-}
-
-impl Drop for SessionExtData {
-    fn drop(&mut self) {}
 }
 
 /// When dropped if the player is still connected to the game they will
