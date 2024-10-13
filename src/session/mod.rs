@@ -56,16 +56,27 @@ pub type SessionLink = Arc<Session>;
 pub type WeakSessionLink = Weak<Session>;
 
 pub struct Session {
+    /// Unique ID for this session
     id: u32,
+
+    /// IP address associated with the session
     pub addr: Ipv4Addr,
 
     /// User will not have an association if they are using an outdated
     /// client version.
     pub association: Option<AssociationId>,
 
+    /// Lock for handling packets with a session, ensures only one packet is
+    /// processed at a time and in the same order that it was received
     busy_lock: QueueLock,
+
+    /// Sender for sending packets to the session
     tx: mpsc::UnboundedSender<Packet>,
+
+    /// Mutable data associated with the session
     data: Mutex<Option<SessionExtData>>,
+
+    /// Access to the sessions store for removing the session -> player association
     sessions: Arc<Sessions>,
 }
 
