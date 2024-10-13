@@ -1,6 +1,6 @@
 use std::{net::Ipv4Addr, sync::Arc};
 
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::{RwLock, RwLockReadGuard};
 use serde::Serialize;
 
 use crate::{
@@ -31,7 +31,7 @@ use super::{
 
 pub struct SessionData {
     /// Extended session data for authenticated sessions
-    ext: Mutex<Option<SessionDataExt>>,
+    ext: RwLock<Option<SessionDataExt>>,
 
     /// IP address associated with the session
     addr: Ipv4Addr,
@@ -59,8 +59,8 @@ impl SessionData {
     }
 
     // Read from the underlying session data
-    fn read(&self) -> MutexGuard<'_, Option<SessionDataExt>> {
-        self.ext.lock()
+    fn read(&self) -> RwLockReadGuard<'_, Option<SessionDataExt>> {
+        self.ext.read()
     }
 
     /// Writes to the underlying session data without publishing the changes
@@ -68,7 +68,7 @@ impl SessionData {
     where
         F: FnOnce(&mut SessionDataExt) -> O,
     {
-        self.ext.lock().as_mut().map(update)
+        self.ext.write().as_mut().map(update)
     }
 
     /// Writes to the underlying session data, publishes changes to
@@ -78,7 +78,7 @@ impl SessionData {
     where
         F: FnOnce(&mut SessionDataExt) -> O,
     {
-        self.ext.lock().as_mut().map(|data| {
+        self.ext.write().as_mut().map(|data| {
             let value = update(data);
             data.publish_update();
             value
@@ -87,13 +87,13 @@ impl SessionData {
 
     /// Clears the underlying session data
     pub fn clear(&self) {
-        self.ext.lock().take();
+        self.ext.write().take();
     }
 
     /// Starts a session from the provided player association
     pub fn start_session(&self, player: SessionPlayerAssociation) -> Arc<Player> {
         self.ext
-            .lock()
+            .write()
             .insert(SessionDataExt::new(player))
             // Obtain the player to return
             .player_assoc

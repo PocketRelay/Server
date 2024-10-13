@@ -64,7 +64,7 @@ pub async fn handle_submit_offline(
         return;
     }
 
-    session.notify_handle().notify(Packet::notify(
+    session.notify_handle.notify(Packet::notify(
         game_reporting::COMPONENT,
         game_reporting::GAME_REPORT_SUBMITTED,
         GameReportResponse,

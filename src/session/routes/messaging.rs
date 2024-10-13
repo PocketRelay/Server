@@ -51,6 +51,6 @@ pub async fn handle_fetch_messages(
         },
     );
 
-    session.notify_handle().notify(notify);
+    session.notify_handle.notify(notify);
     Blaze(FetchMessageResponse { count: 1 })
 }

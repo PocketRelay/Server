@@ -11,7 +11,7 @@ use crate::{
         sessions::{AssociationId, Sessions},
         tunnel::{Tunnel, TunnelService},
     },
-    session::{router::BlazeRouter, Session},
+    session::{data::SessionData, router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
 };
 use axum::{
@@ -120,7 +120,9 @@ pub async fn handle_upgrade(
         }
     };
 
-    Session::start(upgraded, addr, association_id, router).await;
+    let data = SessionData::new(addr, association_id);
+
+    Session::run(upgraded, data, router).await;
 }
 
 /// GET /api/server/tunnel

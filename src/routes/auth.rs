@@ -240,7 +240,7 @@ pub async fn handle_request_login_code(
     );
 
     // Send the message
-    session.notify_handle().notify(notify_origin);
+    session.notify_handle.notify(notify_origin);
 
     Ok(StatusCode::OK)
 }
