@@ -96,11 +96,16 @@ pub async fn log_connection_urls(http_port: u16) {
 /// value if its not expired or fetching the new value from the API using
 /// `fetch_public_addr`
 pub async fn public_address() -> Option<Ipv4Addr> {
+    // Try fetch from cloudflare first
+    if let Some(addr) = public_address_cloudflare().await {
+        return Some(addr);
+    }
+
     // API addresses for IP lookup
-    let addresses = ["https://api.ipify.org/", "https://ipv4.icanhazip.com/"];
+    const ADDRESSES: [&str; 2] = ["https://api.ipify.org/", "https://ipv4.icanhazip.com/"];
 
     // Try all addresses using the first valid value
-    for address in addresses {
+    for address in ADDRESSES {
         let addr = match reqwest::get(address)
             // Read the response as text
             .and_then(reqwest::Response::text)
@@ -122,4 +127,30 @@ pub async fn public_address() -> Option<Ipv4Addr> {
     }
 
     None
+}
+
+/// Retrieves the public address of the server using the cloudflare API
+pub async fn public_address_cloudflare() -> Option<Ipv4Addr> {
+    let response = match reqwest::get("https://cloudflare.com/cdn-cgi/trace")
+        .and_then(reqwest::Response::text)
+        .await
+    {
+        Ok(value) => value,
+        Err(_) => return None,
+    };
+
+    // Find the line containing the IP address
+    let (_, addr) = response
+        .lines()
+        .filter_map(|value| value.split_once('='))
+        .find(|(key, _)| *key == "ip")?;
+
+    // Attempt to parse it as an IPv4 address
+    let addr = addr
+        // Trim whitespace and new lines
+        .trim_matches(|c: char| c == '\n' || c.is_whitespace())
+        // Attempt to parse as an IPv4 address
+        .parse::<Ipv4Addr>();
+
+    addr.ok()
 }
