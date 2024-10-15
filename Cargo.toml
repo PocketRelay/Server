@@ -57,7 +57,7 @@ email_address = "0.2.4"
 # Codec utils for encoding and decoding packets
 tokio-util = { version = "0.7", features = ["codec"] }
 
-# Hyper for connection upgrades (TODO: Update to 1.0 once reqwest supports it)
+# Hyper for connection upgrades
 hyper = "1.4"
 hyper-util = { version = "0.1.7", features = ["tokio"] }
 tower = { version = "0.4", features = ["util"] }
