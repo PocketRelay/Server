@@ -86,7 +86,7 @@ impl<Handle: Clone> TunnelMappings<Handle> {
             }
 
             // Ensure the tunnel isn't already mapped
-            if !self.tunnel_exists(tunnel_id) {
+            if !self.id_to_tunnel.contains_key(&tunnel_id) {
                 return Some(tunnel_id);
             }
 
@@ -126,11 +126,6 @@ impl<Handle: Clone> TunnelMappings<Handle> {
         if let Some(tunnel_data) = self.id_to_tunnel.get_mut(&tunnel_id) {
             tunnel_data.last_alive = last_alive;
         }
-    }
-
-    /// Checks if the provided `tunnel_id` is already in use
-    pub fn tunnel_exists(&self, tunnel_id: TunnelId) -> bool {
-        self.id_to_tunnel.contains_key(&tunnel_id)
     }
 
     /// Attempts to associate the tunnel from `address` to the provided
