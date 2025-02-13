@@ -8,6 +8,7 @@ use crate::utils::types::GameID;
 use super::sessions::{AssociationId, Sessions};
 
 pub mod http_tunnel;
+pub mod mappings;
 pub mod udp_tunnel;
 
 /// ID for a tunnel
@@ -36,20 +37,28 @@ impl TunnelService {
         pool_id: PoolId,
         pool_index: PoolIndex,
     ) {
-        self.http.associate_pool(association, pool_id, pool_index);
-        self.udp.associate_pool(association, pool_id, pool_index);
+        self.http
+            .mappings
+            .write()
+            .associate_pool(association, pool_id, pool_index);
+        self.udp
+            .mappings
+            .write()
+            .associate_pool(association, pool_id, pool_index);
     }
 
     pub fn dissociate_pool(&self, pool_id: PoolId, pool_index: PoolIndex) {
-        self.http.dissociate_pool(pool_id, pool_index);
-        self.udp.dissociate_pool(pool_id, pool_index);
-    }
-
-    pub fn associate_tunnel_http(&self, association: AssociationId, tunnel_id: TunnelId) {
-        self.http.associate_tunnel(association, tunnel_id);
+        self.http
+            .mappings
+            .write()
+            .dissociate_pool(pool_id, pool_index);
+        self.udp
+            .mappings
+            .write()
+            .dissociate_pool(pool_id, pool_index);
     }
 
     pub fn dissociate_tunnel_http(&self, tunnel_id: TunnelId) {
-        self.http.dissociate_tunnel(tunnel_id);
+        self.http.mappings.write().dissociate_tunnel(tunnel_id);
     }
 }

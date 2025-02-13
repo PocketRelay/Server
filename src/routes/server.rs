@@ -172,8 +172,7 @@ pub async fn handle_upgrade_tunnel(
         }
     };
 
-    let tunnel_id = HttpTunnel::start(tunnel_service.clone(), association, upgraded);
-    tunnel_service.associate_tunnel_http(association, tunnel_id);
+    HttpTunnel::start(tunnel_service.clone(), association, upgraded);
 }
 
 /// GET /api/server/log

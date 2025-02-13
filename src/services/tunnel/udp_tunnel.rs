@@ -1,24 +1,16 @@
-use crate::services::sessions::{AssociationId, Sessions};
-use crate::utils::hashing::IntHashMap;
+use crate::services::sessions::Sessions;
 use log::{debug, error};
 use parking_lot::RwLock;
 use pocket_relay_udp_tunnel::{deserialize_message, serialize_message, TunnelMessage};
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{
     net::UdpSocket,
     task::JoinSet,
     time::{interval_at, Instant, MissedTickBehavior},
 };
 
-use super::{PoolId, PoolIndex, TunnelId, TunnelService};
+use super::mappings::{TunnelData, TunnelMappings};
+use super::{TunnelId, TunnelService};
 
 /// The port bound on clients representing the host player within the socket pool
 pub const _TUNNEL_HOST_LOCAL_PORT: u16 = 42132;
@@ -124,7 +116,7 @@ pub async fn keep_alive(service: Arc<TunnelService>, socket: Arc<UdpSocket>) {
                 .read()
                 .id_to_tunnel
                 .iter()
-                .map(|(tunnel_id, value)| (*tunnel_id, value.addr, value.last_alive))
+                .map(|(tunnel_id, value)| (*tunnel_id, value.handle, value.last_alive))
                 .collect()
         };
 
@@ -169,243 +161,18 @@ pub async fn keep_alive(service: Arc<TunnelService>, socket: Arc<UdpSocket>) {
 
 /// UDP tunneling service
 pub struct UdpTunnelService {
-    /// Next available tunnel ID
-    next_tunnel_id: AtomicU32,
     /// Tunneling mapping data
-    mappings: RwLock<TunnelMappings>,
+    pub mappings: RwLock<TunnelMappings<SocketAddr>>,
     /// Access to the session service for exchanging
     /// association tokens
     sessions: Arc<Sessions>,
 }
 
-pub struct TunnelData {
-    /// Association ID for the tunnel
-    association: AssociationId,
-    /// Address of the tunnel
-    addr: SocketAddr,
-    /// Last time a keep alive was obtained for the tunnel
-    last_alive: Instant,
-}
-
-#[derive(Default)]
-pub struct TunnelMappings {
-    /// Mapping from [TunnelId]s to the actual [TunnelHandle] for communicating
-    /// with the tunnel
-    id_to_tunnel: IntHashMap<TunnelId, TunnelData>,
-
-    /// Mapping from [AssociationId] (Client association) to [TunnelHandle]
-    association_to_tunnel: HashMap<AssociationId, TunnelId>,
-
-    /// Mapping associating a [TunnelId] with a [PoolIndex] within a [PoolId]
-    /// that it is apart of
-    tunnel_to_index: IntHashMap<TunnelId, PoolKey>,
-    /// Inverse mapping of `tunnel_to_index` for finding the handle
-    /// associated to a specific pool and slot
-    index_to_tunnel: IntHashMap<PoolKey, TunnelId>,
-}
-
-/// Represents a key that is created from a [PoolId] and [PoolIndex] combined
-/// into a single value.
-///
-/// This allows it to be used as a key in the [IntHashMap]
-#[derive(Hash, PartialEq, Eq, Clone, Copy)]
-struct PoolKey(u64);
-
-impl PoolKey {
-    /// Creates a new pool key from its components
-    const fn new(pool_id: PoolId, pool_index: PoolIndex) -> Self {
-        Self(((pool_id as u64) << 32) | pool_index as u64)
-    }
-
-    /// Converts the key into its underlying parts
-    const fn parts(&self) -> (PoolId, PoolIndex) {
-        ((self.0 >> 32) as PoolId, self.0 as PoolIndex)
-    }
-}
-
-impl TunnelMappings {
-    // Inserts a new tunnel into the mappings
-    fn insert_tunnel(&mut self, tunnel_id: TunnelId, tunnel: TunnelData) {
-        // Insert the tunnel into the mappings
-        self.id_to_tunnel.insert(tunnel_id, tunnel);
-    }
-
-    /// Updates the [SocketAddr] for an existing tunnel when the address has changed
-    fn update_tunnel_addr(&mut self, tunnel_id: TunnelId, tunnel_addr: SocketAddr) {
-        if let Some(tunnel_data) = self.id_to_tunnel.get_mut(&tunnel_id) {
-            tunnel_data.addr = tunnel_addr;
-        }
-    }
-
-    /// Updates the last-alive instant for the tunnel
-    fn update_tunnel_last_alive(&mut self, tunnel_id: TunnelId, last_alive: Instant) {
-        if let Some(tunnel_data) = self.id_to_tunnel.get_mut(&tunnel_id) {
-            tunnel_data.last_alive = last_alive;
-        }
-    }
-
-    /// Checks if the provided `tunnel_id` is already in use
-    fn tunnel_exists(&self, tunnel_id: TunnelId) -> bool {
-        self.id_to_tunnel.contains_key(&tunnel_id)
-    }
-
-    /// Associates the provided `association` to the provided `tunnel`
-    ///
-    /// Creates a mapping for the [AssociationId] to [TunnelHandle] along
-    /// with [TunnelHandle] to [AssociationId]
-    fn associate_tunnel(&mut self, association: AssociationId, tunnel_id: TunnelId) {
-        // Create the IP relationship
-        self.association_to_tunnel.insert(association, tunnel_id);
-    }
-
-    /// Attempts to associate the tunnel from `address` to the provided
-    /// `pool_id` and `pool_index` if there is a tunnel connected to
-    /// `address`
-    fn associate_pool(
-        &mut self,
-        association: AssociationId,
-        pool_id: PoolId,
-        pool_index: PoolIndex,
-    ) {
-        let tunnel_id = match self.association_to_tunnel.get(&association) {
-            Some(value) => *value,
-            None => return,
-        };
-
-        let key = PoolKey::new(pool_id, pool_index);
-
-        self.tunnel_to_index.insert(tunnel_id, key);
-        self.index_to_tunnel.insert(key, tunnel_id);
-    }
-
-    /// Uses the lookup maps to find the [TunnelHandle] of another tunnel within the same
-    /// pool as `tunnel_id` at the provided `pool_index`.
-    ///
-    /// Returns both the [TunnelHandle] at `pool_index` and the [PoolIndex] of the
-    /// provided `tunnel_id`
-    fn get_tunnel_route(
-        &self,
-        tunnel_id: TunnelId,
-        pool_index: PoolIndex,
-    ) -> Option<(SocketAddr, PoolIndex)> {
-        let (game_id, self_index) = self.tunnel_to_index.get(&tunnel_id)?.parts();
-        let other_tunnel = self
-            .index_to_tunnel
-            .get(&PoolKey::new(game_id, pool_index))?;
-        let tunnel = self.id_to_tunnel.get(other_tunnel)?;
-
-        Some((tunnel.addr, self_index))
-    }
-
-    /// Removes the association between the `tunnel_id` and any games and
-    /// removes the tunnel itself.
-    ///
-    /// Used when a tunnel disconnects to remove any associations
-    /// related to the tunnel
-    fn dissociate_tunnel(&mut self, tunnel_id: TunnelId) {
-        // Remove tunnel itself
-        let tunnel_data = self.id_to_tunnel.remove(&tunnel_id);
-
-        if let Some(tunnel_data) = tunnel_data {
-            self.association_to_tunnel.remove(&tunnel_data.association);
-        }
-
-        // Remove the slot association
-        if let Some(key) = self.tunnel_to_index.remove(&tunnel_id) {
-            // Remove the inverse relationship
-            self.index_to_tunnel.remove(&key);
-        }
-    }
-
-    /// Removes the association between a [PoolKey] and a [TunnelId] if
-    /// one is present
-    fn dissociate_pool(&mut self, pool_id: PoolId, pool_index: PoolIndex) {
-        if let Some(tunnel_id) = self
-            .index_to_tunnel
-            .remove(&PoolKey::new(pool_id, pool_index))
-        {
-            self.tunnel_to_index.remove(&tunnel_id);
-        }
-    }
-}
-
 impl UdpTunnelService {
     pub fn new(sessions: Arc<Sessions>) -> Self {
         Self {
-            next_tunnel_id: AtomicU32::new(0),
             mappings: RwLock::new(TunnelMappings::default()),
             sessions,
-        }
-    }
-
-    /// Wrapper around [`TunnelMappings::associate_pool`] that holds the service
-    /// write lock before operating
-    #[inline]
-    pub fn associate_pool(
-        &self,
-        association: AssociationId,
-        pool_id: PoolId,
-        pool_index: PoolIndex,
-    ) {
-        self.mappings
-            .write()
-            .associate_pool(association, pool_id, pool_index)
-    }
-
-    /// Wrapper around [`TunnelMappings::get_tunnel_route`] that holds the service
-    /// read lock before operating
-    #[inline]
-    pub fn get_tunnel_route(
-        &self,
-        tunnel_id: TunnelId,
-        pool_index: PoolIndex,
-    ) -> Option<(SocketAddr, PoolIndex)> {
-        self.mappings.read().get_tunnel_route(tunnel_id, pool_index)
-    }
-
-    /// Wrapper around [`TunnelMappings::dissociate_pool`] that holds the service
-    /// write lock before operating
-    #[inline]
-    pub fn dissociate_pool(&self, pool_id: PoolId, pool_index: PoolIndex) {
-        self.mappings.write().dissociate_pool(pool_id, pool_index);
-    }
-
-    #[inline]
-    pub fn associate_tunnel(&self, association: AssociationId, tunnel_id: TunnelId) {
-        self.mappings
-            .write()
-            .associate_tunnel(association, tunnel_id);
-    }
-
-    /// Attempts to obtain the next available tunnel ID to allocate to
-    /// a new tunnel, will return [None] if all IDs are determined to
-    /// have been exhausted
-    fn acquire_tunnel_id(&self) -> Option<TunnelId> {
-        let mut addr_exhausted = 0;
-
-        // Attempt to acquire an available tunnel ID
-        // Hold read lock while searching
-        let mappings = &*self.mappings.read();
-
-        loop {
-            // Acquire the tunnel ID
-            let tunnel_id = self.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
-
-            // If the one we were issued was the last address then the next
-            // address will loop around to zero
-            if tunnel_id == u32::MAX {
-                addr_exhausted += 1;
-            }
-
-            // Ensure the tunnel isn't already mapped
-            if !mappings.tunnel_exists(tunnel_id) {
-                return Some(tunnel_id);
-            }
-
-            // If we iterated the full range of u32 twice we've definitely exhausted all possible IDs
-            if addr_exhausted > 2 {
-                return None;
-            }
         }
     }
 
@@ -420,7 +187,7 @@ impl UdpTunnelService {
         // Only process tunnels with known IDs
         if tunnel_id != u32::MAX {
             // Store the updated tunnel address
-            self.mappings.write().update_tunnel_addr(tunnel_id, addr);
+            self.mappings.write().update_tunnel_handle(tunnel_id, addr);
         }
 
         match msg {
@@ -433,8 +200,17 @@ impl UdpTunnelService {
                     }
                 };
 
-                // Attempt to acquire an available tunnel ID
-                let tunnel_id = match self.acquire_tunnel_id() {
+                // Store the tunnel mapping
+                let tunnel_id = self.mappings.write().insert_tunnel(
+                    association,
+                    TunnelData {
+                        handle: addr,
+                        association,
+                        last_alive: Instant::now(),
+                    },
+                );
+
+                let tunnel_id = match tunnel_id {
                     Some(value) => value,
                     // Cannot allocate the tunnel an ID
                     None => {
@@ -442,18 +218,6 @@ impl UdpTunnelService {
                         return;
                     }
                 };
-
-                self.associate_tunnel(association, tunnel_id);
-
-                // Store the tunnel mapping
-                self.mappings.write().insert_tunnel(
-                    tunnel_id,
-                    TunnelData {
-                        addr,
-                        association,
-                        last_alive: Instant::now(),
-                    },
-                );
 
                 let buffer = serialize_message(tunnel_id, &TunnelMessage::Initiated { tunnel_id });
 
@@ -464,11 +228,13 @@ impl UdpTunnelService {
             }
             TunnelMessage::Forward { index, message } => {
                 // Get the path through the tunnel
-                let (target_addr, index) = match self.get_tunnel_route(tunnel_id, index) {
-                    Some(value) => value,
-                    // Don't have a tunnel to send the message through
-                    None => {
-                        return;
+                let (target_addr, index) = {
+                    match self.mappings.read().get_tunnel_route(tunnel_id, index) {
+                        Some(value) => value,
+                        // Don't have a tunnel to send the message through
+                        None => {
+                            return;
+                        }
                     }
                 };
 
