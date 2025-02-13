@@ -3,7 +3,7 @@
 //! Details can be found on the GitHub issue: https://github.com/PocketRelay/Server/issues/64
 
 use self::codec::{TunnelCodec, TunnelMessage};
-use crate::utils::{hashing::IntHashMap, types::GameID};
+use crate::utils::hashing::IntHashMap;
 use bytes::Bytes;
 use futures_util::{Sink, Stream};
 use hyper::upgrade::Upgraded;
@@ -26,20 +26,18 @@ use tokio::{
 };
 use tokio_util::codec::Framed;
 
-use super::sessions::AssociationId;
+use crate::services::{
+    sessions::AssociationId,
+    tunnel::{PoolId, PoolIndex, TunnelId},
+};
+
+use super::TunnelService;
 
 /// The port bound on clients representing the host player within the socket pool
 pub const TUNNEL_HOST_LOCAL_PORT: u16 = 42132;
 
-/// ID for a tunnel
-type TunnelId = u32;
-/// Index into a pool of tunnels
-type PoolIndex = u8;
-/// ID of a pool
-type PoolId = GameID;
-
 #[derive(Default)]
-pub struct TunnelService {
+pub struct HttpTunnelService {
     /// Stores the next available tunnel ID
     next_tunnel_id: AtomicU32,
     /// Underlying tunnel mappings
@@ -177,7 +175,7 @@ impl TunnelMappings {
     }
 }
 
-impl TunnelService {
+impl HttpTunnelService {
     /// Wrapper around [`TunnelMappings::associate_tunnel`] that holds the service
     /// write lock before operating
     #[inline]
@@ -235,7 +233,7 @@ pub struct TunnelHandle {
 }
 
 /// Tunnel connection to a client
-pub struct Tunnel {
+pub struct HttpTunnel {
     /// ID for this tunnel
     id: TunnelId,
     /// The IO tunnel used to send information to the host and receive
@@ -251,10 +249,10 @@ pub struct Tunnel {
     keep_alive_interval: Interval,
 }
 
-impl Drop for Tunnel {
+impl Drop for HttpTunnel {
     fn drop(&mut self) {
         // Remove the tunnel from the service
-        self.service.dissociate_tunnel(self.id);
+        self.service.dissociate_tunnel_http(self.id);
     }
 }
 
@@ -281,7 +279,7 @@ enum TunnelReadState {
     Stop,
 }
 
-impl Tunnel {
+impl HttpTunnel {
     // Send keep-alive pings every 10s
     const KEEP_ALIVE_DELAY: Duration = Duration::from_secs(10);
 
@@ -302,10 +300,10 @@ impl Tunnel {
         let io = Framed::new(TokioIo::new(io), TunnelCodec::default());
 
         // Acquire the tunnel ID
-        let id = service.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
+        let id = service.http.next_tunnel_id.fetch_add(1, Ordering::AcqRel);
 
         // Store the tunnel mapping
-        service.mappings.write().insert_tunnel(
+        service.http.mappings.write().insert_tunnel(
             id,
             TunnelData {
                 association,
@@ -320,7 +318,7 @@ impl Tunnel {
         keep_alive_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         // Spawn the tunnel task
-        tokio::spawn(Tunnel {
+        tokio::spawn(HttpTunnel {
             service,
             id,
             io,
@@ -404,11 +402,12 @@ impl Tunnel {
         }
 
         // Get the path through the tunnel
-        let (target_handle, index) = match self.service.get_tunnel_route(self.id, message.index) {
-            Some(value) => value,
-            // Don't have a tunnel to send the message through
-            None => return Poll::Ready(TunnelReadState::Continue),
-        };
+        let (target_handle, index) =
+            match self.service.http.get_tunnel_route(self.id, message.index) {
+                Some(value) => value,
+                // Don't have a tunnel to send the message through
+                None => return Poll::Ready(TunnelReadState::Continue),
+            };
 
         // Update the message target index to be from the correct index
         message.index = index;
@@ -420,7 +419,7 @@ impl Tunnel {
     }
 }
 
-impl Future for Tunnel {
+impl Future for HttpTunnel {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

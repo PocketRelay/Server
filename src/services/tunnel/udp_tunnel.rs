@@ -1,5 +1,5 @@
-use super::sessions::{AssociationId, Sessions};
-use crate::utils::{hashing::IntHashMap, types::GameID};
+use crate::services::sessions::{AssociationId, Sessions};
+use crate::utils::hashing::IntHashMap;
 use log::{debug, error};
 use parking_lot::RwLock;
 use pocket_relay_udp_tunnel::{deserialize_message, serialize_message, TunnelMessage};
@@ -18,19 +18,14 @@ use tokio::{
     time::{interval_at, Instant, MissedTickBehavior},
 };
 
+use super::{PoolId, PoolIndex, TunnelId, TunnelService};
+
 /// The port bound on clients representing the host player within the socket pool
 pub const _TUNNEL_HOST_LOCAL_PORT: u16 = 42132;
 
-/// ID for a tunnel
-type TunnelId = u32;
-/// Index into a pool of tunnels
-type PoolIndex = u8;
-/// ID of a pool
-type PoolId = GameID;
-
 pub async fn start_udp_tunnel(
     tunnel_addr: SocketAddr,
-    service: Arc<UdpTunnelService>,
+    service: Arc<TunnelService>,
 ) -> std::io::Result<()> {
     let socket = UdpSocket::bind(tunnel_addr).await?;
     let socket = Arc::new(socket);
@@ -47,7 +42,7 @@ pub async fn start_udp_tunnel(
 }
 
 /// Reads inbound messages from the tunnel service
-pub async fn accept_messages(service: Arc<UdpTunnelService>, socket: Arc<UdpSocket>) {
+pub async fn accept_messages(service: Arc<TunnelService>, socket: Arc<UdpSocket>) {
     // Buffer to recv messages
     let mut buffer = [0; u16::MAX as usize];
 
@@ -89,6 +84,7 @@ pub async fn accept_messages(service: Arc<UdpTunnelService>, socket: Arc<UdpSock
         // Handle the message in its own task
         tokio::spawn(async move {
             service
+                .udp
                 .handle_message(socket, tunnel_id, packet.message, addr)
                 .await;
         });
@@ -104,7 +100,7 @@ const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(KEEP_ALIVE_DELAY.as_sec
 
 /// Background task that sends out keep alive messages to all the sockets connected
 /// to the tunnel system. Removes inactive and dead connections
-pub async fn keep_alive(service: Arc<UdpTunnelService>, socket: Arc<UdpSocket>) {
+pub async fn keep_alive(service: Arc<TunnelService>, socket: Arc<UdpSocket>) {
     // Task set for keep alive tasks
     let mut send_task_set = JoinSet::new();
 
@@ -123,6 +119,7 @@ pub async fn keep_alive(service: Arc<UdpTunnelService>, socket: Arc<UdpSocket>) 
         // Read the tunnels of all current tunnels
         let tunnels: Vec<(TunnelId, SocketAddr, Instant)> = {
             service
+                .udp
                 .mappings
                 .read()
                 .id_to_tunnel
@@ -161,7 +158,7 @@ pub async fn keep_alive(service: Arc<UdpTunnelService>, socket: Arc<UdpSocket>) 
 
         // Drop any tunnel connections that have passed acceptable keep-alive bounds
         if !expired_tunnels.is_empty() {
-            let mappings = &mut *service.mappings.write();
+            let mappings = &mut *service.udp.mappings.write();
 
             for tunnel_id in expired_tunnels {
                 mappings.dissociate_tunnel(tunnel_id);
@@ -373,6 +370,13 @@ impl UdpTunnelService {
         self.mappings.write().dissociate_pool(pool_id, pool_index);
     }
 
+    #[inline]
+    pub fn associate_tunnel(&self, association: AssociationId, tunnel_id: TunnelId) {
+        self.mappings
+            .write()
+            .associate_tunnel(association, tunnel_id);
+    }
+
     /// Attempts to obtain the next available tunnel ID to allocate to
     /// a new tunnel, will return [None] if all IDs are determined to
     /// have been exhausted
@@ -439,9 +443,7 @@ impl UdpTunnelService {
                     }
                 };
 
-                self.mappings
-                    .write()
-                    .associate_tunnel(association, tunnel_id);
+                self.associate_tunnel(association, tunnel_id);
 
                 // Store the tunnel mapping
                 self.mappings.write().insert_tunnel(

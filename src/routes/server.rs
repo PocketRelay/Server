@@ -9,7 +9,7 @@ use crate::{
     },
     services::{
         sessions::{AssociationId, Sessions},
-        tunnel::{Tunnel, TunnelService},
+        tunnel::{http_tunnel::HttpTunnel, TunnelService},
     },
     session::{data::SessionData, router::BlazeRouter, Session},
     utils::logging::LOG_FILE_NAME,
@@ -172,8 +172,8 @@ pub async fn handle_upgrade_tunnel(
         }
     };
 
-    let tunnel_id = Tunnel::start(tunnel_service.clone(), association, upgraded);
-    tunnel_service.associate_tunnel(association, tunnel_id);
+    let tunnel_id = HttpTunnel::start(tunnel_service.clone(), association, upgraded);
+    tunnel_service.associate_tunnel_http(association, tunnel_id);
 }
 
 /// GET /api/server/log

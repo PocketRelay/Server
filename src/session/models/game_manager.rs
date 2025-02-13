@@ -3,7 +3,7 @@ use crate::{
     config::{RuntimeConfig, TunnelConfig},
     services::{
         game::{rules::RuleSet, AttrMap, Game, GamePlayer},
-        tunnel::TUNNEL_HOST_LOCAL_PORT,
+        tunnel::http_tunnel::TUNNEL_HOST_LOCAL_PORT,
     },
     utils::types::{GameID, PlayerID},
 };
