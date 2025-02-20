@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use http_tunnel::HttpTunnelMessage;
-use mappings::{TunnelHandle, TunnelMappings};
+use mappings::{PoolKey, TunnelData, TunnelHandle, TunnelMappings};
 use parking_lot::RwLock;
 use tokio::{
     sync::mpsc,
@@ -62,13 +62,39 @@ impl TunnelService {
         pool_id: PoolId,
         pool_index: PoolIndex,
     ) {
-        self.mappings
-            .write()
-            .associate_pool(association, pool_id, pool_index);
+        let mappings = &mut *self.mappings.write();
+        let tunnel_id = {
+            match mappings.get_association_tunnel(&association) {
+                Some(value) => value,
+                None => return,
+            }
+        };
+
+        mappings.associate_pool(tunnel_id, pool_id, pool_index);
     }
 
     pub fn dissociate_pool(&self, pool_id: PoolId, pool_index: PoolIndex) {
         self.mappings.write().dissociate_pool(pool_id, pool_index);
+    }
+
+    pub fn insert_tunnel(
+        &self,
+        association: AssociationId,
+        tunnel: TunnelData,
+    ) -> Option<TunnelId> {
+        self.mappings.write().insert_tunnel(association, tunnel)
+    }
+
+    pub fn update_tunnel_handle(&self, tunnel_id: TunnelId, handle: TunnelHandle) {
+        self.mappings
+            .write()
+            .update_tunnel_handle(tunnel_id, handle);
+    }
+
+    pub fn update_tunnel_last_alive(&self, tunnel_id: TunnelId, last_alive: Instant) {
+        self.mappings
+            .write()
+            .update_tunnel_last_alive(tunnel_id, last_alive);
     }
 
     pub fn send_to(
@@ -83,23 +109,29 @@ impl TunnelService {
         // Target details
         to_index: u8,
     ) {
-        // Get the path through the tunnel
-        let (target_handle, from_index) = {
-            match self
-                .mappings
-                .read()
-                .get_tunnel_route(from_tunnel_id, to_index)
-            {
-                Some(value) => value,
-                // Don't have a tunnel to send the message through
-                None => {
-                    return;
-                }
-            }
+        let mappings = self.mappings.read();
+
+        // Get our tunnels current pool data
+        let (pool_id, pool_index) = match mappings.get_tunnel_pool_key(from_tunnel_id) {
+            Some(value) => value,
+
+            // Player is not apart of any game pool
+            None => return,
+        };
+
+        // Pool key for our target tunnel
+        let target_pool_key = PoolKey::new(pool_id, to_index);
+
+        // Get the target tunnel within our pool
+        let target = match mappings.get_tunnel_by_pool_key(&target_pool_key) {
+            Some(value) => value,
+
+            // Target player doesn't have a tunnel
+            None => return,
         };
 
         // Forward message to target tunnel
-        match target_handle {
+        match target {
             TunnelHandle::Udp(socket_addr) => {
                 let message = match buffer {
                     TunnelBuffer::Owned(items) => items,
@@ -109,14 +141,14 @@ impl TunnelService {
                 let buffer: Vec<u8> = pocket_relay_udp_tunnel::serialize_message(
                     from_tunnel_id,
                     &pocket_relay_udp_tunnel::TunnelMessage::Forward {
-                        index: from_index,
+                        index: pool_index,
                         message,
                     },
                 );
 
                 _ = self.udp_tx.send(UdpTunnelMessage {
                     buffer,
-                    target_address: socket_addr,
+                    target_address: *socket_addr,
                 });
             }
             TunnelHandle::Http(tunnel_handle) => {
@@ -126,7 +158,7 @@ impl TunnelService {
                 };
 
                 _ = tunnel_handle.tx.send(HttpTunnelMessage {
-                    index: from_index,
+                    index: pool_index,
                     message,
                 });
             }

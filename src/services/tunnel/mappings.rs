@@ -25,6 +25,44 @@ pub enum TunnelHandle {
     Http(HttpTunnelHandle),
 }
 
+/// Mapping between tunnel ID and the inverse
+#[derive(Default)]
+pub struct TunnelPoolMap {
+    /// Mapping associating a [TunnelId] with a [PoolIndex] within a [PoolId]
+    /// that it is apart of
+    tunnel_to_pool: IntHashMap<TunnelId, PoolKey>,
+    /// Inverse mapping of `tunnel_to_index` for finding the handle
+    /// associated to a specific pool and slot
+    pool_to_tunnel: IntHashMap<PoolKey, TunnelId>,
+}
+
+impl TunnelPoolMap {
+    pub fn get_by_tunnel(&self, tunnel_id: &TunnelId) -> Option<&PoolKey> {
+        self.tunnel_to_pool.get(tunnel_id)
+    }
+
+    pub fn get_by_pool_key(&self, pool_key: &PoolKey) -> Option<&TunnelId> {
+        self.pool_to_tunnel.get(pool_key)
+    }
+
+    pub fn insert(&mut self, tunnel_id: TunnelId, pool_key: PoolKey) {
+        self.tunnel_to_pool.insert(tunnel_id, pool_key);
+        self.pool_to_tunnel.insert(pool_key, tunnel_id);
+    }
+
+    pub fn remove_by_pool_key(&mut self, pool_key: &PoolKey) {
+        if let Some(tunnel_id) = self.pool_to_tunnel.remove(pool_key) {
+            self.tunnel_to_pool.remove(&tunnel_id);
+        }
+    }
+
+    pub fn remove_by_tunnel(&mut self, tunnel_id: &TunnelId) {
+        if let Some(pool_key) = self.tunnel_to_pool.remove(tunnel_id) {
+            self.pool_to_tunnel.remove(&pool_key);
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct TunnelMappings {
     /// Next available tunnel ID
@@ -37,12 +75,7 @@ pub struct TunnelMappings {
     /// Mapping from [AssociationId] (Client association) to [TunnelHandle]
     association_to_tunnel: HashMap<AssociationId, TunnelId>,
 
-    /// Mapping associating a [TunnelId] with a [PoolIndex] within a [PoolId]
-    /// that it is apart of
-    tunnel_to_index: IntHashMap<TunnelId, PoolKey>,
-    /// Inverse mapping of `tunnel_to_index` for finding the handle
-    /// associated to a specific pool and slot
-    index_to_tunnel: IntHashMap<PoolKey, TunnelId>,
+    pool: TunnelPoolMap,
 }
 
 /// Represents a key that is created from a [PoolId] and [PoolIndex] combined
@@ -50,11 +83,11 @@ pub struct TunnelMappings {
 ///
 /// This allows it to be used as a key in the [IntHashMap]
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
-struct PoolKey(u64);
+pub struct PoolKey(u64);
 
 impl PoolKey {
     /// Creates a new pool key from its components
-    const fn new(pool_id: PoolId, pool_index: PoolIndex) -> Self {
+    pub const fn new(pool_id: PoolId, pool_index: PoolIndex) -> Self {
         Self(((pool_id as u64) << 32) | pool_index as u64)
     }
 
@@ -118,12 +151,7 @@ impl TunnelMappings {
             if dead {
                 // Remove association mapping
                 self.association_to_tunnel.remove(&data.association);
-
-                // Remove the slot association
-                if let Some(pool_key) = self.tunnel_to_index.remove(tunnel_id) {
-                    // Remove the inverse relationship
-                    self.index_to_tunnel.remove(&pool_key);
-                }
+                self.pool.remove_by_tunnel(tunnel_id);
             }
 
             !dead
@@ -161,54 +189,37 @@ impl TunnelMappings {
         }
     }
 
+    pub fn get_association_tunnel(&self, association: &AssociationId) -> Option<TunnelId> {
+        self.association_to_tunnel.get(association).copied()
+    }
+
     /// Attempts to associate the tunnel from `address` to the provided
     /// `pool_id` and `pool_index` if there is a tunnel connected to
     /// `address`
-    pub fn associate_pool(
-        &mut self,
-        association: AssociationId,
-        pool_id: PoolId,
-        pool_index: PoolIndex,
-    ) {
-        let tunnel_id = match self.association_to_tunnel.get(&association) {
-            Some(value) => *value,
-            None => return,
-        };
-
+    pub fn associate_pool(&mut self, tunnel_id: TunnelId, pool_id: PoolId, pool_index: PoolIndex) {
         let key = PoolKey::new(pool_id, pool_index);
-
-        self.tunnel_to_index.insert(tunnel_id, key);
-        self.index_to_tunnel.insert(key, tunnel_id);
-    }
-
-    /// Uses the lookup maps to find the [TunnelHandle] of another tunnel within the same
-    /// pool as `tunnel_id` at the provided `pool_index`.
-    ///
-    /// Returns both the [TunnelHandle] at `pool_index` and the [PoolIndex] of the
-    /// provided `tunnel_id`
-    pub fn get_tunnel_route(
-        &self,
-        tunnel_id: TunnelId,
-        pool_index: PoolIndex,
-    ) -> Option<(TunnelHandle, PoolIndex)> {
-        let (game_id, self_index) = self.tunnel_to_index.get(&tunnel_id)?.parts();
-        let other_tunnel = self
-            .index_to_tunnel
-            .get(&PoolKey::new(game_id, pool_index))?;
-
-        let tunnel = self.id_to_tunnel.get(other_tunnel)?;
-
-        Some((tunnel.handle.clone(), self_index))
+        self.pool.insert(tunnel_id, key);
     }
 
     /// Removes the association between a [PoolKey] and a [TunnelId] if
     /// one is present
     pub fn dissociate_pool(&mut self, pool_id: PoolId, pool_index: PoolIndex) {
-        if let Some(tunnel_id) = self
-            .index_to_tunnel
-            .remove(&PoolKey::new(pool_id, pool_index))
-        {
-            self.tunnel_to_index.remove(&tunnel_id);
-        }
+        self.pool
+            .remove_by_pool_key(&PoolKey::new(pool_id, pool_index));
+    }
+
+    /// Get the pool key of a tunnel
+    pub fn get_tunnel_pool_key(&self, tunnel_id: TunnelId) -> Option<(PoolId, PoolIndex)> {
+        self.pool
+            .get_by_tunnel(&tunnel_id)
+            .map(|pool_key| pool_key.parts())
+    }
+
+    /// Get a tunnel using a pool key
+    pub fn get_tunnel_by_pool_key(&self, pool_key: &PoolKey) -> Option<&TunnelHandle> {
+        let tunnel_id = self.pool.get_by_pool_key(pool_key)?;
+        self.id_to_tunnel
+            .get(tunnel_id)
+            .map(|tunnel| &tunnel.handle)
     }
 }

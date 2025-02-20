@@ -138,10 +138,7 @@ fn handle_message(
     // Only process tunnels with known IDs
     if tunnel_id != u32::MAX {
         // Store the updated tunnel address
-        service
-            .mappings
-            .write()
-            .update_tunnel_handle(tunnel_id, TunnelHandle::Udp(addr));
+        service.update_tunnel_handle(tunnel_id, TunnelHandle::Udp(addr));
     }
 
     match msg {
@@ -155,7 +152,7 @@ fn handle_message(
             };
 
             // Store the tunnel mapping
-            let tunnel_id = service.mappings.write().insert_tunnel(
+            let tunnel_id = service.insert_tunnel(
                 association,
                 TunnelData {
                     handle: TunnelHandle::Udp(addr),
@@ -188,10 +185,7 @@ fn handle_message(
         }
         TunnelMessage::KeepAlive => {
             // Update tunnel last alive time
-            service
-                .mappings
-                .write()
-                .update_tunnel_last_alive(tunnel_id, Instant::now());
+            service.update_tunnel_last_alive(tunnel_id, Instant::now());
         }
     }
 }

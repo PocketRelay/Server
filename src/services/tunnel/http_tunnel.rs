@@ -85,7 +85,7 @@ impl HttpTunnel {
         let io = Framed::new(TokioIo::new(io), TunnelCodec::default());
 
         // Store the tunnel mapping
-        let tunnel_id = service.mappings.write().insert_tunnel(
+        let tunnel_id = service.insert_tunnel(
             association,
             TunnelData {
                 association,
@@ -178,6 +178,10 @@ impl HttpTunnel {
             // Cannot read next message stop the tunnel
             return Poll::Ready(TunnelReadState::Stop);
         };
+
+        // Update keep alive state
+        self.service
+            .update_tunnel_last_alive(self.id, Instant::now());
 
         // Ping messages can be ignored
         if message.index == 255 {
