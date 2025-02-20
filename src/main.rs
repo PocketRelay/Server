@@ -68,7 +68,9 @@ async fn main() {
     );
     let sessions = Arc::new(Sessions::new(signing_key));
     let config = Arc::new(runtime_config);
-    let tunnel_service = Arc::new(TunnelService::new(sessions.clone()));
+
+    let (tunnel_service, udp_forward_rx) = TunnelService::new();
+    let tunnel_service = Arc::new(tunnel_service);
 
     let game_manager = Arc::new(GameManager::new(tunnel_service.clone(), config.clone()));
     let retriever = Arc::new(retriever);
@@ -76,7 +78,14 @@ async fn main() {
     // Start the tunnel server (If enabled)
     if tunnel_enabled && config.udp_tunnel.enabled {
         // Start the tunnel service server
-        if let Err(err) = start_udp_tunnel(tunnel_addr, tunnel_service.clone()).await {
+        if let Err(err) = start_udp_tunnel(
+            tunnel_addr,
+            tunnel_service.clone(),
+            sessions.clone(),
+            udp_forward_rx,
+        )
+        .await
+        {
             error!("failed to start udp tunnel server: {}", err);
         }
     }

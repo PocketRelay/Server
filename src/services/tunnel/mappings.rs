@@ -1,28 +1,38 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, net::SocketAddr};
 
 use tokio::time::Instant;
 
 use crate::{services::sessions::AssociationId, utils::hashing::IntHashMap};
 
-use super::{PoolId, PoolIndex, TunnelId};
+use super::{http_tunnel::HttpTunnelHandle, PoolId, PoolIndex, TunnelId};
 
 #[derive(Clone)]
-pub struct TunnelData<Handle> {
+pub struct TunnelData {
     /// Association ID for the tunnel
     pub association: AssociationId,
     /// Handle to the tunnel
-    pub handle: Handle,
+    pub handle: TunnelHandle,
     /// Last time a keep alive was obtained for the tunnel
     pub last_alive: Instant,
 }
 
-pub struct TunnelMappings<Handle> {
+#[derive(Clone)]
+pub enum TunnelHandle {
+    /// UDP tunnels have a socket address target
+    Udp(SocketAddr),
+
+    /// HTTP tunnels have a handle to a tunnel
+    Http(HttpTunnelHandle),
+}
+
+#[derive(Default)]
+pub struct TunnelMappings {
     /// Next available tunnel ID
     next_tunnel_id: TunnelId,
 
     /// Mapping from [TunnelId]s to the actual [TunnelHandle] for communicating
     /// with the tunnel
-    id_to_tunnel: IntHashMap<TunnelId, TunnelData<Handle>>,
+    id_to_tunnel: IntHashMap<TunnelId, TunnelData>,
 
     /// Mapping from [AssociationId] (Client association) to [TunnelHandle]
     association_to_tunnel: HashMap<AssociationId, TunnelId>,
@@ -33,18 +43,6 @@ pub struct TunnelMappings<Handle> {
     /// Inverse mapping of `tunnel_to_index` for finding the handle
     /// associated to a specific pool and slot
     index_to_tunnel: IntHashMap<PoolKey, TunnelId>,
-}
-
-impl<Handle> Default for TunnelMappings<Handle> {
-    fn default() -> Self {
-        Self {
-            next_tunnel_id: Default::default(),
-            id_to_tunnel: Default::default(),
-            association_to_tunnel: Default::default(),
-            tunnel_to_index: Default::default(),
-            index_to_tunnel: Default::default(),
-        }
-    }
 }
 
 /// Represents a key that is created from a [PoolId] and [PoolIndex] combined
@@ -66,7 +64,7 @@ impl PoolKey {
     }
 }
 
-impl<Handle: Clone> TunnelMappings<Handle> {
+impl TunnelMappings {
     /// Attempts to obtain the next available tunnel ID to allocate to
     /// a new tunnel, will return [None] if all IDs are determined to
     /// have been exhausted
@@ -98,7 +96,7 @@ impl<Handle: Clone> TunnelMappings<Handle> {
         }
     }
 
-    pub fn tunnel_data(&self) -> Vec<(TunnelId, TunnelData<Handle>)> {
+    pub fn tunnel_data(&self) -> Vec<(TunnelId, TunnelData)> {
         self.id_to_tunnel
             .iter()
             .map(|(tunnel_id, value)| (*tunnel_id, value.clone()))
@@ -112,7 +110,7 @@ impl<Handle: Clone> TunnelMappings<Handle> {
     pub fn insert_tunnel(
         &mut self,
         association: AssociationId,
-        tunnel: TunnelData<Handle>,
+        tunnel: TunnelData,
     ) -> Option<TunnelId> {
         let tunnel_id = self.acquire_tunnel_id()?;
 
@@ -123,7 +121,7 @@ impl<Handle: Clone> TunnelMappings<Handle> {
         Some(tunnel_id)
     }
 
-    pub fn update_tunnel_handle(&mut self, tunnel_id: TunnelId, handle: Handle) {
+    pub fn update_tunnel_handle(&mut self, tunnel_id: TunnelId, handle: TunnelHandle) {
         if let Some(tunnel_data) = self.id_to_tunnel.get_mut(&tunnel_id) {
             tunnel_data.handle = handle;
         }
@@ -165,7 +163,7 @@ impl<Handle: Clone> TunnelMappings<Handle> {
         &self,
         tunnel_id: TunnelId,
         pool_index: PoolIndex,
-    ) -> Option<(Handle, PoolIndex)> {
+    ) -> Option<(TunnelHandle, PoolIndex)> {
         let (game_id, self_index) = self.tunnel_to_index.get(&tunnel_id)?.parts();
         let other_tunnel = self
             .index_to_tunnel

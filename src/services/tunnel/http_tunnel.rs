@@ -8,7 +8,6 @@ use futures_util::{Sink, Stream};
 use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
 use log::error;
-use parking_lot::RwLock;
 use std::{
     future::Future,
     pin::Pin,
@@ -25,24 +24,18 @@ use tokio_util::codec::Framed;
 use crate::services::{sessions::AssociationId, tunnel::TunnelId};
 
 use super::{
-    mappings::{TunnelData, TunnelMappings},
-    TunnelService,
+    mappings::{TunnelData, TunnelHandle},
+    TunnelBuffer, TunnelService,
 };
 
 /// The port bound on clients representing the host player within the socket pool
 pub const TUNNEL_HOST_LOCAL_PORT: u16 = 42132;
 
-#[derive(Default)]
-pub struct HttpTunnelService {
-    /// Underlying tunnel mappings
-    pub mappings: RwLock<TunnelMappings<TunnelHandle>>,
-}
-
 /// Handle for sending messages to a tunnel
 #[derive(Clone)]
-pub struct TunnelHandle {
+pub struct HttpTunnelHandle {
     /// The sender for sending messages to the tunnel
-    tx: mpsc::UnboundedSender<TunnelMessage>,
+    pub tx: mpsc::UnboundedSender<TunnelMessage>,
 }
 
 /// Tunnel connection to a client
@@ -109,11 +102,11 @@ impl HttpTunnel {
         let io = Framed::new(TokioIo::new(io), TunnelCodec::default());
 
         // Store the tunnel mapping
-        let tunnel_id = service.http.mappings.write().insert_tunnel(
+        let tunnel_id = service.mappings.write().insert_tunnel(
             association,
             TunnelData {
                 association,
-                handle: TunnelHandle { tx },
+                handle: TunnelHandle::Http(HttpTunnelHandle { tx }),
                 last_alive: Instant::now(),
             },
         );
@@ -205,7 +198,7 @@ impl HttpTunnel {
     /// Should be repeatedly called until it no-longer returns [`Poll::Ready`]
     fn poll_read_state(&mut self, cx: &mut Context<'_>) -> Poll<TunnelReadState> {
         // Try receive a message from the `io`
-        let Some(Ok(mut message)) = ready!(Pin::new(&mut self.io).poll_next(cx)) else {
+        let Some(Ok(message)) = ready!(Pin::new(&mut self.io).poll_next(cx)) else {
             // Cannot read next message stop the tunnel
             return Poll::Ready(TunnelReadState::Stop);
         };
@@ -215,26 +208,12 @@ impl HttpTunnel {
             return Poll::Ready(TunnelReadState::Continue);
         }
 
-        // Get the path through the tunnel
-        let (target_handle, index) = {
-            match self
-                .service
-                .http
-                .mappings
-                .read()
-                .get_tunnel_route(self.id, message.index)
-            {
-                Some(value) => value,
-                // Don't have a tunnel to send the message through
-                None => return Poll::Ready(TunnelReadState::Continue),
-            }
-        };
-
-        // Update the message target index to be from the correct index
-        message.index = index;
-
         // Send the message to the tunnel
-        _ = target_handle.tx.send(message);
+        self.service.send_to(
+            self.id,
+            TunnelBuffer::Shared(message.message),
+            message.index,
+        );
 
         Poll::Ready(TunnelReadState::Continue)
     }
@@ -288,6 +267,8 @@ impl Future for HttpTunnel {
         Poll::Pending
     }
 }
+
+pub type HttpTunnelMessage = codec::TunnelMessage;
 
 mod codec {
     //! This modules contains the codec and message structures for [TunnelMessage]s
