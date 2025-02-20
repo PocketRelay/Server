@@ -3,7 +3,6 @@
 //! Details can be found on the GitHub issue: https://github.com/PocketRelay/Server/issues/64
 
 use self::codec::{TunnelCodec, TunnelMessage};
-use bytes::Bytes;
 use futures_util::{Sink, Stream};
 use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
@@ -13,12 +12,8 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{ready, Context, Poll},
-    time::Duration,
 };
-use tokio::{
-    sync::mpsc,
-    time::{interval_at, Instant, Interval, MissedTickBehavior},
-};
+use tokio::{sync::mpsc, time::Instant};
 use tokio_util::codec::Framed;
 
 use crate::services::{sessions::AssociationId, tunnel::TunnelId};
@@ -51,15 +46,6 @@ pub struct HttpTunnel {
     write_state: TunnelWriteState,
     /// The service access
     service: Arc<TunnelService>,
-    /// Interval for sending keep alive messages
-    keep_alive_interval: Interval,
-}
-
-impl Drop for HttpTunnel {
-    fn drop(&mut self) {
-        // Remove the tunnel from the service
-        self.service.dissociate_tunnel_http(self.id);
-    }
 }
 
 /// Holds the state for the current writing progress for a [`Tunnel`]
@@ -86,9 +72,6 @@ enum TunnelReadState {
 }
 
 impl HttpTunnel {
-    // Send keep-alive pings every 10s
-    const KEEP_ALIVE_DELAY: Duration = Duration::from_secs(10);
-
     /// Starts a new tunnel on `io` using the tunnel `service`
     ///
     /// ## Arguments
@@ -120,12 +103,6 @@ impl HttpTunnel {
             }
         };
 
-        // Create the interval to track keep alive pings
-        let keep_alive_start = Instant::now() + Self::KEEP_ALIVE_DELAY;
-        let mut keep_alive_interval = interval_at(keep_alive_start, Self::KEEP_ALIVE_DELAY);
-
-        keep_alive_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
-
         // Spawn the tunnel task
         tokio::spawn(HttpTunnel {
             service,
@@ -133,7 +110,6 @@ impl HttpTunnel {
             io,
             rx,
             write_state: Default::default(),
-            keep_alive_interval,
         });
     }
 
@@ -240,27 +216,6 @@ impl Future for HttpTunnel {
             // Tunnel has stopped
             if let TunnelReadState::Stop = next_state {
                 return Poll::Ready(());
-            }
-        }
-
-        // Write a ping message at the interval if we aren't already sending a message
-        if this.keep_alive_interval.poll_tick(cx).is_ready() {
-            if let TunnelWriteState::Recv = this.write_state {
-                // Move to a writing state
-                this.write_state = TunnelWriteState::Write(Some(TunnelMessage {
-                    index: 255,
-                    message: Bytes::new(),
-                }));
-
-                // Poll the writer with the new message
-                if let Poll::Ready(next_state) = this.poll_write_state(cx) {
-                    this.write_state = next_state;
-
-                    // Tunnel has stopped
-                    if let TunnelWriteState::Stop = this.write_state {
-                        return Poll::Ready(());
-                    }
-                }
             }
         }
 

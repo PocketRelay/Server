@@ -10,7 +10,7 @@ use crate::{
 use axum::{self, Extension};
 use config::{load_config, TunnelConfig};
 use log::{debug, error, info, LevelFilter};
-use services::tunnel::udp_tunnel::start_udp_tunnel;
+use services::tunnel::{tunnel_keep_alive, udp_tunnel::start_udp_tunnel};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{join, net::TcpListener, signal};
 use utils::logging;
@@ -74,6 +74,11 @@ async fn main() {
 
     let game_manager = Arc::new(GameManager::new(tunnel_service.clone(), config.clone()));
     let retriever = Arc::new(retriever);
+
+    // Spawn background task to perform keep alive checks on tunnels
+    if tunnel_enabled {
+        tokio::spawn(tunnel_keep_alive(tunnel_service.clone()));
+    }
 
     // Start the tunnel server (If enabled)
     if tunnel_enabled && config.udp_tunnel.enabled {

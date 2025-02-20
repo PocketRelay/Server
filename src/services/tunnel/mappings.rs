@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, net::SocketAddr, time::Duration};
 
 use tokio::time::Instant;
 
@@ -96,11 +96,38 @@ impl TunnelMappings {
         }
     }
 
-    pub fn tunnel_data(&self) -> Vec<(TunnelId, TunnelData)> {
-        self.id_to_tunnel
-            .iter()
-            .map(|(tunnel_id, value)| (*tunnel_id, value.clone()))
-            .collect()
+    pub fn tunnel_data(&self) -> impl Iterator<Item = (&TunnelId, &TunnelData)> + '_ {
+        self.id_to_tunnel.iter()
+    }
+
+    /// Drops all expired/closed tunnels
+    pub fn remove_dead_tunnels(&mut self, now: Instant, keep_alive_timeout: Duration) {
+        // Retain all now expired tunnels
+        self.id_to_tunnel.retain(|tunnel_id, data| {
+            // Initial dead check based on keep alive timeout
+            let mut dead = data.last_alive.duration_since(now) > keep_alive_timeout;
+
+            // Check for closed http tunnels
+            if let TunnelHandle::Http(handle) = &data.handle {
+                if handle.tx.is_closed() {
+                    dead = true
+                }
+            }
+
+            // Remove other tunnel mappings
+            if dead {
+                // Remove association mapping
+                self.association_to_tunnel.remove(&data.association);
+
+                // Remove the slot association
+                if let Some(pool_key) = self.tunnel_to_index.remove(tunnel_id) {
+                    // Remove the inverse relationship
+                    self.index_to_tunnel.remove(&pool_key);
+                }
+            }
+
+            !dead
+        });
     }
 
     /// Inserts a new tunnel into the mappings and associates it to the
@@ -168,29 +195,10 @@ impl TunnelMappings {
         let other_tunnel = self
             .index_to_tunnel
             .get(&PoolKey::new(game_id, pool_index))?;
+
         let tunnel = self.id_to_tunnel.get(other_tunnel)?;
 
         Some((tunnel.handle.clone(), self_index))
-    }
-
-    /// Removes the association between the `tunnel_id` and any games and
-    /// removes the tunnel itself.
-    ///
-    /// Used when a tunnel disconnects to remove any associations
-    /// related to the tunnel
-    pub fn dissociate_tunnel(&mut self, tunnel_id: TunnelId) {
-        // Remove tunnel itself
-        let tunnel_data = self.id_to_tunnel.remove(&tunnel_id);
-
-        if let Some(tunnel_data) = tunnel_data {
-            self.association_to_tunnel.remove(&tunnel_data.association);
-        }
-
-        // Remove the slot association
-        if let Some(key) = self.tunnel_to_index.remove(&tunnel_id) {
-            // Remove the inverse relationship
-            self.index_to_tunnel.remove(&key);
-        }
     }
 
     /// Removes the association between a [PoolKey] and a [TunnelId] if

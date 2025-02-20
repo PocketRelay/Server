@@ -2,17 +2,14 @@ use crate::services::sessions::Sessions;
 use futures_util::{stream::FuturesUnordered, Stream};
 use log::{debug, error};
 use pocket_relay_udp_tunnel::{deserialize_message, serialize_message, TunnelMessage};
-use std::{future::poll_fn, net::SocketAddr, sync::Arc, task::Poll, time::Duration};
-use tokio::{
-    net::UdpSocket,
-    time::{interval_at, Instant, MissedTickBehavior},
-};
+use std::{future::poll_fn, net::SocketAddr, sync::Arc, task::Poll};
+use tokio::{net::UdpSocket, time::Instant};
 
+use super::TunnelService;
 use super::{
     mappings::{TunnelData, TunnelHandle},
     TunnelBuffer, UdpTunnelForwardRx,
 };
-use super::{TunnelId, TunnelService};
 
 /// The port bound on clients representing the host player within the socket pool
 pub const _TUNNEL_HOST_LOCAL_PORT: u16 = 42132;
@@ -44,13 +41,10 @@ pub async fn start_udp_tunnel(
         // Accept messages future
         let accept_future = accept_messages(service, sessions, socket);
 
-        // Keep alive future
-        let keep_alive_future = keep_alive(service);
-
         // Forwarding future
         let forward_future = forward_messages(socket, udp_forward_rx);
 
-        tokio::join!(accept_future, keep_alive_future, forward_future);
+        tokio::join!(accept_future, forward_future);
     });
 
     Ok(())
@@ -130,83 +124,6 @@ pub async fn accept_messages(service: &TunnelService, sessions: &Sessions, socke
 
         // Handle the message in its own task
         handle_message(service, sessions, tunnel_id, packet.message, addr);
-    }
-}
-
-/// Delay between each keep-alive packet
-const KEEP_ALIVE_DELAY: Duration = Duration::from_secs(10);
-
-/// When this duration elapses between keep-alive checks for a connection
-/// the connection is considered to be dead (4 missed keep-alive check intervals)
-const KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(KEEP_ALIVE_DELAY.as_secs() * 4);
-
-/// Background task that sends out keep alive messages to all the sockets connected
-/// to the tunnel system. Removes inactive and dead connections
-pub async fn keep_alive(service: &TunnelService) {
-    // Create the interval to track keep alive pings
-    let keep_alive_start = Instant::now() + KEEP_ALIVE_DELAY;
-    let mut keep_alive_interval = interval_at(keep_alive_start, KEEP_ALIVE_DELAY);
-
-    keep_alive_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
-
-    loop {
-        // Wait for the next keep-alive tick
-        keep_alive_interval.tick().await;
-
-        let now = Instant::now();
-
-        // Read the tunnels of all current tunnels
-        let tunnels: Vec<(TunnelId, SocketAddr, Instant)> = {
-            service
-                .mappings
-                .read()
-                .tunnel_data()
-                .into_iter()
-                // Filter to only the UDP handles
-                .filter_map(|(tunnel_id, data)| {
-                    let handle = match data.handle {
-                        // Only perform keep alive
-                        TunnelHandle::Udp(socket_addr) => socket_addr,
-                        TunnelHandle::Http(_) => return None,
-                    };
-
-                    Some((tunnel_id, handle, data.last_alive))
-                })
-                .collect()
-        };
-
-        // Don't need to tick if theres no tunnels available
-        if tunnels.is_empty() {
-            continue;
-        }
-
-        let mut expired_tunnels: Vec<TunnelId> = Vec::new();
-
-        // Send out keep-alive messages for any tunnels that aren't expired
-        for (tunnel_id, target_address, last_alive) in tunnels {
-            let last_alive = last_alive.duration_since(now);
-            if last_alive > KEEP_ALIVE_TIMEOUT {
-                expired_tunnels.push(tunnel_id);
-                continue;
-            }
-
-            let buffer = serialize_message(tunnel_id, &TunnelMessage::KeepAlive);
-
-            // Send keep alive message
-            _ = service.udp_tx.send(UdpTunnelMessage {
-                buffer,
-                target_address,
-            });
-        }
-
-        // Drop any tunnel connections that have passed acceptable keep-alive bounds
-        if !expired_tunnels.is_empty() {
-            let mappings = &mut *service.mappings.write();
-
-            for tunnel_id in expired_tunnels {
-                mappings.dissociate_tunnel(tunnel_id);
-            }
-        }
     }
 }
 
