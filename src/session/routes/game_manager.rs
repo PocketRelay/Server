@@ -498,9 +498,6 @@ pub async fn handle_cancel_matchmaking(
     SessionAuth(player): SessionAuth,
     Extension(game_manager): Extension<Arc<GameManager>>,
 ) {
-    // Leave the current game (Incase they got into a match)
-    session.data.leave_game();
-
     // Clear the current game
     session.data.clear_game();
 

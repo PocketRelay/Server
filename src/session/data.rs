@@ -1,5 +1,6 @@
 use std::{net::Ipv4Addr, sync::Arc, task::Context, time::Duration};
 
+use log::debug;
 use parking_lot::{RwLock, RwLockReadGuard};
 use serde::Serialize;
 use tokio::time::{interval_at, Instant, Interval, MissedTickBehavior};
@@ -245,35 +246,8 @@ impl SessionData {
         self.read().auth.as_ref().map(|value| value.net.clone())
     }
 
-    /// Leaves the game informing the game that the player has left
-    ///
-    /// DO NOT CALL FROM CODE ALREADY HOLDING A GAME WRITE LOCK
-    pub fn leave_game(&self) {
-        self.write_silent(|data| {
-            let game = match data.game.take() {
-                Some(game) => game,
-                None => return,
-            };
-
-            // Attempt to access the game
-            let game_ref = match game.game_ref.upgrade() {
-                Some(value) => value,
-                // Game doesn't exist anymore
-                None => return,
-            };
-
-            // Remove player from their game
-            game_ref
-                .write()
-                .remove_player(game.player_id, RemoveReason::PlayerLeft);
-        });
-    }
-
     /// Sets the game the session is currently apart of
     pub fn set_game(&self, game_id: GameID, game_ref: WeakGameRef) {
-        // Leave any existing games
-        self.leave_game();
-
         // Set the current game
         self.write_publish(|data| {
             data.game = Some(SessionGameData {
@@ -285,8 +259,22 @@ impl SessionData {
     }
 
     /// Clears the game the session is apart of
+    ///
+    /// DONT CALL FROM CODE HOLDING A WRITE LOCK TO THE
+    /// USER GAME, call [Self::clear_game_gm] instead which
+    /// doesn't let the drop run preventing a deadlock
     pub fn clear_game(&self) {
         self.write_publish(|data| data.game = None);
+    }
+
+    /// Clears the game the session is apart of, safe to  
+    /// call from the game manager as it prevents the default
+    /// drop behavior of trying to remove the player from the game
+    pub fn clear_game_gm(&self) {
+        self.write_publish(|data| {
+            let game = data.game.take();
+            std::mem::forget(game);
+        });
     }
 
     /// Obtains the ID and reference to the game the session is currently apart of
@@ -304,7 +292,7 @@ impl SessionData {
                 drop(guard);
 
                 // Clear the dangling game ref
-                self.clear_game();
+                self.clear_game_gm();
                 return None;
             }
         };
@@ -448,6 +436,22 @@ struct SessionGameData {
     game_id: GameID,
     /// Reference for accessing the game
     game_ref: WeakGameRef,
+}
+
+impl Drop for SessionGameData {
+    fn drop(&mut self) {
+        // Attempt to access the game
+        let game_ref = match self.game_ref.upgrade() {
+            Some(value) => value,
+            // Game doesn't exist anymore
+            None => return,
+        };
+
+        // Remove player from their game
+        game_ref
+            .write()
+            .remove_player(self.player_id, RemoveReason::PlayerLeft);
+    }
 }
 
 #[derive(Debug, Default, Clone, Serialize)]

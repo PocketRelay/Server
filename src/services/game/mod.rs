@@ -130,7 +130,7 @@ impl GamePlayer {
 
     pub fn try_clear_game(&self) {
         if let Some(link) = self.link.upgrade() {
-            link.data.clear_game();
+            link.data.clear_game_gm();
         }
     }
 
