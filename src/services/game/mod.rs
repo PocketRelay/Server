@@ -25,10 +25,10 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use log::{debug, warn};
+use parking_lot::RwLock;
 use serde::Serialize;
 use std::sync::{Arc, Weak};
 use tdf::{ObjectId, TdfMap, TdfSerializer};
-use tokio::sync::RwLock;
 
 use super::tunnel::TunnelService;
 
@@ -398,11 +398,7 @@ impl Game {
         }
 
         // Remove the stopping game
-        let game_manager = self.game_manager.clone();
-        let game_id = self.id;
-        tokio::spawn(async move {
-            game_manager.remove_game(game_id).await;
-        });
+        self.game_manager.remove_game(self.id);
     }
 
     pub fn joinable_state(&self, rule_set: Option<&RuleSet>) -> GameJoinableState {

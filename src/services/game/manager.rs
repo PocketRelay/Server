@@ -17,6 +17,7 @@ use crate::{
 };
 use chrono::Utc;
 use log::debug;
+use parking_lot::{Mutex, RwLock};
 use std::{
     collections::VecDeque,
     sync::{
@@ -24,10 +25,6 @@ use std::{
         Arc,
     },
     time::SystemTime,
-};
-use tokio::{
-    sync::{Mutex, RwLock},
-    task::JoinSet,
 };
 
 /// Manager which controls all the active games on the server
@@ -71,73 +68,54 @@ impl GameManager {
     }
 
     /// Obtains the total count of games in the list
-    pub async fn get_total_games(&self) -> usize {
-        let games = &*self.games.read().await;
+    pub fn get_total_games(&self) -> usize {
+        let games = &*self.games.read();
         games.len()
     }
 
-    pub async fn create_snapshot(
+    pub fn create_snapshot(
         &self,
         offset: usize,
         count: usize,
         include_net: bool,
         include_players: bool,
     ) -> (Vec<GameSnapshot>, bool) {
-        // Create the futures using the handle action before passing
-        // them to a future to be awaited
-        let mut join_set = JoinSet::new();
+        let games = &*self.games.read();
 
-        let more = {
-            let games = &*self.games.read().await;
+        // Create an ordered set
+        let mut items: Vec<(&GameID, &GameRef)> = games.iter().collect();
+        items.sort_by_key(|(key, _)| *key);
 
-            // Create an ordered set
-            let mut items: Vec<(&GameID, &GameRef)> = games.iter().collect();
-            items.sort_by_key(|(key, _)| *key);
+        // Whether there is more keys that what was requested
+        let more = items.len() > offset + count;
 
-            // Whether there is more keys that what was requested
-            let more = items.len() > offset + count;
-
-            // Spawn tasks for obtaining snapshots to each game
-            items
-                .into_iter()
-                // Skip to the desired offset
-                .skip(offset)
-                // Take the desired number of keys
-                .take(count)
-                // Iterate over the game links
-                .map(|(_, value)| value.clone())
-                // Spawn the snapshot tasks
-                .for_each(|game| {
-                    join_set.spawn(async move {
-                        let game = &*game.read().await;
-                        game.snapshot(include_net, include_players)
-                    });
-                });
-
-            more
-        };
-
-        // Allocate a list for the snapshots
-        let mut snapshots = Vec::with_capacity(join_set.len());
-
-        // Receive all the snapshots from their tasks
-        while let Some(result) = join_set.join_next().await {
-            if let Ok(snapshot) = result {
-                snapshots.push(snapshot);
-            }
-        }
+        // Take snapshot of each game state
+        let snapshots: Vec<GameSnapshot> = items
+            .into_iter()
+            // Skip to the desired offset
+            .skip(offset)
+            // Take the desired number of keys
+            .take(count)
+            // Iterate over the game links
+            .map(|(_, value)| value.clone())
+            // Spawn the snapshot tasks
+            .map(|game| {
+                let game = &*game.read();
+                game.snapshot(include_net, include_players)
+            })
+            .collect();
 
         (snapshots, more)
     }
 
-    pub async fn remove_queue(&self, player_id: PlayerID) {
-        let queue = &mut *self.queue.lock().await;
+    pub fn remove_queue(&self, player_id: PlayerID) {
+        let queue = &mut *self.queue.lock();
         queue.retain(|value| value.player.player.id != player_id);
     }
 
-    pub async fn queue(&self, player: GamePlayer, rule_set: Arc<RuleSet>) {
+    pub fn queue(&self, player: GamePlayer, rule_set: Arc<RuleSet>) {
         let started = SystemTime::now();
-        let queue = &mut *self.queue.lock().await;
+        let queue = &mut *self.queue.lock();
         queue.push_back(MatchmakingEntry {
             player,
             rule_set,
@@ -145,7 +123,7 @@ impl GameManager {
         });
     }
 
-    pub async fn add_to_game(
+    pub fn add_to_game(
         &self,
         game_ref: GameRef,
         player: GamePlayer,
@@ -154,7 +132,7 @@ impl GameManager {
     ) {
         // Add the player to the game
         let (game_id, index) = {
-            let game = &mut *game_ref.write().await;
+            let game = &mut *game_ref.write();
             let slot = game.add_player(player, context, &self.config);
             (game.id, slot)
         };
@@ -169,7 +147,7 @@ impl GameManager {
         session.data.set_game(game_id, Arc::downgrade(&game_ref));
     }
 
-    pub async fn add_from_matchmaking(&self, game_ref: GameRef, player: GamePlayer) {
+    pub fn add_from_matchmaking(&self, game_ref: GameRef, player: GamePlayer) {
         let session = match player.link.upgrade() {
             Some(value) => value,
             // Session was dropped
@@ -197,11 +175,10 @@ impl GameManager {
                 result: MatchmakingResult::JoinedExistingGame,
                 player_id: msid,
             },
-        )
-        .await;
+        );
     }
 
-    pub async fn create_game(
+    pub fn create_game(
         self: &Arc<Self>,
         attributes: AttrMap,
         setting: GameSettings,
@@ -216,27 +193,27 @@ impl GameManager {
             self.clone(),
             self.tunnel_service.clone(),
         );
-        let link = Arc::new(RwLock::new(game));
+        let link = Arc::new(parking_lot::RwLock::new(game));
         {
-            let games = &mut *self.games.write().await;
+            let games = &mut *self.games.write();
             games.insert(id, link.clone());
         }
 
         (link, id)
     }
 
-    pub async fn get_game(&self, game_id: GameID) -> Option<GameRef> {
-        let games = &*self.games.read().await;
+    pub fn get_game(&self, game_id: GameID) -> Option<GameRef> {
+        let games = &*self.games.read();
         games.get(&game_id).cloned()
     }
 
-    pub async fn try_add(&self, player: GamePlayer, rule_set: &RuleSet) -> Result<(), GamePlayer> {
-        let games = &*self.games.read().await;
+    pub fn try_add(&self, player: GamePlayer, rule_set: &RuleSet) -> Result<(), GamePlayer> {
+        let games = &*self.games.read();
 
         // Attempt to find a game thats joinable
         for (id, link) in games {
             let join_state = {
-                let link = &*link.read().await;
+                let link = &*link.read();
                 link.joinable_state(Some(rule_set))
             };
 
@@ -245,7 +222,7 @@ impl GameManager {
                 debug!("Found matching game (GID: {})", id);
 
                 // Add the player to the game
-                self.add_from_matchmaking(link.clone(), player).await;
+                self.add_from_matchmaking(link.clone(), player);
 
                 return Ok(());
             }
@@ -254,20 +231,20 @@ impl GameManager {
         Err(player)
     }
 
-    pub async fn remove_game(&self, game_id: GameID) {
-        let games = &mut *self.games.write().await;
+    pub fn remove_game(&self, game_id: GameID) {
+        let games = &mut *self.games.write();
         _ = games.remove(&game_id);
     }
 
-    pub async fn process_queue(&self, link: GameRef, game_id: GameID) {
-        let queue = &mut *self.queue.lock().await;
+    pub fn process_queue(&self, link: GameRef, game_id: GameID) {
+        let queue = &mut *self.queue.lock();
         if queue.is_empty() {
             return;
         }
 
         while let Some(entry) = queue.front() {
             let join_state = {
-                let link = &*link.read().await;
+                let link = &*link.read();
                 link.joinable_state(Some(&entry.rule_set))
             };
 
@@ -291,7 +268,7 @@ impl GameManager {
                     }
 
                     // Add the player to the game
-                    self.add_from_matchmaking(link.clone(), entry.player).await;
+                    self.add_from_matchmaking(link.clone(), entry.player);
                 }
                 GameJoinableState::Full | GameJoinableState::Stopping => {
                     // If the game is not joinable push the entry back to the

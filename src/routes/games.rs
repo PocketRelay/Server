@@ -75,12 +75,10 @@ pub async fn get_games(
     let include_players = auth.is_some() || !config.api.public_games_hide_players;
 
     // Retrieve the game snapshots
-    let (games, more) = game_manager
-        .create_snapshot(offset, count, include_net, include_players)
-        .await;
+    let (games, more) = game_manager.create_snapshot(offset, count, include_net, include_players);
 
     // Get the total number of games
-    let total_games = game_manager.get_total_games().await;
+    let total_games = game_manager.get_total_games();
 
     Ok(Json(GamesResponse {
         games,
@@ -111,11 +109,8 @@ pub async fn get_game(
         .is_some_and(|player| player.role >= PlayerRole::Admin);
     let include_players = auth.is_some() || !config.api.public_games_hide_players;
 
-    let game = game_manager
-        .get_game(game_id)
-        .await
-        .ok_or(GamesError::NotFound)?;
-    let game = &*game.read().await;
+    let game = game_manager.get_game(game_id).ok_or(GamesError::NotFound)?;
+    let game = &*game.read();
     let snapshot = game.snapshot(include_net, include_players);
 
     Ok(Json(snapshot))

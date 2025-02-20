@@ -35,7 +35,7 @@ pub async fn handle_join_game(
 
     // Check the game is joinable
     let join_state = {
-        let game = &*game_ref.read().await;
+        let game = &*game_ref.read();
         game.joinable_state(None)
     };
 
@@ -46,16 +46,14 @@ pub async fn handle_join_game(
     // Join the game
     debug!("Joining game from invite (GID: {})", game_id);
 
-    game_manager
-        .add_to_game(
-            game_ref,
-            player,
-            session,
-            GameSetupContext::Dataless {
-                context: DatalessContext::JoinGameSetup,
-            },
-        )
-        .await;
+    game_manager.add_to_game(
+        game_ref,
+        player,
+        session,
+        GameSetupContext::Dataless {
+            context: DatalessContext::JoinGameSetup,
+        },
+    );
 
     Ok(Blaze(JoinGameResponse {
         game_id,
@@ -70,10 +68,9 @@ pub async fn handle_get_game_data(
     let game_id = game_list.first().copied().ok_or(GlobalError::System)?;
     let game = game_manager
         .get_game(game_id)
-        .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &*game.read().await;
+    let game = &*game.read();
     let body = game.game_data();
 
     Ok(body)
@@ -139,7 +136,7 @@ pub async fn handle_create_game(
         setting,
     }): Blaze<CreateGameRequest>,
 ) -> ServerResult<Blaze<CreateGameResponse>> {
-    let (link, game_id) = game_manager.create_game(attributes, setting).await;
+    let (link, game_id) = game_manager.create_game(attributes, setting);
 
     // Notify matchmaking of the new game
     let mut player = player;
@@ -147,19 +144,17 @@ pub async fn handle_create_game(
     // Player is the host player (They are connected by default)
     player.state = PlayerState::ActiveConnected;
 
-    game_manager
-        .add_to_game(
-            link.clone(),
-            player,
-            session,
-            GameSetupContext::Dataless {
-                context: DatalessContext::CreateGameSetup,
-            },
-        )
-        .await;
+    game_manager.add_to_game(
+        link.clone(),
+        player,
+        session,
+        GameSetupContext::Dataless {
+            context: DatalessContext::CreateGameSetup,
+        },
+    );
 
     // Update matchmaking with the new game
-    game_manager.process_queue(link, game_id).await;
+    game_manager.process_queue(link, game_id);
 
     Ok(Blaze(CreateGameResponse { game_id }))
 }
@@ -193,21 +188,17 @@ pub async fn handle_set_attributes(
 ) -> ServerResult<()> {
     let link = game_manager
         .get_game(game_id)
-        .await
         .ok_or(GameManagerError::InvalidGameId)?;
-
-    {
-        let game = &mut *link.write().await;
-        game.set_attributes(attributes);
-    }
 
     // Update matchmaking for the changed game
     let join_state = {
-        let game = &*link.read().await;
+        let game = &mut *link.write();
+        game.set_attributes(attributes);
         game.joinable_state(None)
     };
+
     if let GameJoinableState::Joinable = join_state {
-        game_manager.process_queue(link, game_id).await;
+        game_manager.process_queue(link, game_id);
     }
 
     Ok(())
@@ -229,11 +220,9 @@ pub async fn handle_set_state(
 ) -> ServerResult<()> {
     let link = game_manager
         .get_game(game_id)
-        .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &mut *link.write().await;
-    game.set_state(state);
+    link.write().set_state(state);
 
     Ok(())
 }
@@ -254,11 +243,9 @@ pub async fn handle_set_setting(
 ) -> ServerResult<()> {
     let link = game_manager
         .get_game(game_id)
-        .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &mut *link.write().await;
-    game.set_settings(setting);
+    link.write().set_settings(setting);
 
     Ok(())
 }
@@ -286,11 +273,9 @@ pub async fn handle_remove_player(
 ) -> ServerResult<()> {
     let link = game_manager
         .get_game(game_id)
-        .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &mut *link.write().await;
-    game.remove_player(player_id, reason);
+    link.write().remove_player(player_id, reason);
 
     Ok(())
 }
@@ -327,10 +312,9 @@ pub async fn handle_update_mesh_connection(
 
     let link = game_manager
         .get_game(game_id)
-        .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &mut *link.write().await;
+    let game = &mut *link.write();
 
     // Ensure the host is the one making the change
     if game.is_host_player(player.id) {
@@ -347,10 +331,9 @@ pub async fn handle_add_admin_player(
 ) -> ServerResult<()> {
     let link = game_manager
         .get_game(game_id)
-        .await
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &mut *link.write().await;
+    let game = &mut *link.write();
 
     // Ensure the host is the one making the change
     if game.is_host_player(player.id) {
@@ -493,8 +476,8 @@ pub async fn handle_start_matchmaking(
     let rule_set = Arc::new(rules);
 
     // If adding failed attempt to queue instead
-    if let Err(player) = game_manager.try_add(player, &rule_set).await {
-        game_manager.queue(player, rule_set).await;
+    if let Err(player) = game_manager.try_add(player, &rule_set) {
+        game_manager.queue(player, rule_set);
     }
 
     Ok(Blaze(MatchmakingResponse { id: player_id }))
@@ -515,6 +498,11 @@ pub async fn handle_cancel_matchmaking(
     SessionAuth(player): SessionAuth,
     Extension(game_manager): Extension<Arc<GameManager>>,
 ) {
+    // Leave the current game (Incase they got into a match)
+    session.data.leave_game();
+
+    // Clear the current game
     session.data.clear_game();
-    game_manager.remove_queue(player.id).await;
+
+    game_manager.remove_queue(player.id);
 }

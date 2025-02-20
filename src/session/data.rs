@@ -245,8 +245,35 @@ impl SessionData {
         self.read().auth.as_ref().map(|value| value.net.clone())
     }
 
+    /// Leaves the game informing the game that the player has left
+    ///
+    /// DO NOT CALL FROM CODE ALREADY HOLDING A GAME WRITE LOCK
+    pub fn leave_game(&self) {
+        self.write_silent(|data| {
+            let game = match data.game.take() {
+                Some(game) => game,
+                None => return,
+            };
+
+            // Attempt to access the game
+            let game_ref = match game.game_ref.upgrade() {
+                Some(value) => value,
+                // Game doesn't exist anymore
+                None => return,
+            };
+
+            // Remove player from their game
+            game_ref
+                .write()
+                .remove_player(game.player_id, RemoveReason::PlayerLeft);
+        });
+    }
+
     /// Sets the game the session is currently apart of
     pub fn set_game(&self, game_id: GameID, game_ref: WeakGameRef) {
+        // Leave any existing games
+        self.leave_game();
+
         // Set the current game
         self.write_publish(|data| {
             data.game = Some(SessionGameData {
@@ -421,25 +448,6 @@ struct SessionGameData {
     game_id: GameID,
     /// Reference for accessing the game
     game_ref: WeakGameRef,
-}
-
-impl Drop for SessionGameData {
-    fn drop(&mut self) {
-        // Attempt to access the game
-        let game_ref = match self.game_ref.upgrade() {
-            Some(value) => value,
-            // Game doesn't exist anymore
-            None => return,
-        };
-
-        let player_id = self.player_id;
-
-        // Spawn an async task to handle removing the player
-        tokio::spawn(async move {
-            let game = &mut *game_ref.write().await;
-            game.remove_player(player_id, RemoveReason::PlayerLeft);
-        });
-    }
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
