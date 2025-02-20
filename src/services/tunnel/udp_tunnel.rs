@@ -109,16 +109,8 @@ pub async fn keep_alive(service: Arc<TunnelService>, socket: Arc<UdpSocket>) {
         let now = Instant::now();
 
         // Read the tunnels of all current tunnels
-        let tunnels: Vec<(TunnelId, SocketAddr, Instant)> = {
-            service
-                .udp
-                .mappings
-                .read()
-                .id_to_tunnel
-                .iter()
-                .map(|(tunnel_id, value)| (*tunnel_id, value.handle, value.last_alive))
-                .collect()
-        };
+        let tunnels: Vec<(TunnelId, TunnelData<SocketAddr>)> =
+            { service.udp.mappings.read().tunnel_data() };
 
         // Don't need to tick if theres no tunnels available
         if tunnels.is_empty() {
@@ -128,8 +120,8 @@ pub async fn keep_alive(service: Arc<TunnelService>, socket: Arc<UdpSocket>) {
         let mut expired_tunnels: Vec<TunnelId> = Vec::new();
 
         // Send out keep-alive messages for any tunnels that aren't expired
-        for (tunnel_id, addr, last_alive) in tunnels {
-            let last_alive = last_alive.duration_since(now);
+        for (tunnel_id, data) in tunnels {
+            let last_alive = data.last_alive.duration_since(now);
             if last_alive > KEEP_ALIVE_TIMEOUT {
                 expired_tunnels.push(tunnel_id);
                 continue;
@@ -141,7 +133,7 @@ pub async fn keep_alive(service: Arc<TunnelService>, socket: Arc<UdpSocket>) {
             send_task_set.spawn({
                 let socket = socket.clone();
 
-                async move { socket.send_to(&buffer, addr).await }
+                async move { socket.send_to(&buffer, data.handle).await }
             });
         }
 

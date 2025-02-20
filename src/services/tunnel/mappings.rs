@@ -6,6 +6,7 @@ use crate::{services::sessions::AssociationId, utils::hashing::IntHashMap};
 
 use super::{PoolId, PoolIndex, TunnelId};
 
+#[derive(Clone)]
 pub struct TunnelData<Handle> {
     /// Association ID for the tunnel
     pub association: AssociationId,
@@ -21,7 +22,7 @@ pub struct TunnelMappings<Handle> {
 
     /// Mapping from [TunnelId]s to the actual [TunnelHandle] for communicating
     /// with the tunnel
-    pub id_to_tunnel: IntHashMap<TunnelId, TunnelData<Handle>>,
+    id_to_tunnel: IntHashMap<TunnelId, TunnelData<Handle>>,
 
     /// Mapping from [AssociationId] (Client association) to [TunnelHandle]
     association_to_tunnel: HashMap<AssociationId, TunnelId>,
@@ -95,6 +96,13 @@ impl<Handle: Clone> TunnelMappings<Handle> {
                 return None;
             }
         }
+    }
+
+    pub fn tunnel_data(&self) -> Vec<(TunnelId, TunnelData<Handle>)> {
+        self.id_to_tunnel
+            .iter()
+            .map(|(tunnel_id, value)| (*tunnel_id, value.clone()))
+            .collect()
     }
 
     /// Inserts a new tunnel into the mappings and associates it to the
