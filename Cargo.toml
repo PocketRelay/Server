@@ -110,7 +110,7 @@ features = [
 
 # Axum web framework
 [dependencies.axum]
-version = "0.7.5"
+version = "0.8.1"
 default-features = false
 features = ["http1", "json", "query", "tokio"]
 

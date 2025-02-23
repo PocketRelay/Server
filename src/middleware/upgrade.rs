@@ -1,5 +1,4 @@
 use axum::{
-    async_trait,
     extract::FromRequestParts,
     http::{request::Parts, Method, StatusCode},
     response::IntoResponse,
@@ -20,20 +19,20 @@ pub enum UpgradeError {
 /// to upgrade the connection
 pub struct Upgrade(pub OnUpgrade);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for Upgrade
 where
     S: Send + Sync,
 {
     type Rejection = UpgradeError;
 
-    async fn from_request_parts(req: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         // Ensure the method is GET
-        if req.method != Method::GET {
+        if parts.method != Method::GET {
             return Err(UpgradeError::UnacceptableMethod);
         }
 
-        req.extensions
+        parts
+            .extensions
             .remove::<OnUpgrade>()
             .ok_or(UpgradeError::ConnectionNotUpgradable)
             .map(Self)

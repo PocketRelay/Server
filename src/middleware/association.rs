@@ -1,6 +1,5 @@
 use crate::services::sessions::{AssociationId, Sessions};
 use axum::{extract::FromRequestParts, response::IntoResponse};
-use futures_util::future::BoxFuture;
 use hyper::StatusCode;
 use std::{future::ready, sync::Arc};
 
@@ -13,15 +12,10 @@ const TOKEN_HEADER: &str = "x-association";
 impl<S> FromRequestParts<S> for Association {
     type Rejection = InvalidAssociation;
 
-    fn from_request_parts<'a, 'b, 'c>(
-        parts: &'a mut axum::http::request::Parts,
-        _state: &'b S,
-    ) -> BoxFuture<'c, Result<Self, Self::Rejection>>
-    where
-        'a: 'c,
-        'b: 'c,
-        Self: 'c,
-    {
+    fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
         let sessions = parts
             .extensions
             .get::<Arc<Sessions>>()

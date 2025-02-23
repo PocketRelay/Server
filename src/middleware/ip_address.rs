@@ -1,6 +1,5 @@
 use crate::config::RuntimeConfig;
 use axum::{
-    async_trait,
     extract::{rejection::ExtensionRejection, ConnectInfo, FromRequestParts},
     http::request::Parts,
     response::{IntoResponse, Response},
@@ -20,7 +19,6 @@ pub struct IpAddress(pub Ipv4Addr);
 /// Header used to extract the real client IP address, provided by the reverse proxy
 const REAL_IP_HEADER: &str = "X-Real-IP";
 
-#[async_trait]
 impl<S> FromRequestParts<S> for IpAddress
 where
     S: Send + Sync,
@@ -36,13 +34,13 @@ where
         // Reverse proxies should respect the X-Real-IP header
         if config.reverse_proxy {
             return extract_ip_header(&parts.headers)
-                .map_err(|err| {
-                    warn!("Failed to extract X-Real-IP header from incoming request. If you are NOT using a reverse proxy\n\
-                    disable the `reverse_proxy` config property, otherwise check that your reverse proxy is configured\n\
-                    correctly according the guide. (Closing connection with error) cause: {}", err);
-                    err
-                })
-                .map(Self);
+        .map_err(|err| {
+            warn!("Failed to extract X-Real-IP header from incoming request. If you are NOT using a reverse proxy\n\
+            disable the `reverse_proxy` config property, otherwise check that your reverse proxy is configured\n\
+            correctly according the guide. (Closing connection with error) cause: {}", err);
+            err
+        })
+        .map(Self);
         }
 
         Extension::<ConnectInfo<SocketAddr>>::from_request_parts(parts, state)

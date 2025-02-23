@@ -11,7 +11,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use futures_util::future::BoxFuture;
 use sea_orm::DatabaseConnection;
 use std::future::Future;
 use std::sync::Arc;
@@ -22,17 +21,11 @@ pub struct MaybeAuth(pub Option<Player>);
 impl<S> FromRequestParts<S> for MaybeAuth {
     type Rejection = TokenError;
 
-    fn from_request_parts<'a, 'b, 'c>(
-        parts: &'a mut axum::http::request::Parts,
-        state: &'b S,
-    ) -> BoxFuture<'c, Result<Self, Self::Rejection>>
-    where
-        'a: 'c,
-        'b: 'c,
-        Self: 'c,
-    {
-        let auth: std::pin::Pin<Box<dyn Future<Output = Result<Auth, TokenError>> + Send>> =
-            Auth::from_request_parts(parts, state);
+    fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        let auth = Auth::from_request_parts(parts, state);
         Box::pin(async move {
             match auth.await {
                 Ok(Auth(value)) => Ok(MaybeAuth(Some(value))),
@@ -49,15 +42,10 @@ pub struct AdminAuth(pub Player);
 impl<S> FromRequestParts<S> for AdminAuth {
     type Rejection = TokenError;
 
-    fn from_request_parts<'a, 'b, 'c>(
-        parts: &'a mut axum::http::request::Parts,
-        state: &'b S,
-    ) -> BoxFuture<'c, Result<Self, Self::Rejection>>
-    where
-        'a: 'c,
-        'b: 'c,
-        Self: 'c,
-    {
+    fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
         let auth = Auth::from_request_parts(parts, state);
         Box::pin(async move {
             let Auth(player) = auth.await?;
@@ -74,15 +62,11 @@ const TOKEN_HEADER: &str = "X-Token";
 
 impl<S> FromRequestParts<S> for Auth {
     type Rejection = TokenError;
-    fn from_request_parts<'a, 'b, 'c>(
-        parts: &'a mut axum::http::request::Parts,
-        _state: &'b S,
-    ) -> BoxFuture<'c, Result<Self, Self::Rejection>>
-    where
-        'a: 'c,
-        'b: 'c,
-        Self: 'c,
-    {
+
+    fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
         let db = parts
             .extensions
             .get::<DatabaseConnection>()

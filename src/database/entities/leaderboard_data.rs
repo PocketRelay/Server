@@ -44,6 +44,7 @@ pub enum LeaderboardType {
 pub struct LeaderboardDataAndRank {
     /// Unique Identifier for the entry
     #[serde(skip)]
+    #[allow(unused)]
     pub id: u32,
     /// ID of the player this data is for
     pub player_id: PlayerID,
@@ -195,6 +196,7 @@ impl Model {
 
     /// Sets the leaderboard value for the specified `player_id` on
     /// a specific leaderboard `ty` type to the provided `value`
+    #[allow(unused)]
     pub fn set(
         db: &DatabaseConnection,
         ty: LeaderboardType,

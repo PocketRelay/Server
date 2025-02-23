@@ -29,8 +29,8 @@ pub fn router() -> Router {
         .nest(
             "/galaxyatwar",
             Router::new()
-                .route("/getRatings/:id", get(gaw::get_ratings))
-                .route("/increaseRatings/:id", get(gaw::increase_ratings)),
+                .route("/getRatings/{id}", get(gaw::get_ratings))
+                .route("/increaseRatings/{id}", get(gaw::increase_ratings)),
         )
         // Quality of service
         .nest(
@@ -49,7 +49,7 @@ pub fn router() -> Router {
                     "/games",
                     Router::new()
                         .route("/", get(games::get_games))
-                        .route("/:id", get(games::get_game)),
+                        .route("/{id}", get(games::get_game)),
                 )
                 // Players routing
                 .nest(
@@ -60,20 +60,20 @@ pub fn router() -> Router {
                         .route("/self/password", put(players::update_password))
                         .route("/self/details", put(players::update_details))
                         .route(
-                            "/:id",
+                            "/{id}",
                             get(players::get_player).delete(players::delete_player),
                         )
-                        .route("/:id/data", get(players::all_data))
+                        .route("/{id}/data", get(players::all_data))
                         .route(
-                            "/:id/data/:key",
+                            "/{id}/data/{key}",
                             get(players::get_data)
                                 .put(players::set_data)
                                 .delete(players::delete_data),
                         )
-                        .route("/:id/galaxy_at_war", get(players::get_player_gaw))
-                        .route("/:id/password", put(players::set_password))
-                        .route("/:id/details", put(players::set_details))
-                        .route("/:id/role", put(players::set_role)),
+                        .route("/{id}/galaxy_at_war", get(players::get_player_gaw))
+                        .route("/{id}/password", put(players::set_password))
+                        .route("/{id}/details", put(players::set_details))
+                        .route("/{id}/role", put(players::set_role)),
                 )
                 // Authentication routes
                 .nest(
@@ -88,8 +88,8 @@ pub fn router() -> Router {
                 .nest(
                     "/leaderboard",
                     Router::new()
-                        .route("/:name", get(leaderboard::get_leaderboard))
-                        .route("/:name/:player_id", get(leaderboard::get_player_ranking)),
+                        .route("/{name}", get(leaderboard::get_leaderboard))
+                        .route("/{name}/{player_id}", get(leaderboard::get_player_ranking)),
                 )
                 // Server details routes
                 .nest(
