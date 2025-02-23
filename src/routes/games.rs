@@ -1,5 +1,5 @@
 use crate::{
-    config::RuntimeConfig,
+    config::Config,
     database::entities::players::PlayerRole,
     middleware::auth::MaybeAuth,
     services::game::{store::Games, GameSnapshot},
@@ -61,7 +61,7 @@ pub async fn get_games(
     MaybeAuth(auth): MaybeAuth,
     Query(GamesRequest { offset, count }): Query<GamesRequest>,
     Extension(games): Extension<Arc<Games>>,
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
 ) -> Result<Json<GamesResponse>, GamesError> {
     if let (None, false) = (&auth, config.api.public_games) {
         return Err(GamesError::NoPermission);
@@ -98,7 +98,7 @@ pub async fn get_game(
     MaybeAuth(auth): MaybeAuth,
     Path(game_id): Path<GameID>,
     Extension(games): Extension<Arc<Games>>,
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
 ) -> Result<Json<GameSnapshot>, GamesError> {
     if let (None, false) = (&auth, config.api.public_games) {
         return Err(GamesError::NoPermission);

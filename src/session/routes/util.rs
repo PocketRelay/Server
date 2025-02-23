@@ -1,5 +1,5 @@
 use crate::{
-    config::{RuntimeConfig, VERSION},
+    config::{Config, VERSION},
     database::entities::PlayerData,
     services::config::{
         fallback_coalesced_file, fallback_talk_file, local_coalesced_file, local_talk_file,
@@ -82,7 +82,7 @@ pub async fn handle_get_ticker_server() -> Blaze<TickerServer> {
 /// }
 /// ```
 pub async fn handle_pre_auth(
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
 ) -> ServerResult<Blaze<PreAuthResponse>> {
     Ok(Blaze(PreAuthResponse { config }))
 }

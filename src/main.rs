@@ -1,7 +1,7 @@
 #![warn(unused_crate_dependencies)]
 
 use crate::{
-    config::{RuntimeConfig, VERSION},
+    config::VERSION,
     services::{retriever::Retriever, sessions::Sessions, tunnel::TunnelService},
     utils::signing::SigningKey,
 };
@@ -27,95 +27,82 @@ mod utils;
 #[tokio::main]
 async fn main() {
     // Load configuration
-    let config = load_config().unwrap_or_default();
+    let mut config = load_config().unwrap_or_default();
+
+    // Initialize logging
+    logging::setup(config.logging);
 
     if config.logging == LevelFilter::Debug {
         utils::components::initialize();
     }
 
-    // Initialize logging
-    logging::setup(config.logging);
-
     // Create the server socket address while the port is still available
     let addr: SocketAddr = SocketAddr::new(config.host, config.port);
 
-    // Create tunnel server socket address
-    let tunnel_addr: SocketAddr = SocketAddr::new(config.host, config.udp_tunnel.port);
-
-    // Check if the tunnel is enabled
-    let tunnel_enabled: bool = !matches!(config.tunnel, TunnelConfig::Disabled);
-
-    // Config data persisted to runtime
-    let runtime_config = RuntimeConfig {
-        reverse_proxy: config.reverse_proxy,
-        galaxy_at_war: config.galaxy_at_war,
-        menu_message: config.menu_message,
-        dashboard: config.dashboard,
-        qos: config.qos,
-        tunnel: config.tunnel,
-        api: config.api,
-        udp_tunnel: config.udp_tunnel,
-    };
-
-    debug!("QoS server: {:?}", &runtime_config.qos);
+    debug!("QoS server: {:?}", &config.qos);
 
     // This step may take longer than expected so its spawned instead of joined
     tokio::spawn(logging::log_connection_urls(config.port));
 
     let (db, retriever, signing_key) = join!(
-        database::init(&runtime_config),
-        Retriever::start(config.retriever),
+        database::init(&config),
+        Retriever::start(&config.retriever),
         SigningKey::global(),
     );
-    let sessions = Arc::new(Sessions::new(signing_key));
-    let config = Arc::new(runtime_config);
 
     let (tunnel_service, udp_forward_rx) = TunnelService::new();
     let tunnel_service = Arc::new(tunnel_service);
 
+    let sessions = Arc::new(Sessions::new(signing_key));
     let games = Arc::new(Games::default());
     let matchmaking = Arc::new(Matchmaking::default());
     let retriever = Arc::new(retriever);
 
-    // Spawn background task to perform keep alive checks on tunnels
-    if tunnel_enabled {
+    // Start tunnel if not disabled
+    if !matches!(config.tunnel, TunnelConfig::Disabled) {
         tokio::spawn(tunnel_keep_alive(tunnel_service.clone()));
-    }
 
-    // Start the tunnel server (If enabled)
-    if tunnel_enabled && config.udp_tunnel.enabled {
-        // Start the tunnel service server
-        if let Err(err) = start_udp_tunnel(
-            tunnel_addr,
-            tunnel_service.clone(),
-            sessions.clone(),
-            udp_forward_rx,
-        )
-        .await
-        {
-            error!("failed to start udp tunnel server: {}", err);
+        // Start UDP tunnel if enabled
+        if config.udp_tunnel.enabled {
+            // Create tunnel server socket address
+            let tunnel_addr: SocketAddr = SocketAddr::new(config.host, config.udp_tunnel.port);
+
+            // Start the tunnel service server
+            if let Err(err) = start_udp_tunnel(
+                tunnel_addr,
+                tunnel_service.clone(),
+                sessions.clone(),
+                udp_forward_rx,
+            )
+            .await
+            {
+                error!("failed to start UDP tunnel server: {}", err);
+
+                // Disable failed UDP tunnel
+                config.udp_tunnel.enabled = false;
+            }
         }
     }
 
+    let config = Arc::new(config);
+
     // Initialize session router
-    let mut router = session::routes::router();
-
-    router.add_extension(db.clone());
-    router.add_extension(config.clone());
-    router.add_extension(games.clone());
-    router.add_extension(sessions.clone());
-    router.add_extension(tunnel_service.clone());
-    router.add_extension(matchmaking);
-    router.add_extension(retriever);
-
-    let router = router.build();
+    let blaze_router = session::routes::router()
+        .extension(db.clone())
+        .extension(config.clone())
+        .extension(games.clone())
+        .extension(sessions.clone())
+        .extension(tunnel_service.clone())
+        .extension(matchmaking)
+        .extension(retriever)
+        .build();
 
     // Create the HTTP router
     let router = routes::router()
         // Apply data extensions
         .layer(Extension(db))
         .layer(Extension(config))
-        .layer(Extension(router))
+        .layer(Extension(blaze_router))
         .layer(Extension(games))
         .layer(Extension(sessions))
         .layer(Extension(tunnel_service))

@@ -1,6 +1,6 @@
 use super::{util::PING_SITE_ALIAS, NatType, NetworkAddress};
 use crate::{
-    config::{RuntimeConfig, TunnelConfig},
+    config::{Config, TunnelConfig},
     services::{
         game::{rules::RuleSet, AttrMap, Game, GamePlayer},
         tunnel::http_tunnel::TUNNEL_HOST_LOCAL_PORT,
@@ -762,7 +762,7 @@ pub enum SlotType {
 pub struct GameSetupResponse<'a> {
     pub game: &'a Game,
     pub context: GameSetupContext,
-    pub config: &'a RuntimeConfig,
+    pub config: &'a Config,
 }
 
 impl TdfSerialize for GameSetupResponse<'_> {

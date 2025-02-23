@@ -1,6 +1,6 @@
 use self::rules::RuleSet;
 use crate::{
-    config::RuntimeConfig,
+    config::Config,
     database::entities::Player,
     session::{
         data::NetData,
@@ -44,7 +44,7 @@ pub trait GameAddPlayerExt {
     fn add_player(
         &self,
         tunnel_service: &TunnelService,
-        config: &RuntimeConfig,
+        config: &Config,
 
         player: GamePlayer,
         session: SessionLink,
@@ -56,7 +56,7 @@ impl GameAddPlayerExt for GameRef {
     fn add_player(
         &self,
         tunnel_service: &TunnelService,
-        config: &RuntimeConfig,
+        config: &Config,
 
         player: GamePlayer,
         session: SessionLink,
@@ -286,7 +286,7 @@ impl Game {
         &mut self,
         player: GamePlayer,
         context: GameSetupContext,
-        config: &RuntimeConfig,
+        config: &Config,
     ) -> usize {
         let slot = self.players.len();
 

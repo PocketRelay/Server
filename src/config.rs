@@ -12,20 +12,6 @@ use crate::session::models::Port;
 /// The server version extracted from the Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Config variables that are required to always exist during
-/// runtime for various tasks
-#[derive(Default)]
-pub struct RuntimeConfig {
-    pub qos: QosServerConfig,
-    pub reverse_proxy: bool,
-    pub galaxy_at_war: GalaxyAtWarConfig,
-    pub menu_message: String,
-    pub dashboard: DashboardConfig,
-    pub tunnel: TunnelConfig,
-    pub udp_tunnel: UdpTunnelConfig,
-    pub api: APIConfig,
-}
-
 /// Environment variable key to load the config from
 const CONFIG_ENV_KEY: &str = "PR_CONFIG_JSON";
 

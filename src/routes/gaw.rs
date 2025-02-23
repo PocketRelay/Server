@@ -5,7 +5,7 @@
 //! other than the Mass Effect 3 client itself.
 
 use crate::{
-    config::RuntimeConfig,
+    config::Config,
     database::{
         entities::{GalaxyAtWar, Player, PlayerData},
         DatabaseConnection, DbErr, DbResult,
@@ -96,7 +96,7 @@ pub async fn shared_token_login(Query(AuthQuery { auth }): Query<AuthQuery>) -> 
 pub async fn get_ratings(
     Path(id): Path<String>,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
     Extension(sessions): Extension<Arc<Sessions>>,
 ) -> Result<Xml, GAWError> {
     let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
@@ -136,7 +136,7 @@ pub async fn increase_ratings(
     Path(id): Path<String>,
     Query(IncreaseQuery { a, b, c, d, e }): Query<IncreaseQuery>,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
     Extension(sessions): Extension<Arc<Sessions>>,
 ) -> Result<Xml, GAWError> {
     let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
@@ -153,7 +153,7 @@ async fn get_player_gaw_data(
     db: &DatabaseConnection,
     sessions: Arc<Sessions>,
     token: &str,
-    config: &RuntimeConfig,
+    config: &Config,
 ) -> Result<(GalaxyAtWar, u32), GAWError> {
     let player_id = sessions
         .verify_token(token)
@@ -175,7 +175,7 @@ async fn get_player_gaw_data(
 async fn get_promotions(
     db: &DatabaseConnection,
     player: &Player,
-    config: &RuntimeConfig,
+    config: &Config,
 ) -> DbResult<u32> {
     if !config.galaxy_at_war.promotions {
         return Ok(0);

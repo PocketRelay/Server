@@ -106,6 +106,11 @@ impl BlazeRouterBuilder {
             })
     }
 
+    pub fn extension<T: Send + Sync + 'static>(mut self, val: T) -> Self {
+        self.add_extension(val);
+        self
+    }
+
     pub fn route<Args, Res>(&mut self, component: u16, command: u16, route: impl Handler<Args, Res>)
     where
         Args: 'static,

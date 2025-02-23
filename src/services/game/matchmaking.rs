@@ -4,7 +4,7 @@ use log::debug;
 use parking_lot::Mutex;
 
 use crate::{
-    config::RuntimeConfig,
+    config::Config,
     services::tunnel::TunnelService,
     session::{
         models::game_manager::{AsyncMatchmakingStatus, GameSetupContext, MatchmakingResult},
@@ -55,7 +55,7 @@ impl Matchmaking {
     pub fn process_queue(
         &self,
         tunnel_service: &TunnelService,
-        runtime_config: &RuntimeConfig,
+        config: &Config,
 
         link: &GameRef,
         game_id: GameID,
@@ -85,12 +85,7 @@ impl Matchmaking {
                     }
 
                     // Add the player to the game
-                    self.add_from_matchmaking(
-                        tunnel_service,
-                        runtime_config,
-                        link.clone(),
-                        entry.player,
-                    );
+                    self.add_from_matchmaking(tunnel_service, config, link.clone(), entry.player);
                 }
                 GameJoinableState::Full | GameJoinableState::Stopping => {
                     // If the game is not joinable push the entry back to the
@@ -108,7 +103,7 @@ impl Matchmaking {
     pub fn add_from_matchmaking(
         &self,
         tunnel_service: &TunnelService,
-        runtime_config: &RuntimeConfig,
+        config: &Config,
 
         game_ref: GameRef,
         player: GamePlayer,
@@ -131,7 +126,7 @@ impl Matchmaking {
         // Add player to the game
         game_ref.add_player(
             tunnel_service,
-            runtime_config,
+            config,
             player,
             session,
             GameSetupContext::Matchmaking {

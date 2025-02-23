@@ -1,5 +1,5 @@
 use crate::{
-    config::{RuntimeConfig, VERSION},
+    config::{Config, VERSION},
     session::{
         models::messaging::*,
         packet::Packet,
@@ -32,7 +32,7 @@ use std::sync::Arc;
 pub async fn handle_fetch_messages(
     session: SessionLink,
     SessionAuth(player): SessionAuth,
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
 ) -> Blaze<FetchMessageResponse> {
     // Message with player name replaced
     let mut message: String = config

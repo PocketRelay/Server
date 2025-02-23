@@ -1,6 +1,6 @@
 use super::Port;
 use crate::{
-    config::{QosServerConfig, RuntimeConfig},
+    config::{Config, QosServerConfig},
     session::data::KEEP_ALIVE_DELAY,
     utils::types::PlayerID,
 };
@@ -96,7 +96,7 @@ pub const PING_SITE_ALIAS: &str = "ea-sjc";
 
 /// Structure for the response to a pre authentication request
 pub struct PreAuthResponse {
-    pub config: Arc<RuntimeConfig>,
+    pub config: Arc<Config>,
 }
 
 impl TdfSerialize for PreAuthResponse {

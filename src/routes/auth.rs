@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    config::RuntimeConfig,
+    config::Config,
     database::entities::{Player, PlayerRole},
     services::sessions::Sessions,
     session::{models::messaging::MessageNotify, packet::Packet},
@@ -140,7 +140,7 @@ pub struct CreateRequest {
 /// the authentication token for the created user
 pub async fn create(
     Extension(db): Extension<DatabaseConnection>,
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
     Extension(sessions): Extension<Arc<Sessions>>,
     Json(CreateRequest {
         username,

@@ -19,7 +19,7 @@ pub use sea_orm::DbErr;
 
 use self::entities::{Player, PlayerRole};
 use crate::{
-    config::RuntimeConfig,
+    config::Config,
     utils::hashing::{hash_password, verify_password},
 };
 
@@ -31,7 +31,7 @@ const DATABASE_PATH_URL: &str = "sqlite:data/app.db";
 
 /// Connects to the database and applies the admin changes if
 /// required, returning the database connection
-pub async fn init(config: &RuntimeConfig) -> DatabaseConnection {
+pub async fn init(config: &Config) -> DatabaseConnection {
     info!("Connected to database..");
 
     let connection = connect_database().await;
@@ -92,7 +92,7 @@ async fn connect_database() -> DatabaseConnection {
 ///
 /// `db`     The database connection
 /// `config` The config to use for the admin details
-async fn init_database_admin(db: &DatabaseConnection, config: &RuntimeConfig) {
+async fn init_database_admin(db: &DatabaseConnection, config: &Config) {
     let admin_email = match &config.dashboard.super_email {
         // Ignore if email is empty
         Some(value) if value.is_empty() => return,

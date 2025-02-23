@@ -1,5 +1,5 @@
 use crate::{
-    config::RuntimeConfig,
+    config::Config,
     database::{
         entities::{Player, PlayerRole},
         DatabaseConnection,
@@ -122,7 +122,7 @@ pub async fn handle_silent_login(
 pub async fn handle_origin_login(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
     Extension(sessions): Extension<Arc<Sessions>>,
     Extension(retriever): Extension<Arc<Retriever>>,
     Blaze(OriginLoginRequest { token, .. }): Blaze<OriginLoginRequest>,
@@ -327,7 +327,7 @@ pub async fn handle_forgot_password(Blaze(req): Blaze<ForgotPasswordRequest>) {
 pub async fn handle_create_account(
     session: SessionLink,
     Extension(db): Extension<DatabaseConnection>,
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
     Extension(sessions): Extension<Arc<Sessions>>,
     Blaze(CreateAccountRequest { email, password }): Blaze<CreateAccountRequest>,
 ) -> ServerResult<Blaze<AuthResponse>> {

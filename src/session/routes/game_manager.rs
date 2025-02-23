@@ -1,5 +1,5 @@
 use crate::{
-    config::RuntimeConfig,
+    config::Config,
     services::{
         game::{
             matchmaking::Matchmaking, store::Games, Game, GameAddPlayerExt, GameJoinableState,
@@ -26,7 +26,7 @@ pub async fn handle_join_game(
     Blaze(JoinGameRequest { user }): Blaze<JoinGameRequest>,
     Extension(sessions): Extension<Arc<Sessions>>,
     Extension(tunnel_service): Extension<Arc<TunnelService>>,
-    Extension(runtime_config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
 ) -> ServerResult<Blaze<JoinGameResponse>> {
     // Lookup the session join target
     let other_session = sessions
@@ -54,7 +54,7 @@ pub async fn handle_join_game(
 
     game_ref.add_player(
         &tunnel_service,
-        &runtime_config,
+        &config,
         player,
         session,
         GameSetupContext::Dataless {
@@ -140,7 +140,7 @@ pub async fn handle_create_game(
     Extension(games): Extension<Arc<Games>>,
     Extension(matchmaking): Extension<Arc<Matchmaking>>,
     Extension(tunnel_service): Extension<Arc<TunnelService>>,
-    Extension(runtime_config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
     Blaze(CreateGameRequest {
         attributes,
         setting,
@@ -165,7 +165,7 @@ pub async fn handle_create_game(
     // Add player to the game
     game_ref.add_player(
         &tunnel_service,
-        &runtime_config,
+        &config,
         player,
         session,
         GameSetupContext::Dataless {
@@ -175,7 +175,7 @@ pub async fn handle_create_game(
 
     // Update matchmaking with the new game
 
-    matchmaking.process_queue(&tunnel_service, &runtime_config, &game_ref, game_id);
+    matchmaking.process_queue(&tunnel_service, &config, &game_ref, game_id);
 
     Ok(Blaze(CreateGameResponse { game_id }))
 }
@@ -204,7 +204,7 @@ pub async fn handle_set_attributes(
     Extension(games): Extension<Arc<Games>>,
     Extension(matchmaking): Extension<Arc<Matchmaking>>,
     Extension(tunnel_service): Extension<Arc<TunnelService>>,
-    Extension(runtime_config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
 
     Blaze(SetAttributesRequest {
         attributes,
@@ -223,7 +223,7 @@ pub async fn handle_set_attributes(
     };
 
     if let GameJoinableState::Joinable = join_state {
-        matchmaking.process_queue(&tunnel_service, &runtime_config, &game_ref, game_id);
+        matchmaking.process_queue(&tunnel_service, &config, &game_ref, game_id);
     }
 
     Ok(())
@@ -494,7 +494,7 @@ pub async fn handle_start_matchmaking(
     Extension(games): Extension<Arc<Games>>,
     Extension(matchmaking): Extension<Arc<Matchmaking>>,
     Extension(tunnel_service): Extension<Arc<TunnelService>>,
-    Extension(runtime_config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
 
     Blaze(MatchmakingRequest { rules }): Blaze<MatchmakingRequest>,
 ) -> ServerResult<Blaze<MatchmakingResponse>> {
@@ -508,7 +508,7 @@ pub async fn handle_start_matchmaking(
             debug!("Found matching game (GID: {})", game_id);
 
             // Add the player to the game
-            matchmaking.add_from_matchmaking(&tunnel_service, &runtime_config, game_ref, player);
+            matchmaking.add_from_matchmaking(&tunnel_service, &config, game_ref, player);
         }
         None => {
             matchmaking.queue(player, rules);

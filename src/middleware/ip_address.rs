@@ -1,4 +1,3 @@
-use crate::config::RuntimeConfig;
 use axum::{
     extract::{rejection::ExtensionRejection, ConnectInfo, FromRequestParts},
     http::request::Parts,
@@ -12,6 +11,8 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+
+use crate::config::Config;
 
 /// Middleware that extracts the IP address of the connection
 pub struct IpAddress(pub Ipv4Addr);
@@ -28,7 +29,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let config = parts
             .extensions
-            .get::<Arc<RuntimeConfig>>()
+            .get::<Arc<Config>>()
             .expect("Missing runtime config");
 
         // Reverse proxies should respect the X-Real-IP header
@@ -119,8 +120,9 @@ impl IntoResponse for IpAddressError {
 
 #[cfg(test)]
 mod test {
+    use crate::config::Config;
+
     use super::{extract_ip_header, IpAddress, IpAddressError, REAL_IP_HEADER};
-    use crate::config::RuntimeConfig;
     use axum::{
         extract::{ConnectInfo, FromRequestParts},
         http::HeaderValue,
@@ -208,7 +210,7 @@ mod test {
     /// Tests that the middleware can extract the header from a request
     #[tokio::test]
     async fn test_extraction_header() {
-        let config = Arc::new(RuntimeConfig {
+        let config = Arc::new(Config {
             reverse_proxy: true,
             ..Default::default()
         });
@@ -232,7 +234,7 @@ mod test {
     /// extension is used instead
     #[tokio::test]
     async fn test_extraction_fallback() {
-        let config = Arc::new(RuntimeConfig {
+        let config = Arc::new(Config {
             reverse_proxy: false,
             ..Default::default()
         });

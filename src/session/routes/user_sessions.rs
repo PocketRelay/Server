@@ -1,5 +1,5 @@
 use crate::{
-    config::{QosServerConfig, RuntimeConfig},
+    config::{Config, QosServerConfig},
     database::entities::Player,
     services::sessions::{Sessions, VerifyError},
     session::{
@@ -127,7 +127,7 @@ pub async fn handle_resume_session(
 /// ```
 pub async fn handle_update_network(
     session: SessionLink,
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
     Blaze(UpdateNetworkRequest {
         mut address,
         qos,

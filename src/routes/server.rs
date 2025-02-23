@@ -2,7 +2,7 @@
 //! about the server such as the version and services running
 
 use crate::{
-    config::{RuntimeConfig, VERSION},
+    config::{Config, VERSION},
     database::entities::players::PlayerRole,
     middleware::{
         association::Association, auth::AdminAuth, ip_address::IpAddress, upgrade::Upgrade,
@@ -49,7 +49,7 @@ pub struct ServerDetails {
 /// Pocket Relay server.
 pub async fn server_details(
     Extension(sessions): Extension<Arc<Sessions>>,
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
 ) -> Json<ServerDetails> {
     let association = sessions.create_assoc_token();
     Json(ServerDetails {
@@ -73,7 +73,7 @@ pub struct DashboardDetails {
 /// uses this endpoint to validate that the provided host is a valid
 /// Pocket Relay server.
 pub async fn dashboard_details(
-    Extension(config): Extension<Arc<RuntimeConfig>>,
+    Extension(config): Extension<Arc<Config>>,
 ) -> Json<DashboardDetails> {
     Json(DashboardDetails {
         disable_registration: config.dashboard.disable_registration,
