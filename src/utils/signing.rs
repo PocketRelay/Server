@@ -1,5 +1,5 @@
-use argon2::password_hash::rand_core::{OsRng, RngCore};
 use log::{debug, error};
+use rand::{rngs::OsRng, TryRngCore};
 use ring::hmac::{self, Key, Tag, HMAC_SHA256};
 use std::{io, path::Path};
 use tokio::{
@@ -63,7 +63,9 @@ impl SigningKey {
     /// Generates a new signing key
     pub fn generate() -> (Self, [u8; Self::KEY_LENGTH]) {
         let mut secret = [0; Self::KEY_LENGTH];
-        OsRng.fill_bytes(&mut secret);
+        OsRng
+            .try_fill_bytes(&mut secret)
+            .expect("failed to fill secret bytes");
         (Self::new(&secret), secret)
     }
 

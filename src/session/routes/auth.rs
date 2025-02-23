@@ -331,7 +331,7 @@ pub async fn handle_create_account(
         GlobalError::System
     })?;
 
-    let mut rng = StdRng::from_entropy();
+    let mut rng = StdRng::from_os_rng();
     let display_name: String;
 
     loop {

@@ -1,5 +1,5 @@
 use chrono::Local;
-use rand::{distributions::Uniform, Rng};
+use rand::{distr::Uniform, Rng};
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
@@ -115,14 +115,14 @@ pub async fn seed() {
 
     let current_time = Local::now().naive_local();
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     // Random sample used for role data
-    let role_sample = Uniform::new_inclusive(0, 3);
+    let role_sample = Uniform::new_inclusive(0, 3).unwrap();
     // Class level sample
-    let level_sample = Uniform::new_inclusive(0, 20);
+    let level_sample = Uniform::new_inclusive(0, 20).unwrap();
     // Random sample used for gaw groups
-    let gaw_sample = Uniform::new_inclusive(5000, 10099);
+    let gaw_sample = Uniform::new_inclusive(5000, 10099).unwrap();
 
     const INVENTORY_LENGTH: usize = 671;
 
@@ -156,8 +156,13 @@ pub async fn seed() {
 
         // Set the player leaderboard data
         try_join!(
-            LeaderboardData::set(&db, LeaderboardType::N7Rating, model.id, rng.gen()),
-            LeaderboardData::set(&db, LeaderboardType::ChallengePoints, model.id, rng.gen())
+            LeaderboardData::set(&db, LeaderboardType::N7Rating, model.id, rng.random()),
+            LeaderboardData::set(
+                &db,
+                LeaderboardType::ChallengePoints,
+                model.id,
+                rng.random()
+            )
         )
         .unwrap();
 
@@ -183,16 +188,16 @@ pub async fn seed() {
             let mut inventory: String = String::with_capacity(INVENTORY_LENGTH * 2);
             for _ in 0..INVENTORY_LENGTH {
                 // Generate a random value for the inventory item
-                let value: u8 = rng.gen();
+                let value: u8 = rng.random();
 
                 // Store the value as a 2 char hex value
                 write!(&mut inventory, "{value:2x}").unwrap();
             }
 
-            let credits: u32 = rng.gen();
-            let credits_spent: u32 = rng.gen();
-            let games_played: u32 = rng.gen();
-            let seconds_played: u32 = rng.gen();
+            let credits: u32 = rng.random();
+            let credits_spent: u32 = rng.random();
+            let games_played: u32 = rng.random();
+            let seconds_played: u32 = rng.random();
 
             // Generate the player base data
             let base_data = format!(
@@ -205,7 +210,7 @@ pub async fn seed() {
         // Set the player class data for each class
         for (index, class_name) in CLASS_NAMES.iter().enumerate() {
             let level: u32 = rng.sample(level_sample);
-            let xp: f32 = rng.gen();
+            let xp: f32 = rng.random();
 
             let key = format!("class{}", index + 1);
             let value = format!("20;4;{class_name};{level};{xp:.4};0");
@@ -217,7 +222,7 @@ pub async fn seed() {
             let mut completion = String::from("22");
 
             for _ in 0..746 {
-                let value: u8 = rng.gen();
+                let value: u8 = rng.random();
                 write!(&mut completion, ",{value}").unwrap();
             }
 
@@ -229,7 +234,7 @@ pub async fn seed() {
             let mut completion = String::from("22");
 
             for _ in 0..221 {
-                let value: u8 = rng.gen();
+                let value: u8 = rng.random();
                 write!(&mut completion, ",{value}").unwrap();
             }
 
@@ -241,7 +246,7 @@ pub async fn seed() {
             let mut value = String::new();
 
             for _ in 0..250 {
-                let rand: u32 = rng.gen();
+                let rand: u32 = rng.random();
                 write!(&mut value, "{rand},").unwrap();
             }
 
@@ -255,7 +260,7 @@ pub async fn seed() {
             let mut value = String::new();
 
             for _ in 0..250 {
-                let rand: u32 = rng.gen();
+                let rand: u32 = rng.random();
                 write!(&mut value, "{rand},").unwrap();
             }
 
@@ -269,7 +274,7 @@ pub async fn seed() {
             let mut value = String::new();
 
             for _ in 0..245 {
-                let rand: u32 = rng.gen();
+                let rand: u32 = rng.random();
                 write!(&mut value, "{rand},").unwrap();
             }
 
@@ -283,7 +288,7 @@ pub async fn seed() {
             let mut progress = String::from("22");
 
             for _ in 0..745 {
-                let value: u32 = rng.gen();
+                let value: u32 = rng.random();
                 write!(&mut progress, ",{value}").unwrap();
             }
             player_data.push(("Progress".to_string(), progress));

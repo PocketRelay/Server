@@ -1,4 +1,4 @@
-use rand::{rngs::StdRng, seq::SliceRandom, Rng};
+use rand::{rngs::StdRng, seq::IndexedRandom, Rng};
 
 /// Code for generating random names for accounts that weren't provided
 /// display names (Accounts created in-game)
@@ -2126,7 +2126,7 @@ pub fn generate_random_name(rng: &mut StdRng) -> String {
     let noun = NOUNS.choose(rng).unwrap();
 
     // Random number suffix for extra randomness
-    let random_suffix = rng.gen_range(1..10000);
+    let random_suffix = rng.random_range(1..10000);
 
     format!("{}-{}-{:04}", adj, noun, random_suffix)
 }

@@ -8,7 +8,7 @@ use crate::utils::signing::SigningKey;
 use crate::utils::types::PlayerID;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use parking_lot::Mutex;
-use rand::distributions::Distribution;
+use rand::distr::Distribution;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::collections::HashMap;
@@ -57,7 +57,7 @@ struct LoginCodePart;
 impl Distribution<char> for LoginCodePart {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> char {
         let chars = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        let idx = rng.gen_range(0..chars.len());
+        let idx = rng.random_range(0..chars.len());
         chars[idx] as char
     }
 }
@@ -80,7 +80,7 @@ impl Sessions {
     /// Creates a new login code for the provider player, returns the
     /// login code storing the data so it can be exchanged
     pub fn create_login_code(&self, player_id: PlayerID) -> Result<LoginCode, ()> {
-        let rng = StdRng::from_entropy();
+        let rng = StdRng::from_os_rng();
 
         let code: LoginCode = rng
             .sample_iter(&LoginCodePart)

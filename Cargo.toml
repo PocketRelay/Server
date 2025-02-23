@@ -41,42 +41,42 @@ embeddy = "0.1"
 # Password hashing
 argon2 = { version = "0.5", features = ["std"] }
 
-base64ct = { version = "1.5", features = ["alloc"] }
+base64ct = { version = "1.6", features = ["alloc"] }
 flate2 = { version = "1", features = ["zlib"], default-features = false }
 ring = "0.17"
 
 # Library for obtaining the local IP address of the device
-local-ip-address = "0.5"
+local-ip-address = "0.6"
 
 # Error handling and transforming
 thiserror = "1"
 
 # Email validation
-email_address = "0.2.4"
+email_address = "0.2.9"
 
 # Codec utils for encoding and decoding packets
 tokio-util = { version = "0.7", features = ["codec"] }
 
 # Hyper for connection upgrades
-hyper = "1.4"
-hyper-util = { version = "0.1.7", features = ["tokio"] }
-tower = { version = "0.4", features = ["util"] }
+hyper = "1.6"
+hyper-util = { version = "0.1.10", features = ["tokio"] }
+tower = { version = "0.5.2", features = ["util"] }
 
-bitflags = { version = "2.3.1", features = ["serde"] }
+bitflags = { version = "2.8.0", features = ["serde"] }
 tdf = { version = "0.4" }
 bytes = "1.4.0"
 
 indoc = "2"
-parking_lot = "0.12.1"
+parking_lot = "0.12.3"
 
 # Const safe HashMaps (Can be replaced with std HashMap after https://github.com/rust-lang/rust/issues/102575 is resolved)
-hashbrown = { version = "0.14.3", default-features = false, features = [
+hashbrown = { version = "0.15.2", default-features = false, features = [
     "allocator-api2",
     "inline-more",
 ] }
 
 uuid = { version = "^1", features = ["v4", "serde", "fast-rng"] }
-rand = "0.8"
+rand = "0.9"
 
 # SeaORM 
 [dependencies.sea-orm]
@@ -131,10 +131,6 @@ features = ["console_appender", "file_appender"]
 version = "0.4"
 default-features = false
 features = ["std", "serde"]
-
-[dev-dependencies]
-# Random numbers for seeding
-rand = "0.8"
 
 [profile.release]
 strip = true
