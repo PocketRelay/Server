@@ -38,8 +38,8 @@ impl Games {
 
     /// Find a game that matches the provided rule set
     pub fn get_by_rule_set(&self, rule_set: &RuleSet) -> Option<(GameID, GameRef)> {
-        let games = &*self.games.read();
-        games
+        self.games
+            .read()
             .iter()
             .find(|(_game_id, game_ref)| {
                 let join_state = game_ref.read().joinable_state(Some(rule_set));

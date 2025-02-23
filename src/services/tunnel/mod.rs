@@ -197,31 +197,33 @@ pub async fn tunnel_keep_alive(service: Arc<TunnelService>) {
                 .remove_dead_tunnels(now, KEEP_ALIVE_TIMEOUT);
         }
 
-        let mappings = service.mappings.read();
-
         // Send out keep-alive messages for any tunnels that aren't expired
-        mappings.tunnel_data().for_each(|(tunnel_id, data)| {
-            match &data.handle {
-                TunnelHandle::Udp(target_address) => {
-                    let buffer = pocket_relay_udp_tunnel::serialize_message(
-                        *tunnel_id,
-                        &pocket_relay_udp_tunnel::TunnelMessage::KeepAlive,
-                    );
+        service
+            .mappings
+            .read()
+            .tunnel_data()
+            .for_each(|(tunnel_id, data)| {
+                match &data.handle {
+                    TunnelHandle::Udp(target_address) => {
+                        let buffer = pocket_relay_udp_tunnel::serialize_message(
+                            *tunnel_id,
+                            &pocket_relay_udp_tunnel::TunnelMessage::KeepAlive,
+                        );
 
-                    // Send keep alive message
-                    _ = service.udp_tx.send(UdpTunnelMessage {
-                        buffer,
-                        target_address: *target_address,
-                    });
+                        // Send keep alive message
+                        _ = service.udp_tx.send(UdpTunnelMessage {
+                            buffer,
+                            target_address: *target_address,
+                        });
+                    }
+                    TunnelHandle::Http(tunnel_handle) => {
+                        // Write a keep alive message
+                        _ = tunnel_handle.tx.send(HttpTunnelMessage {
+                            index: 255,
+                            message: Bytes::new(),
+                        });
+                    }
                 }
-                TunnelHandle::Http(tunnel_handle) => {
-                    // Write a keep alive message
-                    _ = tunnel_handle.tx.send(HttpTunnelMessage {
-                        index: 255,
-                        message: Bytes::new(),
-                    });
-                }
-            }
-        });
+            });
     }
 }

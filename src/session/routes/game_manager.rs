@@ -40,10 +40,7 @@ pub async fn handle_join_game(
         .ok_or(GameManagerError::InvalidGameId)?;
 
     // Check the game is joinable
-    let join_state = {
-        let game = &*game_ref.read();
-        game.joinable_state(None)
-    };
+    let join_state = { game_ref.read().joinable_state(None) };
 
     if !matches!(join_state, GameJoinableState::Joinable) {
         return Err(GameManagerError::GameFull.into());
@@ -77,8 +74,7 @@ pub async fn handle_get_game_data(
         .get_by_id(game_id)
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &*game.read();
-    let body = game.game_data();
+    let body = game.read().game_data();
 
     Ok(body)
 }
