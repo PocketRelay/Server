@@ -170,6 +170,11 @@ fn handle_message(
                 }
             };
 
+            debug!(
+                "Session UDP tunnel connected (ASSOC: {:?}, TUNNEL_ID: {})",
+                association, tunnel_id
+            );
+
             let buffer = serialize_message(tunnel_id, &TunnelMessage::Initiated { tunnel_id });
 
             _ = service.udp_tx.send(UdpTunnelMessage {

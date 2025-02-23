@@ -98,10 +98,12 @@ impl SessionNotifyHandle {
 }
 
 impl Session {
-    pub async fn run(io: Upgraded, data: SessionData, router: Arc<BlazeRouter>) {
-        // Obtain a session ID
-        let id = SESSION_IDS.fetch_add(1, Ordering::AcqRel);
+    /// Get an ID for a session
+    pub fn acquire_id() -> u32 {
+        SESSION_IDS.fetch_add(1, Ordering::AcqRel)
+    }
 
+    pub async fn run(id: u32, io: Upgraded, data: SessionData, router: Arc<BlazeRouter>) {
         let (notify_handle, rx) = SessionNotifyHandle::new();
         let session = Arc::new(Self {
             id,

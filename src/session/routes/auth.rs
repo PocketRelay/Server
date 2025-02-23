@@ -68,6 +68,11 @@ pub async fn handle_login(
 
     let session_token: String = sessions.create_token(player.id);
 
+    debug!(
+        "Session authenticated (REASON: LOGIN_PASSWORD, PID: {}, SID: {})",
+        player.id, session.id
+    );
+
     Ok(Blaze(AuthResponse {
         player,
         session_token,
@@ -101,6 +106,11 @@ pub async fn handle_silent_login(
 
     // Update the session stored player
     let player = session.data.set_auth(player);
+
+    debug!(
+        "Session authenticated (REASON: LOGIN_SILENT, PID: {}, SID: {})",
+        player.id, session.id
+    );
 
     Ok(Blaze(AuthResponse {
         player,
@@ -140,6 +150,11 @@ pub async fn handle_origin_login(
     let player = session.data.set_auth(player);
 
     let session_token: String = sessions.create_token(player.id);
+
+    debug!(
+        "Session authenticated (REASON: LOGIN_ORIGIN, PID: {}, SID: {})",
+        player.id, session.id
+    );
 
     Ok(Blaze(AuthResponse {
         player,
@@ -366,6 +381,11 @@ pub async fn handle_create_account(
     let player = session.data.set_auth(player);
 
     let session_token = sessions.create_token(player.id);
+
+    debug!(
+        "Session authenticated (REASON: CREATED_ACCOUNT, PID: {}, SID: {})",
+        player.id, session.id
+    );
 
     Ok(Blaze(AuthResponse {
         player,

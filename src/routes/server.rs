@@ -120,9 +120,16 @@ pub async fn handle_upgrade(
         }
     };
 
+    let id = Session::acquire_id();
+
+    debug!(
+        "Session started (SID: {}, ASSOC: {:?}, ADDR: {})",
+        id, association_id, addr
+    );
+
     let data = SessionData::new(addr, association_id);
 
-    Session::run(upgraded, data, router).await;
+    Session::run(id, upgraded, data, router).await;
 }
 
 /// GET /api/server/tunnel

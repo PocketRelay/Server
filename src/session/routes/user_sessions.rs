@@ -14,7 +14,7 @@ use crate::{
     },
 };
 use chrono::Utc;
-use log::error;
+use log::{debug, error};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
@@ -86,6 +86,8 @@ pub async fn handle_resume_session(
 
     let player = sessions.add_session(player, Arc::downgrade(&session));
     let player = session.data.set_auth(player);
+
+    debug!("Session resumed (PID: {}, SID: {})", player.id, session.id);
 
     Ok(Blaze(AuthResponse {
         player,

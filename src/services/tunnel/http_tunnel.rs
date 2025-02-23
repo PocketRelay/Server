@@ -6,7 +6,7 @@ use self::codec::{TunnelCodec, TunnelMessage};
 use futures_util::{Sink, Stream};
 use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
-use log::error;
+use log::{debug, error};
 use std::{
     future::Future,
     pin::Pin,
@@ -102,6 +102,11 @@ impl HttpTunnel {
                 return;
             }
         };
+
+        debug!(
+            "Session HTTP tunnel connected (ASSOC: {:?}, TUNNEL_ID: {})",
+            association, tunnel_id
+        );
 
         // Spawn the tunnel task
         tokio::spawn(HttpTunnel {
