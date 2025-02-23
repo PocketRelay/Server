@@ -1,4 +1,4 @@
-use self::{manager::GameManager, rules::RuleSet};
+use self::rules::RuleSet;
 use crate::{
     config::RuntimeConfig,
     database::entities::Player,
@@ -16,7 +16,7 @@ use crate::{
         },
         packet::Packet,
         router::RawBlaze,
-        SessionNotifyHandle, WeakSessionLink,
+        SessionLink, SessionNotifyHandle, WeakSessionLink,
     },
     utils::{
         components::game_manager,
@@ -28,15 +28,56 @@ use log::{debug, warn};
 use parking_lot::RwLock;
 use serde::Serialize;
 use std::sync::{Arc, Weak};
+use store::Games;
 use tdf::{ObjectId, TdfMap, TdfSerializer};
 
 use super::tunnel::TunnelService;
 
-pub mod manager;
+pub mod matchmaking;
 pub mod rules;
+pub mod store;
 
 pub type GameRef = Arc<RwLock<Game>>;
 pub type WeakGameRef = Weak<RwLock<Game>>;
+
+pub trait GameAddPlayerExt {
+    fn add_player(
+        &self,
+        tunnel_service: &TunnelService,
+        config: &RuntimeConfig,
+
+        player: GamePlayer,
+        session: SessionLink,
+        context: GameSetupContext,
+    );
+}
+
+impl GameAddPlayerExt for GameRef {
+    fn add_player(
+        &self,
+        tunnel_service: &TunnelService,
+        config: &RuntimeConfig,
+
+        player: GamePlayer,
+        session: SessionLink,
+        context: GameSetupContext,
+    ) {
+        // Add the player to the game
+        let (game_id, index) = {
+            let game = &mut *self.write();
+            let slot = game.add_player(player, context, config);
+            (game.id, slot)
+        };
+
+        // Allocate tunnel if supported by client
+        if let Some(association) = session.data.get_association() {
+            tunnel_service.associate_pool(association, game_id, index as u8);
+        }
+
+        // Update the player current game
+        session.data.set_game(game_id, Arc::downgrade(self));
+    }
+}
 
 /// Game service running within the server
 pub struct Game {
@@ -53,7 +94,7 @@ pub struct Game {
     /// Players currently in the game
     pub players: Vec<GamePlayer>,
     /// Services access
-    pub game_manager: Arc<GameManager>,
+    pub games_store: Arc<Games>,
     /// Access to the tunneling service
     pub tunnel_service: Arc<TunnelService>,
 }
@@ -221,8 +262,7 @@ impl Game {
         id: GameID,
         attributes: AttrMap,
         settings: GameSettings,
-        created_at: DateTime<Utc>,
-        game_manager: Arc<GameManager>,
+        games_store: Arc<Games>,
         tunnel_service: Arc<TunnelService>,
     ) -> Game {
         Game {
@@ -231,8 +271,8 @@ impl Game {
             settings,
             state: Default::default(),
             players: Default::default(),
-            created_at,
-            game_manager,
+            created_at: Utc::now(),
+            games_store,
             tunnel_service,
         }
     }
@@ -398,7 +438,7 @@ impl Game {
         }
 
         // Remove the stopping game
-        self.game_manager.remove_game(self.id);
+        self.games_store.remove_by_id(self.id);
     }
 
     pub fn joinable_state(&self, rule_set: Option<&RuleSet>) -> GameJoinableState {

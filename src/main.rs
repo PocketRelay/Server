@@ -2,15 +2,16 @@
 
 use crate::{
     config::{RuntimeConfig, VERSION},
-    services::{
-        game::manager::GameManager, retriever::Retriever, sessions::Sessions, tunnel::TunnelService,
-    },
+    services::{retriever::Retriever, sessions::Sessions, tunnel::TunnelService},
     utils::signing::SigningKey,
 };
 use axum::{self, Extension};
 use config::{load_config, TunnelConfig};
 use log::{debug, error, info, LevelFilter};
-use services::tunnel::{tunnel_keep_alive, udp_tunnel::start_udp_tunnel};
+use services::{
+    game::{matchmaking::Matchmaking, store::Games},
+    tunnel::{tunnel_keep_alive, udp_tunnel::start_udp_tunnel},
+};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{join, net::TcpListener, signal};
 use utils::logging;
@@ -72,7 +73,8 @@ async fn main() {
     let (tunnel_service, udp_forward_rx) = TunnelService::new();
     let tunnel_service = Arc::new(tunnel_service);
 
-    let game_manager = Arc::new(GameManager::new(tunnel_service.clone(), config.clone()));
+    let games = Arc::new(Games::default());
+    let matchmaking = Arc::new(Matchmaking::default());
     let retriever = Arc::new(retriever);
 
     // Spawn background task to perform keep alive checks on tunnels
@@ -100,9 +102,11 @@ async fn main() {
 
     router.add_extension(db.clone());
     router.add_extension(config.clone());
-    router.add_extension(retriever);
-    router.add_extension(game_manager.clone());
+    router.add_extension(games.clone());
     router.add_extension(sessions.clone());
+    router.add_extension(tunnel_service.clone());
+    router.add_extension(matchmaking);
+    router.add_extension(retriever);
 
     let router = router.build();
 
@@ -112,7 +116,7 @@ async fn main() {
         .layer(Extension(db))
         .layer(Extension(config))
         .layer(Extension(router))
-        .layer(Extension(game_manager))
+        .layer(Extension(games))
         .layer(Extension(sessions))
         .layer(Extension(tunnel_service))
         .into_make_service_with_connect_info::<SocketAddr>();

@@ -1,7 +1,12 @@
 use crate::{
+    config::RuntimeConfig,
     services::{
-        game::{manager::GameManager, GameJoinableState, GamePlayer},
+        game::{
+            matchmaking::Matchmaking, store::Games, Game, GameAddPlayerExt, GameJoinableState,
+            GamePlayer,
+        },
         sessions::Sessions,
+        tunnel::TunnelService,
     },
     session::{
         models::{
@@ -20,7 +25,8 @@ pub async fn handle_join_game(
     session: SessionLink,
     Blaze(JoinGameRequest { user }): Blaze<JoinGameRequest>,
     Extension(sessions): Extension<Arc<Sessions>>,
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(tunnel_service): Extension<Arc<TunnelService>>,
+    Extension(runtime_config): Extension<Arc<RuntimeConfig>>,
 ) -> ServerResult<Blaze<JoinGameResponse>> {
     // Lookup the session join target
     let other_session = sessions
@@ -46,8 +52,9 @@ pub async fn handle_join_game(
     // Join the game
     debug!("Joining game from invite (GID: {})", game_id);
 
-    game_manager.add_to_game(
-        game_ref,
+    game_ref.add_player(
+        &tunnel_service,
+        &runtime_config,
         player,
         session,
         GameSetupContext::Dataless {
@@ -63,11 +70,11 @@ pub async fn handle_join_game(
 
 pub async fn handle_get_game_data(
     Blaze(GetGameDataRequest { game_list }): Blaze<GetGameDataRequest>,
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
 ) -> ServerResult<RawBlaze> {
     let game_id = game_list.first().copied().ok_or(GlobalError::System)?;
-    let game = game_manager
-        .get_game(game_id)
+    let game = games
+        .get_by_id(game_id)
         .ok_or(GameManagerError::InvalidGameId)?;
 
     let game = &*game.read();
@@ -130,13 +137,24 @@ pub async fn handle_get_game_data(
 pub async fn handle_create_game(
     player: GamePlayer,
     session: SessionLink,
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
+    Extension(matchmaking): Extension<Arc<Matchmaking>>,
+    Extension(tunnel_service): Extension<Arc<TunnelService>>,
+    Extension(runtime_config): Extension<Arc<RuntimeConfig>>,
     Blaze(CreateGameRequest {
         attributes,
         setting,
     }): Blaze<CreateGameRequest>,
 ) -> ServerResult<Blaze<CreateGameResponse>> {
-    let (link, game_id) = game_manager.create_game(attributes, setting);
+    let game_id = games.next_id();
+    let game = Game::new(
+        game_id,
+        attributes,
+        setting,
+        games.clone(),
+        tunnel_service.clone(),
+    );
+    let game_ref = games.insert(game);
 
     // Notify matchmaking of the new game
     let mut player = player;
@@ -144,8 +162,10 @@ pub async fn handle_create_game(
     // Player is the host player (They are connected by default)
     player.state = PlayerState::ActiveConnected;
 
-    game_manager.add_to_game(
-        link.clone(),
+    // Add player to the game
+    game_ref.add_player(
+        &tunnel_service,
+        &runtime_config,
         player,
         session,
         GameSetupContext::Dataless {
@@ -154,7 +174,8 @@ pub async fn handle_create_game(
     );
 
     // Update matchmaking with the new game
-    game_manager.process_queue(link, game_id);
+
+    matchmaking.process_queue(&tunnel_service, &runtime_config, &game_ref, game_id);
 
     Ok(Blaze(CreateGameResponse { game_id }))
 }
@@ -180,25 +201,29 @@ pub async fn handle_create_game(
 /// }
 /// ```
 pub async fn handle_set_attributes(
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
+    Extension(matchmaking): Extension<Arc<Matchmaking>>,
+    Extension(tunnel_service): Extension<Arc<TunnelService>>,
+    Extension(runtime_config): Extension<Arc<RuntimeConfig>>,
+
     Blaze(SetAttributesRequest {
         attributes,
         game_id,
     }): Blaze<SetAttributesRequest>,
 ) -> ServerResult<()> {
-    let link = game_manager
-        .get_game(game_id)
+    let game_ref = games
+        .get_by_id(game_id)
         .ok_or(GameManagerError::InvalidGameId)?;
 
     // Update matchmaking for the changed game
     let join_state = {
-        let game = &mut *link.write();
+        let game = &mut *game_ref.write();
         game.set_attributes(attributes);
         game.joinable_state(None)
     };
 
     if let GameJoinableState::Joinable = join_state {
-        game_manager.process_queue(link, game_id);
+        matchmaking.process_queue(&tunnel_service, &runtime_config, &game_ref, game_id);
     }
 
     Ok(())
@@ -215,14 +240,14 @@ pub async fn handle_set_attributes(
 /// }
 /// ```
 pub async fn handle_set_state(
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
     Blaze(SetStateRequest { game_id, state }): Blaze<SetStateRequest>,
 ) -> ServerResult<()> {
-    let link = game_manager
-        .get_game(game_id)
+    let game_ref = games
+        .get_by_id(game_id)
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    link.write().set_state(state);
+    game_ref.write().set_state(state);
 
     Ok(())
 }
@@ -238,14 +263,14 @@ pub async fn handle_set_state(
 /// }
 /// ```
 pub async fn handle_set_setting(
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
     Blaze(SetSettingRequest { game_id, setting }): Blaze<SetSettingRequest>,
 ) -> ServerResult<()> {
-    let link = game_manager
-        .get_game(game_id)
+    let game_ref = games
+        .get_by_id(game_id)
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    link.write().set_settings(setting);
+    game_ref.write().set_settings(setting);
 
     Ok(())
 }
@@ -264,18 +289,18 @@ pub async fn handle_set_setting(
 /// }
 /// ```
 pub async fn handle_remove_player(
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
     Blaze(RemovePlayerRequest {
         game_id,
         player_id,
         reason,
     }): Blaze<RemovePlayerRequest>,
 ) -> ServerResult<()> {
-    let link = game_manager
-        .get_game(game_id)
+    let game_ref = games
+        .get_by_id(game_id)
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    link.write().remove_player(player_id, reason);
+    game_ref.write().remove_player(player_id, reason);
 
     Ok(())
 }
@@ -300,7 +325,7 @@ pub async fn handle_remove_player(
 /// ```
 pub async fn handle_update_mesh_connection(
     SessionAuth(player): SessionAuth,
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
     Blaze(UpdateMeshRequest {
         game_id,
         mut targets,
@@ -310,11 +335,11 @@ pub async fn handle_update_mesh_connection(
         return Ok(());
     };
 
-    let link = game_manager
-        .get_game(game_id)
+    let game_ref = games
+        .get_by_id(game_id)
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    let game = &mut *link.write();
+    let game = &mut *game_ref.write();
 
     // Ensure the host is the one making the change
     if game.is_host_player(player.id) {
@@ -326,11 +351,11 @@ pub async fn handle_update_mesh_connection(
 
 pub async fn handle_add_admin_player(
     SessionAuth(player): SessionAuth,
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
     Blaze(AddAdminPlayerRequest { game_id, player_id }): Blaze<AddAdminPlayerRequest>,
 ) -> ServerResult<()> {
-    let link = game_manager
-        .get_game(game_id)
+    let link = games
+        .get_by_id(game_id)
         .ok_or(GameManagerError::InvalidGameId)?;
 
     let game = &mut *link.write();
@@ -466,19 +491,29 @@ pub async fn handle_add_admin_player(
 /// ```
 pub async fn handle_start_matchmaking(
     player: GamePlayer,
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
+    Extension(matchmaking): Extension<Arc<Matchmaking>>,
+    Extension(tunnel_service): Extension<Arc<TunnelService>>,
+    Extension(runtime_config): Extension<Arc<RuntimeConfig>>,
+
     Blaze(MatchmakingRequest { rules }): Blaze<MatchmakingRequest>,
 ) -> ServerResult<Blaze<MatchmakingResponse>> {
     let player_id = player.player.id;
 
     info!("Player {} started matchmaking", player.player.display_name);
 
-    let rule_set = Arc::new(rules);
+    // Find a game thats currently joinable and matches the required rules
+    match games.get_by_rule_set(&rules) {
+        Some((game_id, game_ref)) => {
+            debug!("Found matching game (GID: {})", game_id);
 
-    // If adding failed attempt to queue instead
-    if let Err(player) = game_manager.try_add(player, &rule_set) {
-        game_manager.queue(player, rule_set);
-    }
+            // Add the player to the game
+            matchmaking.add_from_matchmaking(&tunnel_service, &runtime_config, game_ref, player);
+        }
+        None => {
+            matchmaking.queue(player, rules);
+        }
+    };
 
     Ok(Blaze(MatchmakingResponse { id: player_id }))
 }
@@ -496,10 +531,10 @@ pub async fn handle_start_matchmaking(
 pub async fn handle_cancel_matchmaking(
     session: SessionLink,
     SessionAuth(player): SessionAuth,
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(matchmaking): Extension<Arc<Matchmaking>>,
 ) {
     // Clear the current game
     session.data.clear_game();
 
-    game_manager.remove_queue(player.id);
+    matchmaking.remove(player.id);
 }

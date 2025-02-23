@@ -2,7 +2,7 @@ use crate::{
     config::RuntimeConfig,
     database::entities::players::PlayerRole,
     middleware::auth::MaybeAuth,
-    services::game::{manager::GameManager, GameSnapshot},
+    services::game::{store::Games, GameSnapshot},
     utils::types::GameID,
 };
 use axum::{
@@ -60,7 +60,7 @@ pub struct GamesResponse {
 pub async fn get_games(
     MaybeAuth(auth): MaybeAuth,
     Query(GamesRequest { offset, count }): Query<GamesRequest>,
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
 ) -> Result<Json<GamesResponse>, GamesError> {
     if let (None, false) = (&auth, config.api.public_games) {
@@ -75,13 +75,13 @@ pub async fn get_games(
     let include_players = auth.is_some() || !config.api.public_games_hide_players;
 
     // Retrieve the game snapshots
-    let (games, more) = game_manager.create_snapshot(offset, count, include_net, include_players);
+    let (snapshots, more) = games.create_snapshot(offset, count, include_net, include_players);
 
     // Get the total number of games
-    let total_games = game_manager.get_total_games();
+    let total_games = games.total();
 
     Ok(Json(GamesResponse {
-        games,
+        games: snapshots,
         more,
         total_items: total_games,
     }))
@@ -97,7 +97,7 @@ pub async fn get_games(
 pub async fn get_game(
     MaybeAuth(auth): MaybeAuth,
     Path(game_id): Path<GameID>,
-    Extension(game_manager): Extension<Arc<GameManager>>,
+    Extension(games): Extension<Arc<Games>>,
     Extension(config): Extension<Arc<RuntimeConfig>>,
 ) -> Result<Json<GameSnapshot>, GamesError> {
     if let (None, false) = (&auth, config.api.public_games) {
@@ -109,9 +109,8 @@ pub async fn get_game(
         .is_some_and(|player| player.role >= PlayerRole::Admin);
     let include_players = auth.is_some() || !config.api.public_games_hide_players;
 
-    let game = game_manager.get_game(game_id).ok_or(GamesError::NotFound)?;
-    let game = &*game.read();
-    let snapshot = game.snapshot(include_net, include_players);
+    let game = games.get_by_id(game_id).ok_or(GamesError::NotFound)?;
+    let snapshot = game.read().snapshot(include_net, include_players);
 
     Ok(Json(snapshot))
 }
