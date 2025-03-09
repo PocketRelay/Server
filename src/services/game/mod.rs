@@ -13,6 +13,7 @@ use crate::{
                 RemoveReason, SettingChange, SlotType, StateChange, UNSPECIFIED_TEAM_INDEX,
             },
             util::LOCALE_NZ,
+            NetworkAddress,
         },
         packet::Packet,
         router::RawBlaze,
@@ -129,8 +130,6 @@ pub struct GamePlayer {
     pub player: Arc<Player>,
     /// Weak reference to the associated session
     pub link: WeakSessionLink,
-    /// Networking information for the player
-    pub net: Arc<NetData>,
     /// The mesh state of the player
     pub state: PlayerState,
 }
@@ -154,12 +153,23 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(player: Arc<Player>, net: Arc<NetData>, link: WeakSessionLink) -> Self {
+    pub fn new(player: Arc<Player>, link: WeakSessionLink) -> Self {
         Self {
             player,
             link,
-            net,
             state: PlayerState::ActiveConnecting,
+        }
+    }
+
+    pub fn net(&self) -> Option<Arc<NetData>> {
+        let session = self.link.upgrade()?;
+        session.data.net()
+    }
+
+    pub fn network_address(&self) -> NetworkAddress {
+        match self.net() {
+            Some(net) => net.addr.clone(),
+            None => NetworkAddress::Unset,
         }
     }
 
@@ -198,11 +208,7 @@ impl GamePlayer {
         GamePlayerSnapshot {
             player_id: self.player.id,
             display_name: Box::from(self.player.display_name.as_ref()),
-            net: if include_net {
-                Some(self.net.clone())
-            } else {
-                None
-            },
+            net: if include_net { self.net() } else { None },
         }
     }
 
@@ -221,7 +227,7 @@ impl GamePlayer {
             // Player ID
             w.tag_u32(b"PID", self.player.id);
             // Player network data
-            w.tag_ref(b"PNET", &self.net.addr);
+            w.tag_ref(b"PNET", &self.network_address());
             // Slot ID
             w.tag_owned(b"SID", slot);
             // Slot type

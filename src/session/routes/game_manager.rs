@@ -536,8 +536,7 @@ pub async fn handle_cancel_matchmaking(
 
 /// Handles preparing a game for being replayed
 ///
-/// Occurs when a game is finished successfully, is not sent if a game
-/// is failed
+/// Occurs when a game finishes
 ///
 /// ```
 /// Route: GameManager(ReplayGame)

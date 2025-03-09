@@ -804,9 +804,11 @@ impl TdfSerialize for GameSetupResponse<'_> {
             // Game Type used for game reporting as passed up in the request.
             w.tag_str_empty(b"GTYP");
 
+            let host_net = host.net().unwrap_or_default();
+
             // Whether to tunnel the connection
             let tunnel = match &self.config.tunnel {
-                TunnelConfig::Stricter => !matches!(host.net.qos.natt, NatType::Open),
+                TunnelConfig::Stricter => !matches!(host_net.qos.natt, NatType::Open),
                 TunnelConfig::Always => true,
                 TunnelConfig::Disabled => false,
             };
@@ -828,7 +830,7 @@ impl TdfSerialize for GameSetupResponse<'_> {
                     );
                 } else {
                     // Open NATs can directly have players connect normally
-                    if let NetworkAddress::AddressPair(pair) = &host.net.addr {
+                    if let NetworkAddress::AddressPair(pair) = &host_net.addr {
                         w.write_byte(2 /* Address pair type */);
                         TdfSerialize::serialize(pair, w)
                     } else {
@@ -847,7 +849,7 @@ impl TdfSerialize for GameSetupResponse<'_> {
             w.tag_usize(b"MCAP", Game::MAX_PLAYERS);
 
             // Host network qos data
-            w.tag_ref(b"NQOS", &host.net.qos);
+            w.tag_ref(b"NQOS", &host_net.qos);
 
             // Flag to indicate that this game is not resettable. This applies only to the CLIENT_SERVER_DEDICATED topology.
             // The game will be prevented from ever going into the RESETTABlE state.
@@ -952,9 +954,9 @@ impl TdfSerialize for GetGameDetails<'_> {
                 // Topology host network list (The heat bug is present so this encoded as a group even though its a union)
                 w.tag_list_start(b"HNET", TdfType::Group, 1);
 
-                if let NetworkAddress::AddressPair(pair) = &host.net.addr {
+                if let NetworkAddress::AddressPair(pair) = host.network_address() {
                     w.write_byte(2 /* Address pair type */);
-                    TdfSerialize::serialize(pair, w)
+                    TdfSerialize::serialize(&pair, w)
                 } else {
                     // Uh oh.. host networking is missing...?
                     w.write_byte(TAGGED_UNSET_KEY);

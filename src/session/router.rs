@@ -226,17 +226,13 @@ impl FromPacketRequest for GamePlayer {
         Self: 'a,
     {
         Box::pin(async move {
-            let (player, net_data) = req
+            let player = req
                 .state
                 .data
-                .get_game_player_data()
+                .get_player()
                 .ok_or(GlobalError::AuthenticationRequired)?;
 
-            Ok(GamePlayer::new(
-                player,
-                net_data,
-                Arc::downgrade(&req.state),
-            ))
+            Ok(GamePlayer::new(player, Arc::downgrade(&req.state)))
         })
     }
 }

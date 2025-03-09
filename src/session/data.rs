@@ -218,14 +218,6 @@ impl SessionData {
             .map(|value| value.player_assoc.player.clone())
     }
 
-    /// Obtains the parts required to create a game player
-    pub fn get_game_player_data(&self) -> Option<(Arc<Player>, Arc<NetData>)> {
-        self.read()
-            .auth
-            .as_ref()
-            .map(|value| (value.player_assoc.player.clone(), value.net.clone()))
-    }
-
     /// Updates the session hardware flags
     pub fn set_hardware_flags(&self, value: HardwareFlags) {
         self.write_publish(|data| data.net = Arc::new(data.net.with_hardware_flags(value)));
@@ -317,6 +309,12 @@ impl SessionData {
     /// Removes a subscriber from the session
     pub fn remove_subscriber(&self, player_id: PlayerID) {
         self.write_silent(|data| data.remove_subscriber(player_id));
+    }
+
+    pub fn net(&self) -> Option<Arc<NetData>> {
+        let ext = self.read();
+        let auth = ext.auth.as_ref()?;
+        Some(auth.net.clone())
     }
 }
 
