@@ -544,16 +544,14 @@ pub async fn handle_cancel_matchmaking(
 ///  "GID": 2,
 /// }
 /// ```
-#[allow(unused)]
 pub async fn handle_replay_game(
-    session: SessionLink,
-    SessionAuth(player): SessionAuth,
     Extension(games): Extension<Arc<Games>>,
-
     Blaze(ReplayGameRequest { game_id }): Blaze<ReplayGameRequest>,
 ) -> ServerResult<()> {
     let game_ref = games
         .get_by_id(game_id)
         .ok_or(GameManagerError::InvalidGameId)?;
+
+    game_ref.write().replay();
     Ok(())
 }

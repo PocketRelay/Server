@@ -538,6 +538,17 @@ pub struct StateChange {
     pub state: GameState,
 }
 
+/// Message for a game reporting ID changing
+#[derive(TdfSerialize)]
+pub struct ReportingIdChange {
+    /// The ID of the game
+    #[tdf(tag = "GID")]
+    pub id: GameID,
+    /// The new game reporting ID
+    #[tdf(tag = "GRID")]
+    pub grid: u64,
+}
+
 /// Message for a game setting changing
 #[derive(TdfSerialize)]
 pub struct SettingChange {

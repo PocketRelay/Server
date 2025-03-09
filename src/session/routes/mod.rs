@@ -56,6 +56,7 @@ pub fn router() -> BlazeRouterBuilder {
         builder.route(g::COMPONENT, g::CANCEL_MATCHMAKING,handle_cancel_matchmaking);
         builder.route(g::COMPONENT, g::GET_GAME_DATA_FROM_ID, handle_get_game_data);
         builder.route(g::COMPONENT, g::JOIN_GAME, handle_join_game);
+        builder.route(g::COMPONENT, g::REPLAY_GAME, handle_replay_game);
     }
 
     // Stats

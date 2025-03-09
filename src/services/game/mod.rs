@@ -10,7 +10,8 @@ use crate::{
                 GameSetupContext, GameSetupResponse, GameState, GetGameDetails,
                 HostMigrateFinished, HostMigrateStart, JoinComplete, PlayerJoining,
                 PlayerNetConnectionStatus, PlayerRemoved, PlayerState, PlayerStateChange,
-                RemoveReason, SettingChange, SlotType, StateChange, UNSPECIFIED_TEAM_INDEX,
+                RemoveReason, ReportingIdChange, SettingChange, SlotType, StateChange,
+                UNSPECIFIED_TEAM_INDEX,
             },
             util::LOCALE_NZ,
             NetworkAddress,
@@ -252,6 +253,15 @@ impl Game {
         }
     }
 
+    /// Handle a "replay", game resetting its state back to pre-game
+    /// updates game reporting id
+    pub fn replay(&mut self) {
+        self.set_state(GameState::PreGame);
+
+        // TODO: Rotate game reporting ID to a new ID
+        self.set_game_reporting_id(18014398695176361);
+    }
+
     pub fn game_data(&self) -> RawBlaze {
         let data = GetGameDetails { game: self };
         data.into()
@@ -456,6 +466,21 @@ impl Game {
             game_manager::COMPONENT,
             game_manager::GAME_STATE_CHANGE,
             StateChange { id: self.id, state },
+        ));
+    }
+
+    pub fn set_game_reporting_id(&mut self, reporting_id: u64) {
+        self.reporting_id = reporting_id;
+
+        debug!("Updated game reporting id (Value: {:?})", &reporting_id);
+
+        self.notify_all(Packet::notify(
+            game_manager::COMPONENT,
+            game_manager::GAME_REPORTING_ID_CHANGE,
+            ReportingIdChange {
+                id: self.id,
+                grid: reporting_id,
+            },
         ));
     }
 
