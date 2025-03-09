@@ -126,6 +126,12 @@ pub struct AddAdminPlayerRequest {
     pub player_id: PlayerID,
 }
 
+#[derive(TdfDeserialize)]
+pub struct ReplayGameRequest {
+    #[tdf(tag = "GID")]
+    pub game_id: GameID,
+}
+
 /// Structure of the request for starting matchmaking. Contains
 /// the rule set that games must match in order to join
 pub struct MatchmakingRequest {

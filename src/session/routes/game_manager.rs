@@ -519,7 +519,6 @@ pub async fn handle_start_matchmaking(
 ///
 /// ```
 /// Route: GameManager(CancelMatchmaking)
-/// ID: 84
 /// Content: {
 ///     "MSID": 1
 /// }
@@ -533,4 +532,28 @@ pub async fn handle_cancel_matchmaking(
     session.data.clear_game();
 
     matchmaking.remove(player.id);
+}
+
+/// Handles preparing a game for being replayed
+///
+/// Occurs when a game is finished successfully, is not sent if a game
+/// is failed
+///
+/// ```
+/// Route: GameManager(ReplayGame)
+/// Content: {
+///  "GID": 2,
+/// }
+/// ```
+pub async fn handle_replay_game(
+    session: SessionLink,
+    SessionAuth(player): SessionAuth,
+    Extension(games): Extension<Arc<Games>>,
+
+    Blaze(ReplayGameRequest { game_id }): Blaze<ReplayGameRequest>,
+) -> ServerResult<()> {
+    let game_ref = games
+        .get_by_id(game_id)
+        .ok_or(GameManagerError::InvalidGameId)?;
+    Ok(())
 }

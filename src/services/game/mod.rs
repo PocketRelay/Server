@@ -93,6 +93,7 @@ pub struct Game {
     pub created_at: DateTime<Utc>,
     /// Players currently in the game
     pub players: Vec<GamePlayer>,
+
     /// Services access
     pub games_store: Arc<Games>,
     /// Access to the tunneling service

@@ -50,12 +50,13 @@ pub struct Session {
     pub data: SessionData,
 }
 
+type PacketSender = mpsc::UnboundedSender<Packet>;
+
 /// Handle for sending packets to a session notification
 /// channel
 #[derive(Clone)]
 pub struct SessionNotifyHandle {
-    busy_lock: Arc<tokio::sync::Mutex<()>>,
-    tx: mpsc::UnboundedSender<Packet>,
+    tx: Arc<tokio::sync::Mutex<PacketSender>>,
 }
 
 impl SessionNotifyHandle {
@@ -63,37 +64,26 @@ impl SessionNotifyHandle {
     /// and the receiving end to use for receiving from the handle
     pub fn new() -> (SessionNotifyHandle, mpsc::UnboundedReceiver<Packet>) {
         let (tx, rx) = mpsc::unbounded_channel();
-
         let handle = Self {
-            busy_lock: Default::default(),
-            tx,
+            tx: Arc::new(tokio::sync::Mutex::new(tx)),
         };
         (handle, rx)
     }
 
     /// Pushes a new notification packet
     pub fn notify(&self, packet: Packet) {
-        let tx = self.tx.clone();
-
         // Acquire the lock position before scheduling the task to ensure correct ordering
-        let busy_lock = self.busy_lock.clone().lock_owned();
+        let tx = self.tx.clone().lock_owned();
 
         tokio::spawn(async move {
-            let _guard = busy_lock.await;
+            let tx = tx.await;
             let _ = tx.send(packet);
         });
     }
 
     /// Internally lock the busy lock, used by the router when it wants to handle a request
-    fn lock_internal(&self) -> BoxFuture<'static, OwnedMutexGuard<()>> {
-        Box::pin(self.busy_lock.clone().lock_owned())
-    }
-
-    /// Immediately queues a packet onto the channel, should only be used
-    /// internally for sending handled responses use [Self::notify] in all
-    /// other cases
-    fn send_internal(&self, packet: Packet) {
-        let _ = self.tx.send(packet);
+    fn acquire_tx(&self) -> BoxFuture<'static, OwnedMutexGuard<PacketSender>> {
+        Box::pin(self.tx.clone().lock_owned())
     }
 }
 
@@ -174,14 +164,14 @@ enum ReadState<'a> {
     /// Acquiring a lock guard
     Acquire {
         /// Future for the locking guard
-        lock_future: BoxFuture<'static, OwnedMutexGuard<()>>,
+        lock_future: BoxFuture<'static, OwnedMutexGuard<PacketSender>>,
         /// The packet that was read
         packet: Option<Packet>,
     },
     /// Future for a handler is being polled
     Handle {
-        /// Locking guard
-        guard: OwnedMutexGuard<()>,
+        /// Access to the sender for sending the response
+        tx: OwnedMutexGuard<PacketSender>,
         /// Handle future
         future: BoxFuture<'a, Packet>,
     },
@@ -272,7 +262,8 @@ impl SessionFuture<'_> {
                 let result = ready!(Pin::new(&mut self.io).poll_next(cx));
 
                 if let Some(Ok(packet)) = result {
-                    let lock_future = self.session.notify_handle.lock_internal();
+                    // Acquire a write lock future (Reserve our space for sending the response)
+                    let lock_future = self.session.notify_handle.acquire_tx();
 
                     self.read_state = ReadState::Acquire {
                         lock_future,
@@ -297,17 +288,14 @@ impl SessionFuture<'_> {
                 let future = self.router.handle(self.session.clone(), packet);
 
                 // Move onto a handling state
-                self.read_state = ReadState::Handle { guard, future };
+                self.read_state = ReadState::Handle { tx: guard, future };
             }
-            ReadState::Handle {
-                guard: _guard,
-                future,
-            } => {
+            ReadState::Handle { tx, future } => {
                 // Poll the handler until completion
                 let response = ready!(Pin::new(future).poll(cx));
 
                 // Send the response to the writer
-                self.session.notify_handle.send_internal(response);
+                _ = tx.send(response);
 
                 // Reset back to the reading state
                 self.read_state = ReadState::Recv;
