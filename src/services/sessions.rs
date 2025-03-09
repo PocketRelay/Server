@@ -82,11 +82,7 @@ impl Sessions {
     pub fn create_login_code(&self, player_id: PlayerID) -> Result<LoginCode, ()> {
         let rng = StdRng::from_os_rng();
 
-        let code: LoginCode = rng
-            .sample_iter(&LoginCodePart)
-            .take(5)
-            .map(char::from)
-            .collect();
+        let code: LoginCode = rng.sample_iter(&LoginCodePart).take(5).collect();
 
         // Compute expiry timestamp
         let exp = SystemTime::now()

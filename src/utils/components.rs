@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use super::hashing::{int_hash_map, IntHashMap};
 
 /// Key created from a component and command
@@ -16,8 +18,7 @@ static COMPONENT_NAMES: &[(u16, &str)] = &[
     (user_sessions::COMPONENT, "UserSessions"),
 ];
 
-static mut COMMANDS: IntHashMap<ComponentKey, &'static str> = int_hash_map();
-static mut NOTIFICATIONS: IntHashMap<ComponentKey, &'static str> = int_hash_map();
+static PACKET_DEBUG_DATA: LazyLock<PacketDebugData> = LazyLock::new(PacketDebugData::new);
 
 // Packets that will have their content omitted for debug logging
 #[rustfmt::skip]
@@ -48,15 +49,6 @@ pub static DEBUG_IGNORED_PACKETS: &[ComponentKey] = &[
 #[cfg(feature = "large-packet-logging")]
 pub static DEBUG_IGNORED_PACKETS: &[ComponentKey] = &[];
 
-/// Initializes the stored component state. Should only be
-/// called on initial startup
-pub fn initialize() {
-    unsafe {
-        init_commands();
-        init_notifications();
-    }
-}
-
 pub fn get_component_name(component: u16) -> Option<&'static str> {
     COMPONENT_NAMES
         .iter()
@@ -65,11 +57,29 @@ pub fn get_component_name(component: u16) -> Option<&'static str> {
 }
 
 pub fn get_command_name(key: ComponentKey, notify: bool) -> Option<&'static str> {
-    unsafe {
-        if notify {
-            NOTIFICATIONS.get(&key).copied()
-        } else {
-            COMMANDS.get(&key).copied()
+    let debug_data = &*PACKET_DEBUG_DATA;
+    if notify {
+        debug_data.notifications.get(&key).copied()
+    } else {
+        debug_data.commands.get(&key).copied()
+    }
+}
+
+pub struct PacketDebugData {
+    commands: IntHashMap<ComponentKey, &'static str>,
+    notifications: IntHashMap<ComponentKey, &'static str>,
+}
+
+impl PacketDebugData {
+    /// Populates the debug data map with all the debugging information
+    pub fn new() -> Self {
+        let mut commands = int_hash_map();
+        let mut notifications = int_hash_map();
+        init_commands(&mut commands);
+        init_notifications(&mut notifications);
+        Self {
+            commands,
+            notifications,
         }
     }
 }
@@ -409,7 +419,7 @@ pub mod user_sessions {
 }
 
 #[rustfmt::skip]
-unsafe fn init_commands() {
+fn init_commands(commands: &mut IntHashMap<ComponentKey, &'static str>) {
     use authentication as a;
     use game_manager as g;
     use redirector as r;
@@ -420,7 +430,7 @@ unsafe fn init_commands() {
     use game_reporting as gr;
     use user_sessions as us;
 
-    COMMANDS.extend([
+    commands.extend([
         // Authentication
         (component_key(a::COMPONENT, a::CREATE_ACCOUNT), "CreateAccount"),
         (component_key(a::COMPONENT, a::UPDATE_ACCOUNT), "UpdateAccount"),
@@ -624,14 +634,14 @@ unsafe fn init_commands() {
 }
 
 #[rustfmt::skip]
-unsafe fn init_notifications() {
+fn init_notifications(notifications: &mut IntHashMap<ComponentKey, &'static str>) {
     use game_manager as g;
     use messaging as m;
     use game_reporting as gr;
     use user_sessions as us;
 
 
-    NOTIFICATIONS.extend([
+    notifications.extend([
         // Game Manager
         (component_key(g::COMPONENT, g::MATCHMAKING_FAILED), "MatchmakingFailed"),
         (component_key(g::COMPONENT, g::MATCHMAKING_ASYNC_STATUS), "MatchmakingAsyncStatus"),

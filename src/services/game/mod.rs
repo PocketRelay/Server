@@ -16,7 +16,7 @@ use crate::{
         },
         packet::Packet,
         router::RawBlaze,
-        SessionLink, SessionNotifyHandle, WeakSessionLink,
+        SessionLink, WeakSessionLink,
     },
     utils::{
         components::game_manager,
@@ -129,7 +129,6 @@ pub struct GamePlayer {
     pub player: Arc<Player>,
     /// Weak reference to the associated session
     pub link: WeakSessionLink,
-    pub notify_handle: SessionNotifyHandle,
     /// Networking information for the player
     pub net: Arc<NetData>,
     /// The mesh state of the player
@@ -155,16 +154,10 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(
-        player: Arc<Player>,
-        net: Arc<NetData>,
-        link: WeakSessionLink,
-        notify_handle: SessionNotifyHandle,
-    ) -> Self {
+    pub fn new(player: Arc<Player>, net: Arc<NetData>, link: WeakSessionLink) -> Self {
         Self {
             player,
             link,
-            notify_handle,
             net,
             state: PlayerState::ActiveConnecting,
         }
@@ -176,7 +169,7 @@ impl GamePlayer {
         }
     }
 
-    pub fn try_subscribe(&self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
+    pub fn try_subscribe(&self, player_id: PlayerID, subscriber: WeakSessionLink) {
         if let Some(link) = self.link.upgrade() {
             link.data.add_subscriber(player_id, subscriber);
         }
@@ -190,7 +183,13 @@ impl GamePlayer {
 
     #[inline]
     pub fn notify(&self, packet: Packet) {
-        self.notify_handle.notify(packet)
+        let session = match self.link.upgrade() {
+            Some(value) => value,
+            // Session is already closed
+            None => return,
+        };
+
+        session.tx.notify(packet)
     }
 
     /// Takes a snapshot of the current player state
@@ -550,8 +549,8 @@ impl Game {
             .iter()
             .filter(|other| other.player.id != target.player.id)
             .for_each(|other| {
-                target.try_subscribe(other.player.id, other.notify_handle.clone());
-                other.try_subscribe(target.player.id, target.notify_handle.clone());
+                target.try_subscribe(other.player.id, other.link.clone());
+                other.try_subscribe(target.player.id, target.link.clone());
             });
     }
 

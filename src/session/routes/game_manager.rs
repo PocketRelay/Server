@@ -545,6 +545,7 @@ pub async fn handle_cancel_matchmaking(
 ///  "GID": 2,
 /// }
 /// ```
+#[allow(unused)]
 pub async fn handle_replay_game(
     session: SessionLink,
     SessionAuth(player): SessionAuth,

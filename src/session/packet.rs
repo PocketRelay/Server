@@ -377,7 +377,7 @@ pub struct PacketDebug<'a> {
     pub packet: &'a Packet,
 }
 
-impl<'a> Debug for PacketDebug<'a> {
+impl Debug for PacketDebug<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Append basic header information
         let header = &self.packet.frame;

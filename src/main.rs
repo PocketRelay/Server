@@ -7,7 +7,7 @@ use crate::{
 };
 use axum::{self, Extension};
 use config::{load_config, TunnelConfig};
-use log::{debug, error, info, LevelFilter};
+use log::{debug, error, info};
 use services::{
     game::{matchmaking::Matchmaking, store::Games},
     tunnel::{tunnel_keep_alive, udp_tunnel::start_udp_tunnel},
@@ -31,10 +31,6 @@ async fn main() {
 
     // Initialize logging
     logging::setup(config.logging);
-
-    if config.logging == LevelFilter::Debug {
-        utils::components::initialize();
-    }
 
     // Create the server socket address while the port is still available
     let addr: SocketAddr = SocketAddr::new(config.host, config.port);

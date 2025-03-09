@@ -26,7 +26,7 @@ use super::{
         NetworkAddress, QosNetworkData,
     },
     packet::Packet,
-    SessionNotifyHandle,
+    WeakSessionLink,
 };
 
 pub struct SessionData {
@@ -191,7 +191,11 @@ impl SessionData {
 
     /// Clears the underlying authenticated session data
     pub fn clear_auth(&self) {
-        self.ext.write().auth.take();
+        let auth = { self.ext.write().auth.take() };
+
+        // Auth MUST be dropped *after* the write lock is released
+        // as releasing a player from a game requires accessing this
+        drop(auth);
     }
 
     /// Starts a session from the provided player association
@@ -306,7 +310,7 @@ impl SessionData {
     }
 
     /// Adds a subscriber to the session
-    pub fn add_subscriber(&self, player_id: PlayerID, subscriber: SessionNotifyHandle) {
+    pub fn add_subscriber(&self, player_id: PlayerID, subscriber: WeakSessionLink) {
         self.write_silent(|data| data.add_subscriber(player_id, subscriber));
     }
 
@@ -347,11 +351,17 @@ impl SessionDataAuth {
 
     /// Adds a new subscriber to this session `player_id` is the ID of the player who is
     /// subscribing and `notify_handle` is the handle for sending messages to them
-    fn add_subscriber(&mut self, player_id: PlayerID, notify_handle: SessionNotifyHandle) {
+    fn add_subscriber(&mut self, player_id: PlayerID, weak_session: WeakSessionLink) {
         let target_id = self.player_assoc.player.id;
 
+        let session = match weak_session.upgrade() {
+            Some(value) => value,
+            // Tried to subscribe to a session that is already over
+            None => return,
+        };
+
         // Notify the addition of this user data to the subscriber
-        notify_handle.notify(Packet::notify(
+        session.tx.notify(Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_ADDED,
             NotifyUserAdded {
@@ -361,7 +371,7 @@ impl SessionDataAuth {
         ));
 
         // Notify the user that they are now subscribed to this user
-        notify_handle.notify(Packet::notify(
+        session.tx.notify(Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_UPDATED,
             NotifyUserUpdated {
@@ -374,7 +384,7 @@ impl SessionDataAuth {
         self.subscribers.push(SessionSubscription {
             target_id,
             source_id: player_id,
-            source_notify_handle: notify_handle,
+            source_session: weak_session,
         });
     }
 
@@ -395,9 +405,15 @@ impl SessionDataAuth {
             },
         );
 
-        self.subscribers
-            .iter()
-            .for_each(|sub| sub.source_notify_handle.notify(packet.clone()));
+        self.subscribers.iter().for_each(|sub| {
+            let session = match sub.source_session.upgrade() {
+                Some(value) => value,
+                // Session is already closed
+                None => return,
+            };
+
+            session.tx.notify(packet.clone())
+        });
     }
 }
 
@@ -408,14 +424,20 @@ struct SessionSubscription {
     target_id: PlayerID,
     /// ID of the player who is subscribing
     source_id: PlayerID,
-    /// Handle to send messages to the source
-    source_notify_handle: SessionNotifyHandle,
+    /// Source session
+    source_session: WeakSessionLink,
 }
 
 impl Drop for SessionSubscription {
     fn drop(&mut self) {
+        let session = match self.source_session.upgrade() {
+            Some(value) => value,
+            // Session is already closed
+            None => return,
+        };
+
         // Notify the subscriber they've removed the user subscription
-        self.source_notify_handle.notify(Packet::notify(
+        session.tx.notify(Packet::notify(
             user_sessions::COMPONENT,
             user_sessions::USER_REMOVED,
             NotifyUserRemoved {

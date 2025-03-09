@@ -236,7 +236,6 @@ impl FromPacketRequest for GamePlayer {
                 player,
                 net_data,
                 Arc::downgrade(&req.state),
-                req.state.notify_handle.clone(),
             ))
         })
     }

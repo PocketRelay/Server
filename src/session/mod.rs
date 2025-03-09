@@ -10,11 +10,12 @@ use crate::{
     database::entities::Player,
     utils::components::{component_key, DEBUG_IGNORED_PACKETS},
 };
+use blaze_socket::{BlazeLock, BlazeLockFuture, BlazeRx, BlazeSocketFuture, BlazeTx};
 use data::SessionData;
-use futures_util::{future::BoxFuture, Sink, Stream};
+use futures_util::future::BoxFuture;
 use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
-use log::{debug, log_enabled};
+use log::{debug, error, log_enabled};
 use std::{
     fmt::Debug,
     pin::Pin,
@@ -25,9 +26,10 @@ use std::{
     task::{ready, Context, Poll},
 };
 use std::{future::Future, sync::Weak};
-use tokio::sync::{mpsc, OwnedMutexGuard};
+use tokio::spawn;
 use tokio_util::codec::Framed;
 
+pub mod blaze_socket;
 pub mod data;
 pub mod models;
 pub mod packet;
@@ -44,47 +46,10 @@ pub struct Session {
     pub id: u32,
 
     /// Handle for sending packets to this session
-    pub notify_handle: SessionNotifyHandle,
+    pub tx: BlazeTx,
 
     /// Data associated with the session
     pub data: SessionData,
-}
-
-type PacketSender = mpsc::UnboundedSender<Packet>;
-
-/// Handle for sending packets to a session notification
-/// channel
-#[derive(Clone)]
-pub struct SessionNotifyHandle {
-    tx: Arc<tokio::sync::Mutex<PacketSender>>,
-}
-
-impl SessionNotifyHandle {
-    /// Creates a new session notify handle, provides both the handle
-    /// and the receiving end to use for receiving from the handle
-    pub fn new() -> (SessionNotifyHandle, mpsc::UnboundedReceiver<Packet>) {
-        let (tx, rx) = mpsc::unbounded_channel();
-        let handle = Self {
-            tx: Arc::new(tokio::sync::Mutex::new(tx)),
-        };
-        (handle, rx)
-    }
-
-    /// Pushes a new notification packet
-    pub fn notify(&self, packet: Packet) {
-        // Acquire the lock position before scheduling the task to ensure correct ordering
-        let tx = self.tx.clone().lock_owned();
-
-        tokio::spawn(async move {
-            let tx = tx.await;
-            let _ = tx.send(packet);
-        });
-    }
-
-    /// Internally lock the busy lock, used by the router when it wants to handle a request
-    fn acquire_tx(&self) -> BoxFuture<'static, OwnedMutexGuard<PacketSender>> {
-        Box::pin(self.tx.clone().lock_owned())
-    }
 }
 
 impl Session {
@@ -93,15 +58,44 @@ impl Session {
         SESSION_IDS.fetch_add(1, Ordering::AcqRel)
     }
 
-    pub async fn run(id: u32, io: Upgraded, data: SessionData, router: Arc<BlazeRouter>) {
-        let (notify_handle, rx) = SessionNotifyHandle::new();
+    pub fn run(id: u32, io: Upgraded, data: SessionData, router: Arc<BlazeRouter>) {
+        // Create blaze socket handler
+        let (blaze_future, blaze_rx, blaze_tx) =
+            BlazeSocketFuture::new(Framed::new(TokioIo::new(io), PacketCodec::default()));
+
+        spawn(async move {
+            if let Err(cause) = blaze_future.await {
+                error!("error running blaze socket future: {cause:?}")
+            }
+
+            debug!("session blaze future completed");
+        });
+
+        debug!("session started (SID: {id})");
+
+        // Create session handler
         let session = Arc::new(Self {
             id,
-            notify_handle,
+            tx: blaze_tx,
             data,
         });
 
-        SessionFuture::new(io, &session, &router, rx).await;
+        spawn({
+            let session = session;
+
+            async move {
+                // Run the session to completion
+                SessionFuture::new(blaze_rx, &session, &router).await;
+
+                debug!("session future complete");
+
+                // Clear session data, speeds up process of ending the session
+                // prevents session data being accessed while shutting down
+                session.data.clear_auth();
+
+                debug!("session auth cleared, session dropped");
+            }
+        });
     }
 }
 
@@ -131,47 +125,31 @@ impl Debug for DebugSessionData {
 
 /// Future for processing a session
 struct SessionFuture<'a> {
-    /// The IO for reading and writing
-    io: Framed<TokioIo<Upgraded>, PacketCodec>,
-    /// Receiver for packets to write
-    rx: mpsc::UnboundedReceiver<Packet>,
+    /// Receiver for packets to handle
+    rx: BlazeRx,
     /// The session this link is for
     session: &'a SessionLink,
     /// The router to use
     router: &'a BlazeRouter,
-    /// The reading state
-    read_state: ReadState<'a>,
-    /// The writing state
-    write_state: WriteState,
-    /// Whether the future has been stopped
-    stop: bool,
-}
-
-/// Session future writing state
-enum WriteState {
-    /// Waiting for a packet to write
-    Recv,
-    /// Waiting for the framed to become read
-    Write { packet: Option<Packet> },
-    /// Flushing the framed
-    Flush,
+    /// State of the future
+    state: SessionFutureState<'a>,
 }
 
 /// Session future reading state
-enum ReadState<'a> {
-    /// Waiting for a packet
-    Recv,
-    /// Acquiring a lock guard
+enum SessionFutureState<'a> {
+    /// Waiting for inbound packet
+    Accept,
+    /// Waiting to acquire write handling lock
     Acquire {
         /// Future for the locking guard
-        lock_future: BoxFuture<'static, OwnedMutexGuard<PacketSender>>,
+        lock_future: BlazeLockFuture,
         /// The packet that was read
         packet: Option<Packet>,
     },
     /// Future for a handler is being polled
     Handle {
         /// Access to the sender for sending the response
-        tx: OwnedMutexGuard<PacketSender>,
+        tx: BlazeLock,
         /// Handle future
         future: BoxFuture<'a, Packet>,
     },
@@ -179,129 +157,16 @@ enum ReadState<'a> {
 
 impl SessionFuture<'_> {
     pub fn new<'a>(
-        io: Upgraded,
+        rx: BlazeRx,
         session: &'a Arc<Session>,
         router: &'a BlazeRouter,
-        rx: mpsc::UnboundedReceiver<Packet>,
     ) -> SessionFuture<'a> {
         SessionFuture {
-            io: Framed::new(TokioIo::new(io), PacketCodec::default()),
             router,
             rx,
             session,
-            read_state: ReadState::Recv,
-            write_state: WriteState::Recv,
-            stop: false,
+            state: SessionFutureState::Accept,
         }
-    }
-
-    /// Polls the write state, the poll ready state returns whether
-    /// the future should continue
-    fn poll_write_state(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        match &mut self.write_state {
-            WriteState::Recv => {
-                // Try receive a packet from the write channel
-                let result = ready!(Pin::new(&mut self.rx).poll_recv(cx));
-
-                if let Some(packet) = result {
-                    self.write_state = WriteState::Write {
-                        packet: Some(packet),
-                    };
-                } else {
-                    // All writers have closed, session must be closed (Future end)
-                    self.stop = true;
-                }
-            }
-            WriteState::Write { packet } => {
-                // Wait until the inner is ready
-                if ready!(Pin::new(&mut self.io).poll_ready(cx)).is_ok() {
-                    let packet = packet
-                        .take()
-                        .expect("Unexpected write state without packet");
-
-                    debug_log_packet(self.session, "Send", &packet);
-
-                    // Write the packet to the buffer
-                    Pin::new(&mut self.io)
-                        .start_send(packet)
-                        // Packet encoder impl shouldn't produce errors
-                        .expect("Packet encoder errored");
-
-                    self.write_state = WriteState::Flush;
-                } else {
-                    // Failed to ready, session must be closed
-                    self.stop = true;
-                }
-            }
-            WriteState::Flush => {
-                // Wait until the flush is complete
-                if ready!(Pin::new(&mut self.io).poll_flush(cx)).is_ok() {
-                    self.write_state = WriteState::Recv;
-                } else {
-                    // Failed to flush, session must be closed
-                    self.stop = true
-                }
-            }
-        }
-
-        Poll::Ready(())
-    }
-
-    /// Polls the read state, the poll ready state returns whether
-    /// the future should continue
-    fn poll_read_state(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        // Poll checking if the connection has timed-out
-        if self.session.data.poll_keep_alive_dead(cx) {
-            self.stop = true;
-            return Poll::Ready(());
-        }
-
-        match &mut self.read_state {
-            ReadState::Recv => {
-                // Try receive a packet from the write channel
-                let result = ready!(Pin::new(&mut self.io).poll_next(cx));
-
-                if let Some(Ok(packet)) = result {
-                    // Acquire a write lock future (Reserve our space for sending the response)
-                    let lock_future = self.session.notify_handle.acquire_tx();
-
-                    self.read_state = ReadState::Acquire {
-                        lock_future,
-                        packet: Some(packet),
-                    }
-                } else {
-                    // Reader has closed or reading encountered an error (Either way stop reading)
-                    self.stop = true;
-                }
-            }
-            ReadState::Acquire {
-                lock_future,
-                packet,
-            } => {
-                let guard = ready!(Pin::new(lock_future).poll(cx));
-                let packet = packet
-                    .take()
-                    .expect("Unexpected acquire state without packet");
-
-                debug_log_packet(self.session, "Receive", &packet);
-
-                let future = self.router.handle(self.session.clone(), packet);
-
-                // Move onto a handling state
-                self.read_state = ReadState::Handle { tx: guard, future };
-            }
-            ReadState::Handle { tx, future } => {
-                // Poll the handler until completion
-                let response = ready!(Pin::new(future).poll(cx));
-
-                // Send the response to the writer
-                _ = tx.send(response);
-
-                // Reset back to the reading state
-                self.read_state = ReadState::Recv;
-            }
-        }
-        Poll::Ready(())
     }
 }
 
@@ -311,22 +176,61 @@ impl Future for SessionFuture<'_> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        while this.poll_write_state(cx).is_ready() {}
-        while this.poll_read_state(cx).is_ready() {}
+        loop {
+            // Poll checking if the connection has timed-out
+            if this.session.data.poll_keep_alive_dead(cx) {
+                return Poll::Ready(());
+            }
 
-        if this.stop {
-            Poll::Ready(())
-        } else {
-            Poll::Pending
+            match &mut this.state {
+                SessionFutureState::Accept => {
+                    let packet = match ready!(this.rx.poll_recv(cx)) {
+                        Some(value) => value,
+                        None => {
+                            // Read half of the socket has terminated, nothing left to handle
+                            return Poll::Ready(());
+                        }
+                    };
+
+                    // Acquire a write lock future (Reserve our space for sending the response)
+                    let lock_future = Box::pin(this.session.tx.acquire_tx());
+
+                    this.state = SessionFutureState::Acquire {
+                        lock_future,
+                        packet: Some(packet),
+                    }
+                }
+                SessionFutureState::Acquire {
+                    lock_future,
+                    packet,
+                } => {
+                    let guard = ready!(Pin::new(lock_future).poll(cx));
+                    let packet = packet
+                        .take()
+                        .expect("Unexpected acquire state without packet");
+
+                    debug_log_packet(this.session, "Receive", &packet);
+
+                    let future = this.router.handle(this.session.clone(), packet);
+
+                    // Move onto a handling state
+                    this.state = SessionFutureState::Handle { tx: guard, future };
+                }
+                SessionFutureState::Handle { tx, future } => {
+                    // Poll the handler until completion
+                    let response = ready!(Pin::new(future).poll(cx));
+
+                    // Send the response to the writer
+                    if tx.send(response).is_err() {
+                        // Write half has closed, cease reading
+                        return Poll::Ready(());
+                    }
+
+                    // Reset back to the reading state
+                    this.state = SessionFutureState::Accept;
+                }
+            }
         }
-    }
-}
-
-impl Drop for SessionFuture<'_> {
-    fn drop(&mut self) {
-        // Clear session data, speeds up process of ending the session
-        // prevents session data being accessed while shutting down
-        self.session.data.clear_auth();
     }
 }
 
