@@ -27,7 +27,6 @@ use crate::{
 use chrono::{DateTime, Utc};
 use log::{debug, warn};
 use parking_lot::RwLock;
-use serde::Serialize;
 use std::sync::{Arc, Weak};
 use store::Games;
 use tdf::{ObjectId, TdfMap, TdfSerializer};
@@ -36,6 +35,7 @@ use super::tunnel::TunnelService;
 
 pub mod matchmaking;
 pub mod rules;
+pub mod snapshot;
 pub mod store;
 
 pub type GameRef = Arc<RwLock<Game>>;
@@ -101,25 +101,6 @@ pub struct Game {
     pub tunnel_service: Arc<TunnelService>,
 }
 
-/// Snapshot of the current game state and players
-#[derive(Serialize)]
-pub struct GameSnapshot {
-    /// The ID of the game the snapshot is for
-    pub id: GameID,
-    /// The current game state
-    pub state: GameState,
-    /// The current game setting
-    pub setting: u16,
-    /// The game attributes
-    pub attributes: AttrMap,
-    /// Snapshots of the game players
-    pub players: Option<Box<[GamePlayerSnapshot]>>,
-    /// The total number of players in the game
-    pub total_players: usize,
-    /// When the game was created
-    pub created_at: DateTime<Utc>,
-}
-
 /// Attributes map type
 pub type AttrMap = TdfMap<String, String>;
 
@@ -132,18 +113,6 @@ pub struct GamePlayer {
     pub link: WeakSessionLink,
     /// The mesh state of the player
     pub state: PlayerState,
-}
-
-/// Structure for taking a snapshot of the players current
-/// state.
-#[derive(Serialize)]
-pub struct GamePlayerSnapshot {
-    /// The player ID of the snapshot
-    pub player_id: PlayerID,
-    /// The player name of the snapshot
-    pub display_name: Box<str>,
-    /// The player net data of the snapshot if collected
-    pub net: Option<Arc<NetData>>,
 }
 
 impl GamePlayer {
@@ -200,16 +169,6 @@ impl GamePlayer {
         };
 
         session.tx.notify(packet)
-    }
-
-    /// Takes a snapshot of the current player state
-    /// for serialization
-    pub fn snapshot(&self, include_net: bool) -> GamePlayerSnapshot {
-        GamePlayerSnapshot {
-            player_id: self.player.id,
-            display_name: Box::from(self.player.display_name.as_ref()),
-            net: if include_net { self.net() } else { None },
-        }
     }
 
     pub fn encode<S: TdfSerializer>(&self, game_id: GameID, slot: usize, w: &mut S) {
@@ -465,30 +424,6 @@ impl Game {
         }
 
         GameJoinableState::Joinable
-    }
-
-    pub fn snapshot(&self, include_net: bool, include_players: bool) -> GameSnapshot {
-        let total_players: usize = self.players.len();
-        let players = if include_players {
-            let players = self
-                .players
-                .iter()
-                .map(|value| value.snapshot(include_net))
-                .collect();
-            Some(players)
-        } else {
-            None
-        };
-
-        GameSnapshot {
-            id: self.id,
-            state: self.state,
-            setting: self.settings.bits(),
-            attributes: self.attributes.clone(),
-            players,
-            total_players,
-            created_at: self.created_at,
-        }
     }
 
     /// Writes the provided packet to all connected sessions.

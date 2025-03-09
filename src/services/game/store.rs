@@ -1,4 +1,4 @@
-use super::{rules::RuleSet, Game, GameJoinableState, GameRef, GameSnapshot};
+use super::{rules::RuleSet, snapshot::GameSnapshot, Game, GameJoinableState, GameRef};
 use crate::utils::{hashing::IntHashMap, types::GameID};
 use parking_lot::RwLock;
 use std::sync::{
@@ -87,7 +87,7 @@ impl Games {
             // Iterate over the game links
             .map(|(_, value)| value.clone())
             // Spawn the snapshot tasks
-            .map(|game| game.read().snapshot(include_net, include_players))
+            .map(|game| GameSnapshot::new(&game.read(), include_net, include_players))
             .collect();
 
         (snapshots, more)

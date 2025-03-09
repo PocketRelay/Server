@@ -2,7 +2,7 @@ use crate::{
     config::Config,
     database::entities::players::PlayerRole,
     middleware::auth::MaybeAuth,
-    services::game::{store::Games, GameSnapshot},
+    services::game::{snapshot::GameSnapshot, store::Games},
     utils::types::GameID,
 };
 use axum::{
@@ -110,7 +110,7 @@ pub async fn get_game(
     let include_players = auth.is_some() || !config.api.public_games_hide_players;
 
     let game = games.get_by_id(game_id).ok_or(GamesError::NotFound)?;
-    let snapshot = game.read().snapshot(include_net, include_players);
+    let snapshot = GameSnapshot::new(&game.read(), include_net, include_players);
 
     Ok(Json(snapshot))
 }
