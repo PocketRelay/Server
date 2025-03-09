@@ -27,6 +27,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use log::{debug, warn};
 use parking_lot::RwLock;
+use rand::RngCore;
 use std::sync::{Arc, Weak};
 use store::Games;
 use tdf::{ObjectId, TdfMap, TdfSerializer};
@@ -94,6 +95,10 @@ pub struct Game {
     pub created_at: DateTime<Utc>,
     /// Players currently in the game
     pub players: Vec<GamePlayer>,
+    /// ID used when reporting game results
+    pub reporting_id: u64,
+    /// Randomness seed used by players
+    pub seed: u32,
 
     /// Services access
     pub games_store: Arc<Games>,
@@ -230,6 +235,9 @@ impl Game {
         games_store: Arc<Games>,
         tunnel_service: Arc<TunnelService>,
     ) -> Game {
+        let mut rng = rand::rng();
+        let seed = rng.next_u32();
+
         Game {
             id,
             attributes,
@@ -237,6 +245,8 @@ impl Game {
             state: Default::default(),
             players: Default::default(),
             created_at: Utc::now(),
+            reporting_id: 18014398695176361,
+            seed,
             games_store,
             tunnel_service,
         }

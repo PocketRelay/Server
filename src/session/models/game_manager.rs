@@ -798,7 +798,7 @@ impl TdfSerialize for GameSetupResponse<'_> {
             // Game settings
             w.tag_owned(b"GSET", game.settings.bits());
             // Game Reporting ID
-            w.tag_u64(b"GSID", 0x4000000a76b645);
+            w.tag_u64(b"GSID", game.reporting_id);
             // Game state
             w.tag_ref(b"GSTA", &game.state);
             // Game Type used for game reporting as passed up in the request.
@@ -883,8 +883,7 @@ impl TdfSerialize for GameSetupResponse<'_> {
             // Queue capacity
             w.tag_zero(b"QCAP");
             // Shared game randomness seed? (a 32 bit number shared between clients)
-            // TODO: Randomly generate this when creating a game?
-            w.tag_u32(b"SEED", 0x4cbc8585);
+            w.tag_u32(b"SEED", game.seed);
             // Team capacity
             w.tag_zero(b"TCAP");
 
