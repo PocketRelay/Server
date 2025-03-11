@@ -2780,6 +2780,542 @@
               "values": [
                 {
                   "ty": "AddUnique",
+                  "text": "PR_EXTRACT"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_EXTRACT_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_248_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_248_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_247_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_247_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_217_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_217_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_218_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_218_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_273_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_273_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_282_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_282_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_373_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_373_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_500_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_500_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_514_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_514_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_508_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_508_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_577_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_577_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_256_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_256_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_255_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_255_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_225_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_225_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_226_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_226_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_268_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_268_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_240_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_240_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_278_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_278_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_378_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_378_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_480_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_480_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_506_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_506_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_512_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_512_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_576_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_576_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_250_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_250_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_249_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_249_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_219_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_219_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_220_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_220_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_238_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_238_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_280_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_280_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_374_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_374_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_501_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_501_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_503_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_503_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_509_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_509_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_584_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_584_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_254_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_254_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_253_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_253_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_223_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_223_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_224_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_224_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_267_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_267_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_279_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_279_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_375_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_375_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_505_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_505_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_511_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_511_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_583_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_583_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_252_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_252_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_251_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_251_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_221_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_221_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_222_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_222_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_239_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_239_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_281_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_281_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_377_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_377_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_481_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_481_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_504_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_504_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_510_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_510_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_602_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_602_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_290_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_290_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_258_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_258_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_257_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_257_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_227_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_227_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_228_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_228_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_272_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_272_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_283_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_283_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_376_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_376_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_507_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_507_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_513_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_513_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_592_PLAYED"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_ADEPT_592_PLAYED_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
                   "text": "SFXGameContentDLC_Shared.SFXWeaponMod_AssaultRifleMelee"
                 },
                 {
@@ -3333,14 +3869,6 @@
                 {
                   "ty": "AddUnique",
                   "text": "RANDOMFACTION_PROGRESS"
-                },
-                {
-                  "ty": "AddUnique",
-                  "text": "PR_EXTRACT"
-                },
-                {
-                  "ty": "AddUnique",
-                  "text": "PR_EXTRACT_PROGRESS"
                 },
                 {
                   "ty": "AddUnique",
@@ -13732,6 +14260,274 @@
               "name": "grinderaccomplishmentdata",
               "values": [
                 {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_EXTRACT,AccomplishmentProgressName=PR_EXTRACT_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_248_PLAYED,AccomplishmentProgressName=PR_ADEPT_248_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_247_PLAYED,AccomplishmentProgressName=PR_ADEPT_247_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_217_PLAYED,AccomplishmentProgressName=PR_ADEPT_217_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_218_PLAYED,AccomplishmentProgressName=PR_ADEPT_218_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_273_PLAYED,AccomplishmentProgressName=PR_ADEPT_273_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_282_PLAYED,AccomplishmentProgressName=PR_ADEPT_282_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_373_PLAYED,AccomplishmentProgressName=PR_ADEPT_373_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_500_PLAYED,AccomplishmentProgressName=PR_ADEPT_500_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_514_PLAYED,AccomplishmentProgressName=PR_ADEPT_514_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_508_PLAYED,AccomplishmentProgressName=PR_ADEPT_508_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_577_PLAYED,AccomplishmentProgressName=PR_ADEPT_577_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_256_PLAYED,AccomplishmentProgressName=PR_ADEPT_256_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_255_PLAYED,AccomplishmentProgressName=PR_ADEPT_255_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_225_PLAYED,AccomplishmentProgressName=PR_ADEPT_225_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_226_PLAYED,AccomplishmentProgressName=PR_ADEPT_226_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_268_PLAYED,AccomplishmentProgressName=PR_ADEPT_268_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_240_PLAYED,AccomplishmentProgressName=PR_ADEPT_240_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_278_PLAYED,AccomplishmentProgressName=PR_ADEPT_278_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_378_PLAYED,AccomplishmentProgressName=PR_ADEPT_378_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_480_PLAYED,AccomplishmentProgressName=PR_ADEPT_480_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_506_PLAYED,AccomplishmentProgressName=PR_ADEPT_506_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_512_PLAYED,AccomplishmentProgressName=PR_ADEPT_512_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_576_PLAYED,AccomplishmentProgressName=PR_ADEPT_576_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_250_PLAYED,AccomplishmentProgressName=PR_ADEPT_250_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_249_PLAYED,AccomplishmentProgressName=PR_ADEPT_249_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_219_PLAYED,AccomplishmentProgressName=PR_ADEPT_219_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_220_PLAYED,AccomplishmentProgressName=PR_ADEPT_220_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_238_PLAYED,AccomplishmentProgressName=PR_ADEPT_238_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_280_PLAYED,AccomplishmentProgressName=PR_ADEPT_280_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_374_PLAYED,AccomplishmentProgressName=PR_ADEPT_374_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_501_PLAYED,AccomplishmentProgressName=PR_ADEPT_501_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_503_PLAYED,AccomplishmentProgressName=PR_ADEPT_503_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_509_PLAYED,AccomplishmentProgressName=PR_ADEPT_509_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_584_PLAYED,AccomplishmentProgressName=PR_ADEPT_584_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_254_PLAYED,AccomplishmentProgressName=PR_ADEPT_254_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_253_PLAYED,AccomplishmentProgressName=PR_ADEPT_253_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_223_PLAYED,AccomplishmentProgressName=PR_ADEPT_223_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_224_PLAYED,AccomplishmentProgressName=PR_ADEPT_224_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_267_PLAYED,AccomplishmentProgressName=PR_ADEPT_267_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_279_PLAYED,AccomplishmentProgressName=PR_ADEPT_279_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_375_PLAYED,AccomplishmentProgressName=PR_ADEPT_375_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_505_PLAYED,AccomplishmentProgressName=PR_ADEPT_505_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_511_PLAYED,AccomplishmentProgressName=PR_ADEPT_511_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_583_PLAYED,AccomplishmentProgressName=PR_ADEPT_583_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_252_PLAYED,AccomplishmentProgressName=PR_ADEPT_252_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_251_PLAYED,AccomplishmentProgressName=PR_ADEPT_251_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_221_PLAYED,AccomplishmentProgressName=PR_ADEPT_221_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_222_PLAYED,AccomplishmentProgressName=PR_ADEPT_222_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_239_PLAYED,AccomplishmentProgressName=PR_ADEPT_239_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_281_PLAYED,AccomplishmentProgressName=PR_ADEPT_281_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_377_PLAYED,AccomplishmentProgressName=PR_ADEPT_377_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_481_PLAYED,AccomplishmentProgressName=PR_ADEPT_481_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_504_PLAYED,AccomplishmentProgressName=PR_ADEPT_504_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_510_PLAYED,AccomplishmentProgressName=PR_ADEPT_510_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_602_PLAYED,AccomplishmentProgressName=PR_ADEPT_602_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_290_PLAYED,AccomplishmentProgressName=PR_ADEPT_290_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_258_PLAYED,AccomplishmentProgressName=PR_ADEPT_258_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_257_PLAYED,AccomplishmentProgressName=PR_ADEPT_257_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_227_PLAYED,AccomplishmentProgressName=PR_ADEPT_227_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_228_PLAYED,AccomplishmentProgressName=PR_ADEPT_228_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_272_PLAYED,AccomplishmentProgressName=PR_ADEPT_272_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_283_PLAYED,AccomplishmentProgressName=PR_ADEPT_283_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_376_PLAYED,AccomplishmentProgressName=PR_ADEPT_376_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_507_PLAYED,AccomplishmentProgressName=PR_ADEPT_507_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_513_PLAYED,AccomplishmentProgressName=PR_ADEPT_513_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_ADEPT_592_PLAYED,AccomplishmentProgressName=PR_ADEPT_592_PLAYED_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
                   "ty": "Remove",
                   "text": "(AccomplishmentName=COMBATMASTERY,AccomplishmentProgressName=COMBATMASTERY_GOLD_PROGRESS,Goal=9,Interval=1,Title=770352,Description=770703)"
                 },
@@ -14165,10 +14961,6 @@
                 },
                 {
                   "ty": "AddUnique",
-                  "text": "(AccomplishmentName=PR_EXTRACT,AccomplishmentProgressName=PR_EXTRACT_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
-                },
-                {
-                  "ty": "AddUnique",
                   "text": "(AccomplishmentName=PROPHECY_1GROUP,AccomplishmentProgressName=PROPHECY_1GROUP_PROGRESS,Goal=4,Interval=1,Title=814442,Description=814442)"
                 },
                 {
@@ -14192,6 +14984,274 @@
             {
               "name": "accomplishmentdata",
               "values": [
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=745,Name=PR_EXTRACT,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=746,Name=PR_ADEPT_248_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=747,Name=PR_ADEPT_247_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=748,Name=PR_ADEPT_217_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=749,Name=PR_ADEPT_218_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=750,Name=PR_ADEPT_273_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=751,Name=PR_ADEPT_282_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=752,Name=PR_ADEPT_373_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=753,Name=PR_ADEPT_500_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=754,Name=PR_ADEPT_514_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=755,Name=PR_ADEPT_508_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=756,Name=PR_ADEPT_577_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=757,Name=PR_ADEPT_256_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=758,Name=PR_ADEPT_255_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=759,Name=PR_ADEPT_225_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=760,Name=PR_ADEPT_226_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=761,Name=PR_ADEPT_268_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=762,Name=PR_ADEPT_240_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=763,Name=PR_ADEPT_278_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=764,Name=PR_ADEPT_378_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=765,Name=PR_ADEPT_480_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=766,Name=PR_ADEPT_506_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=767,Name=PR_ADEPT_512_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=768,Name=PR_ADEPT_576_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=769,Name=PR_ADEPT_250_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=770,Name=PR_ADEPT_249_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=771,Name=PR_ADEPT_219_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=772,Name=PR_ADEPT_220_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=773,Name=PR_ADEPT_238_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=774,Name=PR_ADEPT_280_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=775,Name=PR_ADEPT_374_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=776,Name=PR_ADEPT_501_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=777,Name=PR_ADEPT_503_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=778,Name=PR_ADEPT_509_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=779,Name=PR_ADEPT_584_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=780,Name=PR_ADEPT_254_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=781,Name=PR_ADEPT_253_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=782,Name=PR_ADEPT_223_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=783,Name=PR_ADEPT_224_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=784,Name=PR_ADEPT_267_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=785,Name=PR_ADEPT_279_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=786,Name=PR_ADEPT_375_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=787,Name=PR_ADEPT_505_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=788,Name=PR_ADEPT_511_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=789,Name=PR_ADEPT_583_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=790,Name=PR_ADEPT_252_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=791,Name=PR_ADEPT_251_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=792,Name=PR_ADEPT_221_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=793,Name=PR_ADEPT_222_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=794,Name=PR_ADEPT_239_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=795,Name=PR_ADEPT_281_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=796,Name=PR_ADEPT_377_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=797,Name=PR_ADEPT_481_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=798,Name=PR_ADEPT_504_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=799,Name=PR_ADEPT_510_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=800,Name=PR_ADEPT_602_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=801,Name=PR_ADEPT_290_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=802,Name=PR_ADEPT_258_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=803,Name=PR_ADEPT_257_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=804,Name=PR_ADEPT_227_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=805,Name=PR_ADEPT_228_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=806,Name=PR_ADEPT_272_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=807,Name=PR_ADEPT_283_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=808,Name=PR_ADEPT_376_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=809,Name=PR_ADEPT_507_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=810,Name=PR_ADEPT_513_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=811,Name=PR_ADEPT_592_PLAYED,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
                 {
                   "ty": "Remove",
                   "text": "(Index=104,Name=SQUADELITE,Title=770340,Incomplete=770691,Complete=770691,PointValue=130,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=MASSEFFECT_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
@@ -14738,10 +15798,6 @@
                 },
                 {
                   "ty": "AddUnique",
-                  "text": "(Index=745,Name=PR_EXTRACT,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
-                },
-                {
-                  "ty": "AddUnique",
                   "text": "(Index=639,Name=PROPHECY_1GROUP,Title=814442,PointValue=10,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=PROPHECY_1GROUP,bRepeatableChallenge=FALSE)"
                 },
                 {
@@ -14765,6 +15821,274 @@
             {
               "name": "challenges",
               "values": [
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_EXTRACT_PROGRESS,PartialSquadMedals=(7,8,9,15))"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_248_PLAYED_PROGRESS,PlayerKit=\"AdeptHumanMale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_247_PLAYED_PROGRESS,PlayerKit=\"AdeptHumanFemale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_217_PLAYED_PROGRESS,PlayerKit=\"AdeptAsari\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_218_PLAYED_PROGRESS,PlayerKit=\"AdeptDrell\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_273_PLAYED_PROGRESS,PlayerKit=\"AdeptAsariCommando\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_282_PLAYED_PROGRESS,PlayerKit=\"AdeptHumanMaleCerberus\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_373_PLAYED_PROGRESS,PlayerKit=\"AdeptN7\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_500_PLAYED_PROGRESS,PlayerKit=\"AdeptVolus\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_514_PLAYED_PROGRESS,PlayerKit=\"AdeptKrogan\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_508_PLAYED_PROGRESS,PlayerKit=\"AdeptBatarian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_577_PLAYED_PROGRESS,PlayerKit=\"AdeptCollector\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_256_PLAYED_PROGRESS,PlayerKit=\"SoldierHumanMale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_255_PLAYED_PROGRESS,PlayerKit=\"SoldierHumanFemale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_225_PLAYED_PROGRESS,PlayerKit=\"SoldierKrogan\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_226_PLAYED_PROGRESS,PlayerKit=\"SoldierTurian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_268_PLAYED_PROGRESS,PlayerKit=\"SoldierHumanMaleBF3\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_240_PLAYED_PROGRESS,PlayerKit=\"SoldierBatarian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_278_PLAYED_PROGRESS,PlayerKit=\"SoldierVorcha\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_378_PLAYED_PROGRESS,PlayerKit=\"SoldierN7\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_480_PLAYED_PROGRESS,PlayerKit=\"N7SoldierTurian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_506_PLAYED_PROGRESS,PlayerKit=\"SoldierGeth\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_512_PLAYED_PROGRESS,PlayerKit=\"SoldierMQuarian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_576_PLAYED_PROGRESS,PlayerKit=\"SoldierGethDestroyer\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_250_PLAYED_PROGRESS,PlayerKit=\"EngineerHumanMale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_249_PLAYED_PROGRESS,PlayerKit=\"EngineerHumanFemale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_219_PLAYED_PROGRESS,PlayerKit=\"EngineerQuarian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_220_PLAYED_PROGRESS,PlayerKit=\"EngineerSalarian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_238_PLAYED_PROGRESS,PlayerKit=\"EngineerGeth\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_280_PLAYED_PROGRESS,PlayerKit=\"EngineerQuarianMale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_374_PLAYED_PROGRESS,PlayerKit=\"EngineerN7\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_501_PLAYED_PROGRESS,PlayerKit=\"EngineerVolus\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_503_PLAYED_PROGRESS,PlayerKit=\"EngineerTurian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_509_PLAYED_PROGRESS,PlayerKit=\"EngineerVorcha\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_584_PLAYED_PROGRESS,PlayerKit=\"EngineerMerc\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_254_PLAYED_PROGRESS,PlayerKit=\"SentinelHumanMale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_253_PLAYED_PROGRESS,PlayerKit=\"SentinelHumanFemale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_223_PLAYED_PROGRESS,PlayerKit=\"SentinelTurian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_224_PLAYED_PROGRESS,PlayerKit=\"SentinelKrogan\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_267_PLAYED_PROGRESS,PlayerKit=\"SentinelBatarian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_279_PLAYED_PROGRESS,PlayerKit=\"SentinelVorcha\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_375_PLAYED_PROGRESS,PlayerKit=\"SentinelN7\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_505_PLAYED_PROGRESS,PlayerKit=\"SentinelVolus\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_511_PLAYED_PROGRESS,PlayerKit=\"SentinelAsari\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_583_PLAYED_PROGRESS,PlayerKit=\"SentinelKroganWarlord\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_252_PLAYED_PROGRESS,PlayerKit=\"InfiltratorHumanMale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_251_PLAYED_PROGRESS,PlayerKit=\"InfiltratorHumanFemale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_221_PLAYED_PROGRESS,PlayerKit=\"InfiltratorSalarian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_222_PLAYED_PROGRESS,PlayerKit=\"InfiltratorQuarian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_239_PLAYED_PROGRESS,PlayerKit=\"InfiltratorGeth\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_281_PLAYED_PROGRESS,PlayerKit=\"InfiltratorQuarianMale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_377_PLAYED_PROGRESS,PlayerKit=\"InfiltratorN7\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_481_PLAYED_PROGRESS,PlayerKit=\"N7InfiltratorTurian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_504_PLAYED_PROGRESS,PlayerKit=\"InfiltratorDrell\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_510_PLAYED_PROGRESS,PlayerKit=\"InfiltratorAsari\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_602_PLAYED_PROGRESS,PlayerKit=\"InfiltratorFembot\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_290_PLAYED_PROGRESS,PlayerKit=\"InfiltratorHumanFemaleBF3\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_258_PLAYED_PROGRESS,PlayerKit=\"VanguardHumanMale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_257_PLAYED_PROGRESS,PlayerKit=\"VanguardHumanFemale\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_227_PLAYED_PROGRESS,PlayerKit=\"VanguardDrell\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_228_PLAYED_PROGRESS,PlayerKit=\"VanguardAsari\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_272_PLAYED_PROGRESS,PlayerKit=\"VanguardKrogan\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_283_PLAYED_PROGRESS,PlayerKit=\"VanguardHumanMaleCerberus\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_376_PLAYED_PROGRESS,PlayerKit=\"VanguardN7\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_507_PLAYED_PROGRESS,PlayerKit=\"VanguardVolus\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_513_PLAYED_PROGRESS,PlayerKit=\"VanguardBatarian\")"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_ADEPT_592_PLAYED_PROGRESS,PlayerKit=\"VanguardTurianFemale\")"
+                },
                 {
                   "ty": "Remove",
                   "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=SOLO1_PROGRESS,DifficultyLevel=0,NumPlayers=1,PartialSquadMedals=(8,9,10))"
@@ -15616,10 +16940,6 @@
                 {
                   "ty": "AddUnique",
                   "text": "(ChallengeType=CET_None,AccomplishmentProgressName=PROPHECY_1GROUP_PROGRESS,EventStartTime=1355075968,EventEndTime=1356371968)"
-                },
-                {
-                  "ty": "AddUnique",
-                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_EXTRACT_PROGRESS,PartialSquadMedals=(7,8,9,15))"
                 }
               ]
             },
@@ -15723,6 +17043,274 @@
             {
               "name": "accomplishmentprogressdata",
               "values": [
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=745,Name=PR_EXTRACT_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=746,Name=PR_ADEPT_248_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=747,Name=PR_ADEPT_247_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=748,Name=PR_ADEPT_217_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=749,Name=PR_ADEPT_218_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=750,Name=PR_ADEPT_273_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=751,Name=PR_ADEPT_282_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=752,Name=PR_ADEPT_373_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=753,Name=PR_ADEPT_500_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=754,Name=PR_ADEPT_514_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=755,Name=PR_ADEPT_508_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=756,Name=PR_ADEPT_577_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=757,Name=PR_ADEPT_256_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=758,Name=PR_ADEPT_255_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=759,Name=PR_ADEPT_225_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=760,Name=PR_ADEPT_226_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=761,Name=PR_ADEPT_268_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=762,Name=PR_ADEPT_240_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=763,Name=PR_ADEPT_278_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=764,Name=PR_ADEPT_378_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=765,Name=PR_ADEPT_480_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=766,Name=PR_ADEPT_506_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=767,Name=PR_ADEPT_512_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=768,Name=PR_ADEPT_576_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=769,Name=PR_ADEPT_250_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=770,Name=PR_ADEPT_249_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=771,Name=PR_ADEPT_219_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=772,Name=PR_ADEPT_220_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=773,Name=PR_ADEPT_238_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=774,Name=PR_ADEPT_280_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=775,Name=PR_ADEPT_374_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=776,Name=PR_ADEPT_501_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=777,Name=PR_ADEPT_503_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=778,Name=PR_ADEPT_509_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=779,Name=PR_ADEPT_584_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=780,Name=PR_ADEPT_254_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=781,Name=PR_ADEPT_253_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=782,Name=PR_ADEPT_223_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=783,Name=PR_ADEPT_224_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=784,Name=PR_ADEPT_267_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=785,Name=PR_ADEPT_279_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=786,Name=PR_ADEPT_375_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=787,Name=PR_ADEPT_505_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=788,Name=PR_ADEPT_511_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=789,Name=PR_ADEPT_583_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=790,Name=PR_ADEPT_252_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=791,Name=PR_ADEPT_251_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=792,Name=PR_ADEPT_221_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=793,Name=PR_ADEPT_222_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=794,Name=PR_ADEPT_239_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=795,Name=PR_ADEPT_281_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=796,Name=PR_ADEPT_377_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=797,Name=PR_ADEPT_481_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=798,Name=PR_ADEPT_504_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=799,Name=PR_ADEPT_510_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=800,Name=PR_ADEPT_602_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=801,Name=PR_ADEPT_290_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=802,Name=PR_ADEPT_258_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=803,Name=PR_ADEPT_257_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=804,Name=PR_ADEPT_227_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=805,Name=PR_ADEPT_228_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=806,Name=PR_ADEPT_272_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=807,Name=PR_ADEPT_283_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=808,Name=PR_ADEPT_376_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=809,Name=PR_ADEPT_507_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=810,Name=PR_ADEPT_513_PLAYED_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=811,Name=PR_ADEPT_592_PLAYED_PROGRESS)"
+                },
                 {
                   "ty": "AddUnique",
                   "text": "(Index=610,Name=COLLECTORSNIPERRIFLE2_PROGRESS)"
@@ -16106,10 +17694,6 @@
                 {
                   "ty": "AddUnique",
                   "text": "(Index=744,Name=RANDOMFACTION_PROGRESS)"
-                },
-                {
-                  "ty": "AddUnique",
-                  "text": "(Index=745,Name=PR_EXTRACT_PROGRESS)"
                 },
                 {
                   "ty": "AddUnique",

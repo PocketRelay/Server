@@ -4,7 +4,7 @@ use crate::{
     services::{
         game::{
             matchmaking::Matchmaking, store::Games, Game, GameAddPlayerExt, GameJoinableState,
-            GamePlayer,
+            GamePlayer, GamePlayerPlayerDataSnapshot,
         },
         sessions::Sessions,
         tunnel::TunnelService,
@@ -254,15 +254,16 @@ pub async fn handle_set_attributes(
                 .data
                 .iter()
                 .find(|(key, _value)| key == "Progress")
-                .map(|(_key, value)| value);
+                .map(|(_key, value)| value.to_string())
+                .unwrap_or_default();
             let progress1 = new_data
                 .iter()
                 .find(|model| model.key == "Progress")
-                .map(|model| &model.value);
+                .map(|model| model.value.to_string());
 
-            // No usable
-            let (progress0, progress1) = match (progress0, progress1) {
-                (Some(value1), Some(value2)) => (value1, value2),
+            // No usable progress data
+            let progress1 = match progress1 {
+                Some(value) => value,
                 _ => continue,
             };
 
@@ -270,30 +271,13 @@ pub async fn handle_set_attributes(
             let progress0_parts: Vec<&str> = progress0.split(',').skip(1).collect();
             let progress1_parts: Vec<&str> = progress1.split(',').skip(1).collect();
 
-            let progress0 = progress0_parts.get(progress_index);
-            let progress1 = progress1_parts.get(progress_index);
+            if is_progress_increased(progress_index, &progress0_parts, &progress1_parts) {
+                match_success = true;
+            }
 
-            match (progress0, progress1) {
-                // Didn't extract, extraction counter went down (Impossible?),
-                (None, None) | (Some(_), None) => continue,
-                (None, Some(value)) => {
-                    if let Ok(value) = value.parse::<u32>() {
-                        if value > 0 {
-                            // Game was the players first success
-                            match_success = true;
-                            break;
-                        }
-                    }
-                }
-                (Some(value1), Some(value2)) => {
-                    if let (Ok(value1), Ok(value2)) = (value1.parse::<u32>(), value2.parse::<u32>())
-                    {
-                        if value2 > value1 {
-                            // Success counter increased
-                            match_success = true;
-                            break;
-                        }
-                    }
+            for (kit_name, progress_index) in PROGRESS_COUNTER_CHARACTER_MAPPING {
+                if is_progress_increased(progress_index, &progress0_parts, &progress1_parts) {
+                    debug!("PLAYER IS USING {kit_name}");
                 }
             }
         }
@@ -306,6 +290,100 @@ pub async fn handle_set_attributes(
     }
 
     Ok(())
+}
+
+static PROGRESS_COUNTER_CHARACTER_MAPPING: [(&str, usize); 66] = [
+    ("AdeptHumanMale", 746),
+    ("AdeptHumanFemale", 747),
+    ("AdeptAsari", 748),
+    ("AdeptDrell", 749),
+    ("AdeptAsariCommando", 750),
+    ("AdeptHumanMaleCerberus", 751),
+    ("AdeptN7", 752),
+    ("AdeptVolus", 753),
+    ("AdeptKrogan", 754),
+    ("AdeptBatarian", 755),
+    ("AdeptCollector", 756),
+    ("SoldierHumanMale", 757),
+    ("SoldierHumanFemale", 758),
+    ("SoldierKrogan", 759),
+    ("SoldierTurian", 760),
+    ("SoldierHumanMaleBF3", 761),
+    ("SoldierBatarian", 762),
+    ("SoldierVorcha", 763),
+    ("SoldierN7", 764),
+    ("N7SoldierTurian", 765),
+    ("SoldierGeth", 766),
+    ("SoldierMQuarian", 767),
+    ("SoldierGethDestroyer", 768),
+    ("EngineerHumanMale", 769),
+    ("EngineerHumanFemale", 770),
+    ("EngineerQuarian", 771),
+    ("EngineerSalarian", 772),
+    ("EngineerGeth", 773),
+    ("EngineerQuarianMale", 774),
+    ("EngineerN7", 775),
+    ("EngineerVolus", 776),
+    ("EngineerTurian", 777),
+    ("EngineerVorcha", 778),
+    ("EngineerMerc", 779),
+    ("SentinelHumanMale", 780),
+    ("SentinelHumanFemale", 781),
+    ("SentinelTurian", 782),
+    ("SentinelKrogan", 783),
+    ("SentinelBatarian", 784),
+    ("SentinelVorcha", 785),
+    ("SentinelN7", 786),
+    ("SentinelVolus", 787),
+    ("SentinelAsari", 788),
+    ("SentinelKroganWarlord", 789),
+    ("InfiltratorHumanMale", 790),
+    ("InfiltratorHumanFemale", 791),
+    ("InfiltratorSalarian", 792),
+    ("InfiltratorQuarian", 793),
+    ("InfiltratorGeth", 794),
+    ("InfiltratorQuarianMale", 795),
+    ("InfiltratorN7", 796),
+    ("N7InfiltratorTurian", 797),
+    ("InfiltratorDrell", 798),
+    ("InfiltratorAsari", 799),
+    ("InfiltratorFembot", 800),
+    ("InfiltratorHumanFemaleBF3", 801),
+    ("VanguardHumanMale", 802),
+    ("VanguardHumanFemale", 803),
+    ("VanguardDrell", 804),
+    ("VanguardAsari", 805),
+    ("VanguardKrogan", 806),
+    ("VanguardHumanMaleCerberus", 807),
+    ("VanguardN7", 808),
+    ("VanguardVolus", 809),
+    ("VanguardBatarian", 810),
+    ("VanguardTurianFemale", 811),
+];
+
+fn is_progress_increased(index: usize, a: &[&str], b: &[&str]) -> bool {
+    let progress0 = a.get(index);
+    let progress1 = b.get(index);
+
+    match (progress0, progress1) {
+        (None, None) | (Some(_), None) => {}
+        (None, Some(value)) => {
+            if let Ok(value) = value.parse::<u32>() {
+                if value > 0 {
+                    return true;
+                }
+            }
+        }
+        (Some(value1), Some(value2)) => {
+            if let (Ok(value1), Ok(value2)) = (value1.parse::<u32>(), value2.parse::<u32>()) {
+                if value2 > value1 {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Handles changing the state of the game with the provided ID
