@@ -3,8 +3,8 @@
 
 use super::{models::errors::BlazeError, packet::Packet, SessionLink};
 use crate::{
-    database::entities::Player,
-    services::game::GamePlayer,
+    database::entities::{Player, PlayerData},
+    services::game::{GamePlayer, GamePlayerPlayerDataSnapshot},
     session::models::errors::GlobalError,
     utils::{
         components::{component_key, ComponentKey},
@@ -14,6 +14,7 @@ use crate::{
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use log::{debug, error};
+use sea_orm::DatabaseConnection;
 use std::{
     any::{Any, TypeId},
     convert::Infallible,
@@ -226,13 +227,30 @@ impl FromPacketRequest for GamePlayer {
         Self: 'a,
     {
         Box::pin(async move {
+            let db = req
+                .extensions
+                .get::<DatabaseConnection>()
+                .ok_or(GlobalError::System)?;
+
             let player = req
                 .state
                 .data
                 .get_player()
                 .ok_or(GlobalError::AuthenticationRequired)?;
 
-            Ok(GamePlayer::new(player, Arc::downgrade(&req.state)))
+            let player_data: Vec<(String, String)> = PlayerData::all(db, player.id)
+                .await?
+                .into_iter()
+                .map(|model| (model.key, model.value))
+                .collect();
+
+            let snapshot = GamePlayerPlayerDataSnapshot { data: player_data };
+
+            Ok(GamePlayer::new(
+                player,
+                Arc::downgrade(&req.state),
+                snapshot,
+            ))
         })
     }
 }

@@ -119,6 +119,13 @@ pub struct GamePlayer {
     pub link: WeakSessionLink,
     /// The mesh state of the player
     pub state: PlayerState,
+    /// Snapshot of the player data when they entered the game
+    /// (Used at end-game to determine the outcome of the game and the characters/weapons used)
+    pub data_snapshot: GamePlayerPlayerDataSnapshot,
+}
+
+pub struct GamePlayerPlayerDataSnapshot {
+    pub data: Vec<(String, String)>,
 }
 
 impl GamePlayer {
@@ -128,11 +135,16 @@ impl GamePlayer {
     /// `player` The session player
     /// `net`    The player networking details
     /// `addr`   The session address
-    pub fn new(player: Arc<Player>, link: WeakSessionLink) -> Self {
+    pub fn new(
+        player: Arc<Player>,
+        link: WeakSessionLink,
+        data_snapshot: GamePlayerPlayerDataSnapshot,
+    ) -> Self {
         Self {
             player,
             link,
             state: PlayerState::ActiveConnecting,
+            data_snapshot,
         }
     }
 
