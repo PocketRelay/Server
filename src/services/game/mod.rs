@@ -124,6 +124,7 @@ pub struct GamePlayer {
     pub data_snapshot: GamePlayerPlayerDataSnapshot,
 }
 
+#[derive(Clone)]
 pub struct GamePlayerPlayerDataSnapshot {
     pub data: Vec<(String, String)>,
 }
@@ -277,6 +278,13 @@ impl Game {
     pub fn game_data(&self) -> RawBlaze {
         let data = GetGameDetails { game: self };
         data.into()
+    }
+
+    pub fn get_players_with_state(&self) -> Vec<(Arc<Player>, GamePlayerPlayerDataSnapshot)> {
+        self.players
+            .iter()
+            .map(|value| (value.player.clone(), value.data_snapshot.clone()))
+            .collect()
     }
 
     pub fn add_player(

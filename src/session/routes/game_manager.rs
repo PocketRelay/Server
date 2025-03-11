@@ -1,5 +1,6 @@
 use crate::{
     config::Config,
+    database::entities::PlayerData,
     services::{
         game::{
             matchmaking::Matchmaking, store::Games, Game, GameAddPlayerExt, GameJoinableState,
@@ -18,6 +19,7 @@ use crate::{
     },
 };
 use log::{debug, info};
+use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
 pub async fn handle_join_game(
@@ -201,6 +203,7 @@ pub async fn handle_set_attributes(
     Extension(matchmaking): Extension<Arc<Matchmaking>>,
     Extension(tunnel_service): Extension<Arc<TunnelService>>,
     Extension(config): Extension<Arc<Config>>,
+    Extension(db): Extension<DatabaseConnection>,
 
     Blaze(SetAttributesRequest {
         attributes,
@@ -211,6 +214,10 @@ pub async fn handle_set_attributes(
         .get_by_id(game_id)
         .ok_or(GameManagerError::InvalidGameId)?;
 
+    let finishing = attributes
+        .get("ME3gameState")
+        .is_some_and(|value| value == "IN_GAME_FINISHING");
+
     // Update matchmaking for the changed game
     let join_state = {
         let game = &mut *game_ref.write();
@@ -220,6 +227,82 @@ pub async fn handle_set_attributes(
 
     if let GameJoinableState::Joinable = join_state {
         matchmaking.process_queue(&tunnel_service, &config, &game_ref, game_id);
+    }
+
+    if finishing {
+        debug!("CHECKING GAME FINISH STATE");
+
+        // CREATE GAME REPORT
+        let players_with_data = {
+            let game = &*game_ref.read();
+            game.get_players_with_state()
+        };
+
+        // Fetch the latest player data for each player
+        let mut new_players_with_data = Vec::new();
+        for (player, old_data) in players_with_data {
+            let player_data = PlayerData::all(&db, player.id).await.unwrap();
+            new_players_with_data.push((player.id, old_data, player_data));
+        }
+
+        // Search players for the extraction flag
+        let mut match_success = false;
+
+        for (_player, old_data, new_data) in new_players_with_data {
+            // Extract progress data
+            let progress0 = old_data
+                .data
+                .iter()
+                .find(|(key, _value)| key == "Progress")
+                .map(|(_key, value)| value);
+            let progress1 = new_data
+                .iter()
+                .find(|model| model.key == "Progress")
+                .map(|model| &model.value);
+
+            // No usable
+            let (progress0, progress1) = match (progress0, progress1) {
+                (Some(value1), Some(value2)) => (value1, value2),
+                _ => continue,
+            };
+
+            let progress_index = 745;
+            let progress0_parts: Vec<&str> = progress0.split(',').skip(1).collect();
+            let progress1_parts: Vec<&str> = progress1.split(',').skip(1).collect();
+
+            let progress0 = progress0_parts.get(progress_index);
+            let progress1 = progress1_parts.get(progress_index);
+
+            match (progress0, progress1) {
+                // Didn't extract, extraction counter went down (Impossible?),
+                (None, None) | (Some(_), None) => continue,
+                (None, Some(value)) => {
+                    if let Ok(value) = value.parse::<u32>() {
+                        if value > 0 {
+                            // Game was the players first success
+                            match_success = true;
+                            break;
+                        }
+                    }
+                }
+                (Some(value1), Some(value2)) => {
+                    if let (Ok(value1), Ok(value2)) = (value1.parse::<u32>(), value2.parse::<u32>())
+                    {
+                        if value2 > value1 {
+                            // Success counter increased
+                            match_success = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if match_success {
+            debug!("PLAYERS SUCCESSFULLY EXTRACTED ON MISSION (GID: {game_id})")
+        } else {
+            debug!("PLAYERS FAILED EXTRACTION ON MISSION (GID: {game_id})")
+        }
     }
 
     Ok(())
