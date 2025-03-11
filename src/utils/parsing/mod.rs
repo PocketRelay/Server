@@ -2,6 +2,9 @@
 use serde::Serialize;
 use std::str::{FromStr, Split};
 
+pub mod parser;
+pub mod player_character;
+
 /// Parser for parsing strings that are formatted using the ME3
 /// string format. For this format the values are split by a ;
 /// and the first two values indicate the version
@@ -38,7 +41,6 @@ impl<'a> MEParser<'a> {
         Some(())
     }
 }
-
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PlayerClass<'a> {
     /// The class name

@@ -6,7 +6,6 @@ use rand::{rngs::StdRng, seq::IndexedRandom, Rng};
 /// Nouns and adjectives sourced from the `names` crate. Had to adapt
 /// this to use the [StdRng] so that it could be used within the [Send]
 /// handlers
-
 const NOUNS: &[&str] = &[
     "able",
     "account",
