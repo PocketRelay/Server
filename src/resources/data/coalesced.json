@@ -3336,6 +3336,14 @@
                 },
                 {
                   "ty": "AddUnique",
+                  "text": "PR_EXTRACT"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "PR_EXTRACT_PROGRESS"
+                },
+                {
+                  "ty": "AddUnique",
                   "text": "COMMUNITYTEST1"
                 },
                 {
@@ -14157,6 +14165,10 @@
                 },
                 {
                   "ty": "AddUnique",
+                  "text": "(AccomplishmentName=PR_EXTRACT,AccomplishmentProgressName=PR_EXTRACT_PROGRESS,Goal=25,Interval=5,Title=817854,Description=817855)"
+                },
+                {
+                  "ty": "AddUnique",
                   "text": "(AccomplishmentName=PROPHECY_1GROUP,AccomplishmentProgressName=PROPHECY_1GROUP_PROGRESS,Goal=4,Interval=1,Title=814442,Description=814442)"
                 },
                 {
@@ -14723,6 +14735,10 @@
                 {
                   "ty": "AddUnique",
                   "text": "(Index=744,Name=RANDOMFACTION,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=745,Name=PR_EXTRACT,Title=817854,Incomplete=817855,Complete=817855,PointValue=15,Icon=\"GUI_MPImages_SMP.ChallengeNotifi\",IsMultiplayerOnly=TRUE,ChallengeGroupName=SQUADELITE,GrinderAccomplishmentName=SQUADELITE_GOLD_PROGRESS,bRepeatableChallenge=TRUE)"
                 },
                 {
                   "ty": "AddUnique",
@@ -15600,6 +15616,10 @@
                 {
                   "ty": "AddUnique",
                   "text": "(ChallengeType=CET_None,AccomplishmentProgressName=PROPHECY_1GROUP_PROGRESS,EventStartTime=1355075968,EventEndTime=1356371968)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(ChallengeType=CET_MatchCompletion,AccomplishmentProgressName=PR_EXTRACT_PROGRESS,PartialSquadMedals=(7,8,9,15))"
                 }
               ]
             },
@@ -16086,6 +16106,10 @@
                 {
                   "ty": "AddUnique",
                   "text": "(Index=744,Name=RANDOMFACTION_PROGRESS)"
+                },
+                {
+                  "ty": "AddUnique",
+                  "text": "(Index=745,Name=PR_EXTRACT_PROGRESS)"
                 },
                 {
                   "ty": "AddUnique",
