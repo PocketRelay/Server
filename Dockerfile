@@ -21,6 +21,7 @@ VOLUME /app/data
 
 # Expore app port
 EXPOSE 80
+EXPOSE 9032/udp
 
 CMD ["/app/pocket-relay-linux"]
 
