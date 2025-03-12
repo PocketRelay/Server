@@ -6,6 +6,7 @@ mod m20221222_174733_player_data;
 mod m20230913_185124_player_data_unique;
 mod m20231205_121139_leaderboard_data;
 mod m20240714_023535_add_player_timestamps;
+mod m20250312_083054_game_reports;
 
 pub struct Migrator;
 
@@ -19,6 +20,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230913_185124_player_data_unique::Migration),
             Box::new(m20231205_121139_leaderboard_data::Migration),
             Box::new(m20240714_023535_add_player_timestamps::Migration),
+            Box::new(m20250312_083054_game_reports::Migration),
         ]
     }
 }

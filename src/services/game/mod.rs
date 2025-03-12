@@ -271,6 +271,9 @@ impl Game {
     pub fn replay(&mut self) {
         self.set_state(GameState::PreGame);
 
+        // Update game creation timestamp
+        self.created_at = Utc::now();
+
         // TODO: Rotate game reporting ID to a new ID
         self.set_game_reporting_id(18014398695176361);
     }

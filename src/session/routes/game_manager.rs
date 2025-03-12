@@ -1,10 +1,13 @@
 use crate::{
     config::Config,
-    database::entities::PlayerData,
+    database::entities::{
+        game_report::{GameReportData, GameReportModel, GameReportPlayer},
+        PlayerData,
+    },
     services::{
         game::{
             matchmaking::Matchmaking, store::Games, Game, GameAddPlayerExt, GameJoinableState,
-            GamePlayer, GamePlayerPlayerDataSnapshot,
+            GamePlayer,
         },
         sessions::Sessions,
         tunnel::TunnelService,
@@ -17,10 +20,12 @@ use crate::{
         router::{Blaze, Extension, RawBlaze, SessionAuth},
         SessionLink,
     },
+    utils::parsing::player_character::PlayerCharacter,
 };
-use log::{debug, info};
+use chrono::Utc;
+use log::{debug, error, info};
 use sea_orm::DatabaseConnection;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 pub async fn handle_join_game(
     player: GamePlayer,
@@ -204,6 +209,7 @@ pub async fn handle_set_attributes(
     Extension(tunnel_service): Extension<Arc<TunnelService>>,
     Extension(config): Extension<Arc<Config>>,
     Extension(db): Extension<DatabaseConnection>,
+    SessionAuth(player): SessionAuth,
 
     Blaze(SetAttributesRequest {
         attributes,
@@ -229,63 +235,116 @@ pub async fn handle_set_attributes(
         matchmaking.process_queue(&tunnel_service, &config, &game_ref, game_id);
     }
 
-    if finishing {
-        debug!("CHECKING GAME FINISH STATE");
+    let is_host = { game_ref.read().is_host_player(player.id) };
 
-        // CREATE GAME REPORT
-        let players_with_data = {
+    if finishing && is_host {
+        let finished_at = Utc::now();
+
+        // Extract game data
+        let (players_with_data, attributes, seed, created_at) = {
             let game = &*game_ref.read();
-            game.get_players_with_state()
+
+            let mut attributes = HashMap::new();
+            attributes.extend(game.attributes.iter().cloned());
+
+            (
+                game.get_players_with_state(),
+                attributes,
+                game.seed,
+                game.created_at,
+            )
         };
 
         // Fetch the latest player data for each player
         let mut new_players_with_data = Vec::new();
         for (player, old_data) in players_with_data {
-            let player_data = PlayerData::all(&db, player.id).await.unwrap();
-            new_players_with_data.push((player.id, old_data, player_data));
+            let player_data = PlayerData::all(&db, player.id).await.unwrap_or_default();
+            new_players_with_data.push((player, old_data, player_data));
         }
 
         // Search players for the extraction flag
         let mut match_success = false;
 
-        for (_player, old_data, new_data) in new_players_with_data {
-            // Extract progress data
-            let progress0 = old_data
-                .data
-                .iter()
-                .find(|(key, _value)| key == "Progress")
-                .map(|(_key, value)| value.to_string())
-                .unwrap_or_default();
-            let progress1 = new_data
-                .iter()
-                .find(|model| model.key == "Progress")
-                .map(|model| model.value.to_string());
+        let game_report_players: Vec<GameReportPlayer> = new_players_with_data
+            .into_iter()
+            .map(|(player, old_data, new_data)| {
+                // Extract progress data
+                let progress0 = old_data
+                    .data
+                    .iter()
+                    .find(|(key, _value)| key == "Progress")
+                    .map(|(_key, value)| value.to_string())
+                    .unwrap_or_default();
+                let progress1 = new_data
+                    .iter()
+                    .find(|model| model.key == "Progress")
+                    .map(|model| model.value.to_string());
 
-            // No usable progress data
-            let progress1 = match progress1 {
-                Some(value) => value,
-                _ => continue,
-            };
+                let mut current_kit_name: Option<String> = None;
 
-            let progress_index = 745;
-            let progress0_parts: Vec<&str> = progress0.split(',').skip(1).collect();
-            let progress1_parts: Vec<&str> = progress1.split(',').skip(1).collect();
+                // No usable progress data
+                if let Some(progress1) = progress1 {
+                    let progress_index = 745;
+                    let progress0_parts: Vec<&str> = progress0.split(',').skip(1).collect();
+                    let progress1_parts: Vec<&str> = progress1.split(',').skip(1).collect();
 
-            if is_progress_increased(progress_index, &progress0_parts, &progress1_parts) {
-                match_success = true;
-            }
+                    if is_progress_increased(progress_index, &progress0_parts, &progress1_parts) {
+                        match_success = true;
+                    }
 
-            for (kit_name, progress_index) in PROGRESS_COUNTER_CHARACTER_MAPPING {
-                if is_progress_increased(progress_index, &progress0_parts, &progress1_parts) {
-                    debug!("PLAYER IS USING {kit_name}");
+                    for (kit_name, progress_index) in PROGRESS_COUNTER_CHARACTER_MAPPING {
+                        if is_progress_increased(progress_index, &progress0_parts, &progress1_parts)
+                        {
+                            current_kit_name = Some(kit_name.to_string());
+                        }
+                    }
                 }
-            }
-        }
 
-        if match_success {
-            debug!("PLAYERS SUCCESSFULLY EXTRACTED ON MISSION (GID: {game_id})")
-        } else {
-            debug!("PLAYERS FAILED EXTRACTION ON MISSION (GID: {game_id})")
+                let mut weapons = None;
+                let mut weapon_mods = None;
+                let mut powers = None;
+
+                if let Some(kit_name) = &current_kit_name {
+                    let character = old_data
+                        .data
+                        .iter()
+                        .filter_map(|(key, value)| {
+                            if !key.starts_with("char") {
+                                return None;
+                            }
+
+                            let (_v, _dv, character) = PlayerCharacter::parse_input(value).ok()?;
+                            Some(character)
+                        })
+                        .find(|character| character.kit_name.eq(kit_name));
+
+                    if let Some(character) = character {
+                        weapons = Some(character.weapons);
+                        weapon_mods = Some(character.weapon_mods);
+                        powers = Some(character.powers);
+                    }
+                }
+
+                GameReportPlayer {
+                    player_id: player.id,
+                    player_name: player.display_name.to_string(),
+                    kit_name: current_kit_name,
+                    weapons,
+                    weapon_mods,
+                    powers,
+                }
+            })
+            .collect();
+
+        let game_report = GameReportData {
+            attributes,
+            players: game_report_players,
+            seed,
+            extracted: match_success,
+        };
+
+        if let Err(err) = GameReportModel::create(&db, game_report, created_at, finished_at).await {
+            error!("Failed to store game outcome: {err:?} (GID: {game_id})");
         }
     }
 

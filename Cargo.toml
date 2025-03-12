@@ -82,7 +82,13 @@ rand = "0.9"
 [dependencies.sea-orm]
 version = "^1"
 default-features = false
-features = ["runtime-tokio-rustls", "macros", "with-chrono", "sqlx-sqlite"]
+features = [
+    "runtime-tokio-rustls",
+    "macros",
+    "with-chrono",
+    "with-json",
+    "sqlx-sqlite",
+]
 
 # SeaORM Migration 
 [dependencies.sea-orm-migration]

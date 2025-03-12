@@ -1,8 +1,10 @@
 use std::str::Split;
 
+use serde::{Deserialize, Serialize};
+
 use super::parser::{next_bool, next_float, next_int, next_str, next_string, ParseResult};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerCharacter {
     pub kit_name: String,
     pub character_name: String,
@@ -26,7 +28,7 @@ pub struct PlayerCharacter {
 pub type WeaponId = u32;
 pub type WeaponModId = u32;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerCharacterTimestamp {
     pub year: u32,
     pub month: u32,
@@ -34,7 +36,7 @@ pub struct PlayerCharacterTimestamp {
     pub seconds: u32,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlayerCharacterPower {
     pub power_name: String,
     pub power_id: u32,
@@ -46,16 +48,16 @@ pub struct PlayerCharacterPower {
 
 impl Eq for PlayerCharacterPower {}
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PowerSelectionPair {
     pub a: bool,
     pub b: bool,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerCharacterWeaponMod {
-    pub weapon_id: u32,
-    pub weapon_mod_ids: Vec<u32>,
+    pub weapon_id: WeaponId,
+    pub weapon_mod_ids: Vec<WeaponModId>,
 }
 
 impl PlayerCharacter {
@@ -121,6 +123,10 @@ fn parse_weapons(input: &str) -> ParseResult<Vec<WeaponId>> {
     let mut weapons: Vec<u32> = Vec::new();
     let parts = input.split(',');
     for part in parts {
+        if part.is_empty() {
+            continue;
+        }
+
         let weapon_index: u32 = part.parse()?;
         weapons.push(weapon_index);
     }
@@ -154,6 +160,10 @@ impl PlayerCharacterPower {
         let p = input.split(',');
 
         for part in p {
+            if part.is_empty() {
+                continue;
+            }
+
             let power = PlayerCharacterPower::parse(part)?;
             powers.push(power);
         }
@@ -214,6 +224,10 @@ impl PlayerCharacterWeaponMod {
         let p = input.split(',');
 
         for part in p {
+            if part.is_empty() {
+                continue;
+            }
+
             let power = PlayerCharacterWeaponMod::parse(part)?;
             powers.push(power);
         }

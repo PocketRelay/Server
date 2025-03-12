@@ -1,4 +1,5 @@
 pub mod galaxy_at_war;
+pub mod game_report;
 pub mod leaderboard_data;
 pub mod player_data;
 pub mod players;
