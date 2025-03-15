@@ -1,4 +1,5 @@
 use crate::{
+    config::Config,
     database::{
         entities::{players::PlayerRole, Player},
         DbErr,
@@ -67,6 +68,11 @@ impl<S> FromRequestParts<S> for Auth {
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        let config = parts
+            .extensions
+            .get::<Arc<Config>>()
+            .expect("config extension missing")
+            .clone();
         let db = parts
             .extensions
             .get::<DatabaseConnection>()
@@ -84,6 +90,10 @@ impl<S> FromRequestParts<S> for Auth {
             .and_then(|value| value.to_str().ok())
             .ok_or(TokenError::MissingToken)
             .and_then(|token| {
+                if let Some(config_user_id) = config.api.access_tokens.get(token) {
+                    return Ok(*config_user_id);
+                }
+
                 sessions.verify_token(token).map_err(|err| match err {
                     VerifyError::Expired => TokenError::ExpiredToken,
                     VerifyError::Invalid => TokenError::InvalidToken,

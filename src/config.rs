@@ -1,13 +1,14 @@
 use log::LevelFilter;
 use serde::Deserialize;
 use std::{
+    collections::HashMap,
     env,
     fs::read_to_string,
     net::{IpAddr, Ipv4Addr},
     path::Path,
 };
 
-use crate::session::models::Port;
+use crate::{session::models::Port, utils::types::PlayerID};
 
 /// The server version extracted from the Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -177,6 +178,8 @@ pub struct APIConfig {
     pub public_games: bool,
     /// Hide players from API response when no auth is provided
     pub public_games_hide_players: bool,
+    /// Access tokens that authenticate to a specific player
+    pub access_tokens: HashMap<String, PlayerID>,
 }
 
 impl Default for APIConfig {
@@ -184,6 +187,7 @@ impl Default for APIConfig {
         Self {
             public_games: false,
             public_games_hide_players: true,
+            access_tokens: Default::default(),
         }
     }
 }
