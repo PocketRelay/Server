@@ -51,6 +51,13 @@ pub fn router() -> Router {
                         .route("/", get(games::get_games))
                         .route("/{id}", get(games::get_game)),
                 )
+                // Games Report routing
+                .nest(
+                    "/game-reports",
+                    Router::new()
+                        .route("/", get(games::get_game_reports))
+                        .route("/{id}", get(games::get_game_report)),
+                )
                 // Players routing
                 .nest(
                     "/players",
