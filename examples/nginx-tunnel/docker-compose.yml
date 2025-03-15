@@ -1,5 +1,13 @@
 version: "3"
 services:
+  pocket-relay:
+    restart: unless-stopped
+    image: jacobtread/pocket-relay:latest
+    volumes:
+      # Bind the server config to a local config.json file
+      - ./config.json:/app/config.json
+      # Binding the server data to a local data folder
+      - ./data:/app/data
   nginx:
     restart: unless-stopped
     image: nginx

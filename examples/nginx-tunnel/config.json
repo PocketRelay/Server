@@ -1,4 +1,9 @@
 {
+    "logging": "debug",
     "port": 80,
-    "reverse_proxy": true
+    "reverse_proxy": true,
+    "udp_tunnel": {
+        "port": 9032,
+        "external_port": 8081
+    }
 }

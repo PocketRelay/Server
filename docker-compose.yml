@@ -6,6 +6,7 @@ services:
     ports:
       # Server port
       - 80:80/tcp
+      - 9032:9032/udp
     image: jacobtread/pocket-relay:latest
     volumes:
       # Bind the server config to a local config.json file
