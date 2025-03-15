@@ -1622,7 +1622,7 @@ checksum = "953ec861398dccce10c670dfeaf3ec4911ca479e9c02154b3a215178c5f566f2"
 
 [[package]]
 name = "pocket-relay"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "argon2",
  "axum",
