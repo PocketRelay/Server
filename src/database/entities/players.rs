@@ -167,7 +167,6 @@ impl Model {
     ///
     /// `db`       The database connection
     /// `password` The new hashed password
-
     pub fn set_password(
         self,
         db: &DatabaseConnection,
