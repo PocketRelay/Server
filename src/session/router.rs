@@ -1,13 +1,13 @@
 //! Router implementation for routing packet components to different functions
 //! and automatically decoding the packet contents to the function type
 
-use super::{models::errors::BlazeError, packet::Packet, SessionLink};
+use super::{SessionLink, models::errors::BlazeError, packet::Packet};
 use crate::{
     database::entities::{Player, PlayerData},
     services::game::{GamePlayer, GamePlayerPlayerDataSnapshot},
     session::models::errors::GlobalError,
     utils::{
-        components::{component_key, ComponentKey},
+        components::{ComponentKey, component_key},
         hashing::IntHashMap,
     },
 };
@@ -19,11 +19,10 @@ use std::{
     any::{Any, TypeId},
     convert::Infallible,
     future::ready,
-    future::Future,
     marker::PhantomData,
     sync::Arc,
 };
-use tdf::{serialize_vec, TdfDeserialize, TdfSerialize};
+use tdf::{TdfDeserialize, TdfSerialize, serialize_vec};
 
 pub trait Handler<Args, Res>: Send + Sync + 'static {
     fn handle(&self, req: PacketRequest) -> BoxFuture<'_, Packet>;
