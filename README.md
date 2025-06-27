@@ -35,10 +35,11 @@ the [Server Setup Guide](https://pocket-relay.pages.dev/guide/server/)
 
 Below is a table of the download links for the different platforms
 
-| Platform | Download                                                                                            |
-| -------- | --------------------------------------------------------------------------------------------------- |
-| Windows  | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-windows.exe) |
-| Linux    | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-linux)       |
+| Platform     | Download                                                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| Windows      | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-x86_64-windows-msvc.exe) |
+| Linux        | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-x86_64-linux-musl)       |
+| Linux  (ARM) | [Download](https://github.com/PocketRelay/Server/releases/latest/download/pocket-relay-aarch64-linux-musl)       |
 
 You can find individual releases on the [Releases](https://github.com/PocketRelay/Server/releases) page
 
