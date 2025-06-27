@@ -54,7 +54,10 @@ run_task = [
 condition = { env_set = ["DOCKER_IMAGE_TAG", "GITHUB_RELEASE_VERSION"] }
 command = "docker"
 args = [
+    "buildx",
     "build",
+    "--platform",
+    "linux/amd64,linux/arm64",
     ".",
     "-t",
     "${DOCKER_IMAGE_TAG}",
@@ -81,7 +84,6 @@ run_task = [
     ], parallel = true },
 ]
 
-
 # ---- Pushing docker tags ----
 
 # Publishes the docker image using the DOCKER_IMAGE_TAG tag
@@ -92,7 +94,6 @@ condition = { env_set = [
 command = "docker"
 args = ["push", "${DOCKER_IMAGE_TAG}"]
 dependencies = ["build-docker"]
-
 
 # Publish the docker image using a tag created from the verson in Cargo.toml
 [tasks.publish-docker-version]
