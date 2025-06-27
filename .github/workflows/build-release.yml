@@ -144,8 +144,12 @@ jobs:
 
       # Sign binary
       - name: Sign binary
-        run: signtool sign /tr http://timestamp.digicert.com /td sha256 /fd SHA256 /f cert.pfx /p "${{ secrets.SIGNING_CERT_PASSWORD }}" ${{ matrix.filename }}
-        shell: bash
+        run: |
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe |
+              Where-Object { $_.FullName -like '*x64*' } |
+              Sort-Object FullName -Descending |
+              Select-Object -ExpandProperty FullName -First 1
+          & "$signtool" sign /tr http://timestamp.digicert.com /td sha256 /fd SHA256 /f cert.pfx /p "${{ secrets.SIGNING_CERT_PASSWORD }}" ${{ matrix.filename }}
 
       # Upload the built artifact
       - name: Upload binary artifact
