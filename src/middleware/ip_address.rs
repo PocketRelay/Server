@@ -38,7 +38,7 @@ where
         .map_err(|err| {
             warn!("Failed to extract X-Real-IP header from incoming request. If you are NOT using a reverse proxy\n\
             disable the `reverse_proxy` config property, otherwise check that your reverse proxy is configured\n\
-            correctly according the guide. (Closing connection with error) cause: {}", err);
+            correctly according the guide. (Closing connection with error) cause: {err}");
             err
         })
         .map(Self);

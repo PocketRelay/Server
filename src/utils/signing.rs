@@ -31,7 +31,7 @@ impl SigningKey {
             match Self::from_file(secret_path).await {
                 Ok(value) => return value,
                 Err(err) => {
-                    error!("Failed to load existing secrets file: {}", err);
+                    error!("Failed to load existing secrets file: {err}");
                 }
             }
         }
@@ -39,7 +39,7 @@ impl SigningKey {
         debug!("Generating server secret key...");
         let (key, secret) = Self::generate();
         if let Err(err) = write(secret_path, &secret).await {
-            error!("Failed to save secrets file: {}", err);
+            error!("Failed to save secrets file: {err}");
         }
 
         key

@@ -97,7 +97,7 @@ impl UdpTunnelFuture {
         let packet = match deserialize_message(buffer) {
             Ok(value) => value,
             Err(err) => {
-                error!("failed to deserialize packet: {}", err);
+                error!("failed to deserialize packet: {err}");
                 return Poll::Ready(());
             }
         };
@@ -190,7 +190,7 @@ fn handle_message(
             let association = match sessions.verify_assoc_token(&association_token) {
                 Ok(value) => value,
                 Err(err) => {
-                    error!("client send invalid association token: {}", err);
+                    error!("client send invalid association token: {err}");
                     return;
                 }
             };
@@ -215,8 +215,7 @@ fn handle_message(
             };
 
             debug!(
-                "Session UDP tunnel connected (ASSOC: {:?}, TUNNEL_ID: {})",
-                association, tunnel_id
+                "Session UDP tunnel connected (ASSOC: {association:?}, TUNNEL_ID: {tunnel_id})"
             );
 
             let buffer = serialize_message(tunnel_id, &TunnelMessage::Initiated { tunnel_id });

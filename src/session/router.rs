@@ -302,7 +302,7 @@ where
             req.packet
                 .deserialize::<'a, V>()
                 .map_err(|err| {
-                    error!("Error while decoding packet: {:?}", err);
+                    error!("Error while decoding packet: {err:?}");
                     GlobalError::System.into()
                 })
                 .map(Blaze),

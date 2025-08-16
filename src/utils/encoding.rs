@@ -33,7 +33,7 @@ pub fn create_base64_map(bytes: &[u8]) -> ChunkMap {
             &encoded[o1..]
         };
 
-        output.insert(format!("CHUNK_{}", index), slice.to_string());
+        output.insert(format!("CHUNK_{index}"), slice.to_string());
         index += 1;
     }
 

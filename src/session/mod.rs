@@ -254,5 +254,5 @@ fn debug_log_packet(session: &Session, action: &'static str, packet: &Packet) {
     let debug_data = DebugSessionData { action, id, auth };
     let debug_packet = PacketDebug { packet };
 
-    debug!("\n{:?}{:?}", debug_data, debug_packet);
+    debug!("\n{debug_data:?}{debug_packet:?}");
 }

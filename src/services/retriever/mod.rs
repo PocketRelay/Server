@@ -162,7 +162,7 @@ impl OfficialInstance {
                 // Loopback value means it was probably redirected in the hosts file
                 // so those are ignored
                 if !ip.is_loopback() {
-                    return Ok(format!("{}", ip));
+                    return Ok(format!("{ip}"));
                 }
             }
         }
@@ -204,7 +204,7 @@ impl Retriever {
             match OfficialInstance::obtain().await {
                 Ok(value) => Some(value),
                 Err(error) => {
-                    error!("Failed to setup retriever: {}", error);
+                    error!("Failed to setup retriever: {error}");
                     None
                 }
             }
@@ -248,8 +248,7 @@ impl Retriever {
                 Ok(value) => Some(value),
                 Err(err) => {
                     error!(
-                        "Official server instance expired but failed to obtain new instance: {}",
-                        err
+                        "Official server instance expired but failed to obtain new instance: {err}"
                     );
                     None
                 }
@@ -406,7 +405,7 @@ fn debug_log_packet(packet: &Packet, action: &str) {
         return;
     }
     let debug = PacketDebug { packet };
-    debug!("\nOfficial: {}\n{:?}", action, debug);
+    debug!("\nOfficial: {action}\n{debug:?}");
 }
 
 /// Wrapping structure for packets to allow them to be

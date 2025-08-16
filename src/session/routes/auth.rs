@@ -129,12 +129,12 @@ pub async fn handle_origin_login(
 ) -> ServerResult<Blaze<AuthResponse>> {
     // Obtain an origin flow
     let mut flow = retriever.origin_flow().await.map_err(|err| {
-        error!("Failed to obtain origin flow: {}", err);
+        error!("Failed to obtain origin flow: {err}");
         GlobalError::System
     })?;
 
     let player: Player = flow.login(&db, token, &config).await.map_err(|err| {
-        error!("Failed to login with origin: {}", err);
+        error!("Failed to login with origin: {err}");
         GlobalError::System
     })?;
 
@@ -342,7 +342,7 @@ pub async fn handle_create_account(
 
     // Hash the provided plain text password using Argon2
     let hashed_password: String = hash_password(&password).map_err(|err| {
-        error!("Failed to hash password for creating account: {}", err);
+        error!("Failed to hash password for creating account: {err}");
         GlobalError::System
     })?;
 

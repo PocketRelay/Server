@@ -54,7 +54,7 @@ pub async fn handle_join_game(
     }
 
     // Join the game
-    debug!("Joining game from invite (GID: {})", game_id);
+    debug!("Joining game from invite (GID: {game_id})");
 
     game_ref.add_player(
         &tunnel_service,
@@ -721,7 +721,7 @@ pub async fn handle_start_matchmaking(
     // Find a game thats currently joinable and matches the required rules
     match games.get_by_rule_set(&rules) {
         Some((game_id, game_ref)) => {
-            debug!("Found matching game (GID: {})", game_id);
+            debug!("Found matching game (GID: {game_id})");
 
             // Add the player to the game
             matchmaking.add_from_matchmaking(&tunnel_service, &config, game_ref, player);

@@ -173,7 +173,7 @@ pub async fn handle_fetch_client_config(
         "ME3_BINI_PC_COMPRESSED" => match create_coalesced_map().await {
             Ok(map) => map,
             Err(err) => {
-                error!("Failed to load server coalesced: {}", err);
+                error!("Failed to load server coalesced: {err}");
                 return Err(GlobalError::System.into());
             }
         },
@@ -207,8 +207,7 @@ async fn load_coalesced() -> Coalesced {
             // Log errors if the file existed
             if !matches!(err.kind(), std::io::ErrorKind::NotFound) {
                 error!(
-                    "Unable to load local coalesced file falling back to default: {}",
-                    err
+                    "Unable to load local coalesced file falling back to default: {err}"
                 );
             }
 
@@ -242,8 +241,7 @@ async fn talk_file(lang: &str) -> ChunkMap {
             // Log errors if the file existed
             if !matches!(err.kind(), std::io::ErrorKind::NotFound) {
                 error!(
-                    "Unable to load local talk file falling back to default: {}",
-                    err
+                    "Unable to load local talk file falling back to default: {err}"
                 );
             }
 
@@ -263,8 +261,7 @@ fn messages() -> TdfMap<String, String> {
         image: None,
         title: Some("Pocket Relay".to_owned()),
         message: format!(
-            "You are connected to Pocket Relay <font color='#FFFF66'>(v{})</font>",
-            VERSION,
+            "You are connected to Pocket Relay <font color='#FFFF66'>(v{VERSION})</font>",
         ),
         priority: 1,
         tracking_id: Some(1),
@@ -374,7 +371,7 @@ impl Message {
 /// Telemetry Server: 159.153.235.32:9988
 ///
 fn data_config() -> TdfMap<String, String> {
-    let prefix = format!("http://127.0.0.1:{}", LOCAL_HTTP_PORT);
+    let prefix = format!("http://127.0.0.1:{LOCAL_HTTP_PORT}");
 
     let tele_port = TELEMETRY_PORT;
 
@@ -508,8 +505,7 @@ pub async fn handle_set_client_metrics(
     }): Blaze<SetClientMetricsRequest>,
 ) {
     debug!(
-        "Handling UPNP (Device: {}, BlazeFlags: {:?} Flags: {:?}, NAT: {:?}, WAN: {}, STATUS: {:?})",
-        device_info, blaze_flags, flags, nat_type, wan, status
+        "Handling UPNP (Device: {device_info}, BlazeFlags: {blaze_flags:?} Flags: {flags:?}, NAT: {nat_type:?}, WAN: {wan}, STATUS: {status:?})"
     );
 
     // Don't do anything if Upnp failed
@@ -519,7 +515,7 @@ pub async fn handle_set_client_metrics(
 
     // Set external address using Upnp specified
     if !wan.is_unspecified() && !blaze_flags.contains(UpnpFlags::DOUBLE_NAT) {
-        debug!("Using client Upnp WAN address override: {}", wan);
+        debug!("Using client Upnp WAN address override: {wan}");
 
         let network_info = session.data.network_info().unwrap_or_default();
         let ping_site_latency = network_info.ping_site_latency.clone();

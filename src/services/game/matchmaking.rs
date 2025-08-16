@@ -75,8 +75,7 @@ impl Matchmaking {
                         .expect("Expecting matchmaking entry but nothing was present");
 
                     debug!(
-                        "Found player from queue adding them to the game (GID: {})",
-                        game_id
+                        "Found player from queue adding them to the game (GID: {game_id})"
                     );
                     let time = SystemTime::now();
                     let elapsed = time.duration_since(entry.started);

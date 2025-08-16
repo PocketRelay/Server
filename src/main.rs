@@ -6,7 +6,7 @@ use crate::{
     utils::signing::SigningKey,
 };
 use axum::{self, Extension};
-use config::{load_config, TunnelConfig};
+use config::{TunnelConfig, load_config};
 use log::{debug, error, info};
 use services::{
     game::{matchmaking::Matchmaking, store::Games},
@@ -72,7 +72,7 @@ async fn main() {
             )
             .await
             {
-                error!("failed to start UDP tunnel server: {}", err);
+                error!("failed to start UDP tunnel server: {err}");
 
                 // Disable failed UDP tunnel
                 config.udp_tunnel.enabled = false;
@@ -104,13 +104,13 @@ async fn main() {
         .layer(Extension(tunnel_service))
         .into_make_service_with_connect_info::<SocketAddr>();
 
-    info!("Starting server on {} (v{})", addr, VERSION);
+    info!("Starting server on {addr} (v{VERSION})");
 
     // Start the TCP listener
     let listener = match TcpListener::bind(addr).await {
         Ok(value) => value,
         Err(err) => {
-            error!("Failed to bind HTTP server pm {}: {:?}", addr, err);
+            error!("Failed to bind HTTP server pm {addr}: {err:?}");
             return;
         }
     };
@@ -122,6 +122,6 @@ async fn main() {
         })
         .await
     {
-        error!("Error within HTTP server {:?}", err);
+        error!("Error within HTTP server {err:?}");
     }
 }

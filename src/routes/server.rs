@@ -115,7 +115,7 @@ pub async fn handle_upgrade(
     let upgraded = match upgrade.await {
         Ok(upgraded) => upgraded,
         Err(err) => {
-            error!("Failed to upgrade client connection: {}", err);
+            error!("Failed to upgrade client connection: {err}");
             return;
         }
     };
@@ -123,8 +123,7 @@ pub async fn handle_upgrade(
     let id = Session::acquire_id();
 
     debug!(
-        "Session started (SID: {}, ASSOC: {:?}, ADDR: {})",
-        id, association_id, addr
+        "Session started (SID: {id}, ASSOC: {association_id:?}, ADDR: {addr})"
     );
 
     let data = SessionData::new(addr, association_id);
@@ -174,7 +173,7 @@ pub async fn handle_upgrade_tunnel(
     let upgraded = match upgrade.await {
         Ok(upgraded) => upgraded,
         Err(err) => {
-            error!("Failed to upgrade client connection: {}", err);
+            error!("Failed to upgrade client connection: {err}");
             return;
         }
     };
@@ -193,7 +192,7 @@ pub async fn get_log(AdminAuth(auth): AdminAuth) -> Result<String, StatusCode> {
     }
     let path = std::path::Path::new(LOG_FILE_NAME);
     read_to_string(path).await.map_err(|err| {
-        error!("Failed to read server log file: {}", err);
+        error!("Failed to read server log file: {err}");
         StatusCode::INTERNAL_SERVER_ERROR
     })
 }
@@ -218,13 +217,13 @@ pub async fn clear_log(AdminAuth(auth): AdminAuth) -> Result<(), StatusCode> {
         .open(path)
         .await
         .map_err(|err| {
-            error!("Failed to open server log file: {}", err);
+            error!("Failed to open server log file: {err}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
     // Truncate the file
     file.set_len(0).await.map_err(|err| {
-        error!("Failed to truncate server log file: {}", err);
+        error!("Failed to truncate server log file: {err}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -244,6 +243,6 @@ pub struct TelemetryMessage {
 /// Handles the incoming telemetry messages received
 /// from Pocket Relay clients
 pub async fn submit_telemetry(Json(data): Json<TelemetryMessage>) -> StatusCode {
-    debug!("[TELEMETRY] {:?}", data);
+    debug!("[TELEMETRY] {data:?}");
     StatusCode::OK
 }

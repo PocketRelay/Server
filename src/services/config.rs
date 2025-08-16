@@ -10,8 +10,8 @@ struct DefaultTlkFiles;
 
 /// Attempts to load a talk file from a local file
 pub async fn local_talk_file(lang: &str) -> std::io::Result<Vec<u8>> {
-    let file_name = format!("{}.tlk", lang);
-    let local_path = format!("data/{}", file_name);
+    let file_name = format!("{lang}.tlk");
+    let local_path = format!("data/{file_name}");
     let local_path = Path::new(&local_path);
     tokio::fs::read(local_path).await
 }
@@ -20,7 +20,7 @@ pub async fn local_talk_file(lang: &str) -> std::io::Result<Vec<u8>> {
 /// using the specified language. Will fallback to default if the
 /// language is not found.
 pub fn fallback_talk_file(lang: &str) -> &'static [u8] {
-    let file_name = format!("{}.tlk", lang);
+    let file_name = format!("{lang}.tlk");
 
     // Fallback to embedded tlk files
     DefaultTlkFiles::get(&file_name)
@@ -41,10 +41,9 @@ pub async fn local_coalesced_file() -> std::io::Result<Coalesced> {
     match serde_json::from_slice(&bytes) {
         Ok(value) => Ok(value),
         Err(err) => {
-            error!("Failed to parse server coalesced: {}", err);
+            error!("Failed to parse server coalesced: {err}");
 
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(std::io::Error::other(
                 "Failed to parse server coalesced",
             ))
         }

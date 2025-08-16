@@ -104,8 +104,7 @@ impl HttpTunnel {
         };
 
         debug!(
-            "Session HTTP tunnel connected (ASSOC: {:?}, TUNNEL_ID: {})",
-            association, tunnel_id
+            "Session HTTP tunnel connected (ASSOC: {association:?}, TUNNEL_ID: {tunnel_id})"
         );
 
         // Spawn the tunnel task

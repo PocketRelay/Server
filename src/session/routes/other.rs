@@ -60,7 +60,7 @@ pub async fn handle_submit_offline(
         LeaderboardData::set_ty_bulk(&db, LeaderboardType::ChallengePoints, cp_data),
     ) {
         // TODO: Handle failed to update leaderboards
-        error!("Failed to update leaderboards: {}", err);
+        error!("Failed to update leaderboards: {err}");
         return;
     }
 

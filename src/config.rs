@@ -22,7 +22,7 @@ pub fn load_config() -> Option<Config> {
         let config: Config = match serde_json::from_str(&env) {
             Ok(value) => value,
             Err(err) => {
-                eprintln!("Failed to load env config (Using default): {:?}", err);
+                eprintln!("Failed to load env config (Using default): {err:?}");
                 return None;
             }
         };
@@ -38,7 +38,7 @@ pub fn load_config() -> Option<Config> {
     let data = match read_to_string(file) {
         Ok(value) => value,
         Err(err) => {
-            eprintln!("Failed to load config file (Using defaults): {:?}", err);
+            eprintln!("Failed to load config file (Using defaults): {err:?}");
             return None;
         }
     };
@@ -46,7 +46,7 @@ pub fn load_config() -> Option<Config> {
     let config: Config = match serde_json::from_str(&data) {
         Ok(value) => value,
         Err(err) => {
-            eprintln!("Failed to load config file (Using default): {:?}", err);
+            eprintln!("Failed to load config file (Using default): {err:?}");
             return None;
         }
     };

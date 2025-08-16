@@ -2127,5 +2127,5 @@ pub fn generate_random_name(rng: &mut StdRng) -> String {
     // Random number suffix for extra randomness
     let random_suffix = rng.random_range(1..10000);
 
-    format!("{}-{}-{:04}", adj, noun, random_suffix)
+    format!("{adj}-{noun}-{random_suffix:04}")
 }

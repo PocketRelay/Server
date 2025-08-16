@@ -17,7 +17,7 @@ fn decode_error() {
     let mut out = [0u8; 2];
     out.copy_from_slice(&bytes[2..]);
     let out = u16::from_le_bytes(out);
-    println!("{:#00x}", out);
+    println!("{out:#00x}");
 }
 
 #[derive(Debug, Clone)]
@@ -53,7 +53,7 @@ pub struct BlazeError(u16);
 
 impl From<DbErr> for BlazeError {
     fn from(value: DbErr) -> Self {
-        error!("Database error: {}", value);
+        error!("Database error: {value}");
         match value {
             DbErr::ConnectionAcquire(_) => DatabaseError::NoConnectionAvailable,
             DbErr::Conn(_) => DatabaseError::InitFailure,

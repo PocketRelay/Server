@@ -73,13 +73,12 @@ async fn connect_database() -> DatabaseConnection {
                 warn!(
                     "It looks like your app.db has been used with a newer version \
                 of Pocket Relay, you may encounter unexpected issues or bugs its \
-                recommended that you backup your database before trying a new version: {}",
-                    custom_err
+                recommended that you backup your database before trying a new version: {custom_err}"
                 )
             }
         } else {
             // Other errors should be considered fatal
-            panic!("Failed to run database migrations: {}", err);
+            panic!("Failed to run database migrations: {err}");
         }
     }
 
@@ -107,7 +106,7 @@ async fn init_database_admin(db: &DatabaseConnection, config: &Config) {
         Ok(None) => return,
         // Encountered an error
         Err(err) => {
-            error!("Failed to find player to provide super admin: {:?}", err);
+            error!("Failed to find player to provide super admin: {err:?}");
             return;
         }
     };
@@ -115,7 +114,7 @@ async fn init_database_admin(db: &DatabaseConnection, config: &Config) {
     let player = match player.set_role(db, PlayerRole::SuperAdmin).await {
         Ok(value) => value,
         Err(err) => {
-            error!("Failed to assign super admin role: {:?}", err);
+            error!("Failed to assign super admin role: {err:?}");
             return;
         }
     };
@@ -135,7 +134,7 @@ async fn init_database_admin(db: &DatabaseConnection, config: &Config) {
 
         if !matches {
             if let Err(err) = player.set_password(db, password_hash).await {
-                error!("Failed to set super admin password: {:?}", err)
+                error!("Failed to set super admin password: {err:?}")
             } else {
                 info!("Updated super admin password")
             }
