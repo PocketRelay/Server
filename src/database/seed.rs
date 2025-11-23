@@ -1,5 +1,5 @@
 use chrono::Local;
-use rand::{distr::Uniform, Rng};
+use rand::{Rng, distr::Uniform};
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
@@ -8,8 +8,8 @@ use tokio::{task::JoinSet, try_join};
 
 use crate::{
     database::entities::{
-        galaxy_at_war::ActiveModel as GawActiveModel, leaderboard_data::LeaderboardType,
-        players::ActiveModel as PlayerActiveModel, LeaderboardData, PlayerData, PlayerRole,
+        LeaderboardData, PlayerData, PlayerRole, galaxy_at_war::ActiveModel as GawActiveModel,
+        leaderboard_data::LeaderboardType, players::ActiveModel as PlayerActiveModel,
     },
     utils::hashing::hash_password,
 };

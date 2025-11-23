@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-use super::{rules::RuleSet, GameAddPlayerExt, GameJoinableState, GamePlayer, GameRef};
+use super::{GameAddPlayerExt, GameJoinableState, GamePlayer, GameRef, rules::RuleSet};
 
 #[derive(Default)]
 pub struct Matchmaking {
@@ -74,9 +74,7 @@ impl Matchmaking {
                         .pop_front()
                         .expect("Expecting matchmaking entry but nothing was present");
 
-                    debug!(
-                        "Found player from queue adding them to the game (GID: {game_id})"
-                    );
+                    debug!("Found player from queue adding them to the game (GID: {game_id})");
                     let time = SystemTime::now();
                     let elapsed = time.duration_since(entry.started);
                     if let Ok(elapsed) = elapsed {

@@ -11,9 +11,9 @@ use crate::{
     },
 };
 use axum::{
+    Extension, Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Extension, Json,
 };
 use chrono::Utc;
 use log::error;
@@ -57,7 +57,9 @@ pub enum AuthError {
     RegistrationDisabled,
 
     /// Session is not active
-    #[error("This player is not currently connected, please connect to the server and visit the main menu in-game before attempting this action.")]
+    #[error(
+        "This player is not currently connected, please connect to the server and visit the main menu in-game before attempting this action."
+    )]
     SessionNotActive,
 
     /// Failed to create login code
@@ -214,7 +216,9 @@ pub async fn handle_request_login_code(
 
     let small_message =
         format!("Login confirmation code: <font color='#FFFF66'>{login_code}</font>");
-    let full_message = format!("Your login confirmation code is <font color='#FFFF66'>{login_code}</font>, enter this on the dashboard to login");
+    let full_message = format!(
+        "Your login confirmation code is <font color='#FFFF66'>{login_code}</font>, enter this on the dashboard to login"
+    );
 
     // Create and serialize the message
     let origin_message = serde_json::to_string(&SystemMessage {

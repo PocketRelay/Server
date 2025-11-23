@@ -1,7 +1,7 @@
 //! Retriever service for completing the Origin account authentication
 //! and data loading flow
 
-use super::{models::OriginLoginResponse, OfficialSession, RetrieverResult};
+use super::{OfficialSession, RetrieverResult, models::OriginLoginResponse};
 use crate::{
     config::Config,
     database::entities::{Player, PlayerData, PlayerRole},
@@ -89,12 +89,12 @@ impl OriginFlow {
             role = PlayerRole::SuperAdmin;
 
             // Update the password with the specified one
-            if let Some(super_password) = config.dashboard.super_password.as_ref() {
-                if !super_password.is_empty() {
-                    let password_hash =
-                        hash_password(super_password).expect("Failed to hash super user password");
-                    password = Some(password_hash);
-                }
+            if let Some(super_password) = config.dashboard.super_password.as_ref()
+                && !super_password.is_empty()
+            {
+                let password_hash =
+                    hash_password(super_password).expect("Failed to hash super user password");
+                password = Some(password_hash);
             }
         }
 

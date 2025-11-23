@@ -8,7 +8,7 @@ use self::{
 };
 use crate::{
     database::entities::Player,
-    utils::components::{component_key, DEBUG_IGNORED_PACKETS},
+    utils::components::{DEBUG_IGNORED_PACKETS, component_key},
 };
 use blaze_socket::{BlazeLock, BlazeLockFuture, BlazeRx, BlazeSocketFuture, BlazeTx};
 use data::SessionData;
@@ -20,10 +20,10 @@ use std::{
     fmt::Debug,
     pin::Pin,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
-    task::{ready, Context, Poll},
+    task::{Context, Poll, ready},
 };
 use std::{future::Future, sync::Weak};
 use tokio::spawn;

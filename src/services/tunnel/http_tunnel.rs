@@ -11,7 +11,7 @@ use std::{
     future::Future,
     pin::Pin,
     sync::Arc,
-    task::{ready, Context, Poll},
+    task::{Context, Poll, ready},
 };
 use tokio::{sync::mpsc, time::Instant};
 use tokio_util::codec::Framed;
@@ -19,8 +19,8 @@ use tokio_util::codec::Framed;
 use crate::services::{sessions::AssociationId, tunnel::TunnelId};
 
 use super::{
-    mappings::{TunnelData, TunnelHandle},
     TunnelBuffer, TunnelService,
+    mappings::{TunnelData, TunnelHandle},
 };
 
 /// The port bound on clients representing the host player within the socket pool
@@ -103,9 +103,7 @@ impl HttpTunnel {
             }
         };
 
-        debug!(
-            "Session HTTP tunnel connected (ASSOC: {association:?}, TUNNEL_ID: {tunnel_id})"
-        );
+        debug!("Session HTTP tunnel connected (ASSOC: {association:?}, TUNNEL_ID: {tunnel_id})");
 
         // Spawn the tunnel task
         tokio::spawn(HttpTunnel {

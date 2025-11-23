@@ -1,4 +1,4 @@
-use rand::{rngs::StdRng, seq::IndexedRandom, Rng};
+use rand::{Rng, rngs::StdRng, seq::IndexedRandom};
 
 /// Code for generating random names for accounts that weren't provided
 /// display names (Accounts created in-game)

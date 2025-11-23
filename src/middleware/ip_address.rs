@@ -1,10 +1,10 @@
 use axum::{
-    extract::{rejection::ExtensionRejection, ConnectInfo, FromRequestParts},
+    Extension,
+    extract::{ConnectInfo, FromRequestParts, rejection::ExtensionRejection},
     http::request::Parts,
     response::{IntoResponse, Response},
-    Extension,
 };
-use hyper::{header::ToStrError, HeaderMap, StatusCode};
+use hyper::{HeaderMap, StatusCode, header::ToStrError};
 use log::warn;
 use std::{
     net::{AddrParseError, IpAddr, Ipv4Addr, SocketAddr},
@@ -47,7 +47,7 @@ where
         Extension::<ConnectInfo<SocketAddr>>::from_request_parts(parts, state)
             .await
             .map_err(IpAddressError::ConnectInfo)
-            .and_then(|value| try_socket_address(value.0 .0))
+            .and_then(|value| try_socket_address(value.0.0))
             .map(Self)
     }
 }
@@ -122,7 +122,7 @@ impl IntoResponse for IpAddressError {
 mod test {
     use crate::config::Config;
 
-    use super::{extract_ip_header, IpAddress, IpAddressError, REAL_IP_HEADER};
+    use super::{IpAddress, IpAddressError, REAL_IP_HEADER, extract_ip_header};
     use axum::{
         extract::{ConnectInfo, FromRequestParts},
         http::HeaderValue,

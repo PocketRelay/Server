@@ -1,9 +1,9 @@
 use crate::{
     database::{
+        DatabaseConnection, DbErr,
         entities::players,
         entities::players::PlayerRole,
         entities::{GalaxyAtWar, Player, PlayerData},
-        DatabaseConnection, DbErr,
     },
     middleware::auth::{AdminAuth, Auth},
     utils::{
@@ -12,15 +12,15 @@ use crate::{
     },
 };
 use axum::{
+    Extension, Json,
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Extension, Json,
 };
 use email_address::EmailAddress;
 use log::error;
 use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
-use serde::{ser::SerializeMap, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, ser::SerializeMap};
 use thiserror::Error;
 
 /// Enum for errors that could occur when accessing any of

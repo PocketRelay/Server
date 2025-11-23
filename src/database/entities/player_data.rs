@@ -1,9 +1,9 @@
 use crate::{database::DbResult, utils::types::PlayerID};
 use sea_orm::{
-    entity::prelude::*,
-    sea_query::OnConflict,
     ActiveValue::{NotSet, Set},
     DeleteResult, InsertResult,
+    entity::prelude::*,
+    sea_query::OnConflict,
 };
 use serde::Serialize;
 use std::future::Future;

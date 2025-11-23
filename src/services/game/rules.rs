@@ -85,10 +85,10 @@ impl RuleSet {
     /// the attributes map.
     pub fn matches(&self, attributes: &AttrMap) -> bool {
         // Non public matches are unable to be matched
-        if let Some(privacy) = attributes.get(PRIVACY_ATTR) {
-            if privacy != "PUBLIC" {
-                return false;
-            }
+        if let Some(privacy) = attributes.get(PRIVACY_ATTR)
+            && privacy != "PUBLIC"
+        {
+            return false;
         }
 
         // Handle matching requested rules

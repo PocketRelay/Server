@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use base64ct::{Base64, Encoding};
-use flate2::{write::ZlibEncoder, Compression};
+use flate2::{Compression, write::ZlibEncoder};
 use tdf::TdfMap;
 
 /// Type of a base64 chunks map

@@ -1,10 +1,10 @@
 use crate::{
     config::{Config, VERSION},
     session::{
+        SessionLink,
         models::messaging::*,
         packet::Packet,
         router::{Blaze, Extension, SessionAuth},
-        SessionLink,
     },
     utils::components::messaging,
 };

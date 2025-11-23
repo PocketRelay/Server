@@ -9,7 +9,7 @@ use bitflags::bitflags;
 use serde::Serialize;
 use tdf::{ObjectId, TdfDeserialize, TdfDeserializeOwned, TdfMap, TdfSerialize, TdfTyped};
 
-use super::{util::PING_SITE_ALIAS, NetworkAddress, QosNetworkData};
+use super::{NetworkAddress, QosNetworkData, util::PING_SITE_ALIAS};
 
 #[derive(Debug, Clone)]
 #[repr(u16)]

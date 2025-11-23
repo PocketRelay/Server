@@ -3,8 +3,10 @@ use crate::{
     config::Config,
     database::entities::Player,
     session::{
+        SessionLink, WeakSessionLink,
         data::NetData,
         models::{
+            NetworkAddress,
             game_manager::{
                 AdminListChange, AdminListOperation, AttributesChange, GameSettings,
                 GameSetupContext, GameSetupResponse, GameState, GetGameDetails,
@@ -14,11 +16,9 @@ use crate::{
                 UNSPECIFIED_TEAM_INDEX,
             },
             util::LOCALE_NZ,
-            NetworkAddress,
         },
         packet::Packet,
         router::RawBlaze,
-        SessionLink, WeakSessionLink,
     },
     utils::{
         components::game_manager,
@@ -460,10 +460,10 @@ impl Game {
         }
 
         // Check rule set matches
-        if let Some(rule_set) = rule_set {
-            if !rule_set.matches(&self.attributes) {
-                return GameJoinableState::NotMatch;
-            }
+        if let Some(rule_set) = rule_set
+            && !rule_set.matches(&self.attributes)
+        {
+            return GameJoinableState::NotMatch;
         }
 
         GameJoinableState::Joinable

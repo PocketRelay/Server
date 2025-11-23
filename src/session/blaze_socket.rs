@@ -2,13 +2,13 @@ use std::{
     future::Future,
     pin::Pin,
     sync::Arc,
-    task::{ready, Context, Poll},
+    task::{Context, Poll, ready},
 };
 
-use futures_util::{future::BoxFuture, SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt, future::BoxFuture};
 use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
-use tokio::sync::{mpsc, Mutex, OwnedMutexGuard};
+use tokio::sync::{Mutex, OwnedMutexGuard, mpsc};
 use tokio_util::codec::Framed;
 
 use super::packet::{Packet, PacketCodec};

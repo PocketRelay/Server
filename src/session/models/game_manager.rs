@@ -1,8 +1,8 @@
-use super::{util::PING_SITE_ALIAS, NatType, NetworkAddress};
+use super::{NatType, NetworkAddress, util::PING_SITE_ALIAS};
 use crate::{
     config::{Config, TunnelConfig},
     services::{
-        game::{rules::RuleSet, AttrMap, Game, GamePlayer},
+        game::{AttrMap, Game, GamePlayer, rules::RuleSet},
         tunnel::http_tunnel::TUNNEL_HOST_LOCAL_PORT,
     },
     utils::types::{GameID, PlayerID},
@@ -11,8 +11,8 @@ use bitflags::bitflags;
 use serde::Serialize;
 use std::net::Ipv4Addr;
 use tdf::{
-    types::tagged_union::TAGGED_UNSET_KEY, Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned,
-    TdfSerialize, TdfType, TdfTyped,
+    Blob, GroupSlice, TdfDeserialize, TdfDeserializeOwned, TdfSerialize, TdfType, TdfTyped,
+    types::tagged_union::TAGGED_UNSET_KEY,
 };
 
 #[derive(Debug, Clone)]

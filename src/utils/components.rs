@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use super::hashing::{int_hash_map, IntHashMap};
+use super::hashing::{IntHashMap, int_hash_map};
 
 /// Key created from a component and command
 pub type ComponentKey = u32;

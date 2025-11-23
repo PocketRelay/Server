@@ -5,18 +5,18 @@ use crate::{
         fallback_coalesced_file, fallback_talk_file, local_coalesced_file, local_talk_file,
     },
     session::{
+        SessionLink,
         models::{
+            IpPairAddress, NetworkAddress,
             errors::{BlazeError, GlobalError, ServerResult},
             util::*,
-            IpPairAddress, NetworkAddress,
         },
         router::{Blaze, Extension, SessionAuth},
-        SessionLink,
     },
-    utils::encoding::{create_base64_map, generate_coalesced, ChunkMap},
+    utils::encoding::{ChunkMap, create_base64_map, generate_coalesced},
 };
 use log::{debug, error};
-use me3_coalesced_parser::{serialize_coalesced, Coalesced};
+use me3_coalesced_parser::{Coalesced, serialize_coalesced};
 use sea_orm::DatabaseConnection;
 use std::{
     borrow::Cow,
@@ -206,9 +206,7 @@ async fn load_coalesced() -> Coalesced {
         Err(err) => {
             // Log errors if the file existed
             if !matches!(err.kind(), std::io::ErrorKind::NotFound) {
-                error!(
-                    "Unable to load local coalesced file falling back to default: {err}"
-                );
+                error!("Unable to load local coalesced file falling back to default: {err}");
             }
 
             // Fallback to default
@@ -240,9 +238,7 @@ async fn talk_file(lang: &str) -> ChunkMap {
         Err(err) => {
             // Log errors if the file existed
             if !matches!(err.kind(), std::io::ErrorKind::NotFound) {
-                error!(
-                    "Unable to load local talk file falling back to default: {err}"
-                );
+                error!("Unable to load local talk file falling back to default: {err}");
             }
 
             // Fallback to default

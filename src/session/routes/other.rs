@@ -3,12 +3,12 @@ use sea_orm::DatabaseConnection;
 use tokio::try_join;
 
 use crate::{
-    database::entities::{leaderboard_data::LeaderboardType, LeaderboardData},
+    database::entities::{LeaderboardData, leaderboard_data::LeaderboardType},
     session::{
+        SessionLink,
         models::{other::*, stats::SubmitGameReportRequest},
         packet::Packet,
         router::{Blaze, Extension, SessionAuth},
-        SessionLink,
     },
     utils::components::game_reporting,
 };

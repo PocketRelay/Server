@@ -1,5 +1,5 @@
 use crate::utils::components::{
-    component_key, get_command_name, get_component_name, OMIT_PACKET_CONTENTS,
+    OMIT_PACKET_CONTENTS, component_key, get_command_name, get_component_name,
 };
 use bitflags::bitflags;
 use bytes::{Buf, BufMut, Bytes, BytesMut};

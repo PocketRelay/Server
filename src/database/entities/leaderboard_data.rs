@@ -2,10 +2,10 @@
 
 use crate::database::DbResult;
 use crate::utils::types::PlayerID;
-use sea_orm::sea_query::OnConflict;
 use sea_orm::ActiveValue::NotSet;
-use sea_orm::{prelude::*, FromQueryResult, InsertResult, QueryOrder, QuerySelect};
+use sea_orm::sea_query::OnConflict;
 use sea_orm::{ActiveValue::Set, DatabaseConnection, EntityTrait};
+use sea_orm::{FromQueryResult, InsertResult, QueryOrder, QuerySelect, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 
@@ -175,7 +175,7 @@ impl Model {
         // The number of ranks to start at before the centered rank
         let before = (count / 2)
             // Add 1 when the count is even
-            .saturating_add((count % 2 == 0) as u32);
+            .saturating_add(count.is_multiple_of(2) as u32);
 
         // Determine the starting rank saturating zero bounds
         let start = value.rank.saturating_sub(before);

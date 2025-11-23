@@ -1,6 +1,6 @@
 use crate::services::sessions::Sessions;
 use log::{debug, error};
-use pocket_relay_udp_tunnel::{deserialize_message, serialize_message, TunnelMessage};
+use pocket_relay_udp_tunnel::{TunnelMessage, deserialize_message, serialize_message};
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
@@ -11,8 +11,8 @@ use tokio::{net::UdpSocket, time::Instant};
 
 use super::TunnelService;
 use super::{
-    mappings::{TunnelData, TunnelHandle},
     TunnelBuffer, UdpTunnelForwardRx,
+    mappings::{TunnelData, TunnelHandle},
 };
 
 /// The port bound on clients representing the host player within the socket pool
@@ -141,9 +141,10 @@ impl UdpTunnelFuture {
         };
 
         // Attempt to send the message
-        _ = ready!(self
-            .socket
-            .poll_send_to(cx, &message.buffer, message.target_address));
+        _ = ready!(
+            self.socket
+                .poll_send_to(cx, &message.buffer, message.target_address)
+        );
 
         // Remove the sent message from the queue
         _ = self.write_queue.pop_front();
@@ -214,9 +215,7 @@ fn handle_message(
                 }
             };
 
-            debug!(
-                "Session UDP tunnel connected (ASSOC: {association:?}, TUNNEL_ID: {tunnel_id})"
-            );
+            debug!("Session UDP tunnel connected (ASSOC: {association:?}, TUNNEL_ID: {tunnel_id})");
 
             let buffer = serialize_message(tunnel_id, &TunnelMessage::Initiated { tunnel_id });
 

@@ -7,18 +7,18 @@
 use crate::{
     config::Config,
     database::{
-        entities::{GalaxyAtWar, Player, PlayerData},
         DatabaseConnection, DbErr, DbResult,
+        entities::{GalaxyAtWar, Player, PlayerData},
     },
     middleware::xml::Xml,
     services::sessions::Sessions,
     utils::parsing::PlayerClass,
 };
 use axum::{
-    extract::{Path, Query},
-    http::{header, HeaderValue, StatusCode},
-    response::{IntoResponse, Response},
     Extension,
+    extract::{Path, Query},
+    http::{HeaderValue, StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use indoc::formatdoc;
 use serde::Deserialize;

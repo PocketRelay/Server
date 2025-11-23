@@ -5,7 +5,7 @@ use axum::{
 };
 use embeddy::Embedded;
 use futures_util::future::BoxFuture;
-use hyper::{header::CONTENT_TYPE, StatusCode};
+use hyper::{StatusCode, header::CONTENT_TYPE};
 use std::{
     convert::Infallible,
     path::{Path, PathBuf},
@@ -82,17 +82,17 @@ impl Service<Request<Body>> for PublicContent {
             };
 
             // File exists in public data folder server try serve that and fallback to next on failure
-            if let Some(local_path) = find_local_path(&path) {
-                if local_path.exists() && local_path.is_file() {
-                    if let Ok(contents) = tokio::fs::read(local_path).await {
-                        // Create byte response from the embedded file
-                        let mut response = Body::from(contents).into_response();
-                        response
-                            .headers_mut()
-                            .insert(CONTENT_TYPE, HeaderValue::from_static(mime_type));
-                        return Ok(response);
-                    }
-                }
+            if let Some(local_path) = find_local_path(&path)
+                && local_path.exists()
+                && local_path.is_file()
+                && let Ok(contents) = tokio::fs::read(local_path).await
+            {
+                // Create byte response from the embedded file
+                let mut response = Body::from(contents).into_response();
+                response
+                    .headers_mut()
+                    .insert(CONTENT_TYPE, HeaderValue::from_static(mime_type));
+                return Ok(response);
             }
 
             // File exists within binary serve that

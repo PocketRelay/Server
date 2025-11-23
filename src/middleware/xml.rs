@@ -1,5 +1,5 @@
 use axum::{
-    http::header::{HeaderValue, CONTENT_TYPE},
+    http::header::{CONTENT_TYPE, HeaderValue},
     response::{IntoResponse, Response},
 };
 

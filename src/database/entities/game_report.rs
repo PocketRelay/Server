@@ -6,7 +6,7 @@ use crate::{
     },
 };
 use futures_util::future::BoxFuture;
-use sea_orm::{entity::prelude::*, ActiveValue::Set, FromJsonQueryResult};
+use sea_orm::{ActiveValue::Set, FromJsonQueryResult, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

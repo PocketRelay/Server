@@ -2,7 +2,7 @@ use std::str::Split;
 
 use serde::{Deserialize, Serialize};
 
-use super::parser::{next_bool, next_float, next_int, next_str, next_string, ParseResult};
+use super::parser::{ParseResult, next_bool, next_float, next_int, next_str, next_string};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerCharacter {
@@ -261,7 +261,7 @@ mod test {
 
     use player_character::PlayerCharacterTimestamp;
 
-    use crate::utils::parsing::player_character::{self, parse_weapons, PowerSelectionPair};
+    use crate::utils::parsing::player_character::{self, PowerSelectionPair, parse_weapons};
 
     use super::{PlayerCharacter, PlayerCharacterPower, PlayerCharacterWeaponMod};
 

@@ -6,7 +6,7 @@ use mappings::{PoolKey, TunnelData, TunnelHandle, TunnelMappings};
 use parking_lot::RwLock;
 use tokio::{
     sync::mpsc,
-    time::{interval_at, Instant, MissedTickBehavior},
+    time::{Instant, MissedTickBehavior, interval_at},
 };
 use udp_tunnel::UdpTunnelMessage;
 

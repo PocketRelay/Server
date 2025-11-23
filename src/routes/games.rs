@@ -9,10 +9,10 @@ use crate::{
     utils::types::GameID,
 };
 use axum::{
+    Extension, Json,
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Extension, Json,
 };
 use sea_orm::{DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryOrder};
 use serde::{Deserialize, Serialize};

@@ -1,20 +1,20 @@
 use crate::{
     config::Config,
     database::{
-        entities::{Player, PlayerRole},
         DatabaseConnection,
+        entities::{Player, PlayerRole},
     },
     services::{
         retriever::Retriever,
         sessions::{Sessions, VerifyError},
     },
     session::{
+        SessionLink,
         models::{
             auth::*,
             errors::{GlobalError, ServerResult},
         },
         router::{Blaze, Extension, SessionAuth},
-        SessionLink,
     },
     utils::{
         hashing::{hash_password, verify_password},
@@ -24,7 +24,7 @@ use crate::{
 use chrono::Utc;
 use email_address::EmailAddress;
 use log::{debug, error};
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 use std::{borrow::Cow, sync::Arc};
 use tokio::fs::read_to_string;
 

@@ -1,8 +1,8 @@
 //! Hashing utility for hashing and verifying passwords
 
 use argon2::{
-    password_hash::{self, rand_core::OsRng, PasswordVerifier, SaltString},
     Argon2, PasswordHash, PasswordHasher,
+    password_hash::{self, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use hashbrown::HashMap;
 use std::hash::{BuildHasher, Hasher};

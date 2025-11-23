@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    http::{header, HeaderValue, Method, StatusCode},
+    http::{HeaderValue, Method, StatusCode, header},
     middleware::Next,
     response::Response,
 };
@@ -44,12 +44,12 @@ pub async fn cors_layer(req: Request<Body>, next: Next) -> Response {
 #[cfg(test)]
 mod test {
     use super::cors_layer;
-    use axum::{body::Body, middleware::from_fn, routing::get, Router};
+    use axum::{Router, body::Body, middleware::from_fn, routing::get};
     use hyper::{
+        Method, Request, StatusCode,
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
         },
-        Method, Request, StatusCode,
     };
     use tower::ServiceExt;
 

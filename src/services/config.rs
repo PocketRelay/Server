@@ -43,9 +43,7 @@ pub async fn local_coalesced_file() -> std::io::Result<Coalesced> {
         Err(err) => {
             error!("Failed to parse server coalesced: {err}");
 
-            Err(std::io::Error::other(
-                "Failed to parse server coalesced",
-            ))
+            Err(std::io::Error::other("Failed to parse server coalesced"))
         }
     }
 }

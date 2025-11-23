@@ -9,21 +9,21 @@ use crate::{
     },
     services::{
         sessions::{AssociationId, Sessions},
-        tunnel::{http_tunnel::HttpTunnel, TunnelService},
+        tunnel::{TunnelService, http_tunnel::HttpTunnel},
     },
-    session::{data::SessionData, router::BlazeRouter, Session},
+    session::{Session, data::SessionData, router::BlazeRouter},
     utils::logging::LOG_FILE_NAME,
 };
 use axum::{
-    http::{header, StatusCode},
-    response::{IntoResponse, Response},
     Extension, Json,
+    http::{StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use hyper::upgrade::OnUpgrade;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::{net::Ipv4Addr, sync::Arc};
-use tokio::fs::{read_to_string, OpenOptions};
+use tokio::fs::{OpenOptions, read_to_string};
 
 /// Response detailing the information about this Pocket Relay server
 /// contains the version information as well as the server information
@@ -122,9 +122,7 @@ pub async fn handle_upgrade(
 
     let id = Session::acquire_id();
 
-    debug!(
-        "Session started (SID: {id}, ASSOC: {association_id:?}, ADDR: {addr})"
-    );
+    debug!("Session started (SID: {id}, ASSOC: {association_id:?}, ADDR: {addr})");
 
     let data = SessionData::new(addr, association_id);
 

@@ -1,7 +1,7 @@
 use parking_lot::{RwLock, RwLockReadGuard};
 use serde::Serialize;
 use std::{net::Ipv4Addr, sync::Arc, task::Context, time::Duration};
-use tokio::time::{interval_at, Instant, Interval, MissedTickBehavior};
+use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 
 use crate::{
     database::entities::Player,
@@ -16,17 +16,17 @@ use crate::{
 };
 
 use super::{
+    WeakSessionLink,
     models::{
+        NetworkAddress, QosNetworkData,
         game_manager::RemoveReason,
         user_sessions::{
             HardwareFlags, LookupResponse, NotifyUserAdded, NotifyUserRemoved, NotifyUserUpdated,
             UserDataFlags, UserIdentification, UserSessionExtendedData,
             UserSessionExtendedDataUpdate,
         },
-        NetworkAddress, QosNetworkData,
     },
     packet::Packet,
-    WeakSessionLink,
 };
 
 pub struct SessionData {

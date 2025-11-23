@@ -101,7 +101,7 @@ impl Model {
     /// Deletes the provided player
     ///
     /// `db` The database connection
-    pub fn delete(self, db: &DatabaseConnection) -> BoxFuture<DbResult<DeleteResult>> {
+    pub fn delete(self, db: &DatabaseConnection) -> BoxFuture<'_, DbResult<DeleteResult>> {
         // Delete player itself
         self.into_active_model().delete(db)
     }

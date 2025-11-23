@@ -1,9 +1,9 @@
-use super::{rules::RuleSet, snapshot::GameSnapshot, Game, GameJoinableState, GameRef};
+use super::{Game, GameJoinableState, GameRef, rules::RuleSet, snapshot::GameSnapshot};
 use crate::utils::{hashing::IntHashMap, types::GameID};
 use parking_lot::RwLock;
 use std::sync::{
-    atomic::{AtomicU32, Ordering},
     Arc,
+    atomic::{AtomicU32, Ordering},
 };
 
 pub struct Games {

@@ -1,6 +1,6 @@
 use axum::{
     extract::FromRequestParts,
-    http::{request::Parts, Method, StatusCode},
+    http::{Method, StatusCode, request::Parts},
     response::IntoResponse,
 };
 use hyper::upgrade::OnUpgrade;

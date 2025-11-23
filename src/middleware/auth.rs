@@ -1,8 +1,8 @@
 use crate::{
     config::Config,
     database::{
-        entities::{players::PlayerRole, Player},
         DbErr,
+        entities::{Player, players::PlayerRole},
     },
     services::sessions::{Sessions, VerifyError},
 };

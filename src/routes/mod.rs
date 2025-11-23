@@ -1,7 +1,6 @@
 use axum::{
-    middleware,
+    Router, middleware,
     routing::{get, post, put},
-    Router,
 };
 
 use crate::middleware::cors::cors_layer;

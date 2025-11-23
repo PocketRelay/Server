@@ -2,7 +2,7 @@ use log::{error, info, warn};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::Database as SeaDatabase;
 use std::{
-    fs::{create_dir_all, File},
+    fs::{File, create_dir_all},
     path::Path,
 };
 
@@ -47,10 +47,10 @@ async fn connect_database() -> DatabaseConnection {
     let path = Path::new(&DATABASE_PATH);
 
     // Create path to database file if missing
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            create_dir_all(parent).expect("Unable to create parent directory for sqlite database");
-        }
+    if let Some(parent) = path.parent()
+        && !parent.exists()
+    {
+        create_dir_all(parent).expect("Unable to create parent directory for sqlite database");
     }
 
     // Create the database if file is missing

@@ -4,7 +4,7 @@ use tokio::time::Instant;
 
 use crate::{services::sessions::AssociationId, utils::hashing::IntHashMap};
 
-use super::{http_tunnel::HttpTunnelHandle, PoolId, PoolIndex, TunnelId};
+use super::{PoolId, PoolIndex, TunnelId, http_tunnel::HttpTunnelHandle};
 
 #[derive(Clone)]
 pub struct TunnelData {
@@ -141,10 +141,10 @@ impl TunnelMappings {
             let mut dead = data.last_alive.duration_since(now) > keep_alive_timeout;
 
             // Check for closed http tunnels
-            if let TunnelHandle::Http(handle) = &data.handle {
-                if handle.tx.is_closed() {
-                    dead = true
-                }
+            if let TunnelHandle::Http(handle) = &data.handle
+                && handle.tx.is_closed()
+            {
+                dead = true
             }
 
             // Remove other tunnel mappings

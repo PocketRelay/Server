@@ -1,15 +1,15 @@
 use crate::{
     database::entities::{
-        leaderboard_data::{LeaderboardDataAndRank, LeaderboardType},
         LeaderboardData,
+        leaderboard_data::{LeaderboardDataAndRank, LeaderboardType},
     },
     utils::types::PlayerID,
 };
 use axum::{
+    Extension, Json,
     extract::{Path, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Extension, Json,
 };
 use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};

@@ -1,24 +1,24 @@
 use crate::{
     config::Config,
     database::entities::{
-        game_report::{GameReportData, GameReportModel, GameReportPlayer},
         PlayerData,
+        game_report::{GameReportData, GameReportModel, GameReportPlayer},
     },
     services::{
         game::{
-            matchmaking::Matchmaking, store::Games, Game, GameAddPlayerExt, GameJoinableState,
-            GamePlayer,
+            Game, GameAddPlayerExt, GameJoinableState, GamePlayer, matchmaking::Matchmaking,
+            store::Games,
         },
         sessions::Sessions,
         tunnel::TunnelService,
     },
     session::{
+        SessionLink,
         models::{
             errors::{GlobalError, ServerResult},
             game_manager::*,
         },
         router::{Blaze, Extension, RawBlaze, SessionAuth},
-        SessionLink,
     },
     utils::parsing::player_character::PlayerCharacter,
 };
@@ -427,17 +427,17 @@ fn is_progress_increased(index: usize, a: &[&str], b: &[&str]) -> bool {
     match (progress0, progress1) {
         (None, None) | (Some(_), None) => {}
         (None, Some(value)) => {
-            if let Ok(value) = value.parse::<u32>() {
-                if value > 0 {
-                    return true;
-                }
+            if let Ok(value) = value.parse::<u32>()
+                && value > 0
+            {
+                return true;
             }
         }
         (Some(value1), Some(value2)) => {
-            if let (Ok(value1), Ok(value2)) = (value1.parse::<u32>(), value2.parse::<u32>()) {
-                if value2 > value1 {
-                    return true;
-                }
+            if let (Ok(value1), Ok(value2)) = (value1.parse::<u32>(), value2.parse::<u32>())
+                && value2 > value1
+            {
+                return true;
             }
         }
     }
@@ -603,47 +603,47 @@ pub async fn handle_add_admin_player(
 ///         "RLST": [
 ///             {
 ///                 "NAME": "ME3_gameStateMatchRule",
-///                 "THLD": "quickMatch",   
+///                 "THLD": "quickMatch",
 ///                 "VALU": ["MATCH_MAKING"]
 ///             },
 ///             {
 ///                 "NAME": "ME3_gameMapMatchRule",
-///                 "THLD": "quickMatch",   
+///                 "THLD": "quickMatch",
 ///                 "VALU": ["abstain"]
 ///             },
 ///             {
 ///                 "NAME": "ME3_gameEnemyTypeRule",
-///                 "THLD": "quickMatch",   
+///                 "THLD": "quickMatch",
 ///                 "VALU": ["abstain"]
 ///             },
 ///             {
 ///                 "NAME": "ME3_gameDifficultyRule",
-///                 "THLD": "quickMatch",   
+///                 "THLD": "quickMatch",
 ///                 "VALU": ["abstain"]
 ///             },
 ///             {
 ///                 "NAME": "ME3_rule_dlc2500",
-///                 "THLD": "requireExactMatch",   
+///                 "THLD": "requireExactMatch",
 ///                 "VALU": ["required"]
 ///             },
 ///             {
 ///                 "NAME": "ME3_rule_dlc2300",
-///                 "THLD": "requireExactMatch",   
+///                 "THLD": "requireExactMatch",
 ///                 "VALU": ["required"]
 ///             },
 ///             {
 ///                 "NAME": "ME3_rule_dlc2700",
-///                 "THLD": "requireExactMatch",   
+///                 "THLD": "requireExactMatch",
 ///                 "VALU": ["required"]
 ///             },
 ///             {
 ///                 "NAME": "ME3_rule_dlc3050",
-///                 "THLD": "requireExactMatch",   
+///                 "THLD": "requireExactMatch",
 ///                 "VALU": ["required"]
 ///             },
 ///             {
 ///                 "NAME": "ME3_rule_dlc3225",
-///                 "THLD": "requireExactMatch",   
+///                 "THLD": "requireExactMatch",
 ///                 "VALU": ["required"]
 ///             },
 ///         ],
@@ -664,7 +664,7 @@ pub async fn handle_add_admin_player(
 ///             "PMIN": 0,
 ///             "SDIF": 0,
 ///             "THLD": "",
-///             "TID": 65535      
+///             "TID": 65535
 ///         },
 ///         "UED": Map {
 ///             "ME3_characterSkill_Rule": {
@@ -675,7 +675,7 @@ pub async fn handle_add_admin_player(
 ///             }
 ///         },
 ///         "VIAB": {
-///             "THLD": "hostViability"    
+///             "THLD": "hostViability"
 ///         },
 ///         "VIRT": {
 ///             "THLD": "",

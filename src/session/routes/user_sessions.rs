@@ -3,14 +3,14 @@ use crate::{
     database::entities::Player,
     services::sessions::{Sessions, VerifyError},
     session::{
+        SessionLink,
         models::{
+            NetworkAddress,
             auth::{AuthResponse, AuthenticationError},
             errors::ServerResult,
             user_sessions::*,
-            NetworkAddress,
         },
         router::{Blaze, Extension},
-        SessionLink,
     },
 };
 use chrono::Utc;
