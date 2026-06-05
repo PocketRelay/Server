@@ -5,7 +5,7 @@ on:
     workflow_dispatch:
         inputs:
             release_tag:
-                description: "Release tag to build the Docker image from"
+                description: "Release tag to build the Docker image from excluding the 'v' prefix"
                 required: true
                 default: "1.0.0"
 
