@@ -381,11 +381,10 @@ impl OfficialSession {
             let header = &response.frame;
 
             match &header.ty {
-                FrameType::Response => {
-                    if header.path_matches(request) {
-                        return Ok(response);
-                    }
+                FrameType::Response if header.path_matches(request) => {
+                    return Ok(response);
                 }
+                FrameType::Response => {}
                 FrameType::Error => return Err(RetrieverError::Packet(ErrorPacket(response))),
                 _ => {}
             }
