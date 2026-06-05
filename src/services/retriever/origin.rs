@@ -11,7 +11,7 @@ use crate::{
         hashing::hash_password,
     },
 };
-use log::{debug, error, warn};
+use log::{debug, warn};
 use sea_orm::{DatabaseConnection, DbErr};
 use tdf::TdfMap;
 use thiserror::Error;

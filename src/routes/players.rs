@@ -18,7 +18,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use email_address::EmailAddress;
-use log::error;
 use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use serde::{Deserialize, Serialize, ser::SerializeMap};
 use thiserror::Error;
@@ -463,7 +462,7 @@ pub async fn all_data(
 /// Route for getting a specific piece of player data for
 /// a specific player using the ID of the player and the
 /// key of the data
-///  
+///
 /// `player_id` The ID of the player
 /// `key`       The player data key
 /// `auth`      The currently authenticated player
