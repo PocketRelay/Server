@@ -1,6 +1,6 @@
 use log::{error, info, warn};
 use migration::{Migrator, MigratorTrait};
-use sea_orm::Database as SeaDatabase;
+use sea_orm::{ConnectOptions, Database as SeaDatabase};
 use std::{
     fs::{File, create_dir_all},
     path::Path,
@@ -58,8 +58,18 @@ async fn connect_database() -> DatabaseConnection {
         File::create(path).expect("Unable to create sqlite database file");
     }
 
+    let mut options: ConnectOptions = ConnectOptions::new(DATABASE_PATH_URL);
+
+    // Enable WAL journal mode and optimizing on close
+    // (Connections are automatically closed internally by the connection pool if they've lived a long time)
+    options.map_sqlx_sqlite_opts(|options| {
+        options
+            .journal_mode(sea_orm::sqlx::sqlite::SqliteJournalMode::Wal)
+            .optimize_on_close(true, None)
+    });
+
     // Connect to database
-    let connection = SeaDatabase::connect(DATABASE_PATH_URL)
+    let connection = SeaDatabase::connect(options)
         .await
         .expect("Unable to create database connection");
 
