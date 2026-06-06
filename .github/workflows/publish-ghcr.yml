@@ -43,10 +43,10 @@ jobs:
                   build-args: |
                       GITHUB_RELEASE_VERSION=${{ github.event.inputs.release_tag }}
                   tags: |
-                      ghcr.io/${{ github.repository }}:${{ github.event.inputs.release_tag }}-debian-prebuilt
-                      ghcr.io/${{ github.repository }}:${{ github.event.inputs.release_tag }}-debian
-                      ghcr.io/${{ github.repository }}:latest-debian-prebuilt
-                      ghcr.io/${{ github.repository }}:latest-debian
+                      ghcr.io/${{ vars.GHCR_REPOSITORY }}:${{ github.event.inputs.release_tag }}-debian-prebuilt
+                      ghcr.io/${{ vars.GHCR_REPOSITORY }}:${{ github.event.inputs.release_tag }}-debian
+                      ghcr.io/${{ vars.GHCR_REPOSITORY }}:latest-debian-prebuilt
+                      ghcr.io/${{ vars.GHCR_REPOSITORY }}:latest-debian
 
     build-and-push-alpine:
         runs-on: ubuntu-latest
@@ -77,9 +77,9 @@ jobs:
                   build-args: |
                       GITHUB_RELEASE_VERSION=${{ github.event.inputs.release_tag }}
                   tags: |
-                      ghcr.io/${{ github.repository }}:${{ github.event.inputs.release_tag }}
-                      ghcr.io/${{ github.repository }}:${{ github.event.inputs.release_tag }}-alpine-prebuilt
-                      ghcr.io/${{ github.repository }}:${{ github.event.inputs.release_tag }}-alpine
-                      ghcr.io/${{ github.repository }}:latest-alpine-prebuilt
-                      ghcr.io/${{ github.repository }}:latest-alpine
-                      ghcr.io/${{ github.repository }}:latest
+                      ghcr.io/${{ vars.GHCR_REPOSITORY }}:${{ github.event.inputs.release_tag }}
+                      ghcr.io/${{ vars.GHCR_REPOSITORY }}:${{ github.event.inputs.release_tag }}-alpine-prebuilt
+                      ghcr.io/${{ vars.GHCR_REPOSITORY }}:${{ github.event.inputs.release_tag }}-alpine
+                      ghcr.io/${{ vars.GHCR_REPOSITORY }}:latest-alpine-prebuilt
+                      ghcr.io/${{ vars.GHCR_REPOSITORY }}:latest-alpine
+                      ghcr.io/${{ vars.GHCR_REPOSITORY }}:latest
