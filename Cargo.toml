@@ -1,6 +1,6 @@
 [package]
 name = "pocket-relay"
-version = "0.8.3"
+version = "0.8.4"
 description = "Pocket Relay Server"
 readme = "README.md"
 keywords = ["EA", "PocketRelay", "MassEffect"]
@@ -71,8 +71,8 @@ parking_lot = "0.12.3"
 
 # Const safe HashMaps (Can be replaced with std HashMap after https://github.com/rust-lang/rust/issues/102575 is resolved)
 hashbrown = { version = "0.17.1", default-features = false, features = [
-    "allocator-api2",
-    "inline-more",
+  "allocator-api2",
+  "inline-more",
 ] }
 
 uuid = { version = "^1", features = ["v4", "serde", "fast-rng"] }
@@ -82,13 +82,7 @@ rand = "0.9"
 [dependencies.sea-orm]
 version = "^1"
 default-features = false
-features = [
-    "runtime-tokio-rustls",
-    "macros",
-    "with-chrono",
-    "with-json",
-    "sqlx-sqlite",
-]
+features = ["runtime-tokio-rustls", "macros", "with-chrono", "with-json", "sqlx-sqlite"]
 
 # SeaORM Migration
 [dependencies.sea-orm-migration]
@@ -104,15 +98,7 @@ features = ["sink"]
 # Tokio async runtime
 [dependencies.tokio]
 version = "1"
-features = [
-    "fs",
-    "macros",
-    "net",
-    "parking_lot",
-    "rt-multi-thread",
-    "signal",
-    "sync",
-]
+features = ["fs", "macros", "net", "parking_lot", "rt-multi-thread", "signal", "sync"]
 
 # Axum web framework
 [dependencies.axum]
