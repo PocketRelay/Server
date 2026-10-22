@@ -131,7 +131,7 @@ async fn init_database_admin(db: &DatabaseConnection, config: &Config) {
 
     if let Some(password) = &config.dashboard.super_password {
         // Ignore the password if empty
-        if !password.is_empty() {
+        if password.is_empty() {
             return;
         }
 
@@ -149,5 +149,180 @@ async fn init_database_admin(db: &DatabaseConnection, config: &Config) {
                 info!("Updated super admin password")
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use sea_orm::{Database as SeaDatabase, DatabaseConnection};
+    use sea_orm_migration::MigratorTrait;
+
+    use crate::{
+        config::{Config, DashboardConfig},
+        database::{
+            entities::{Player, PlayerRole},
+            init_database_admin,
+            migration::Migrator,
+        },
+        utils::hashing::verify_password,
+    };
+
+    async fn mock_db() -> DatabaseConnection {
+        let connection = SeaDatabase::connect("sqlite::memory:").await.unwrap();
+        Migrator::up(&connection, None).await.unwrap();
+        connection
+    }
+
+    #[tokio::test]
+    async fn test_init_database_admin_apply_super_email() {
+        let db = mock_db().await;
+        let player = Player::create(
+            &db,
+            "test@test.com".to_string(),
+            "test".to_string(),
+            None,
+            crate::database::entities::PlayerRole::Default,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(player.role, PlayerRole::Default);
+        assert_eq!(player.password, None);
+
+        init_database_admin(
+            &db,
+            &Config {
+                dashboard: DashboardConfig {
+                    super_email: Some("test@test.com".to_string()),
+                    super_password: None,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let player = Player::by_email(&db, "test@test.com")
+            .await
+            .unwrap()
+            .expect("player should exist");
+        assert_eq!(player.role, PlayerRole::SuperAdmin);
+        assert_eq!(player.password, None);
+    }
+
+    #[tokio::test]
+    async fn test_init_database_admin_dont_apply_super_email() {
+        let db = mock_db().await;
+        let player = Player::create(
+            &db,
+            "test@test.com".to_string(),
+            "test".to_string(),
+            None,
+            crate::database::entities::PlayerRole::Default,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(player.role, PlayerRole::Default);
+        assert_eq!(player.password, None);
+
+        init_database_admin(
+            &db,
+            &Config {
+                dashboard: DashboardConfig {
+                    super_email: Some("test1@test.com".to_string()),
+                    super_password: None,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let player = Player::by_email(&db, "test@test.com")
+            .await
+            .unwrap()
+            .expect("player should exist");
+        assert_eq!(player.role, PlayerRole::Default);
+        assert_eq!(player.password, None);
+    }
+
+    #[tokio::test]
+    async fn test_init_database_admin_apply_super_email_password() {
+        let db = mock_db().await;
+        let player = Player::create(
+            &db,
+            "test@test.com".to_string(),
+            "test".to_string(),
+            None,
+            crate::database::entities::PlayerRole::Default,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(player.role, PlayerRole::Default);
+        assert_eq!(player.password, None);
+
+        let password = "test";
+
+        init_database_admin(
+            &db,
+            &Config {
+                dashboard: DashboardConfig {
+                    super_email: Some("test@test.com".to_string()),
+                    super_password: Some(password.to_string()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let player = Player::by_email(&db, "test@test.com")
+            .await
+            .unwrap()
+            .expect("player should exist");
+        assert_eq!(player.role, PlayerRole::SuperAdmin);
+        assert!(verify_password(
+            password,
+            &player.password.expect("password should be set")
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_init_database_admin_apply_super_email_skip_apply_empty_password() {
+        let db = mock_db().await;
+        let player = Player::create(
+            &db,
+            "test@test.com".to_string(),
+            "test".to_string(),
+            None,
+            crate::database::entities::PlayerRole::Default,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(player.role, PlayerRole::Default);
+        assert_eq!(player.password, None);
+
+        init_database_admin(
+            &db,
+            &Config {
+                dashboard: DashboardConfig {
+                    super_email: Some("test@test.com".to_string()),
+                    super_password: Some("".to_string()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let player = Player::by_email(&db, "test@test.com")
+            .await
+            .unwrap()
+            .expect("player should exist");
+        assert_eq!(player.role, PlayerRole::SuperAdmin);
+        assert_eq!(player.password, None);
     }
 }
