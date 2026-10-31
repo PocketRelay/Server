@@ -42,7 +42,7 @@ pub async fn handle_filtered_leaderboard(
 
 /// Handles returning the number of leaderboard objects present.
 ///
-/// ```
+/// ```ignore
 /// Route: Stats(GetLeaderboardEntityCount)
 /// ID: 0
 /// Content: {
@@ -86,7 +86,7 @@ fn get_locale_name(code: &str) -> &str {
 
 ///
 ///
-/// ```
+/// ```ignore
 /// Route: Stats(GetLeaderboardGroup)
 /// ID: 19
 /// Content: {

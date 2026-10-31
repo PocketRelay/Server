@@ -1,7 +1,7 @@
 use crate::{database::DbResult, utils::types::PlayerID};
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    DeleteResult, InsertResult,
+    DeleteResult, ExprTrait, InsertManyResult, InsertResult,
     entity::prelude::*,
     sea_query::OnConflict,
 };
@@ -79,7 +79,7 @@ impl Model {
         db: &DatabaseConnection,
         player_id: PlayerID,
         data: impl Iterator<Item = (String, String)>,
-    ) -> impl Future<Output = DbResult<InsertResult<ActiveModel>>> + Send + '_ {
+    ) -> impl Future<Output = DbResult<InsertManyResult<ActiveModel>>> + Send + '_ {
         // Insert all the models
         Entity::insert_many(
             // Transform the key value pairs into insertable models

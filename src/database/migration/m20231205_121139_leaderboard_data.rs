@@ -15,14 +15,14 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(LeaderboardData::Id)
-                            .unsigned()
+                            .integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
                     .col(
                         ColumnDef::new(LeaderboardData::PlayerId)
-                            .unsigned()
+                            .integer()
                             .not_null(),
                     )
                     .col(ColumnDef::new(LeaderboardData::Ty).unsigned().not_null())

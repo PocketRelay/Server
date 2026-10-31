@@ -81,6 +81,7 @@ impl Extensions {
 type AnyMap = IntHashMap<TypeId, Box<dyn Any + Send + Sync>>;
 type RouteMap = IntHashMap<ComponentKey, Box<dyn ErasedHandler>>;
 
+#[derive(Default)]
 pub struct BlazeRouterBuilder {
     /// Map for looking up a route based on the component key
     routes: RouteMap,
@@ -89,10 +90,7 @@ pub struct BlazeRouterBuilder {
 
 impl BlazeRouterBuilder {
     pub fn new() -> Self {
-        Self {
-            routes: Default::default(),
-            extensions: Default::default(),
-        }
+        Self::default()
     }
 
     pub fn add_extension<T: Send + Sync + 'static>(&mut self, val: T) -> Option<T> {

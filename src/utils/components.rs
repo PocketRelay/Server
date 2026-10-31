@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use super::hashing::{IntHashMap, int_hash_map};
+use super::hashing::IntHashMap;
 
 /// Key created from a component and command
 pub type ComponentKey = u32;
@@ -65,6 +65,7 @@ pub fn get_command_name(key: ComponentKey, notify: bool) -> Option<&'static str>
     }
 }
 
+#[derive(Default)]
 pub struct PacketDebugData {
     commands: IntHashMap<ComponentKey, &'static str>,
     notifications: IntHashMap<ComponentKey, &'static str>,
@@ -73,14 +74,10 @@ pub struct PacketDebugData {
 impl PacketDebugData {
     /// Populates the debug data map with all the debugging information
     pub fn new() -> Self {
-        let mut commands = int_hash_map();
-        let mut notifications = int_hash_map();
-        init_commands(&mut commands);
-        init_notifications(&mut notifications);
-        Self {
-            commands,
-            notifications,
-        }
+        let mut initial = PacketDebugData::default();
+        init_commands(&mut initial.commands);
+        init_notifications(&mut initial.notifications);
+        initial
     }
 }
 
@@ -483,7 +480,7 @@ fn init_commands(commands: &mut IntHashMap<ComponentKey, &'static str>) {
         (component_key(a::COMPONENT, a::GET_LEGAL_DOCS_INFO), "GetLegalDocsInfo"),
         (component_key(a::COMPONENT, a::GET_TERMS_OF_SERVICE_CONTENT), "GetTermsOfServiceContent"),
         (component_key(a::COMPONENT, a::DEVICE_LOGIN_GUEST), "DeviceLoginGuest"),
-        
+
         // Game Manager
         (component_key(g::COMPONENT, g::CREATE_GAME), "CreateGame"),
         (component_key(g::COMPONENT, g::DESTROY_GAME), "DestroyGame"),
@@ -531,10 +528,10 @@ fn init_commands(commands: &mut IntHashMap<ComponentKey, &'static str>) {
         (component_key(g::COMPONENT, g::SWAP_PLAYERS_TEAM), "SwapPlayersTeam"),
         (component_key(g::COMPONENT, g::REGISTER_DYNAMIC_DEDICATED_SERVER_CREATOR), "RegisterDynamicDedicatedServerCreator"),
         (component_key(g::COMPONENT, g::UNREGISTER_DYNAMIC_DEDICATED_SERVER_CREATOR), "UnregisterDynamicDedicatedServerCreator"),
-       
-        // Redirector  
+
+        // Redirector
         (component_key(r::COMPONENT, r::GET_SERVER_INSTANCE), "GetServerInstance"),
-        
+
         // Stats
         (component_key(s::COMPONENT, s::GET_STAT_DECS), "GetStatDecs"),
         (component_key(s::COMPONENT, s::GET_STATS), "GetStats"),
@@ -558,7 +555,7 @@ fn init_commands(commands: &mut IntHashMap<ComponentKey, &'static str>) {
         (component_key(s::COMPONENT, s::GET_CENTERED_LEADERBOARD_RAW), "GetCenteredLeaderboardRaw"),
         (component_key(s::COMPONENT, s::GET_FILTERED_LEADERBOARD_RAW), "GetFilteredLeaderboardRaw"),
         (component_key(s::COMPONENT, s::CHANGE_KEY_SCOPE_VALUE), "ChangeKeyScopeValue"),
-        
+
         // Util
         (component_key(u::COMPONENT, u::FETCH_CLIENT_CONFIG), "FetchClientConfig"),
         (component_key(u::COMPONENT, u::PING), "Ping"),
@@ -580,13 +577,13 @@ fn init_commands(commands: &mut IntHashMap<ComponentKey, &'static str>) {
         (component_key(u::COMPONENT, u::GET_USER_OPTIONS), "GetUserOptions"),
         (component_key(u::COMPONENT, u::SET_USER_OPTIONS), "SetUserOptions"),
         (component_key(u::COMPONENT, u::SUSPEND_USER_PING), "SuspendUserPing"),
-        
+
         // Messaging
         (component_key(m::COMPONENT, m::FETCH_MESSAGES), "FetchMessages"),
         (component_key(m::COMPONENT, m::PURGE_MESSAGES), "PurgeMessages"),
         (component_key(m::COMPONENT, m::TOUCH_MESSAGES), "TouchMessages"),
         (component_key(m::COMPONENT, m::GET_MESSAGES), "GetMessages"),
-        
+
         // Association Lists
         (component_key(al::COMPONENT, al::ADD_USERS_TO_LIST), "AddUsersToList"),
         (component_key(al::COMPONENT, al::REMOVE_USERS_FROM_LIST), "RemoveUsersFromList"),
@@ -614,7 +611,7 @@ fn init_commands(commands: &mut IntHashMap<ComponentKey, &'static str>) {
         (component_key(gr::COMPONENT, gr::GET_GAME_REPORT_COLUMN_VALUES), "GetGameReportColumnValues"),
         (component_key(gr::COMPONENT, gr::SUBMIT_TRUSTED_MID_GAME_REPORT), "SubmitTrustedMidGameReport"),
         (component_key(gr::COMPONENT, gr::SUBMIT_TRUSTED_END_GAME_REPORT), "SubmitTrustedEndGameReport"),
-     
+
         // User Sessions
         (component_key(us::COMPONENT, us::UPDATE_HARDWARE_FLAGS), "UpdateHardwareFlags"),
         (component_key(us::COMPONENT, us::LOOKUP_USER), "LookupUser"),

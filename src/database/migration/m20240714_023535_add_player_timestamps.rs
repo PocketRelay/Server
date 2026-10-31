@@ -11,7 +11,11 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(Players::Table)
-                    .add_column(ColumnDef::new(Players::LastLoginAt).date_time().null())
+                    .add_column(
+                        ColumnDef::new(Players::LastLoginAt)
+                            .timestamp_with_time_zone()
+                            .null(),
+                    )
                     .to_owned(),
             )
             .await

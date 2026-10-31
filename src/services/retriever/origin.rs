@@ -109,7 +109,7 @@ impl OriginFlow {
             } else {
                 warn!(
                     "Unable to load origin player settings from official servers (Name: {}, Email: {})",
-                    &player.display_name, &player.email
+                    player.display_name, player.email
                 );
             }
         }
@@ -131,7 +131,7 @@ impl OriginFlow {
 
         debug!(
             "Retrieved Origin details (Name: {}, Email: {})",
-            &value.display_name, &value.email
+            value.display_name, value.email
         );
         Ok(value)
     }

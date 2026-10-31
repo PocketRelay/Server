@@ -61,8 +61,8 @@ impl ActiveModelBehavior for ActiveModel {}
     EnumIter,
     DeriveActiveEnum,
 )]
-#[sea_orm(rs_type = "u8", db_type = "TinyUnsigned")]
-#[repr(u8)]
+#[sea_orm(rs_type = "i32", db_type = "Integer")]
+#[repr(i32)]
 pub enum PlayerRole {
     /// The default no extra permissions level
     #[sea_orm(num_value = 0)]

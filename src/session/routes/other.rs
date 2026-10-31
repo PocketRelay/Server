@@ -16,7 +16,7 @@ use crate::{
 /// Handles submission of offline game reports from clients. This contains
 /// the new leaderboard information for the player
 ///
-/// ```
+/// ```ignore
 /// Route: GameReporting(SubmitOfflineGameReport)
 /// ID: 133
 /// Content: {
@@ -73,7 +73,7 @@ pub async fn handle_submit_offline(
 
 /// Handles getting associated lists for the player
 ///
-/// ```
+/// ```ignore
 /// Route: AssociationLists(GetLists)
 /// ID: 33
 /// Content: {

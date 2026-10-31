@@ -422,7 +422,7 @@ impl Debug for PacketDebug<'_> {
 
         if !str.stringify() {
             // Write the raw content if stringify doesn't complete
-            writeln!(&mut str.w, "Raw: {:?}", &self.packet.contents)?;
+            writeln!(&mut str.w, "Raw: {:?}", self.packet.contents)?;
         }
 
         Ok(())

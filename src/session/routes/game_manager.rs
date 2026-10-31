@@ -88,7 +88,7 @@ pub async fn handle_get_game_data(
 
 /// Handles creating a game for the provided session.
 ///
-/// ```
+/// ```ignore
 /// Route: GameManager(CreateGame)
 /// ID: 55
 /// Content: {
@@ -185,7 +185,7 @@ pub async fn handle_create_game(
 
 /// Handles changing the attributes of the game with the provided ID
 ///
-/// ```
+/// ```ignore
 /// Route: GameManager(SetGameAttributes)
 /// ID: 162
 /// Content: {
@@ -447,7 +447,7 @@ fn is_progress_increased(index: usize, a: &[&str], b: &[&str]) -> bool {
 
 /// Handles changing the state of the game with the provided ID
 ///
-/// ```
+/// ```ignore
 /// Route: GameManager(AdvanceGameState)
 /// ID: 57
 /// Content: {
@@ -470,7 +470,7 @@ pub async fn handle_set_state(
 
 /// Handles changing the setting of the game with the provided ID
 ///
-/// ```
+/// ```ignore
 /// Route: GameManager(SetGameSettings)
 /// ID: 161
 /// Content: {
@@ -493,7 +493,7 @@ pub async fn handle_set_setting(
 
 /// Handles removing a player from a game
 ///
-/// ```
+/// ```ignore
 /// Route: GameManager(RemovePlayer)
 /// ID: 151
 /// Content: {
@@ -525,7 +525,7 @@ pub async fn handle_remove_player(
 ///
 /// Only sent by the host player (I think)
 ///
-/// ```
+/// ```ignore
 /// Route: GameManager(UpdateMeshConnection)
 /// ID: 147
 /// Content: {
@@ -587,7 +587,7 @@ pub async fn handle_add_admin_player(
 /// Handles either directly joining a game or placing the
 /// session into a matchmaking queue for searching for games.
 ///
-/// ```
+/// ```ignore
 /// Route: GameManager(StartMatchmaking)
 /// ID: 146
 /// Content: {
@@ -737,7 +737,7 @@ pub async fn handle_start_matchmaking(
 /// Handles cancelling matchmaking for the current session removing
 /// itself from the matchmaking queue.
 ///
-/// ```
+/// ```ignore
 /// Route: GameManager(CancelMatchmaking)
 /// Content: {
 ///     "MSID": 1
@@ -758,7 +758,7 @@ pub async fn handle_cancel_matchmaking(
 ///
 /// Occurs when a game finishes
 ///
-/// ```
+/// ```ignore
 /// Route: GameManager(ReplayGame)
 /// Content: {
 ///  "GID": 2,

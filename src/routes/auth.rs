@@ -210,9 +210,7 @@ pub async fn handle_request_login_code(
         .ok_or(AuthError::SessionNotActive)?;
 
     // Generate the login code
-    let login_code = sessions
-        .create_login_code(player.id)
-        .map_err(|_| AuthError::FailedGenerateCode)?;
+    let login_code = sessions.create_login_code(player.id);
 
     let small_message =
         format!("Login confirmation code: <font color='#FFFF66'>{login_code}</font>");

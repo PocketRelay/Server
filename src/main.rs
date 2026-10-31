@@ -8,6 +8,7 @@ use crate::{
 use axum::{self, Extension};
 use config::{TunnelConfig, load_config};
 use log::{debug, error, info};
+use pocket_relay as _;
 use services::{
     game::{matchmaking::Matchmaking, store::Games},
     tunnel::{tunnel_keep_alive, udp_tunnel::start_udp_tunnel},
@@ -16,13 +17,13 @@ use std::{net::SocketAddr, sync::Arc};
 use tokio::{join, net::TcpListener, signal};
 use utils::logging;
 
-mod config;
-mod database;
-mod middleware;
-mod routes;
-mod services;
-mod session;
-mod utils;
+pub mod config;
+pub mod database;
+pub mod middleware;
+pub mod routes;
+pub mod services;
+pub mod session;
+pub mod utils;
 
 #[tokio::main]
 async fn main() {
@@ -35,7 +36,7 @@ async fn main() {
     // Create the server socket address while the port is still available
     let addr: SocketAddr = SocketAddr::new(config.host, config.port);
 
-    debug!("QoS server: {:?}", &config.qos);
+    debug!("QoS server: {:?}", config.qos);
 
     // This step may take longer than expected so its spawned instead of joined
     tokio::spawn(logging::log_connection_urls(config.port));

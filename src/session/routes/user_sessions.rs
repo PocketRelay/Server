@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 /// Attempts to lookup another authenticated session details
 ///
-/// ```
+/// ```ignore
 /// Component: UserSessions(LookupUser)
 /// Type: Request
 /// ID: 70
@@ -54,7 +54,7 @@ pub async fn handle_lookup_user(
 /// Attempts to resume an existing session for a player that has the
 /// provided session token.
 ///
-/// ```
+/// ```ignore
 /// Route: UserSessions(ResumeSession)
 /// ID: 207
 /// Content: {
@@ -99,7 +99,7 @@ pub async fn handle_resume_session(
 /// Handles updating the stored networking information for the current session
 /// this is required for clients to be able to connect to each-other
 ///
-/// ```
+/// ```ignore
 /// Route: UserSessions(UpdateNetworkInfo)
 /// ID: 8
 /// Content: {
@@ -180,7 +180,7 @@ pub async fn handle_update_network(
 
 /// Handles updating the stored hardware flag with the client provided hardware flag
 ///
-/// ```
+/// ```ignore
 /// Route: UserSessions(UpdateHardwareFlags)
 /// ID: 22
 /// Content: {

@@ -72,7 +72,7 @@ pub struct EntityCountResponse {
 /// Request for a list of leaderboard entries where the center
 /// value is the entry for the player with the provided ID
 ///
-/// ```
+/// ```ignore
 /// Route: Stats(GetCenteredLeaderboard)
 /// ID: 0
 /// Content: {
@@ -140,7 +140,7 @@ impl TdfSerialize for LeaderboardResponse {
 /// contents at the provided start offset
 ///
 /// Component: Stats(GetLeaderboard)
-/// ```
+/// ```ignore
 /// ID: 1274
 /// Content: {
 ///   "COUN": 61,
@@ -172,7 +172,7 @@ pub struct LeaderboardRequest {
 /// Structure for a request to get a leaderboard only
 /// containing the details for a specific player
 ///
-/// ```
+/// ```ignore
 /// Route: Stats(GetFilteredLeaderboard)
 /// ID: 27
 /// Content: {

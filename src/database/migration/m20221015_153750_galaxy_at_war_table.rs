@@ -18,12 +18,12 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(GalaxyAtWar::Id)
-                            .unsigned()
+                            .integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(GalaxyAtWar::PlayerId).unsigned().not_null())
+                    .col(ColumnDef::new(GalaxyAtWar::PlayerId).integer().not_null())
                     .col(
                         ColumnDef::new(GalaxyAtWar::LastModified)
                             .date_time()

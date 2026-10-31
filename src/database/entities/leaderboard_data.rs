@@ -5,7 +5,9 @@ use crate::utils::types::PlayerID;
 use sea_orm::ActiveValue::NotSet;
 use sea_orm::sea_query::OnConflict;
 use sea_orm::{ActiveValue::Set, DatabaseConnection, EntityTrait};
-use sea_orm::{FromQueryResult, InsertResult, QueryOrder, QuerySelect, prelude::*};
+use sea_orm::{
+    ExprTrait, FromQueryResult, InsertManyResult, InsertResult, QueryOrder, QuerySelect, prelude::*,
+};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 
@@ -219,7 +221,7 @@ impl Model {
         db: &DatabaseConnection,
         ty: LeaderboardType,
         data: impl Iterator<Item = (PlayerID, u32)>,
-    ) -> impl Future<Output = DbResult<InsertResult<ActiveModel>>> + Send + '_ {
+    ) -> impl Future<Output = DbResult<InsertManyResult<ActiveModel>>> + Send + '_ {
         // Insert all the models
         Entity::insert_many(
             // Transform the key value pairs into insertable models
