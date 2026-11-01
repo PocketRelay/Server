@@ -11,10 +11,10 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(GameReport::Table)
                     .if_not_exists()
-                    .col(pk_auto(GameReport::Id))
+                    .col(big_pk_auto(GameReport::Id))
                     .col(json_binary(GameReport::Data))
-                    .col(date_time(GameReport::CreatedAt))
-                    .col(date_time(GameReport::FinishedAt))
+                    .col(timestamp_with_time_zone(GameReport::CreatedAt))
+                    .col(timestamp_with_time_zone(GameReport::FinishedAt))
                     .to_owned(),
             )
             .await
