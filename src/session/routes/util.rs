@@ -1,3 +1,4 @@
+use crate::database::DatabaseConnection;
 use crate::{
     config::{Config, VERSION},
     database::entities::PlayerData,
@@ -17,7 +18,6 @@ use crate::{
 };
 use log::{debug, error};
 use me3_coalesced_parser::{Coalesced, serialize_coalesced};
-use sea_orm::DatabaseConnection;
 use std::{
     borrow::Cow,
     cmp::Ordering,

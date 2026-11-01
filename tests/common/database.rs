@@ -1,5 +1,5 @@
+use pocket_relay::database::DatabaseConnection;
 use pocket_relay::{config::DatabaseConfig, database::connect_database};
-use sea_orm::DatabaseConnection;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
 

@@ -1,3 +1,4 @@
+use crate::database::DatabaseConnection;
 use crate::{
     config::{Config, QosServerConfig},
     database::entities::Player,
@@ -15,7 +16,6 @@ use crate::{
 };
 use chrono::Utc;
 use log::{debug, error};
-use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
 /// Attempts to lookup another authenticated session details

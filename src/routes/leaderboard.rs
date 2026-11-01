@@ -1,3 +1,4 @@
+use crate::database::{DatabaseConnection, DbErr};
 use crate::{
     database::entities::{
         LeaderboardData,
@@ -11,7 +12,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

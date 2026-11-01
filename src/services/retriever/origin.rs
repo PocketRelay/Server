@@ -2,6 +2,7 @@
 //! and data loading flow
 
 use super::{OfficialSession, RetrieverResult, models::OriginLoginResponse};
+use crate::database::{DatabaseConnection, DbErr};
 use crate::{
     config::Config,
     database::entities::{Player, PlayerData, PlayerRole},
@@ -12,7 +13,6 @@ use crate::{
     },
 };
 use log::{debug, warn};
-use sea_orm::{DatabaseConnection, DbErr};
 use tdf::TdfMap;
 use thiserror::Error;
 

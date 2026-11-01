@@ -1,3 +1,4 @@
+use crate::database::{EntityTrait, PaginatorTrait, QueryOrder};
 use crate::{
     database::{
         DatabaseConnection, DbErr,
@@ -18,7 +19,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use email_address::EmailAddress;
-use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use serde::{Deserialize, Serialize, ser::SerializeMap};
 use thiserror::Error;
 

@@ -2,6 +2,7 @@
 //! and automatically decoding the packet contents to the function type
 
 use super::{SessionLink, models::errors::BlazeError, packet::Packet};
+use crate::database::DatabaseConnection;
 use crate::{
     database::entities::{Player, PlayerData},
     services::game::{GamePlayer, GamePlayerPlayerDataSnapshot},
@@ -14,7 +15,6 @@ use crate::{
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use log::{debug, error};
-use sea_orm::DatabaseConnection;
 use std::{
     any::{Any, TypeId},
     convert::Infallible,

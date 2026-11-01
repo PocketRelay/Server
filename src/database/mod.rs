@@ -14,8 +14,10 @@ mod migration;
 mod seed;
 
 // Re-exports of database types
-pub use sea_orm::DatabaseConnection;
-pub use sea_orm::DbErr;
+pub use sea_orm::{
+    DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryOrder, SqlErr,
+    prelude::DateTimeUtc,
+};
 
 use self::entities::{Player, PlayerRole};
 use crate::{

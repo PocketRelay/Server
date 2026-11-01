@@ -1,3 +1,4 @@
+use crate::database::DatabaseConnection;
 use crate::{
     config::Config,
     database::entities::{
@@ -24,7 +25,6 @@ use crate::{
 };
 use chrono::Utc;
 use log::{debug, error, info};
-use sea_orm::DatabaseConnection;
 use std::{collections::HashMap, sync::Arc};
 
 pub async fn handle_join_game(

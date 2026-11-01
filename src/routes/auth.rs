@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::database::{DatabaseConnection, DbErr};
 use crate::{
     config::Config,
     database::entities::{Player, PlayerRole},
@@ -17,7 +18,6 @@ use axum::{
 };
 use chrono::Utc;
 use log::error;
-use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

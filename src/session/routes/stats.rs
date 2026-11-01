@@ -1,3 +1,4 @@
+use crate::database::DatabaseConnection;
 use crate::{
     database::entities::LeaderboardData,
     session::{
@@ -5,7 +6,6 @@ use crate::{
         router::{Blaze, Extension},
     },
 };
-use sea_orm::DatabaseConnection;
 
 pub async fn handle_normal_leaderboard(
     Extension(db): Extension<DatabaseConnection>,

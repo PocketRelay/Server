@@ -1,23 +1,9 @@
 use pocket_relay::database::entities::{Player, PlayerRole};
-use sea_orm::{DatabaseConnection, SqlErr, prelude::DateTimeUtc};
+use pocket_relay::database::{DatabaseConnection, DateTimeUtc, SqlErr};
 
-use crate::common::database::{postgres_database, sqlite_database};
+use crate::common::player::{quick_test_player, quick_test_player_with_name};
 
 mod common;
-
-async fn quick_test_player(db: &DatabaseConnection, email: impl Into<String>) -> Player {
-    quick_test_player_with_name(db, email, "test").await
-}
-
-async fn quick_test_player_with_name(
-    db: &DatabaseConnection,
-    email: impl Into<String>,
-    name: impl Into<String>,
-) -> Player {
-    Player::create(db, email.into(), name.into(), None, PlayerRole::Default)
-        .await
-        .unwrap()
-}
 
 /// Tests that a player can be created and then retrieved and matches
 async fn test_create_player(db: &DatabaseConnection) {
@@ -186,122 +172,15 @@ async fn test_set_player_last_login(db: &DatabaseConnection) {
     assert_eq!(player_get.last_login_at, Some(constant_date));
 }
 
-#[tokio::test]
-async fn test_create_player_sqlite() {
-    let db = sqlite_database().await;
-    test_create_player(&db).await;
-}
-
-#[tokio::test]
-async fn test_create_player_postgres() {
-    let (db, _postgres) = postgres_database().await;
-    test_create_player(&db).await;
-}
-
-#[tokio::test]
-async fn test_create_player_prevents_duplicate_email_sqlite() {
-    let db = sqlite_database().await;
-    test_create_player_prevents_duplicate_email(&db).await;
-}
-
-#[tokio::test]
-async fn test_create_player_prevents_duplicate_email_postgres() {
-    let (db, _postgres) = postgres_database().await;
-    test_create_player_prevents_duplicate_email(&db).await;
-}
-
-#[tokio::test]
-async fn test_delete_player_sqlite() {
-    let db = sqlite_database().await;
-    test_delete_player(&db).await;
-}
-
-#[tokio::test]
-async fn test_delete_player_postgres() {
-    let (db, _postgres) = postgres_database().await;
-    test_delete_player(&db).await;
-}
-
-#[tokio::test]
-async fn test_get_player_by_id_sqlite() {
-    let db = sqlite_database().await;
-    test_get_player_by_id(&db).await;
-}
-
-#[tokio::test]
-async fn test_get_player_by_id_postgres() {
-    let (db, _postgres) = postgres_database().await;
-    test_get_player_by_id(&db).await;
-}
-
-#[tokio::test]
-async fn test_get_player_by_email_sqlite() {
-    let db = sqlite_database().await;
-    test_get_player_by_email(&db).await;
-}
-
-#[tokio::test]
-async fn test_get_player_by_email_postgres() {
-    let (db, _postgres) = postgres_database().await;
-    test_get_player_by_email(&db).await;
-}
-
-#[tokio::test]
-async fn test_get_player_by_username_sqlite() {
-    let db = sqlite_database().await;
-    test_get_player_by_username(&db).await;
-}
-
-#[tokio::test]
-async fn test_get_player_by_username_postgres() {
-    let (db, _postgres) = postgres_database().await;
-    test_get_player_by_username(&db).await;
-}
-
-#[tokio::test]
-async fn test_set_player_password_sqlite() {
-    let db = sqlite_database().await;
-    test_set_player_password(&db).await;
-}
-
-#[tokio::test]
-async fn test_set_player_password_postgres() {
-    let (db, _postgres) = postgres_database().await;
-    test_set_player_password(&db).await;
-}
-
-#[tokio::test]
-async fn test_set_player_role_sqlite() {
-    let db = sqlite_database().await;
-    test_set_player_role(&db).await;
-}
-
-#[tokio::test]
-async fn test_set_player_role_postgres() {
-    let (db, _postgres) = postgres_database().await;
-    test_set_player_role(&db).await;
-}
-
-#[tokio::test]
-async fn test_set_player_details_sqlite() {
-    let db = sqlite_database().await;
-    test_set_player_details(&db).await;
-}
-
-#[tokio::test]
-async fn test_set_player_details_postgres() {
-    let (db, _postgres) = postgres_database().await;
-    test_set_player_details(&db).await;
-}
-
-#[tokio::test]
-async fn test_set_player_last_login_sqlite() {
-    let db = sqlite_database().await;
-    test_set_player_last_login(&db).await;
-}
-
-#[tokio::test]
-async fn test_set_player_last_login_postgres() {
-    let (db, _postgres) = postgres_database().await;
-    test_set_player_last_login(&db).await;
-}
+database_tests!(
+    test_create_player,
+    test_create_player_prevents_duplicate_email,
+    test_delete_player,
+    test_get_player_by_id,
+    test_get_player_by_email,
+    test_get_player_by_username,
+    test_set_player_password,
+    test_set_player_role,
+    test_set_player_details,
+    test_set_player_last_login
+);
