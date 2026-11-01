@@ -27,15 +27,15 @@ pub struct Model {
     /// to calculate how many days of decay have passed
     pub last_modified: NaiveDateTime,
     /// The first group value
-    pub group_a: u16,
+    pub group_a: u32,
     /// The second group value
-    pub group_b: u16,
+    pub group_b: u32,
     /// The third group value
-    pub group_c: u16,
+    pub group_c: u32,
     /// The fourth group value
-    pub group_d: u16,
+    pub group_d: u32,
     /// The fifth group value
-    pub group_e: u16,
+    pub group_e: u32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -45,11 +45,23 @@ impl ActiveModelBehavior for ActiveModel {}
 
 impl Model {
     /// The minimum value for galaxy at war entries
-    const MIN_VALUE: u16 = 5000;
+    const MIN_VALUE: u32 = 5000;
     /// The maximum value for galaxy at war entries
-    const MAX_VALUE: u16 = 10099;
+    const MAX_VALUE: u32 = 10099;
 
-    pub async fn get(db: &DatabaseConnection, player_id: PlayerID) -> DbResult<Self> {
+    /// Get the current [NaiveDateTime] timestamp from local time for the
+    /// last modified timestamp
+    pub fn current_date_time() -> NaiveDateTime {
+        Local::now().naive_local()
+    }
+
+    /// Get the galaxy at war data for the provided player, will be
+    /// created if it does not exist yet
+    pub async fn get(
+        db: &DatabaseConnection,
+        player_id: PlayerID,
+        now: NaiveDateTime,
+    ) -> DbResult<Self> {
         let existing = Entity::find()
             .filter(Column::PlayerId.eq(player_id))
             .one(db)
@@ -59,11 +71,19 @@ impl Model {
             return Ok(value);
         }
 
-        let current_time = Local::now().naive_local();
+        Self::create_default(db, player_id, now).await
+    }
+
+    /// Create a default galaxy at war data for the provided player
+    async fn create_default(
+        db: &DatabaseConnection,
+        player_id: PlayerID,
+        now: NaiveDateTime,
+    ) -> DbResult<Self> {
         ActiveModel {
             id: NotSet,
             player_id: Set(player_id),
-            last_modified: Set(current_time),
+            last_modified: Set(now),
             group_a: Set(Self::MIN_VALUE),
             group_b: Set(Self::MIN_VALUE),
             group_c: Set(Self::MIN_VALUE),
@@ -79,9 +99,15 @@ impl Model {
     pub fn add(
         self,
         db: &DatabaseConnection,
-        values: [u16; 5],
+        values: [u32; 5],
+        now: NaiveDateTime,
     ) -> impl Future<Output = DbResult<Self>> + '_ {
-        self.transform(db, |a, b| a.saturating_add(b).min(Model::MAX_VALUE), values)
+        self.transform(
+            db,
+            |a, b| a.saturating_add(b).min(Model::MAX_VALUE),
+            values,
+            now,
+        )
     }
 
     /// Decrease the stored group values decreasing them by the `values`
@@ -89,29 +115,35 @@ impl Model {
     pub fn sub(
         self,
         db: &DatabaseConnection,
-        values: [u16; 5],
+        values: [u32; 5],
+        now: NaiveDateTime,
     ) -> impl Future<Output = DbResult<Self>> + '_ {
-        self.transform(db, |a, b| a.saturating_sub(b).max(Model::MIN_VALUE), values)
+        self.transform(
+            db,
+            |a, b| a.saturating_sub(b).max(Model::MIN_VALUE),
+            values,
+            now,
+        )
     }
 
     /// Transforms the underlying group values using the provided action
     /// function which is given the current value as the first argument
     /// and the respective value from `values` as the second argument
     #[inline]
-    pub async fn transform<F>(
+    async fn transform<F>(
         self,
         db: &DatabaseConnection,
         action: F,
-        values: [u16; 5],
+        values: [u32; 5],
+        now: NaiveDateTime,
     ) -> DbResult<Self>
     where
-        F: Fn(u16, u16) -> u16,
+        F: Fn(u32, u32) -> u32,
     {
-        let current_time = Local::now().naive_local();
         ActiveModel {
             id: Set(self.id),
             player_id: Set(self.player_id),
-            last_modified: Set(current_time),
+            last_modified: Set(now),
             group_a: Set(action(self.group_a, values[0])),
             group_b: Set(action(self.group_b, values[1])),
             group_c: Set(action(self.group_c, values[2])),
@@ -124,16 +156,20 @@ impl Model {
 
     /// Applies the daily decay progress to the group values calculating the
     /// decay amount from the number of days passed
-    pub async fn apply_decay(self, db: &DatabaseConnection, decay: f32) -> DbResult<Self> {
+    pub async fn apply_decay(
+        self,
+        db: &DatabaseConnection,
+        decay: f32,
+        now: NaiveDateTime,
+    ) -> DbResult<Self> {
         // Skip decaying if decay is non existent
         if decay <= 0.0 {
             return Ok(self);
         }
 
-        let current_time = Local::now().naive_local();
-        let days_passed = (current_time - self.last_modified).num_days() as f32;
-        let decay_value = (decay * days_passed * 100.0) as u16;
+        let days_passed = (now - self.last_modified).num_days() as f32;
+        let decay_value = (decay * days_passed * 100.0) as u32;
 
-        self.sub(db, [decay_value; 5]).await
+        self.sub(db, [decay_value; 5], now).await
     }
 }
