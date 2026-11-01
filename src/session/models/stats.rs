@@ -112,7 +112,7 @@ impl TdfSerialize for LeaderboardDataAndRank {
         w.group_body(|w| {
             w.tag_str(b"ENAM", &self.player_name);
             w.tag_u32(b"ENID", self.player_id);
-            w.tag_u32(b"RANK", self.rank);
+            w.tag_u64(b"RANK", self.rank as u64);
 
             let value_str = self.value.to_string();
             w.tag_str(b"RSTA", &value_str);

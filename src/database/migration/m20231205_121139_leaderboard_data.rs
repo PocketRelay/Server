@@ -25,8 +25,8 @@ impl MigrationTrait for Migration {
                             .integer()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(LeaderboardData::Ty).unsigned().not_null())
-                    .col(ColumnDef::new(LeaderboardData::Value).unsigned().not_null())
+                    .col(ColumnDef::new(LeaderboardData::Ty).integer().not_null())
+                    .col(ColumnDef::new(LeaderboardData::Value).integer().not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .from(LeaderboardData::Table, LeaderboardData::PlayerId)

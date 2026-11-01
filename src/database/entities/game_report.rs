@@ -6,11 +6,7 @@ use crate::{
     },
 };
 use futures_util::future::BoxFuture;
-use sea_orm::{
-    ActiveValue::{NotSet, Set},
-    FromJsonQueryResult,
-    entity::prelude::*,
-};
+use sea_orm::{ActiveValue::Set, FromJsonQueryResult, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -72,7 +68,6 @@ impl Model {
         finished_at: DateTimeUtc,
     ) -> BoxFuture<'_, DbResult<Self>> {
         ActiveModel {
-            id: NotSet,
             data: Set(data),
             created_at: Set(created_at),
             finished_at: Set(finished_at),
