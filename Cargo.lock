@@ -2602,7 +2602,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-relay"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "argon2",
  "axum",
