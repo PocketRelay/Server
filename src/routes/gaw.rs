@@ -140,7 +140,13 @@ pub async fn increase_ratings(
     Extension(sessions): Extension<Arc<Sessions>>,
 ) -> Result<Xml, GAWError> {
     let (gaw_data, promotions) = get_player_gaw_data(&db, sessions, &id, &config).await?;
-    let gaw_data = gaw_data.add(&db, [a, b, c, d, e]).await?;
+    let gaw_data = gaw_data
+        .add(
+            &db,
+            [a as u32, b as u32, c as u32, d as u32, e as u32],
+            GalaxyAtWar::current_date_time(),
+        )
+        .await?;
     Ok(ratings_response(gaw_data, promotions))
 }
 
@@ -164,10 +170,16 @@ async fn get_player_gaw_data(
         .ok_or(GAWError::InvalidToken)?;
 
     let (gaw_data, promotions) = try_join!(
-        GalaxyAtWar::get(db, player.id),
+        GalaxyAtWar::get(db, player.id, GalaxyAtWar::current_date_time()),
         get_promotions(db, &player, config)
     )?;
-    let gaw_data = gaw_data.apply_decay(db, config.galaxy_at_war.decay).await?;
+    let gaw_data = gaw_data
+        .apply_decay(
+            db,
+            config.galaxy_at_war.decay,
+            GalaxyAtWar::current_date_time(),
+        )
+        .await?;
 
     Ok((gaw_data, promotions))
 }

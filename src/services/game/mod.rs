@@ -483,7 +483,7 @@ impl Game {
     pub fn set_state(&mut self, state: GameState) {
         self.state = state;
 
-        debug!("Updated game state (Value: {:?})", &state);
+        debug!("Updated game state (Value: {:?})", state);
 
         self.notify_all(Packet::notify(
             game_manager::COMPONENT,
@@ -495,7 +495,7 @@ impl Game {
     pub fn set_game_reporting_id(&mut self, reporting_id: u64) {
         self.reporting_id = reporting_id;
 
-        debug!("Updated game reporting id (Value: {:?})", &reporting_id);
+        debug!("Updated game reporting id (Value: {:?})", reporting_id);
 
         self.notify_all(Packet::notify(
             game_manager::COMPONENT,
@@ -510,7 +510,7 @@ impl Game {
     pub fn set_settings(&mut self, settings: GameSettings) {
         self.settings = settings;
 
-        debug!("Updated game setting (Value: {:?})", &settings);
+        debug!("Updated game setting (Value: {:?})", settings);
 
         self.notify_all(Packet::notify(
             game_manager::COMPONENT,

@@ -1,3 +1,4 @@
+use crate::database::DatabaseConnection;
 use crate::{
     config::{Config, VERSION},
     database::entities::PlayerData,
@@ -17,7 +18,6 @@ use crate::{
 };
 use log::{debug, error};
 use me3_coalesced_parser::{Coalesced, serialize_coalesced};
-use sea_orm::DatabaseConnection;
 use std::{
     borrow::Cow,
     cmp::Ordering,
@@ -28,7 +28,7 @@ use tdf::TdfMap;
 
 /// Handles retrieving the details about the telemetry server
 ///
-/// ```
+/// ```ignore
 /// Route: Util(GetTelemetryServer)
 /// ID: 0
 /// Content: {}
@@ -40,7 +40,7 @@ pub async fn handle_get_telemetry_server() -> Blaze<TelemetryServer> {
 
 /// Handles retrieving the details about the ticker server
 ///
-/// ```
+/// ```ignore
 /// Route: Util(GetTickerServer)
 /// ID: 0
 /// Content: {}
@@ -54,7 +54,7 @@ pub async fn handle_get_ticker_server() -> Blaze<TickerServer> {
 /// that clients will send. The response to this contains information
 /// about the server the client is connecting to.
 ///
-/// ```
+/// ```ignore
 /// Route: Util(PreAuth)
 /// ID: 0
 /// Content: {
@@ -90,7 +90,7 @@ pub async fn handle_pre_auth(
 /// Handles post authentication requests. This provides information about other
 /// servers that are used by Mass Effect such as the Telemetry and Ticker servers.
 ///
-/// ```
+/// ```ignore
 /// Route: Util(PostAuth)
 /// ID: 27
 /// Content: {}
@@ -115,7 +115,7 @@ pub async fn handle_post_auth(
 /// specified in the pre-auth response. The server replies to this messages with
 /// the current server unix timestamp in seconds.
 ///
-/// ```
+/// ```ignore
 /// Route: Util(Ping)
 /// ID: 1
 /// Content: {}
@@ -145,7 +145,7 @@ const ME3_DIME: &str = include_str!("../../resources/data/dime.xml");
 /// - **ME3_BINI_PC_COMPRESSED**: The server Coalesced file contents packed into a compressed format
 /// - **ME3_LIVE_TLK_PC_{LANG}**: Game talk files for the specified language
 /// # Structure
-/// ```
+/// ```ignore
 /// Route: Util(FetchClientConfig)
 /// ID: 2
 /// Content: {
@@ -407,7 +407,7 @@ fn data_config() -> TdfMap<String, String> {
 /// [UtilError::]
 ///
 ///
-/// ```
+/// ```ignore
 /// Route: Util(SuspendUserPing)
 /// ID: 31
 /// Content: {
@@ -434,7 +434,7 @@ pub async fn handle_suspend_user_ping(
 
 /// Handles updating the stored data for this account
 ///
-/// ```
+/// ```ignore
 /// Route: Util(UserSettingsSave)
 /// ID: 45
 /// Content: {
@@ -455,7 +455,7 @@ pub async fn handle_user_settings_save(
 /// Handles loading all the user details for the current account and sending them to the
 /// client
 ///
-/// ```
+/// ```ignore
 /// Route: Util(UserSettingsLoadAll)
 /// ID: 23
 /// Content: {}
@@ -476,7 +476,7 @@ pub async fn handle_load_settings(
 
 /// Handles client updating networking through Upnp changes
 ///
-/// ```
+/// ```ignore
 /// Request (27): Util->SetClientMetrics (0x0009->0x0016)
 /// Content: {
 ///     "UBFL": 2,

@@ -8,4 +8,5 @@ pub type GalaxyAtWar = galaxy_at_war::Model;
 pub type Player = players::Model;
 pub type PlayerData = player_data::Model;
 pub type LeaderboardData = leaderboard_data::Model;
+pub type GameReport = game_report::Model;
 pub use players::PlayerRole;

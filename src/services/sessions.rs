@@ -79,7 +79,7 @@ impl Sessions {
 
     /// Creates a new login code for the provider player, returns the
     /// login code storing the data so it can be exchanged
-    pub fn create_login_code(&self, player_id: PlayerID) -> Result<LoginCode, ()> {
+    pub fn create_login_code(&self, player_id: PlayerID) -> LoginCode {
         let rng = StdRng::from_os_rng();
 
         let code: LoginCode = rng.sample_iter(&LoginCodePart).take(5).collect();
@@ -94,7 +94,7 @@ impl Sessions {
             .lock()
             .insert(code.clone(), LoginCodeData { player_id, exp });
 
-        Ok(code)
+        code
     }
 
     /// Exchanges a login code for a token to the player the code was for

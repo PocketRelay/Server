@@ -72,7 +72,7 @@ pub struct EntityCountResponse {
 /// Request for a list of leaderboard entries where the center
 /// value is the entry for the player with the provided ID
 ///
-/// ```
+/// ```ignore
 /// Route: Stats(GetCenteredLeaderboard)
 /// ID: 0
 /// Content: {
@@ -112,7 +112,7 @@ impl TdfSerialize for LeaderboardDataAndRank {
         w.group_body(|w| {
             w.tag_str(b"ENAM", &self.player_name);
             w.tag_u32(b"ENID", self.player_id);
-            w.tag_u32(b"RANK", self.rank);
+            w.tag_u64(b"RANK", self.rank as u64);
 
             let value_str = self.value.to_string();
             w.tag_str(b"RSTA", &value_str);
@@ -140,7 +140,7 @@ impl TdfSerialize for LeaderboardResponse {
 /// contents at the provided start offset
 ///
 /// Component: Stats(GetLeaderboard)
-/// ```
+/// ```ignore
 /// ID: 1274
 /// Content: {
 ///   "COUN": 61,
@@ -172,7 +172,7 @@ pub struct LeaderboardRequest {
 /// Structure for a request to get a leaderboard only
 /// containing the details for a specific player
 ///
-/// ```
+/// ```ignore
 /// Route: Stats(GetFilteredLeaderboard)
 /// ID: 27
 /// Content: {

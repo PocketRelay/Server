@@ -25,7 +25,7 @@ pub struct QosQuery {
 ///
 /// Called by game: /qos/qos?prpt=3659&vers=1&qtyp=1
 ///
-/// ```
+/// ```ignore
 /// <qos>
 ///     <numprobes>0</numprobes>
 ///     <qosport>17499</qosport>
@@ -49,7 +49,7 @@ pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
     if query.qtype == 1 {
         Xml(formatdoc! {r#"
             <?xml version="1.0" encoding="UTF-8"?>
-            <qos> 
+            <qos>
                 <numprobes>0</numprobes>
                 <qosport>{}</qosport>
                 <probesize>0</probesize>
@@ -62,7 +62,7 @@ pub async fn qos(Query(query): Query<QosQuery>) -> Xml {
     } else {
         Xml(formatdoc! {r#"
             <?xml version="1.0" encoding="UTF-8"?>
-            <qos> 
+            <qos>
                 <numprobes>10</numprobes>
                 <qosport>{}</qosport>
                 <probesize>1200</probesize>

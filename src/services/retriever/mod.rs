@@ -111,7 +111,7 @@ impl OfficialInstance {
 
     async fn obtain() -> Result<OfficialInstance, InstanceError> {
         let host = Self::lookup_host().await?;
-        debug!("Completed host lookup: {}", &host);
+        debug!("Completed host lookup: {}", host);
 
         // Create a session to the redirector server
         let mut session = OfficialSession::connect(&host, Self::REDIRECT_PORT).await?;
@@ -134,7 +134,7 @@ impl OfficialInstance {
 
         debug!(
             "Retriever instance obtained. (Host: {} Port: {})",
-            &host, port
+            host, port
         );
 
         let expiry = SystemTime::now().add(Self::LIFETIME);
@@ -424,7 +424,7 @@ impl Display for ErrorPacket {
 ///
 /// # Structure
 ///
-/// ```
+/// ```ignore
 /// {
 ///   "Status": 0,
 ///   "TC": false,
@@ -459,7 +459,7 @@ struct LookupResponse {
 /// being used so only that is present here.
 ///
 /// # Structure
-/// ```
+/// ```ignore
 /// {
 ///   "name": "gosredirector.ea.com.",
 ///   "type": 1,

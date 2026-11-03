@@ -14,12 +14,14 @@ mod migration;
 mod seed;
 
 // Re-exports of database types
-pub use sea_orm::DatabaseConnection;
-pub use sea_orm::DbErr;
+pub use sea_orm::{
+    DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryOrder, SqlErr,
+    prelude::DateTimeUtc,
+};
 
 use self::entities::{Player, PlayerRole};
 use crate::{
-    config::Config,
+    config::{Config, DatabaseConfig},
     utils::hashing::{hash_password, verify_password},
 };
 
@@ -34,7 +36,7 @@ const DATABASE_PATH_URL: &str = "sqlite:data/app.db";
 pub async fn init(config: &Config) -> DatabaseConnection {
     info!("Connected to database..");
 
-    let connection = connect_database().await;
+    let connection = connect_database(&config.database).await;
 
     // Setup the super admin account
     init_database_admin(&connection, config).await;
@@ -43,7 +45,7 @@ pub async fn init(config: &Config) -> DatabaseConnection {
 }
 
 /// Connects to the database
-async fn connect_database() -> DatabaseConnection {
+pub async fn connect_database(config: &DatabaseConfig) -> DatabaseConnection {
     let path = Path::new(&DATABASE_PATH);
 
     // Create path to database file if missing
@@ -58,15 +60,22 @@ async fn connect_database() -> DatabaseConnection {
         File::create(path).expect("Unable to create sqlite database file");
     }
 
-    let mut options: ConnectOptions = ConnectOptions::new(DATABASE_PATH_URL);
-
-    // Enable WAL journal mode and optimizing on close
-    // (Connections are automatically closed internally by the connection pool if they've lived a long time)
-    options.map_sqlx_sqlite_opts(|options| {
-        options
-            .journal_mode(sea_orm::sqlx::sqlite::SqliteJournalMode::Wal)
-            .optimize_on_close(true, None)
+    let mut options: ConnectOptions = ConnectOptions::new(match &config.connection_url {
+        Some(value) => value.as_str(),
+        None => DATABASE_PATH_URL,
     });
+
+    let wal = config.wal.unwrap_or(true);
+
+    if wal {
+        // Enable WAL journal mode and optimizing on close
+        // (Connections are automatically closed internally by the connection pool if they've lived a long time)
+        options.map_sqlx_sqlite_opts(|options| {
+            options
+                .journal_mode(sea_orm::sqlx::sqlite::SqliteJournalMode::Wal)
+                .optimize_on_close(true, None)
+        });
+    }
 
     // Connect to database
     let connection = SeaDatabase::connect(options)

@@ -57,7 +57,7 @@ impl PlayerClass<'_> {
     /// Attempts to parse the provided player class data string
     ///
     /// # Format
-    /// ```
+    /// ```ignore
     /// 20;4;Adept;20;0;50
     /// 20;4;NAME;LEVEL;EXP;PROMOTIONS
     /// ```

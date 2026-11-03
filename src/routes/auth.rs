@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::database::{DatabaseConnection, DbErr};
 use crate::{
     config::Config,
     database::entities::{Player, PlayerRole},
@@ -17,7 +18,6 @@ use axum::{
 };
 use chrono::Utc;
 use log::error;
-use sea_orm::{DatabaseConnection, DbErr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -210,9 +210,7 @@ pub async fn handle_request_login_code(
         .ok_or(AuthError::SessionNotActive)?;
 
     // Generate the login code
-    let login_code = sessions
-        .create_login_code(player.id)
-        .map_err(|_| AuthError::FailedGenerateCode)?;
+    let login_code = sessions.create_login_code(player.id);
 
     let small_message =
         format!("Login confirmation code: <font color='#FFFF66'>{login_code}</font>");

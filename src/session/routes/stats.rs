@@ -1,3 +1,4 @@
+use crate::database::DatabaseConnection;
 use crate::{
     database::entities::LeaderboardData,
     session::{
@@ -5,7 +6,6 @@ use crate::{
         router::{Blaze, Extension},
     },
 };
-use sea_orm::DatabaseConnection;
 
 pub async fn handle_normal_leaderboard(
     Extension(db): Extension<DatabaseConnection>,
@@ -42,7 +42,7 @@ pub async fn handle_filtered_leaderboard(
 
 /// Handles returning the number of leaderboard objects present.
 ///
-/// ```
+/// ```ignore
 /// Route: Stats(GetLeaderboardEntityCount)
 /// ID: 0
 /// Content: {
@@ -86,7 +86,7 @@ fn get_locale_name(code: &str) -> &str {
 
 ///
 ///
-/// ```
+/// ```ignore
 /// Route: Stats(GetLeaderboardGroup)
 /// ID: 19
 /// Content: {

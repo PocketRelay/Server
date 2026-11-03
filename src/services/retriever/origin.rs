@@ -2,6 +2,7 @@
 //! and data loading flow
 
 use super::{OfficialSession, RetrieverResult, models::OriginLoginResponse};
+use crate::database::{DatabaseConnection, DbErr};
 use crate::{
     config::Config,
     database::entities::{Player, PlayerData, PlayerRole},
@@ -12,7 +13,6 @@ use crate::{
     },
 };
 use log::{debug, warn};
-use sea_orm::{DatabaseConnection, DbErr};
 use tdf::TdfMap;
 use thiserror::Error;
 
@@ -109,7 +109,7 @@ impl OriginFlow {
             } else {
                 warn!(
                     "Unable to load origin player settings from official servers (Name: {}, Email: {})",
-                    &player.display_name, &player.email
+                    player.display_name, player.email
                 );
             }
         }
@@ -131,7 +131,7 @@ impl OriginFlow {
 
         debug!(
             "Retrieved Origin details (Name: {}, Email: {})",
-            &value.display_name, &value.email
+            value.display_name, value.email
         );
         Ok(value)
     }

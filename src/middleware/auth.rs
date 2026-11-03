@@ -1,3 +1,4 @@
+use crate::database::DatabaseConnection;
 use crate::{
     config::Config,
     database::{
@@ -12,7 +13,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use sea_orm::DatabaseConnection;
 use std::future::Future;
 use std::sync::Arc;
 use thiserror::Error;

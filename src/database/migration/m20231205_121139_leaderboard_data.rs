@@ -15,18 +15,18 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(LeaderboardData::Id)
-                            .unsigned()
+                            .integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
                     .col(
                         ColumnDef::new(LeaderboardData::PlayerId)
-                            .unsigned()
+                            .integer()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(LeaderboardData::Ty).unsigned().not_null())
-                    .col(ColumnDef::new(LeaderboardData::Value).unsigned().not_null())
+                    .col(ColumnDef::new(LeaderboardData::Ty).integer().not_null())
+                    .col(ColumnDef::new(LeaderboardData::Value).integer().not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .from(LeaderboardData::Table, LeaderboardData::PlayerId)

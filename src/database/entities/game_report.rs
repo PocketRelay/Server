@@ -17,7 +17,7 @@ pub type GameReportModel = Model;
 #[sea_orm(table_name = "game_report")]
 pub struct Model {
     /// Unique Identifier for the player data
-    #[sea_orm(primary_key, column_type = "Integer")]
+    #[sea_orm(primary_key)]
     pub id: i64,
     pub data: GameReportData,
     pub created_at: DateTimeUtc,

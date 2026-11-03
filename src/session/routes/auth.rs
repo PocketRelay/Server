@@ -166,7 +166,7 @@ pub async fn handle_origin_login(
 /// Handles logging out by the client this removes any current player data from the
 /// session and updating anything that depends on the session having a player.
 ///
-/// ```
+/// ```ignore
 /// Route: Authentication(Logout)
 /// ID: 8
 /// Content: {}
@@ -233,7 +233,7 @@ static ENTITLEMENTS: &[Entitlement] = &[
 /// Handles list user entitlements 2 responses requests which contains information
 /// about certain content the user has access two
 ///
-/// ```
+/// ```ignore
 /// Route: Authentication(ListUserEntitlements2)
 /// ID: 8
 /// Content: {
@@ -265,7 +265,7 @@ pub async fn handle_list_entitlements(
 /// Handles logging into a persona. This system doesn't implement the persona system so
 /// the account details are just used instead
 ///
-/// ```
+/// ```ignore
 /// Route: Authentication(LoginPersona),
 /// ID: 14
 /// Content: {
@@ -280,7 +280,7 @@ pub async fn handle_login_persona(SessionAuth(player): SessionAuth) -> Blaze<Per
 /// email but this server does not yet implement that functionality so it is just
 /// logged to debug output
 ///
-/// ```
+/// ```ignore
 /// Route: Authentication(PasswordForgot)
 /// ID: 17
 /// Content: {
@@ -293,7 +293,7 @@ pub async fn handle_forgot_password(Blaze(req): Blaze<ForgotPasswordRequest>) {
 
 /// Handles creating accounts
 ///
-/// ```
+/// ```ignore
 /// Route: Authentication(CreateAccount)
 /// ID: 18
 /// Content: {
@@ -397,7 +397,7 @@ pub async fn handle_create_account(
 /// Expected to be getting information about the legal docs however the exact meaning
 /// of the response content is not yet known and further research is required
 ///
-/// ```
+/// ```ignore
 /// Route: Authentication(GetLegalDocsInfo)
 /// ID: 22
 /// Content: {
@@ -409,7 +409,7 @@ pub async fn handle_get_legal_docs_info() -> Blaze<LegalDocsInfo> {
     Blaze(LegalDocsInfo)
 }
 
-/// ```
+/// ```ignore
 /// Route: Authentication(GetTermsOfServiceContent)
 /// ID: 23
 /// Content: {
@@ -434,7 +434,7 @@ pub async fn handle_tos() -> Blaze<LegalContent> {
     })
 }
 
-/// ```
+/// ```ignore
 /// Route: Authentication(GetPrivacyPolicyContent)
 /// ID: 24
 /// Content: {
@@ -462,7 +462,7 @@ pub async fn handle_privacy_policy() -> Blaze<LegalContent> {
 /// Handles retrieving an authentication token for use with the Galaxy At War HTTP service.
 /// This implementation uses the session token for the player
 ///
-/// ```
+/// ```ignore
 /// Route: Authentication(GetAuthToken),
 /// ID: 35
 /// Content: {}

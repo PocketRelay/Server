@@ -7,6 +7,7 @@ use sea_orm::{
 use tokio::{task::JoinSet, try_join};
 
 use crate::{
+    config::DatabaseConfig,
     database::entities::{
         LeaderboardData, PlayerData, PlayerRole, galaxy_at_war::ActiveModel as GawActiveModel,
         leaderboard_data::LeaderboardType, players::ActiveModel as PlayerActiveModel,
@@ -108,7 +109,7 @@ static CHARACTER_DATA: &[&str] = &[
 #[tokio::test]
 #[ignore]
 pub async fn seed() {
-    let db = connect_database().await;
+    let db = connect_database(&DatabaseConfig::default()).await;
 
     // All accounts use the same default password
     let default_password = hash_password("test").unwrap();

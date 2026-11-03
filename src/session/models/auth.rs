@@ -30,7 +30,7 @@ pub enum AuthenticationError {
 }
 
 /// Login through login prompt menu with email and password
-/// ```
+/// ```ignore
 /// {
 ///     "DVID": 0,
 ///     "MAIL": "ACCOUNT_EMAIL",
@@ -50,7 +50,7 @@ pub struct LoginRequest {
 }
 
 /// Silent token based authentication with player ID
-/// ```
+/// ```ignore
 /// {
 ///     "AUTH": "AUTH_TOKEN",
 ///     "PID": 1,
@@ -66,7 +66,7 @@ pub struct SilentLoginRequest {
 }
 
 /// Authentication through origin token
-/// ```
+/// ```ignore
 /// {
 ///     "AUTH": "ORIGIN_AUTH_TOKEN",
 ///     "TYPE": 1

@@ -310,7 +310,7 @@ pub struct HostMigrateFinished {
 
 ///
 /// # Example
-/// ```
+/// ```ignore
 /// Content: {
 ///  "ASIL": List<Group> [
 ///    {

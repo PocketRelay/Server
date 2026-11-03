@@ -69,6 +69,7 @@ pub struct Config {
     pub tunnel: TunnelConfig,
     pub udp_tunnel: UdpTunnelConfig,
     pub api: APIConfig,
+    pub database: DatabaseConfig,
 }
 
 impl Default for Config {
@@ -85,9 +86,22 @@ impl Default for Config {
             retriever: Default::default(),
             tunnel: Default::default(),
             udp_tunnel: Default::default(),
-            api: Default::default()
+            api: Default::default(),
+            database: DatabaseConfig::default()
         }
     }
+}
+
+/// Configuration for the database
+#[derive(Default, Deserialize)]
+#[serde(default)]
+pub struct DatabaseConfig {
+    /// Whether to enable sqlite WAL mode
+    pub wal: Option<bool>,
+
+    /// Optional connection URL to create a custom database connection
+    /// (Custom sqlite options or connecting to a PostgreSQL server)
+    pub connection_url: Option<String>,
 }
 
 /// Configuration for how the server should use tunneling

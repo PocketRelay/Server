@@ -13,7 +13,7 @@ use std::sync::Arc;
 /// Handles requests from the client to fetch the server messages. The initial response contains
 /// the amount of messages and then each message is sent using a SendMessage notification.
 ///
-/// ```
+/// ```ignore
 /// Route: Messaging(FetchMessages)
 /// ID: 24
 /// Content: {

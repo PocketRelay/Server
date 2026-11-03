@@ -1,5 +1,5 @@
+use crate::database::DbErr;
 use log::error;
-use sea_orm::DbErr;
 
 use crate::session::{packet::Packet, router::IntoPacketResponse};
 

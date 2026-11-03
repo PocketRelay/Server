@@ -1,3 +1,4 @@
+use crate::database::{DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryOrder};
 use crate::{
     config::Config,
     database::entities::{
@@ -14,7 +15,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use sea_orm::{DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryOrder};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;

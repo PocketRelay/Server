@@ -1,3 +1,4 @@
+use crate::database::{EntityTrait, PaginatorTrait, QueryOrder};
 use crate::{
     database::{
         DatabaseConnection, DbErr,
@@ -18,7 +19,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use email_address::EmailAddress;
-use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder};
 use serde::{Deserialize, Serialize, ser::SerializeMap};
 use thiserror::Error;
 
@@ -552,7 +552,7 @@ pub async fn get_player_gaw(
     Extension(db): Extension<DatabaseConnection>,
 ) -> PlayersRes<GalaxyAtWar> {
     let player = find_player(&db, player_id).await?;
-    let galax_at_war = GalaxyAtWar::get(&db, player.id).await?;
+    let galax_at_war = GalaxyAtWar::get(&db, player.id, GalaxyAtWar::current_date_time()).await?;
     Ok(Json(galax_at_war))
 }
 
