@@ -238,7 +238,7 @@ impl TdfSerialize for PostAuthResponse {
         // User options
         w.group(b"UROP", |w| {
             w.tag_u8(b"TMOP", 1);
-            w.tag_u64(b"UID", self.player_id as u64);
+            w.tag_u32(b"UID", self.player_id);
         });
     }
 }
