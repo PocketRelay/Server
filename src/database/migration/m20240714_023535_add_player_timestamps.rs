@@ -1,4 +1,4 @@
-use sea_orm_migration::prelude::*;
+use sea_orm_migration::{prelude::*, schema::timestamp_with_time_zone_null};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -11,11 +11,7 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(Players::Table)
-                    .add_column(
-                        ColumnDef::new(Players::LastLoginAt)
-                            .timestamp_with_time_zone()
-                            .null(),
-                    )
+                    .add_column(timestamp_with_time_zone_null(Players::LastLoginAt))
                     .to_owned(),
             )
             .await

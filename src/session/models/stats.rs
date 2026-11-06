@@ -111,7 +111,7 @@ impl TdfSerialize for LeaderboardDataAndRank {
     fn serialize<S: tdf::TdfSerializer>(&self, w: &mut S) {
         w.group_body(|w| {
             w.tag_str(b"ENAM", &self.player_name);
-            w.tag_u32(b"ENID", self.player_id);
+            w.tag_u64(b"ENID", self.player_id as u64);
             w.tag_u64(b"RANK", self.rank as u64);
 
             let value_str = self.value.to_string();

@@ -6,6 +6,7 @@ use std::{
     path::Path,
 };
 
+pub mod data_mover;
 pub mod entities;
 mod migration;
 
@@ -28,8 +29,8 @@ use crate::{
 /// Database error result type
 pub type DbResult<T> = Result<T, DbErr>;
 
-const DATABASE_PATH: &str = "data/app.db";
-const DATABASE_PATH_URL: &str = "sqlite:data/app.db";
+const SQLITE_DATABASE_PATH: &str = "data/app.db";
+const SQLITE_DATABASE_PATH_URL: &str = "sqlite:data/app.db";
 
 /// Connects to the database and applies the admin changes if
 /// required, returning the database connection
@@ -44,9 +45,8 @@ pub async fn init(config: &Config) -> DatabaseConnection {
     connection
 }
 
-/// Connects to the database
-pub async fn connect_database(config: &DatabaseConfig) -> DatabaseConnection {
-    let path = Path::new(&DATABASE_PATH);
+async fn prepare_sqlite_database() {
+    let path = Path::new(&SQLITE_DATABASE_PATH);
 
     // Create path to database file if missing
     if let Some(parent) = path.parent()
@@ -59,10 +59,18 @@ pub async fn connect_database(config: &DatabaseConfig) -> DatabaseConnection {
     if !path.exists() {
         File::create(path).expect("Unable to create sqlite database file");
     }
+}
+
+/// Connects to the database
+pub async fn connect_database(config: &DatabaseConfig) -> DatabaseConnection {
+    // Only prepare for a sqlite database if a connection URL is not specified
+    if config.connection_url.is_none() {
+        prepare_sqlite_database().await;
+    }
 
     let mut options: ConnectOptions = ConnectOptions::new(match &config.connection_url {
         Some(value) => value.as_str(),
-        None => DATABASE_PATH_URL,
+        None => SQLITE_DATABASE_PATH_URL,
     });
 
     let wal = config.wal.unwrap_or(true);
