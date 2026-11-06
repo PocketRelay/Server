@@ -2,6 +2,7 @@
 
 use crate::{
     config::VERSION,
+    database::{connect_database, data_mover::copy_database},
     services::{retriever::Retriever, sessions::Sessions, tunnel::TunnelService},
     utils::signing::SigningKey,
 };
@@ -13,7 +14,7 @@ use services::{
     game::{matchmaking::Matchmaking, store::Games},
     tunnel::{tunnel_keep_alive, udp_tunnel::start_udp_tunnel},
 };
-use std::{net::SocketAddr, sync::Arc};
+use std::{env::args, net::SocketAddr, process::exit, sync::Arc};
 use tokio::{join, net::TcpListener, signal};
 use utils::logging;
 
@@ -32,6 +33,47 @@ async fn main() {
 
     // Initialize logging
     logging::setup(config.logging);
+
+    let args: Vec<String> = args().collect();
+    let command = args.get(1);
+    if let Some(command) = command {
+        match command.as_str() {
+            // Command to handle migrating from the local sqlite database
+            "migrate-sqlite-to-database" => {
+                let db_config = &config.database;
+
+                if db_config.connection_url.is_none() {
+                    log::error!(
+                        "missing database connection_url config, no database target to migrate to"
+                    );
+                    exit(1);
+                }
+
+                // Recreate the database configuration dropping the connection URL so
+                // that we connect to the sqlite database while respecting other settings
+                let mut sqlite_config = db_config.clone();
+                sqlite_config.connection_url = None;
+
+                log::info!("connecting to sqlite database");
+                let sqlite_database = connect_database(&sqlite_config).await;
+
+                log::info!("connecting to destination database");
+                let dest_database = connect_database(db_config).await;
+
+                if let Err(error) = copy_database(&sqlite_database, &dest_database).await {
+                    log::error!("failed to copy database: {error}\n\ndebug: {error:?}");
+                    exit(1)
+                }
+
+                log::info!("completed database copy successfully");
+                return;
+            }
+
+            unknown => {
+                log::warn!("unknown command \"{unknown}\"");
+            }
+        }
+    }
 
     // Create the server socket address while the port is still available
     let addr: SocketAddr = SocketAddr::new(config.host, config.port);

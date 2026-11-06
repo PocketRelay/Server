@@ -1,7 +1,10 @@
 //! Migration logic for generating the players table which stores
 //! the basic player details
 
-use sea_orm_migration::prelude::*;
+use sea_orm_migration::{
+    prelude::*,
+    schema::{integer, pk_auto, string_len, string_len_uniq, string_null},
+};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -14,31 +17,11 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Players::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Players::Id)
-                            .integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
-                    .col(
-                        ColumnDef::new(Players::Email)
-                            .string_len(254)
-                            .unique_key()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(Players::DisplayName)
-                            .string_len(99)
-                            .not_null(),
-                    )
-                    .col(ColumnDef::new(Players::Password).string().null())
-                    .col(
-                        ColumnDef::new(Players::Role)
-                            .integer()
-                            .default(0)
-                            .not_null(),
-                    )
+                    .col(pk_auto(Players::Id))
+                    .col(string_len_uniq(Players::Email, 254))
+                    .col(string_len(Players::DisplayName, 99))
+                    .col(string_null(Players::Password))
+                    .col(integer(Players::Role).default(0))
                     .to_owned(),
             )
             .await?;

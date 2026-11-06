@@ -3,7 +3,10 @@
 //! specific player
 
 use super::m20221015_142649_players_table::Players;
-use sea_orm_migration::prelude::*;
+use sea_orm_migration::{
+    prelude::*,
+    schema::{date_time, integer, pk_auto},
+};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -16,24 +19,14 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(GalaxyAtWar::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(GalaxyAtWar::Id)
-                            .integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
-                    .col(ColumnDef::new(GalaxyAtWar::PlayerId).integer().not_null())
-                    .col(
-                        ColumnDef::new(GalaxyAtWar::LastModified)
-                            .date_time()
-                            .not_null(),
-                    )
-                    .col(ColumnDef::new(GalaxyAtWar::GroupA).integer().not_null())
-                    .col(ColumnDef::new(GalaxyAtWar::GroupB).integer().not_null())
-                    .col(ColumnDef::new(GalaxyAtWar::GroupC).integer().not_null())
-                    .col(ColumnDef::new(GalaxyAtWar::GroupD).integer().not_null())
-                    .col(ColumnDef::new(GalaxyAtWar::GroupE).integer().not_null())
+                    .col(pk_auto(GalaxyAtWar::Id))
+                    .col(integer(GalaxyAtWar::PlayerId))
+                    .col(date_time(GalaxyAtWar::LastModified))
+                    .col(integer(GalaxyAtWar::GroupA))
+                    .col(integer(GalaxyAtWar::GroupB))
+                    .col(integer(GalaxyAtWar::GroupC))
+                    .col(integer(GalaxyAtWar::GroupD))
+                    .col(integer(GalaxyAtWar::GroupE))
                     .foreign_key(
                         ForeignKey::create()
                             .from(GalaxyAtWar::Table, GalaxyAtWar::PlayerId)

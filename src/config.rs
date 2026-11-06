@@ -93,7 +93,7 @@ impl Default for Config {
 }
 
 /// Configuration for the database
-#[derive(Default, Deserialize)]
+#[derive(Default, Clone, Deserialize)]
 #[serde(default)]
 pub struct DatabaseConfig {
     /// Whether to enable sqlite WAL mode

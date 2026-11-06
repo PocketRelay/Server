@@ -1,4 +1,7 @@
-use sea_orm_migration::prelude::*;
+use sea_orm_migration::{
+    prelude::*,
+    schema::{big_integer, integer, pk_auto},
+};
 
 use super::m20221015_142649_players_table::Players;
 
@@ -13,20 +16,10 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(LeaderboardData::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(LeaderboardData::Id)
-                            .integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
-                    .col(
-                        ColumnDef::new(LeaderboardData::PlayerId)
-                            .integer()
-                            .not_null(),
-                    )
-                    .col(ColumnDef::new(LeaderboardData::Ty).integer().not_null())
-                    .col(ColumnDef::new(LeaderboardData::Value).integer().not_null())
+                    .col(pk_auto(LeaderboardData::Id))
+                    .col(integer(LeaderboardData::PlayerId))
+                    .col(integer(LeaderboardData::Ty))
+                    .col(big_integer(LeaderboardData::Value))
                     .foreign_key(
                         ForeignKey::create()
                             .from(LeaderboardData::Table, LeaderboardData::PlayerId)

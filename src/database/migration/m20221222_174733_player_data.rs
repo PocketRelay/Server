@@ -1,7 +1,10 @@
 //! Migration to create the `player_data` table which stores the
 //! associated player data for each player as key value pairs
 
-use sea_orm_migration::prelude::*;
+use sea_orm_migration::{
+    prelude::*,
+    schema::{integer, pk_auto, string, text},
+};
 
 use super::m20221015_142649_players_table::Players;
 
@@ -16,16 +19,10 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(PlayerData::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(PlayerData::Id)
-                            .integer()
-                            .not_null()
-                            .auto_increment()
-                            .primary_key(),
-                    )
-                    .col(ColumnDef::new(PlayerData::PlayerId).integer().not_null())
-                    .col(ColumnDef::new(PlayerData::Key).string().not_null())
-                    .col(ColumnDef::new(PlayerData::Value).text().not_null())
+                    .col(pk_auto(PlayerData::Id))
+                    .col(integer(PlayerData::PlayerId))
+                    .col(string(PlayerData::Key))
+                    .col(text(PlayerData::Value))
                     .foreign_key(
                         ForeignKey::create()
                             .from(PlayerData::Table, PlayerData::PlayerId)
