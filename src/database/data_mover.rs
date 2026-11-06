@@ -32,6 +32,7 @@ where
             break;
         }
 
+        log::info!("processed {copied}");
         offset += limit;
     }
 

@@ -26,7 +26,12 @@ pub struct Model {
     /// ID of the player this data is for
     pub player_id: PlayerID,
     /// The value of this leaderboard data
-    pub value: u32,
+    ///
+    /// Due to integer sizing from SeaORM and to fit the actual full complete u32 value set we have to
+    /// treat this value as an i64 even though the value set is only ever within the bounds of u32:
+    ///
+    /// mismatched types; Rust type `i32` (as SQL type `INT4`) is not compatible with SQL type `INT8`
+    pub value: i64,
 }
 
 /// Type of leaderboard entity
@@ -56,7 +61,12 @@ pub struct LeaderboardDataAndRank {
     #[sea_orm(alias = "display_name")]
     pub player_name: String,
     /// The value of this leaderboard data
-    pub value: u32,
+    ///
+    /// Due to integer sizing from SeaORM and to fit the actual full complete u32 value set we have to
+    /// treat this value as an i64 even though the value set is only ever within the bounds of u32:
+    ///
+    /// mismatched types; Rust type `i32` (as SQL type `INT4`) is not compatible with SQL type `INT8`
+    pub value: i64,
     /// The ranking of this entry (Position in the leaderboard)
     pub rank: i64,
 }
@@ -243,7 +253,7 @@ impl Model {
             id: NotSet,
             ty: Set(ty),
             player_id: Set(player_id),
-            value: Set(value),
+            value: Set(value as i64),
         })
         .on_conflict(Self::conflict_handle())
         .exec(db)
@@ -263,7 +273,7 @@ impl Model {
                 id: NotSet,
                 ty: Set(ty),
                 player_id: Set(player_id),
-                value: Set(value),
+                value: Set(value as i64),
             }),
         )
         .on_conflict(Self::conflict_handle())

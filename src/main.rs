@@ -65,6 +65,7 @@ async fn main() {
                     exit(1)
                 }
 
+                log::info!("completed database copy successfully");
                 return;
             }
 
