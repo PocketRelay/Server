@@ -75,6 +75,11 @@ pub struct TunnelMappings {
     /// Mapping from [AssociationId] (Client association) to [TunnelHandle]
     association_to_tunnel: HashMap<AssociationId, TunnelId>,
 
+    /// Mapping from [AssociationId] to the game pool slot the client is in,
+    /// kept even if the client doesn't have a tunnel yet so a tunnel created
+    /// (or re-created) later on is still connected to the right slot
+    association_to_pool: HashMap<AssociationId, PoolKey>,
+
     pool: TunnelPoolMap,
 }
 
@@ -138,7 +143,7 @@ impl TunnelMappings {
         // Retain all now expired tunnels
         self.id_to_tunnel.retain(|tunnel_id, data| {
             // Initial dead check based on keep alive timeout
-            let mut dead = data.last_alive.duration_since(now) > keep_alive_timeout;
+            let mut dead = now.duration_since(data.last_alive) > keep_alive_timeout;
 
             // Check for closed http tunnels
             if let TunnelHandle::Http(handle) = &data.handle
@@ -160,66 +165,3 @@ impl TunnelMappings {
 
     /// Inserts a new tunnel into the mappings and associates it to the
     /// provided association token
-    ///
-    /// Creates and returns a tunnel ID if [None] is returned no tunnel ID could be created
-    pub fn insert_tunnel(
-        &mut self,
-        association: AssociationId,
-        tunnel: TunnelData,
-    ) -> Option<TunnelId> {
-        let tunnel_id = self.acquire_tunnel_id()?;
-
-        // Insert the tunnel into the mappings
-        self.id_to_tunnel.insert(tunnel_id, tunnel);
-        self.association_to_tunnel.insert(association, tunnel_id);
-
-        Some(tunnel_id)
-    }
-
-    pub fn update_tunnel_handle(&mut self, tunnel_id: TunnelId, handle: TunnelHandle) {
-        if let Some(tunnel_data) = self.id_to_tunnel.get_mut(&tunnel_id) {
-            tunnel_data.handle = handle;
-        }
-    }
-
-    /// Updates the last-alive instant for the tunnel
-    pub fn update_tunnel_last_alive(&mut self, tunnel_id: TunnelId, last_alive: Instant) {
-        if let Some(tunnel_data) = self.id_to_tunnel.get_mut(&tunnel_id) {
-            tunnel_data.last_alive = last_alive;
-        }
-    }
-
-    pub fn get_association_tunnel(&self, association: &AssociationId) -> Option<TunnelId> {
-        self.association_to_tunnel.get(association).copied()
-    }
-
-    /// Attempts to associate the tunnel from `address` to the provided
-    /// `pool_id` and `pool_index` if there is a tunnel connected to
-    /// `address`
-    pub fn associate_pool(&mut self, tunnel_id: TunnelId, pool_id: PoolId, pool_index: PoolIndex) {
-        let key = PoolKey::new(pool_id, pool_index);
-        self.pool.insert(tunnel_id, key);
-    }
-
-    /// Removes the association between a [PoolKey] and a [TunnelId] if
-    /// one is present
-    pub fn dissociate_pool(&mut self, pool_id: PoolId, pool_index: PoolIndex) {
-        self.pool
-            .remove_by_pool_key(&PoolKey::new(pool_id, pool_index));
-    }
-
-    /// Get the pool key of a tunnel
-    pub fn get_tunnel_pool_key(&self, tunnel_id: TunnelId) -> Option<(PoolId, PoolIndex)> {
-        self.pool
-            .get_by_tunnel(&tunnel_id)
-            .map(|pool_key| pool_key.parts())
-    }
-
-    /// Get a tunnel using a pool key
-    pub fn get_tunnel_by_pool_key(&self, pool_key: &PoolKey) -> Option<&TunnelHandle> {
-        let tunnel_id = self.pool.get_by_pool_key(pool_key)?;
-        self.id_to_tunnel
-            .get(tunnel_id)
-            .map(|tunnel| &tunnel.handle)
-    }
-}
