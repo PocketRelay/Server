@@ -62,7 +62,11 @@ impl Matchmaking {
     ) {
         let queue = &mut *self.queue.lock();
 
-        while let Some(entry) = queue.front() {
+        // Index of the queue entry currently being checked. Entries that don't
+        // match this game are skipped instead of being re-checked forever
+        let mut index = 0;
+
+        while let Some(entry) = queue.get(index) {
             let join_state = { link.read().joinable_state(Some(&entry.rule_set)) };
 
             // TODO: If player has been in queue long enough create
@@ -70,8 +74,9 @@ impl Matchmaking {
 
             match join_state {
                 GameJoinableState::Joinable => {
+                    // Index is not advanced, the next entry moves into this position
                     let entry = queue
-                        .pop_front()
+                        .remove(index)
                         .expect("Expecting matchmaking entry but nothing was present");
 
                     debug!("Found player from queue adding them to the game (GID: {game_id})");
@@ -92,6 +97,9 @@ impl Matchmaking {
                 GameJoinableState::NotMatch => {
                     // TODO: Check started time and timeout
                     // player if they've been waiting too long
+
+                    // Skip this entry and check the next one
+                    index += 1;
                 }
             }
         }

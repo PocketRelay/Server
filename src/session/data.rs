@@ -243,13 +243,18 @@ impl SessionData {
     /// Sets the game the session is currently apart of
     pub fn set_game(&self, game_id: GameID, game_ref: WeakGameRef) {
         // Set the current game
-        self.write_publish(|data| {
-            data.game = Some(SessionGameData {
+        let previous = self.write_publish(|data| {
+            data.game.replace(SessionGameData {
                 player_id: data.player_assoc.player.id,
                 game_id,
                 game_ref,
-            });
+            })
         });
+
+        // Previous game MUST be dropped *after* the write lock is released
+        // as its drop removes the player from the game which requires
+        // accessing this session data again
+        drop(previous);
     }
 
     /// Clears the game the session is apart of
@@ -258,10 +263,15 @@ impl SessionData {
     /// USER GAME, call [Self::clear_game_gm] instead which
     /// doesn't let the drop run preventing a deadlock
     pub fn clear_game(&self) {
-        self.write_publish(|data| data.game = None);
+        let previous = self.write_publish(|data| data.game.take());
+
+        // Game MUST be dropped *after* the write lock is released
+        // as its drop removes the player from the game which requires
+        // accessing this session data again
+        drop(previous);
     }
 
-    /// Clears the game the session is apart of, safe to  
+    /// Clears the game the session is apart of, safe to
     /// call from the game manager as it prevents the default
     /// drop behavior of trying to remove the player from the game
     pub fn clear_game_gm(&self) {
