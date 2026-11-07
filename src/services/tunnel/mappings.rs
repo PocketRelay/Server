@@ -184,9 +184,9 @@ impl TunnelMappings {
         }
 
         // Client is already in a game, connect the new tunnel to its slot
-        if let Some(pool_key) = self.association_to_pool.get(&association).copied() {
-            self.pool.remove_by_pool_key(&pool_key);
-            self.pool.insert(tunnel_id, pool_key);
+        if let Some(pool_key) = self.association_to_pool.get(&association) {
+            self.pool.remove_by_pool_key(pool_key);
+            self.pool.insert(tunnel_id, *pool_key);
         }
 
         Some(tunnel_id)
@@ -223,6 +223,7 @@ impl TunnelMappings {
         // Remember the slot even if the tunnel doesn't exist yet
         self.association_to_pool.insert(association, key);
 
+        // Associate the tunnel to the pool if theres an associated tunnel
         if let Some(tunnel_id) = self.get_association_tunnel(&association) {
             self.pool.insert(tunnel_id, key);
         }
