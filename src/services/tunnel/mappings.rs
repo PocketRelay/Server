@@ -63,28 +63,24 @@ impl TunnelPoolMap {
     }
 }
 
-pub fn remove_dead_tunnels(&mut self, now: Instant, keep_alive_timeout: Duration) {
-    // Retain all now expired tunnels
-    self.id_to_tunnel.retain(|tunnel_id, data| {
-        // Initial dead check based on keep alive timeout
-        let mut dead = now.duration_since(data.last_alive) > keep_alive_timeout;
+#[derive(Default)]
+pub struct TunnelMappings {
+    /// Next available tunnel ID
+    next_tunnel_id: TunnelId,
 
-        // Check for closed http tunnels
-        if let TunnelHandle::Http(handle) = &data.handle
-            && handle.tx.is_closed()
-        {
-            dead = true
-        }
+    /// Mapping from [TunnelId]s to the actual [TunnelHandle] for communicating
+    /// with the tunnel
+    id_to_tunnel: IntHashMap<TunnelId, TunnelData>,
 
-        // Remove other tunnel mappings
-        if dead {
-            // Remove association mapping
-            self.association_to_tunnel.remove(&data.association);
-            self.pool.remove_by_tunnel(tunnel_id);
-        }
+    /// Mapping from [AssociationId] (Client association) to [TunnelHandle]
+    association_to_tunnel: HashMap<AssociationId, TunnelId>,
 
-        !dead
-    });
+    /// Mapping from [AssociationId] to the game pool slot the client is in,
+    /// kept even if the client doesn't have a tunnel yet so a tunnel created
+    /// (or re-created) later on is still connected to the right slot
+    association_to_pool: HashMap<AssociationId, PoolKey>,
+
+    pool: TunnelPoolMap,
 }
 
 /// Represents a key that is created from a [PoolId] and [PoolIndex] combined
