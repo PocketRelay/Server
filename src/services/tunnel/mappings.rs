@@ -165,3 +165,90 @@ impl TunnelMappings {
 
     /// Inserts a new tunnel into the mappings and associates it to the
     /// provided association token
+    ///
+    /// Creates and returns a tunnel ID if [None] is returned no tunnel ID could be created
+    pub fn insert_tunnel(
+        &mut self,
+        association: AssociationId,
+        tunnel: TunnelData,
+    ) -> Option<TunnelId> {
+        let tunnel_id = self.acquire_tunnel_id()?;
+
+        // Insert the tunnel into the mappings
+        self.id_to_tunnel.insert(tunnel_id, tunnel);
+
+        // Replace any previous tunnel for this association
+        if let Some(previous) = self.association_to_tunnel.insert(association, tunnel_id) {
+            self.id_to_tunnel.remove(&previous);
+            self.pool.remove_by_tunnel(&previous);
+        }
+
+        // Client is already in a game, connect the new tunnel to its slot
+        if let Some(pool_key) = self.association_to_pool.get(&association) {
+            self.pool.remove_by_pool_key(pool_key);
+            self.pool.insert(tunnel_id, *pool_key);
+        }
+
+        Some(tunnel_id)
+    }
+
+    pub fn update_tunnel_handle(&mut self, tunnel_id: TunnelId, handle: TunnelHandle) {
+        if let Some(tunnel_data) = self.id_to_tunnel.get_mut(&tunnel_id) {
+            tunnel_data.handle = handle;
+        }
+    }
+
+    /// Updates the last-alive instant for the tunnel
+    pub fn update_tunnel_last_alive(&mut self, tunnel_id: TunnelId, last_alive: Instant) {
+        if let Some(tunnel_data) = self.id_to_tunnel.get_mut(&tunnel_id) {
+            tunnel_data.last_alive = last_alive;
+        }
+    }
+
+    pub fn get_association_tunnel(&self, association: &AssociationId) -> Option<TunnelId> {
+        self.association_to_tunnel.get(association).copied()
+    }
+
+    /// Attempts to associate the tunnel from `address` to the provided
+    /// `pool_id` and `pool_index` if there is a tunnel connected to
+    /// `address`
+    pub fn associate_pool(
+        &mut self,
+        association: AssociationId,
+        pool_id: PoolId,
+        pool_index: PoolIndex,
+    ) {
+        let key = PoolKey::new(pool_id, pool_index);
+
+        // Remember the slot even if the tunnel doesn't exist yet
+        self.association_to_pool.insert(association, key);
+
+        // Associate the tunnel to the pool if theres an associated tunnel
+        if let Some(tunnel_id) = self.get_association_tunnel(&association) {
+            self.pool.insert(tunnel_id, key);
+        }
+    }
+
+    /// Removes the association between a [PoolKey] and a [TunnelId] if
+    /// one is present
+    pub fn dissociate_pool(&mut self, pool_id: PoolId, pool_index: PoolIndex) {
+        let key = PoolKey::new(pool_id, pool_index);
+        self.pool.remove_by_pool_key(&key);
+        self.association_to_pool.retain(|_, value| *value != key);
+    }
+
+    /// Get the pool key of a tunnel
+    pub fn get_tunnel_pool_key(&self, tunnel_id: TunnelId) -> Option<(PoolId, PoolIndex)> {
+        self.pool
+            .get_by_tunnel(&tunnel_id)
+            .map(|pool_key| pool_key.parts())
+    }
+
+    /// Get a tunnel using a pool key
+    pub fn get_tunnel_by_pool_key(&self, pool_key: &PoolKey) -> Option<&TunnelHandle> {
+        let tunnel_id = self.pool.get_by_pool_key(pool_key)?;
+        self.id_to_tunnel
+            .get(tunnel_id)
+            .map(|tunnel| &tunnel.handle)
+    }
+}
