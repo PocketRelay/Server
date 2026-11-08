@@ -97,7 +97,12 @@ pub async fn log_connection_urls(http_port: u16) {
 /// value if its not expired or fetching the new value from the API using
 /// `fetch_public_addr`
 pub async fn public_address() -> Option<Ipv4Addr> {
-    // Try fetch from cloudflare first
+    // Try fetch from ifconfig.me first
+    if let Some(addr) = public_address_ifconfig().await {
+        return Some(addr);
+    }
+
+    // Fallback to cloudflare
     if let Some(addr) = public_address_cloudflare().await {
         return Some(addr);
     }
@@ -128,6 +133,17 @@ pub async fn public_address() -> Option<Ipv4Addr> {
     }
 
     None
+}
+
+/// Retrieves the public address of the server using the ifconfig.me API
+pub async fn public_address_ifconfig() -> Option<Ipv4Addr> {
+    let response = reqwest::get("https://ifconfig.me/ip")
+        .and_then(reqwest::Response::text)
+        .await
+        .ok()?;
+
+    // Trim whitespace and attempt to parse as an IPv4 address
+    response.trim().parse::<Ipv4Addr>().ok()
 }
 
 /// Retrieves the public address of the server using the cloudflare API

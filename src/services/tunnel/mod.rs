@@ -62,15 +62,18 @@ impl TunnelService {
         pool_id: PoolId,
         pool_index: PoolIndex,
     ) {
-        let mappings = &mut *self.mappings.write();
-        let tunnel_id = {
-            match mappings.get_association_tunnel(&association) {
-                Some(value) => value,
-                None => return,
-            }
-        };
+        self.mappings
+            .write()
+            .associate_pool(association, pool_id, pool_index);
+    }
 
-        mappings.associate_pool(tunnel_id, pool_id, pool_index);
+    /// Checks whether the client with the provided association
+    /// currently has a connected tunnel
+    pub fn has_tunnel(&self, association: &AssociationId) -> bool {
+        self.mappings
+            .read()
+            .get_association_tunnel(association)
+            .is_some()
     }
 
     pub fn dissociate_pool(&self, pool_id: PoolId, pool_index: PoolIndex) {

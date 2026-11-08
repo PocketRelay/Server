@@ -62,16 +62,32 @@ impl Matchmaking {
     ) {
         let queue = &mut *self.queue.lock();
 
-        while let Some(entry) = queue.front() {
-            let join_state = { link.read().joinable_state(Some(&entry.rule_set)) };
+        // Index of the queue entry currently being checked. Entries that don't
+        // match this game are skipped instead of being re-checked forever
+        let mut index = 0;
+
+        while let Some(entry) = queue.get(index) {
+            let (join_state, tunnel_ready) = {
+                let game = link.read();
+                (
+                    game.joinable_state(Some(&entry.rule_set)),
+                    game.is_tunnel_ready(config, tunnel_service, &entry.player),
+                )
+            };
 
             // TODO: If player has been in queue long enough create
             // a game matching their specifics
 
             match join_state {
+                GameJoinableState::Joinable if !tunnel_ready => {
+                    // Player doesn't have a connected tunnel yet so they wouldn't
+                    // be able to communicate with the game, keep them queued
+                    index += 1;
+                }
                 GameJoinableState::Joinable => {
+                    // Index is not advanced, the next entry moves into this position
                     let entry = queue
-                        .pop_front()
+                        .remove(index)
                         .expect("Expecting matchmaking entry but nothing was present");
 
                     debug!("Found player from queue adding them to the game (GID: {game_id})");
@@ -92,6 +108,9 @@ impl Matchmaking {
                 GameJoinableState::NotMatch => {
                     // TODO: Check started time and timeout
                     // player if they've been waiting too long
+
+                    // Skip this entry and check the next one
+                    index += 1;
                 }
             }
         }
