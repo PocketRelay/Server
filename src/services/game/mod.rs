@@ -1,12 +1,12 @@
 use self::rules::RuleSet;
 use crate::{
-    config::Config,
+    config::{Config, TunnelConfig},
     database::entities::Player,
     session::{
         SessionLink, WeakSessionLink,
         data::NetData,
         models::{
-            NetworkAddress,
+            NatType, NetworkAddress,
             game_manager::{
                 AdminListChange, AdminListOperation, AttributesChange, GameSettings,
                 GameSetupContext, GameSetupResponse, GameState, GetGameDetails,
@@ -447,6 +447,45 @@ impl Game {
 
         // Remove the stopping game
         self.games_store.remove_by_id(self.id);
+    }
+
+    /// Whether players joining this game must have a connected tunnel
+    /// (Mirrors the tunnel decision used when sending the game setup)
+    pub fn requires_tunnel(&self, config: &Config) -> bool {
+        match config.tunnel {
+            TunnelConfig::Always => true,
+            TunnelConfig::Disabled => false,
+            TunnelConfig::Stricter => {
+                let host_net = self
+                    .players
+                    .first()
+                    .and_then(|host| host.net())
+                    .unwrap_or_default();
+                !matches!(host_net.qos.natt, NatType::Open)
+            }
+        }
+    }
+
+    /// Whether the player is able to communicate with this game, players
+    /// without a connected tunnel can't join games that require one
+    pub fn is_tunnel_ready(
+        &self,
+        config: &Config,
+        tunnel_service: &TunnelService,
+        player: &GamePlayer,
+    ) -> bool {
+        if !self.requires_tunnel(config) {
+            return true;
+        }
+
+        let Some(session) = player.link.upgrade() else {
+            return false;
+        };
+
+        session
+            .data
+            .get_association()
+            .is_some_and(|association| tunnel_service.has_tunnel(&association))
     }
 
     pub fn joinable_state(&self, rule_set: Option<&RuleSet>) -> GameJoinableState {

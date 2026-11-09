@@ -24,7 +24,7 @@ use crate::{
     utils::parsing::player_character::PlayerCharacter,
 };
 use chrono::Utc;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::{collections::HashMap, sync::Arc};
 
 pub async fn handle_join_game(
@@ -46,11 +46,25 @@ pub async fn handle_join_game(
         .get_game()
         .ok_or(GameManagerError::InvalidGameId)?;
 
-    // Check the game is joinable
-    let join_state = { game_ref.read().joinable_state(None) };
+    // Check the game is joinable and the player is able to communicate with it
+    let (join_state, tunnel_ready) = {
+        let game = game_ref.read();
+        (
+            game.joinable_state(None),
+            game.is_tunnel_ready(&config, &tunnel_service, &player),
+        )
+    };
 
     if !matches!(join_state, GameJoinableState::Joinable) {
         return Err(GameManagerError::GameFull.into());
+    }
+
+    if !tunnel_ready {
+        warn!(
+            "Player {} has no connected tunnel, unable to join game (GID: {game_id})",
+            player.player.display_name
+        );
+        return Err(GameManagerError::JoinPlayerFailed.into());
     }
 
     // Join the game
@@ -721,10 +735,26 @@ pub async fn handle_start_matchmaking(
     // Find a game thats currently joinable and matches the required rules
     match games.get_by_rule_set(&rules) {
         Some((game_id, game_ref)) => {
-            debug!("Found matching game (GID: {game_id})");
+            let tunnel_ready = {
+                game_ref
+                    .read()
+                    .is_tunnel_ready(&config, &tunnel_service, &player)
+            };
 
-            // Add the player to the game
-            matchmaking.add_from_matchmaking(&tunnel_service, &config, game_ref, player);
+            if tunnel_ready {
+                debug!("Found matching game (GID: {game_id})");
+
+                // Add the player to the game
+                matchmaking.add_from_matchmaking(&tunnel_service, &config, game_ref, player);
+            } else {
+                warn!(
+                    "Player {} has no connected tunnel, queueing instead of joining game (GID: {game_id})",
+                    player.player.display_name
+                );
+
+                // Queue the player until their tunnel is connected
+                matchmaking.queue(player, rules);
+            }
         }
         None => {
             matchmaking.queue(player, rules);

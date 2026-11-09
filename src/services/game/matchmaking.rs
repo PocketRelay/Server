@@ -67,12 +67,23 @@ impl Matchmaking {
         let mut index = 0;
 
         while let Some(entry) = queue.get(index) {
-            let join_state = { link.read().joinable_state(Some(&entry.rule_set)) };
+            let (join_state, tunnel_ready) = {
+                let game = link.read();
+                (
+                    game.joinable_state(Some(&entry.rule_set)),
+                    game.is_tunnel_ready(config, tunnel_service, &entry.player),
+                )
+            };
 
             // TODO: If player has been in queue long enough create
             // a game matching their specifics
 
             match join_state {
+                GameJoinableState::Joinable if !tunnel_ready => {
+                    // Player doesn't have a connected tunnel yet so they wouldn't
+                    // be able to communicate with the game, keep them queued
+                    index += 1;
+                }
                 GameJoinableState::Joinable => {
                     // Index is not advanced, the next entry moves into this position
                     let entry = queue

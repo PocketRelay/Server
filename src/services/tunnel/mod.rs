@@ -67,6 +67,15 @@ impl TunnelService {
             .associate_pool(association, pool_id, pool_index);
     }
 
+    /// Checks whether the client with the provided association
+    /// currently has a connected tunnel
+    pub fn has_tunnel(&self, association: &AssociationId) -> bool {
+        self.mappings
+            .read()
+            .get_association_tunnel(association)
+            .is_some()
+    }
+
     pub fn dissociate_pool(&self, pool_id: PoolId, pool_index: PoolIndex) {
         self.mappings.write().dissociate_pool(pool_id, pool_index);
     }
